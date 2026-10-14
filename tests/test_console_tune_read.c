@@ -28,7 +28,7 @@ int main(void) {
     assert(frame[6] == 0u && frame[7] == 0u && frame[8] == 32u);
     assert(memcmp(frame + 9u, wire.bytes, 32u) == 0);
     assert(!tunuino_console_tune_reply(&wire, (const uint8_t[]){0,0,33}, 3u, frame, sizeof(frame)));
-    assert(!tunuino_console_tune_reply(&wire, (const uint8_t[]){0x4f,0x01,2}, 3u, frame, sizeof(frame)));
+    assert(!tunuino_console_tune_reply(&wire, (const uint8_t[]){0x8f,0x04,2}, 3u, frame, sizeof(frame)));
     assert(!tunuino_console_tune_reply(&wire, req, 2u, frame, sizeof(frame)));
     assert(!tunuino_console_tune_reply(&wire, req, 3u, frame, 42u));
     return 0;
