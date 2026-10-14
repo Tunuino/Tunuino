@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Tunuino
-export const rpmAxis = Object.freeze([800, 1200, 1800, 2500, 3500, 4500, 5500, 6500]);
-export const loadAxis = Object.freeze([30, 50, 70, 90, 110, 130]);
+export const rpmAxis = Object.freeze([500, 750, 1000, 1250, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 7000, 8000]);
+export const loadAxis = Object.freeze([20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 140, 160, 180, 220, 250]);
 export function makeDemoMap(type = "ve") {
   if (type !== "ve" && type !== "ignition") throw new RangeError("Unknown map");
   return loadAxis.map((load, row) => rpmAxis.map((rpm, col) => type === "ve"
