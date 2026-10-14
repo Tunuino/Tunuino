@@ -7,7 +7,11 @@ uint16_t tunuino_console_crc16(const uint8_t *data, size_t size) {
     for (size_t i = 0; i < size; ++i) {
         crc ^= (uint16_t)data[i] << 8;
         for (unsigned bit = 0; bit < 8; ++bit)
-            crc = (uint16_t)((crc & 0x8000u) ? ((crc << 1) ^ 0x1021u) : (crc << 1));
+            if ((crc & 0x8000u) != 0u) {
+                crc = (uint16_t)(((uint32_t)crc << 1) ^ 0x1021u);
+            } else {
+                crc = (uint16_t)((uint32_t)crc << 1);
+            }
     }
     return crc;
 }
