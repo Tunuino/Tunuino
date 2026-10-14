@@ -133,7 +133,8 @@ export class TunuinoSerialTransport {
                 (payload[0] | (payload[1] << 8)) === pending.offset &&
                 payload[2] === pending.count) {
               this.onTuneChunk(payload);
-              this.#clearPendingTune();
+              this.pendingTune = null;
+              clearTimeout(pending.timer);
               pending.resolve(true);
             }
           }
