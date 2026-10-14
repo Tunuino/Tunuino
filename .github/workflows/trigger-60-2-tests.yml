@@ -1,0 +1,13 @@
+name: Tunuino 60-2 decoder tests
+on:
+  push:
+  pull_request:
+jobs:
+  decoder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile
+        run: cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/core/trigger_60_2.c tests/test_trigger_60_2.c -o /tmp/tunuino_60_2_test
+      - name: Run
+        run: /tmp/tunuino_60_2_test
