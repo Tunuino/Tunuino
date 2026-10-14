@@ -1,0 +1,13 @@
+name: Tunuino trigger capture tests
+on:
+  push:
+  pull_request:
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile trigger tests
+        run: cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/core/trigger_capture.c tests/test_trigger_capture.c -o /tmp/tunuino_trigger_test
+      - name: Run trigger tests
+        run: /tmp/tunuino_trigger_test
