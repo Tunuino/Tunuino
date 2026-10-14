@@ -3,7 +3,7 @@
 #ifndef TUNUINO_TUNE_MAPS_H
 #define TUNUINO_TUNE_MAPS_H
 #include <stdint.h>
-#define TUNUINO_MAP_AXIS_SIZE 8u
+#define TUNUINO_MAP_AXIS_SIZE 16u
 typedef struct {
     uint16_t rpm_axis[TUNUINO_MAP_AXIS_SIZE];
     uint16_t load_axis[TUNUINO_MAP_AXIS_SIZE]; // kPa x10
