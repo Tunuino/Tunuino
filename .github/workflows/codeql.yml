@@ -1,0 +1,31 @@
+name: Tunuino CodeQL
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'firmware/**'
+      - 'console/**'
+      - '.github/workflows/codeql.yml'
+  pull_request:
+    paths:
+      - 'firmware/**'
+      - 'console/**'
+      - '.github/workflows/codeql.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [cpp, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+      - uses: github/codeql-action/analyze@v3
