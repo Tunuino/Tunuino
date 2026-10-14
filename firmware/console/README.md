@@ -1,35 +1,33 @@
 # Tunuino firmware console
 
-This directory owns the ECU-side communication architecture. It is distinct
-from the browser-based Tunuino Console application at the repository root.
+This directory mirrors the ECU-side console location in the reference firmware
+tree. It is **not** the browser-based application, which remains in `/console`.
 
-## Current implementation
+## Reference-compatible module layout
 
-The transport-independent framing, tune read and UART pump are currently in
-`firmware/core/`:
+| Reference console module | Tunuino responsibility | Current implementation |
+| --- | --- | --- |
+| `console_io` | Console transport I/O | `firmware/core/console_uart_pump.c`, `console_tx.c` |
+| `eficonsole` | Command dispatch and framing | `firmware/core/console_protocol.c` |
+| `status_loop` | Periodic status and telemetry | Firmware-side transport not yet connected |
+| `usb_console` | USB device console | Not implemented |
+| `connector_uart_dma` | UART/DMA transport | `firmware/platform/stm32f429/usart_console.c` (disabled) |
+| `binary/tunerstudio` | Binary configuration protocol | `firmware/core/console_tune_*.c` (partial, independent protocol) |
+| `binary/live_data` | Real-time data | Framing only; no hardware stream |
+| `binary/tooth_logger` | Trigger tooth capture | Not implemented |
+| `binary/trigger_scope` | Trigger diagnostics | Not implemented |
+| `binary_log` and `binary_mlg_log` | Log storage/format | Not implemented |
 
-- `console_protocol.c`: framing and message validation.
-- `console_tune_read.c`, `console_tune_request.c`, `console_tune_rx.c`,
-  `console_tune_link.c`: tune read protocol.
-- `console_tx_queue.c`, `console_tx.c`, `console_uart_pump.c`: buffered output.
+The table is a **migration inventory**, not a claim of protocol compatibility.
+The existing Tunuino modules remain in their original paths until their
+include paths, build rules and tests can be migrated together. No duplicate
+transport layer or speculative hardware driver is introduced.
 
-STM32F429-specific peripheral access remains in
-`firmware/platform/stm32f429/usart_console.c`. The UART peripheral is
-intentionally left disconnected pending verified board wiring.
+## Integration rules
 
-## Architecture
-
-Browser application (`/console`)
-  <-> Tunuino framed protocol (`/firmware/core`)
-  <-> ECU console transport (`/firmware/console`)
-  <-> verified STM32 peripheral driver (`/firmware/platform/stm32f429`)
-
-Planned responsibilities: USB CDC device transport, UART RX/TX, command
-dispatch, telemetry subscriptions, fault diagnostics and tune operations.
-Bootloader communication is a separate recovery protocol.
-
-**Not implemented:** functional USB CDC device, end-to-end connection to
-hardware, live tuning writes, ECU flash programming. No ignition or injector
-outputs should be enabled as a side effect of console development.
-
-The code is organized under the Tunuino identity and remains independent.
+1. Preserve the reference directory/module responsibilities where applicable.
+2. Keep the browser-based application separate from ECU firmware code.
+3. Move working source files only with corresponding build and test changes.
+4. Do not enable flash writes, injector/ignition outputs or USB peripherals
+   before verified hardware and recovery support.
+5. Maintain original project identity and respect upstream source licenses.
