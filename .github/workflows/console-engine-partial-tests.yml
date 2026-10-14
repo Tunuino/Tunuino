@@ -1,0 +1,13 @@
+name: Tunuino Console engine partial tests
+on:
+  push:
+  pull_request:
+jobs:
+  engine-partial:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile engine partial tests
+        run: cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/core/console_protocol.c firmware/core/console_tx.c firmware/core/console_tx_queue.c firmware/core/console_uart_pump.c firmware/core/console_service.c firmware/core/console_partial.c firmware/core/console_partial_service.c firmware/core/console_engine_partial.c tests/test_console_engine_partial.c -o /tmp/tunuino_engine_partial
+      - name: Run engine partial tests
+        run: /tmp/tunuino_engine_partial
