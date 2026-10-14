@@ -1,0 +1,3 @@
+rootProject.name = 'tunuino'
+include ':version'
+project(':version').projectDir = file('java_tools/version')
