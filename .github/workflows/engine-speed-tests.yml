@@ -1,0 +1,13 @@
+name: Tunuino engine RPM tests
+on:
+  push:
+  pull_request:
+jobs:
+  rpm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile RPM tests
+        run: cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/core/engine_speed.c tests/test_engine_speed.c -o /tmp/tunuino_engine_speed
+      - name: Run RPM tests
+        run: /tmp/tunuino_engine_speed
