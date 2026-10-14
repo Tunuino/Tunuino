@@ -3,12 +3,12 @@
 #include "usart_console.h"
 #define REG32(address) (*(volatile uint32_t *)(address))
 #define RCC_APB1ENR REG32(0x40023840u)
-#define USART2_SR REG32(0x40004400u)
-#define USART2_DR REG32(0x40004404u)
-#define USART2_BRR REG32(0x40004408u)
-#define USART2_CR1 REG32(0x4000440Cu)
-#define USART2_CR2 REG32(0x40004410u)
-#define USART2_CR3 REG32(0x40004414u)
+#define USART3_SR REG32(0x40004800u)
+#define USART3_DR REG32(0x40004804u)
+#define USART3_BRR REG32(0x40004808u)
+#define USART3_CR1 REG32(0x4000480Cu)
+#define USART3_CR2 REG32(0x40004810u)
+#define USART3_CR3 REG32(0x40004814u)
 tunuino_usart_config_t tunuino_usart_make_config(uint32_t pclk_hz, uint32_t baud) {
     tunuino_usart_config_t cfg = {0};
     cfg.peripheral_clock_hz = pclk_hz;
@@ -21,25 +21,25 @@ tunuino_usart_config_t tunuino_usart_make_config(uint32_t pclk_hz, uint32_t baud
     cfg.valid = 1u;
     return cfg;
 }
-uint8_t tunuino_usart2_init_disconnected(const tunuino_usart_config_t *cfg) {
+uint8_t tunuino_usart3_init_disconnected(const tunuino_usart_config_t *cfg) {
     if (!cfg || !cfg->valid) return 0u;
-    RCC_APB1ENR |= (1u << 17); // USART2EN
+    RCC_APB1ENR |= (1u << 18); // USART3EN
     (void)RCC_APB1ENR;
-    USART2_CR1 = 0u; // UE=0: peripheral disabled
-    USART2_CR2 = 0u;
-    USART2_CR3 = 0u;
-    USART2_BRR = cfg->brr;
+    USART3_CR1 = 0u; // UE=0: peripheral disabled
+    USART3_CR2 = 0u;
+    USART3_CR3 = 0u;
+    USART3_BRR = cfg->brr;
     // Do not set UE, TE, RE or any IRQ bits before pinout is verified.
     return 1u;
 }
-uint8_t tunuino_usart2_tx_ready(void *context) {
+uint8_t tunuino_usart3_tx_ready(void *context) {
     (void)context;
     // No transmission unless both UE and TE are enabled by a future reviewed driver.
-    if ((USART2_CR1 & ((1u << 13) | (1u << 3))) != ((1u << 13) | (1u << 3)))
+    if ((USART3_CR1 & ((1u << 13) | (1u << 3))) != ((1u << 13) | (1u << 3)))
         return 0u;
-    return (uint8_t)((USART2_SR & (1u << 7)) != 0u);
+    return (uint8_t)((USART3_SR & (1u << 7)) != 0u);
 }
-void tunuino_usart2_send_byte(uint8_t byte, void *context) {
+void tunuino_usart3_send_byte(uint8_t byte, void *context) {
     (void)context;
-    if (tunuino_usart2_tx_ready(0)) USART2_DR = byte;
+    if (tunuino_usart3_tx_ready(0)) USART3_DR = byte;
 }
