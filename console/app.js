@@ -35,18 +35,20 @@ function renderMap() {
   const table = document.querySelector("#map-table");
   table.replaceChildren();
   const header = document.createElement("tr");
-  for (const label of ["kPa / RPM", ...rpmAxis]) {
+  const activeRpmAxis = showingEcuMap ? ecuMaps[currentType].rpmAxis : rpmAxis;
+  const activeLoadAxis = showingEcuMap ? ecuMaps[currentType].loadAxis : loadAxis;
+  for (const label of ["kPa / RPM", ...activeRpmAxis]) {
     const th = document.createElement("th"); th.textContent = label; header.append(th);
   }
   table.append(header);
   map.forEach((values, row) => {
     const tr = document.createElement("tr");
-    const th = document.createElement("th"); th.textContent = loadAxis[row]; tr.append(th);
+    const th = document.createElement("th"); th.textContent = activeLoadAxis[row]; tr.append(th);
     values.forEach((value, col) => {
       const td = document.createElement("td");
       const input = document.createElement("input");
       input.type = "number"; input.step = "0.1"; input.disabled = showingEcuMap; input.value = String(value);
-      input.setAttribute("aria-label", `Carga ${loadAxis[row]} kPa, ${rpmAxis[col]} rpm`);
+      input.setAttribute("aria-label", `Carga ${activeLoadAxis[row]} kPa, ${activeRpmAxis[col]} rpm`);
       input.addEventListener("change", () => {
         try { setCell(map, row, col, input.value, currentType); input.value = String(map[row][col]); }
         catch { input.value = String(map[row][col]); document.querySelector("#map-notice").textContent = "Valor inválido, alteração rejeitada."; }
@@ -69,7 +71,7 @@ document.querySelector("#reset-map").addEventListener("click", () => {
 document.querySelector("#export-map").addEventListener("click", () => {
   const blob = new Blob([mapToCsv(map)], {type: "text/csv;charset=utf-8"});
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href = url; a.download = `tunuino-${currentType}-demo.csv`; a.click();
+  const a = document.createElement("a"); a.href = url; a.download = `tunuino-${currentType}-${showingEcuMap ? "ecu" : "demo"}.csv`; a.click();
   URL.revokeObjectURL(url);
 });
 renderMap();
