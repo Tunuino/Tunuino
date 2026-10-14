@@ -5,6 +5,7 @@ import {TelemetryStream} from "./telemetry-stream.js";
 import {TunuinoSerialTransport} from "./serial-transport.js";
 import {TelemetryFreshness} from "./telemetry-freshness.js";
 import {TuneSnapshotAssembler} from "./tune-snapshot.js";
+import {inspectFirmwareImage} from "./firmware-image.js";
 const metrics = [
   ["RPM", "rpm", 0, 8000], ["MAP", "kPa", 0, 250],
   ["TPS", "%", 0, 100], ["CLT", "°C", -20, 130],
@@ -178,3 +179,18 @@ disconnectButton.addEventListener("click", async () => {
 
 // Watchdog runs only while the page is active; after tab suspension it expires on resume.
 setInterval(() => freshness.check(performance.now()), 100);
+
+// Offline image preflight. Flash button intentionally locked until a real,
+// tested STM32F429 bootloader transport and verification are implemented.
+document.querySelector("#firmware-file").addEventListener("change", async event => {
+  const status = document.querySelector("#firmware-status");
+  const file = event.target.files?.[0];
+  if (!file) { status.textContent = "Nenhum firmware selecionado."; return; }
+  try {
+    const info = inspectFirmwareImage(new Uint8Array(await file.arrayBuffer()));
+    status.textContent = "Imagem BIN plausível: " + info.size +
+      " bytes. Vetores de arranque válidos. Gravação bloqueada até validar o bootloader e a placa.";
+  } catch (error) {
+    status.textContent = "Firmware rejeitado: " + error.message;
+  }
+});
