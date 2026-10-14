@@ -1,10 +1,10 @@
 # Firmware Tunuino
 
-Alvo: STM32F407ZGT6, Cortex-M4F, LQFP144.
+Alvo: STM32F429ZIT6, Cortex-M4F, LQFP144.
 
 ## Estado
 
-Estrutura inicial, sem firmware executável. Não há ainda bootloader, HAL, drivers, scheduler ou compilação validada.
+Firmware de arranque e protocolo de leitura compilados para ARM. Comunicação física, saídas de potência e validação em placa ainda pendentes.
 
 ## Funcionalidades planeadas
 
