@@ -1,0 +1,13 @@
+name: Tunuino tune validation tests
+on:
+  push:
+  pull_request:
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile map validation tests
+        run: cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/core/tune_maps.c firmware/core/tune_validation.c tests/test_tune_validation.c -o /tmp/tunuino_tune_validation
+      - name: Run validation tests
+        run: /tmp/tunuino_tune_validation
