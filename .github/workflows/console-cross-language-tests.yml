@@ -1,0 +1,19 @@
+name: Tunuino Console C JS interoperability tests
+on:
+  push:
+  pull_request:
+jobs:
+  interoperability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile C protocol vector generator
+        run: cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/core/console_protocol.c tests/console_protocol_vectors.c -o /tmp/tunuino_vectors
+      - name: Compare C output with checked-in vectors
+        run: /tmp/tunuino_vectors | diff -u tests/console_protocol_vectors.txt -
+      - name: Run JS protocol tests
+        working-directory: console
+        run: npm test
