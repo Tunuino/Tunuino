@@ -7,12 +7,10 @@ SIZE := $(TOOLCHAIN)size
 APP_FLASH_ORIGIN ?= 0x08000000
 CFLAGS := -mcpu=cortex-m4 -mthumb -DSTM32F429xx -std=c11 -Os -ffreestanding -fdata-sections -ffunction-sections -Wall -Wextra -Werror
 LDFLAGS := -mcpu=cortex-m4 -mthumb -nostdlib -Wl,--gc-sections -Wl,-Map=build/tunuino.map -T linker.ld -Wl,--defsym=APP_FLASH_ORIGIN=$(APP_FLASH_ORIGIN)
+include ../../console/console.mk
 SOURCES := startup.c main.c board.c startup_contract.c mcu_clock.c mcu_tick.c usart_console.c can1.c \
   ../../core/tune_maps.c ../../core/tune_validation.c ../../core/tune_store.c \
-  ../../core/tune_wire.c ../../core/console_protocol.c ../../core/console_tune_read.c \
-  ../../core/console_tx_queue.c ../../core/console_tune_request.c \
-  ../../core/console_tune_rx.c ../../core/console_uart_pump.c ../../core/console_tune_link.c \
-  ../../core/console_tx.c
+  ../../core/tune_wire.c $(TUNUINO_CONSOLE_SOURCES)
 OBJECTS := $(patsubst %.c,build/%.o,$(SOURCES))
 .PHONY: all clean
 all: build/tunuino.elf build/tunuino.bin
