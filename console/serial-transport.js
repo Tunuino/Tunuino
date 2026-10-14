@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Tunuino
 import {TelemetryStream} from "./telemetry-stream.js";
 import {TYPE_TUNE_CHUNK} from "./tune-snapshot.js";
+import {allTuneReadRequests} from "./tune-request.js";
 import {decodeFrame, PROTOCOL_VERSION, TYPE_HELLO, MAX_PAYLOAD} from "./protocol.js";
 // Read-only Web Serial transport. Does not send data or control the ECU.
 export class TunuinoSerialTransport {
@@ -11,6 +12,7 @@ export class TunuinoSerialTransport {
     this.telemetry = new TelemetryStream(onTelemetry);
     this.port = null;
     this.reader = null;
+    this.writer = null;
     this.connected = false;
     this.identified = false;
     this.running = false;
@@ -47,6 +49,21 @@ export class TunuinoSerialTransport {
         this.port = null;
       }
       this.onStatus("disconnected");
+    }
+  }
+  async requestTune() {
+    if (!this.connected || !this.identified || !this.port?.writable)
+      throw new Error("ECU não identificada ou porta indisponível");
+    if (this.writer) throw new Error("Leitura já em curso");
+    this.writer = this.port.writable.getWriter();
+    try {
+      for (const request of allTuneReadRequests()) {
+        if (!this.running || !this.identified) throw new Error("Ligação interrompida");
+        await this.writer.write(request);
+      }
+    } finally {
+      this.writer.releaseLock();
+      this.writer = null;
     }
   }
   async disconnect() {
