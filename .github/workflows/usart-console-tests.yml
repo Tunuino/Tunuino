@@ -1,0 +1,13 @@
+name: Tunuino USART console clock tests
+on:
+  push:
+  pull_request:
+jobs:
+  usart-clock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile USART clock tests
+        run: cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/platform/stm32f407/usart_console.c tests/test_usart_console.c -o /tmp/tunuino_usart_console
+      - name: Run USART clock tests
+        run: /tmp/tunuino_usart_console
