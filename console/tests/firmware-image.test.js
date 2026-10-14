@@ -22,3 +22,11 @@ test("rejects empty and oversized images", () => {
   assert.throws(() => inspectFirmwareImage(new Uint8Array(0)), /Tamanho/);
   assert.throws(() => inspectFirmwareImage(new Uint8Array(2097153)), /Tamanho/);
 });
+
+test("bootloader-offset image must match its exact application origin", () => {
+  const app = image(0x20020000, 0x08008009);
+  assert.equal(inspectFirmwareImage(app, {base: 0x08008000}).base, 0x08008000);
+  assert.throws(() => inspectFirmwareImage(app), /arranque/);
+  assert.throws(() => inspectFirmwareImage(image(), {base: 0x08008000}), /arranque/);
+  assert.throws(() => inspectFirmwareImage(app, {base: 0x08008001}), /Endereço/);
+});
