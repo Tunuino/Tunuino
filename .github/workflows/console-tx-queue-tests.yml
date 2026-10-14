@@ -1,0 +1,13 @@
+name: Tunuino Console TX queue tests
+on:
+  push:
+  pull_request:
+jobs:
+  tx-queue:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile TX queue tests
+        run: cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/core/console_protocol.c firmware/core/console_tx.c firmware/core/console_tx_queue.c tests/test_console_tx_queue.c -o /tmp/tunuino_tx_queue
+      - name: Run TX queue tests
+        run: /tmp/tunuino_tx_queue
