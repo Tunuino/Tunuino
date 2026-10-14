@@ -33,6 +33,8 @@ jobs:
           /tmp/tunuino-bootloader-guards
           cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/bootloader/tests/boot_decision_test.c -o /tmp/tunuino-bootloader-decision
           /tmp/tunuino-bootloader-decision
+          cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/bootloader/tests/flash_regions_test.c -o /tmp/tunuino-flash-regions
+          /tmp/tunuino-flash-regions
       - name: Install ARM compiler when bootloader sources exist
         if: ${{ hashFiles('firmware/bootloader/Makefile') != '' }}
         run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi
