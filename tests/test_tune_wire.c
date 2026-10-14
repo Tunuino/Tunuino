@@ -19,7 +19,7 @@ int main(void) {
     tunuino_tune_wire_t wire = {0};
     assert(tunuino_tune_wire_build(&wire, &store));
     assert(wire.bytes[0] == 'T' && wire.bytes[3] == 'E');
-    assert(wire.bytes[4] == 1u && wire.bytes[6] == 0x50u);
+    assert(wire.bytes[4] == 2u && wire.bytes[6] == 0x90u && wire.bytes[7] == 0x04u);
     uint8_t collected[TUNUINO_TUNE_WIRE_SIZE] = {0};
     size_t at = 0u;
     while (at < sizeof(collected)) {
