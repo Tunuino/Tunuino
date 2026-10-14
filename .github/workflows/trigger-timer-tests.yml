@@ -1,0 +1,13 @@
+name: Tunuino trigger timer adapter tests
+on:
+  push:
+  pull_request:
+jobs:
+  timer-adapter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile timer adapter
+        run: cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/platform/stm32f407/trigger_timer.c tests/test_trigger_timer.c -o /tmp/tunuino_trigger_timer
+      - name: Run timer adapter
+        run: /tmp/tunuino_trigger_timer
