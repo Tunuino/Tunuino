@@ -32,7 +32,7 @@
     </section>
     <section id="connection" class="page">
       <div class="heading"><h2>Ligação à ECU</h2><p>O protocolo de comunicação Tunuino ainda está em desenvolvimento.</p></div>
-      <div class="panel"><h3>USB / Serial / CAN</h3><p><button id="connect-serial" type="button">Ligar USB/Serial</button> <button id="disconnect-serial" type="button" disabled>Desligar</button></p><p>A ligação Web Serial experimental é apenas de leitura. A ECU precisa de enviar uma mensagem HELLO válida antes de mostrar telemetria.</p><p>Próxima etapa: definir mensagens, identificação da ECU, telemetria, CRC e controlo de escrita seguro.</p></div>
+      <div class="panel"><h3>USB / Serial / CAN</h3><p><button id="connect-serial" type="button">Ligar USB/Serial</button> <button id="disconnect-serial" type="button" disabled>Desligar</button></p><p>A ligação Web Serial experimental é apenas de leitura. A ECU precisa de enviar uma mensagem HELLO válida antes de mostrar telemetria.</p><p>A instalação de firmware requer bootloader compatível e entrada segura em modo de programação; a gravação ainda não está disponível.</p><label>Firmware STM32F429 (.bin) <input id="firmware-file" type="file" accept=".bin,application/octet-stream"></label><p id="firmware-status" role="status">Seleciona um ficheiro BIN para verificar a imagem antes de programar.</p><button id="flash-firmware" type="button" disabled>Gravar firmware (bootloader pendente)</button></div>
     </section>
   </main>
   <footer>Tunuino Console · protótipo independente · MIT · © 2026 Tunuino</footer>
