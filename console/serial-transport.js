@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Tunuino
 import {TelemetryStream} from "./telemetry-stream.js";
+import {TYPE_TUNE_CHUNK} from "./tune-snapshot.js";
 import {decodeFrame, PROTOCOL_VERSION, TYPE_HELLO, MAX_PAYLOAD} from "./protocol.js";
 // Read-only Web Serial transport. Does not send data or control the ECU.
 export class TunuinoSerialTransport {
-  constructor({onTelemetry, onStatus}) {
+  constructor({onTelemetry, onStatus, onTuneChunk}) {
+    this.onTuneChunk = onTuneChunk ?? (() => {});
     this.onStatus = onStatus ?? (() => {});
     this.telemetry = new TelemetryStream(onTelemetry);
     this.port = null;
@@ -72,7 +74,8 @@ export class TunuinoSerialTransport {
           this.identified = true;
           this.onStatus("identified");
         } else if (this.identified) {
-          this.telemetry.push(frameBytes);
+          if (frame.type === TYPE_TUNE_CHUNK) this.onTuneChunk(frame.payload);
+          else this.telemetry.push(frameBytes);
         }
       } catch { this.buffer.shift(); }
     }
