@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Tunuino
-#ifndef TUNUINO_STM32F407_BOARD_H
-#define TUNUINO_STM32F407_BOARD_H
+#ifndef TUNUINO_STM32F429_BOARD_H
+#define TUNUINO_STM32F429_BOARD_H
 #include <stdint.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
-#define TUNUINO_BOARD_NAME "Tunuino STM32F407ZG"
+#define TUNUINO_BOARD_NAME "Tunuino STM32F429ZG"
 #define TUNUINO_INJECTOR_COUNT 8u
 #define TUNUINO_IGNITION_COUNT 8u
 #define TUNUINO_CAN_WIDEBAND_BUS 1u
