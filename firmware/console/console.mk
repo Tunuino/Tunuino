@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: MIT
-# Tunuino ECU console module, following the firmware/console/console.mk layout.
-# Existing source files are referenced directly until migrated with their tests.
+# Tunuino firmware console sources.
+# Paths are relative to firmware/console/.
 TUNUINO_CONSOLE_SOURCES := \
-  ../../console/console_protocol.c ../../core/console_tune_read.c \
-  ../../console/console_tx_queue.c ../../core/console_tune_request.c \
-  ../../core/console_tune_rx.c ../../console/console_uart_pump.c \
-  ../../core/console_tune_link.c ../../core/console_tx.c
+  console_protocol.c ../core/console_tune_read.c \
+  console_tx_queue.c ../core/console_tune_request.c \
+  ../core/console_tune_rx.c console_uart_pump.c \
+  ../core/console_tune_link.c ../core/console_tx.c
