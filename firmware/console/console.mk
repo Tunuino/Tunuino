@@ -4,5 +4,5 @@
 TUNUINO_CONSOLE_SOURCES := \
   ../../core/console_protocol.c ../../core/console_tune_read.c \
   ../../console/console_tx_queue.c ../../core/console_tune_request.c \
-  ../../core/console_tune_rx.c ../../core/console_uart_pump.c \
+  ../../core/console_tune_rx.c ../../console/console_uart_pump.c \
   ../../core/console_tune_link.c ../../core/console_tx.c
