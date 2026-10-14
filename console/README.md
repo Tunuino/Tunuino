@@ -1,34 +1,24 @@
 # Tunuino Console
 
-Aplicação original Tunuino para configuração e diagnóstico de ECU. A organização funcional inspira-se nas ferramentas de gestão de motores, incluindo a rusEFI Console, mas **não contém código copiado da rusEFI**.
+Interface independente, MIT, para monitorização e leitura de calibrações Tunuino.
 
-## Protótipo funcional
+## Funcionalidades implementadas
 
-- Dashboard com indicadores RPM, MAP, TPS, CLT, IAT, AFR e bateria (ainda sem dados reais).
-- Editor local de mapas VE e avanço de ignição, com validação e exportação CSV.
-- Secções de diagnóstico e ligação, ainda sem implementação de comunicação.
-- Interface responsiva para computador e telemóvel.
+- Dashboard RPM, MAP, TPS, CLT, IAT, AFR e tensão, atualizado apenas com telemetria validada.
+- Web Serial a 115200 baud com identificação HELLO, enquadramento e CRC16.
+- Leitura apenas de mapas VE e ignição 16×16 em 37 blocos de até 32 bytes, com confirmação, timeout e repetição.
+- Validação de tamanho, versão, eixos, limites de células e CRC32 do snapshot antes de apresentar dados da ECU.
+- Mapas de demonstração editáveis localmente e exportação CSV. Mapas recebidos da ECU são apenas de leitura.
+- Desconexão, expiração de telemetria e estados de erro visíveis.
 
-### Executar
+## Executar
 
-Servir a pasta `console/` com um servidor HTTP estático e abrir `index.html` no navegador. A aplicação usa módulos JavaScript nativos. Não são necessárias dependências de produção.
+Abrir a pasta `console/` num servidor HTTP estático e aceder a `index.html` num navegador com Web Serial (por exemplo, Chrome ou Edge em computador). A API Web Serial requer contexto seguro, como `http://localhost` ou HTTPS. Nem todos os navegadores móveis suportam Web Serial.
 
-### Testar
+Testes: `cd console && npm test` (Node.js 22). GitHub Actions executa os testes automaticamente.
 
-Com Node.js 22: `cd console && npm test`. Os testes também são executados no GitHub Actions.
+## Limitações de hardware e segurança
 
-## Limitações
+A Console está implementada como cliente de protocolo experimental, mas **não está validada numa ECU física**. O firmware STM32F429 ainda mantém USART2 fisicamente desligada e não fornece um snapshot de calibração válido em produção; por isso a leitura real não funcionará até integrar e validar ambos os lados na PCB. Não existe escrita de mapas na ECU, flash de firmware, controlo de injetores/ignição, leitura real de DTC nem suporte CAN direto no navegador.
 
-**Modo demonstração exclusivamente.** Sem USB/serial/CAN, sem telemetria, sem escrita de mapas na ECU e sem controlo de saídas. A ECU ainda não implementa o protocolo de comunicação necessário. Os mapas iniciais são valores fictícios, não calibrações seguras para um motor.
-
-## Próximas etapas
-
-1. Definir protocolo Tunuino (identificação, versão, CRC, telemetria, erros e segurança).
-2. Implementar transporte serial/USB e telemetria real.
-3. Adicionar datalogging, leitura de DTC, calibração e mapas persistentes.
-4. Melhorar visualização de mapas, gráficos e ferramentas de configuração.
-5. Avaliar compatibilidade com TunerStudio e fluxos equivalentes aos da rusEFI Console.
-
-## Licenciamento
-
-Código próprio da Tunuino: MIT, Copyright (c) 2026 Tunuino. Qualquer integração futura de código de terceiros terá de respeitar as respetivas licenças e avisos de direitos de autor.
+Os mapas de demonstração são fictícios e não devem ser usados para operar um motor. Compatibilidade TunerStudio não validada.
