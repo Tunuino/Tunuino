@@ -1,0 +1,13 @@
+name: Tunuino Console RPM pipeline tests
+on:
+  push:
+  pull_request:
+jobs:
+  rpm-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile RPM pipeline tests
+        run: cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/core/trigger_capture.c firmware/core/trigger_60_2.c firmware/core/engine_phase.c firmware/core/engine_position.c firmware/core/engine_speed.c firmware/core/engine_state.c firmware/core/console_rpm_freshness.c firmware/core/console_rpm_pipeline.c tests/test_console_rpm_pipeline.c -o /tmp/tunuino_rpm_pipeline
+      - name: Run RPM pipeline tests
+        run: /tmp/tunuino_rpm_pipeline
