@@ -1,3 +1,4 @@
 rootProject.name = 'tunuino'
-include ':version'
+include ':version', ':bin2header'
 project(':version').projectDir = file('java_tools/version')
+project(':bin2header').projectDir = file('java_tools/bin2header')
