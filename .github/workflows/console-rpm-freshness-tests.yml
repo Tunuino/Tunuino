@@ -1,0 +1,19 @@
+name: Tunuino Console RPM freshness tests
+on:
+  push:
+  pull_request:
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile firmware RPM freshness tests
+        run: cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/core/console_rpm_freshness.c tests/test_console_rpm_freshness.c -o /tmp/tunuino_rpm_freshness
+      - name: Run firmware tests
+        run: /tmp/tunuino_rpm_freshness
+      - name: Run Console tests
+        working-directory: console
+        run: npm test
