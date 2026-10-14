@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include "tune_store.h"
 #define TUNUINO_TUNE_WIRE_VERSION 1u
-#define TUNUINO_TUNE_WIRE_SIZE 548u
+#define TUNUINO_TUNE_WIRE_SIZE 336u
 #define TUNUINO_TUNE_WIRE_CHUNK_MAX 32u
 typedef struct {
     uint8_t bytes[TUNUINO_TUNE_WIRE_SIZE];
@@ -16,7 +16,7 @@ typedef struct {
 } tunuino_tune_wire_t;
 // Deterministic, little-endian serialization of validated tune store.
 // 2 maps x (8 rpm axes + 8 load axes + 64 signed cells) x 2 bytes,
-// plus 8-byte header and 4-byte CRC = 332 bytes.
+// plus 12-byte header and 4-byte CRC = 336 bytes.
 uint8_t tunuino_tune_wire_build(tunuino_tune_wire_t *wire,
     const tunuino_tune_store_t *store);
 size_t tunuino_tune_wire_read(const tunuino_tune_wire_t *wire,
