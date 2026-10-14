@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/tunuino-logo.png" alt="Tunuino" width="700"></p>
+<p align="center"><img src="assets/tunuino-logo.png" alt="Tunuino" width="420"></p>
 
 # Tunuino
 
