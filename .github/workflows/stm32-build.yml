@@ -2,6 +2,7 @@ name: Tunuino STM32 firmware build
 on:
   push:
   pull_request:
+  workflow_dispatch:
 jobs:
   firmware:
     runs-on: ubuntu-latest
@@ -11,10 +12,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi
       - name: Build ELF and BIN
         run: make -C firmware/platform/stm32f429
+      - name: Validate alternate application origin (bootloader layout smoke test)
+        run: |
+          make -C firmware/platform/stm32f429 clean
+          make -C firmware/platform/stm32f429 APP_FLASH_ORIGIN=0x08008000
+          arm-none-eabi-objdump -h firmware/platform/stm32f429/build/tunuino.elf | grep -E '08008000.*isr_vector|isr_vector.*08008000'
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tunuino-stm32f429-first-boot
+          name: tunuino-stm32f429-offset-build-only
           path: |
             firmware/platform/stm32f429/build/tunuino.elf
             firmware/platform/stm32f429/build/tunuino.bin
