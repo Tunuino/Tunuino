@@ -21,8 +21,8 @@
       <div class="panel"><h3>Estado da ECU</h3><p id="engine-status">Sem ECU ligada. Saídas de potência não controladas por esta aplicação.</p></div>
     </section>
     <section id="maps" class="page">
-      <div class="heading"><h2>Editor de mapas</h2><p>Mapa VE demonstrativo, guardado apenas em memória. Não é enviado à ECU.</p></div>
-      <div class="toolbar"><label>Mapa <select id="map-type"><option value="ve">VE (%)</option><option value="ignition">Avanço de ignição (°)</option></select></label><button id="reset-map">Repor demonstração</button><button id="export-map">Exportar CSV</button></div>
+      <div class="heading"><h2>Editor de mapas</h2><p>Mapas 16×16. Demonstração local ou leitura experimental da ECU, sem gravação.</p></div>
+      <div class="toolbar"><label>Mapa <select id="map-type"><option value="ve">VE (%)</option><option value="ignition">Avanço de ignição (°)</option></select></label><button id="read-ecu-map" type="button" disabled>Ler mapas da ECU</button><button id="reset-map">Repor demonstração</button><button id="export-map">Exportar CSV</button></div>
       <div class="table-scroll"><table id="map-table" aria-label="Tabela de calibração"></table></div>
       <p id="map-notice" role="status">Edição local de demonstração.</p>
     </section>
