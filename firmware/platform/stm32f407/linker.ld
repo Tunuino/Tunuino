@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: MIT */
-/* Tunuino STM32F407ZGT6: 1 MiB flash, 192 KiB SRAM (128K + 64K CCM).
+/* Tunuino STM32F429ZIT6: 2 MiB flash, 256 KiB SRAM including CCM.
  * Initial firmware uses only the contiguous 128 KiB SRAM region. */
 ENTRY(Reset_Handler)
 MEMORY {
-  FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 1024K
+  FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 2048K
   RAM (rwx)   : ORIGIN = 0x20000000, LENGTH = 128K
 }
 _estack = ORIGIN(RAM) + LENGTH(RAM);
