@@ -3,6 +3,7 @@
 import {rpmAxis, loadAxis, makeDemoMap, setCell, mapToCsv} from "./map-model.js";
 import {TelemetryStream} from "./telemetry-stream.js";
 import {TunuinoSerialTransport} from "./serial-transport.js";
+import {TelemetryFreshness} from "./telemetry-freshness.js";
 const metrics = [
   ["RPM", "rpm", 0, 8000], ["MAP", "kPa", 0, 250],
   ["TPS", "%", 0, 100], ["CLT", "°C", -20, 130],
@@ -68,7 +69,15 @@ renderMap();
 // Validated telemetry is rendered only when explicitly delivered by a transport.
 // No transport is attached in this prototype, so the dashboard remains unavailable.
 const telemetryKeys = ["rpm", "map", "tps", "clt", "iat", "afr", "battery"];
+const freshness = new TelemetryFreshness(() => clearGauges(), 500);
+function clearGauges() {
+  document.querySelectorAll("#gauges .gauge").forEach(card => {
+    card.querySelector(".value").textContent = "--";
+    card.querySelector(".fill").style.width = "0%";
+  });
+}
 export function renderTelemetry(values) {
+  freshness.received(performance.now());
   const cards = document.querySelectorAll("#gauges .gauge");
   telemetryKeys.forEach((key, index) => {
     const value = values[key];
@@ -91,6 +100,7 @@ const disconnectButton = document.querySelector("#disconnect-serial");
 const serialTransport = new TunuinoSerialTransport({
   onTelemetry: renderTelemetry,
   onStatus(status) {
+    if (status === "disconnected" || status === "error") freshness.reset();
     const labels = {
       "serial-open": "SERIAL ABERTA · NÃO IDENTIFICADA",
       identified: "TUNUINO IDENTIFICADA · LEITURA",
@@ -118,3 +128,6 @@ disconnectButton.addEventListener("click", async () => {
   disconnectButton.disabled = true;
   await serialTransport.disconnect();
 });
+
+// Watchdog runs only while the page is active; after tab suspension it expires on resume.
+setInterval(() => freshness.check(performance.now()), 100);
