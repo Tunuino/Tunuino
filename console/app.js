@@ -4,6 +4,7 @@ import {rpmAxis, loadAxis, makeDemoMap, setCell, mapToCsv} from "./map-model.js"
 import {TelemetryStream} from "./telemetry-stream.js";
 import {TunuinoSerialTransport} from "./serial-transport.js";
 import {TelemetryFreshness} from "./telemetry-freshness.js";
+import {TuneSnapshotAssembler} from "./tune-snapshot.js";
 const metrics = [
   ["RPM", "rpm", 0, 8000], ["MAP", "kPa", 0, 250],
   ["TPS", "%", 0, 100], ["CLT", "°C", -20, 130],
@@ -26,6 +27,10 @@ document.querySelectorAll("nav button").forEach(button => button.addEventListene
 }));
 let currentType = "ve";
 let map = makeDemoMap(currentType);
+const demoMaps = {ve: map, ignition: makeDemoMap("ignition")};
+let ecuMaps = null;
+let showingEcuMap = false;
+let tuneAssembler = new TuneSnapshotAssembler();
 function renderMap() {
   const table = document.querySelector("#map-table");
   table.replaceChildren();
@@ -40,7 +45,7 @@ function renderMap() {
     values.forEach((value, col) => {
       const td = document.createElement("td");
       const input = document.createElement("input");
-      input.type = "number"; input.step = "0.1"; input.value = String(value);
+      input.type = "number"; input.step = "0.1"; input.disabled = showingEcuMap; input.value = String(value);
       input.setAttribute("aria-label", `Carga ${loadAxis[row]} kPa, ${rpmAxis[col]} rpm`);
       input.addEventListener("change", () => {
         try { setCell(map, row, col, input.value, currentType); input.value = String(map[row][col]); }
@@ -52,11 +57,14 @@ function renderMap() {
   });
 }
 document.querySelector("#map-type").addEventListener("change", e => {
-  currentType = e.target.value; map = makeDemoMap(currentType); renderMap();
+  currentType = e.target.value;
+  map = showingEcuMap ? ecuMaps[currentType].cells : demoMaps[currentType]; renderMap();
 });
 document.querySelector("#reset-map").addEventListener("click", () => {
-  map = makeDemoMap(currentType); renderMap();
-  document.querySelector("#map-notice").textContent = "Mapa demonstrativo reposto.";
+  showingEcuMap = false;
+  demoMaps[currentType] = makeDemoMap(currentType);
+  map = demoMaps[currentType]; renderMap();
+  document.querySelector("#map-notice").textContent = "Mapa demonstrativo reposto. Sem escrita na ECU.";
 });
 document.querySelector("#export-map").addEventListener("click", () => {
   const blob = new Blob([mapToCsv(map)], {type: "text/csv;charset=utf-8"});
@@ -99,8 +107,31 @@ const connectButton = document.querySelector("#connect-serial");
 const disconnectButton = document.querySelector("#disconnect-serial");
 const serialTransport = new TunuinoSerialTransport({
   onTelemetry: renderTelemetry,
+  onTuneChunk(payload) {
+    try {
+      if (!tuneAssembler.addChunk(payload)) return;
+      ecuMaps = tuneAssembler.finish();
+      showingEcuMap = true;
+      map = ecuMaps[currentType].cells;
+      renderMap();
+      document.querySelector("#map-notice").textContent =
+        "Mapa da ECU, revisão " + ecuMaps.revision + ". Apenas leitura.";
+    } catch (error) {
+      tuneAssembler = new TuneSnapshotAssembler();
+      document.querySelector("#map-notice").textContent =
+        "Dados de afinação rejeitados: " + error.message;
+    }
+  },
   onStatus(status) {
-    if (status === "disconnected" || status === "error") freshness.reset();
+    if (status === "disconnected" || status === "error") {
+      freshness.reset();
+      tuneAssembler = new TuneSnapshotAssembler();
+      ecuMaps = null;
+      showingEcuMap = false;
+      map = demoMaps[currentType];
+      renderMap();
+      document.querySelector("#map-notice").textContent = "Sem mapa da ECU. Demonstração local.";
+    }
     const labels = {
       "serial-open": "SERIAL ABERTA · NÃO IDENTIFICADA",
       identified: "TUNUINO IDENTIFICADA · LEITURA",
