@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Tunuino
 import {rpmAxis, loadAxis, makeDemoMap, setCell, mapToCsv} from "./map-model.js";
 import {TelemetryStream} from "./telemetry-stream.js";
+import {TunuinoSerialTransport} from "./serial-transport.js";
 const metrics = [
   ["RPM", "rpm", 0, 8000], ["MAP", "kPa", 0, 250],
   ["TPS", "%", 0, 100], ["CLT", "°C", -20, 130],
@@ -79,3 +80,37 @@ export function renderTelemetry(values) {
   });
 }
 export const telemetryReceiver = new TelemetryStream(renderTelemetry);
+
+const connectionLabel = document.querySelector("#connection");
+const connectButton = document.querySelector("#connect-serial");
+const disconnectButton = document.querySelector("#disconnect-serial");
+const serialTransport = new TunuinoSerialTransport({
+  onTelemetry: renderTelemetry,
+  onStatus(status) {
+    const labels = {
+      "serial-open": "SERIAL ABERTA · NÃO IDENTIFICADA",
+      identified: "TUNUINO IDENTIFICADA · LEITURA",
+      disconnected: "DEMO · SEM ECU",
+      error: "ERRO NA LIGAÇÃO"
+    };
+    connectionLabel.textContent = labels[status] ?? "SEM ECU";
+    disconnectButton.disabled = status === "disconnected" || status === "error";
+    if (status === "disconnected" || status === "error") {
+      document.querySelectorAll("#gauges .gauge").forEach(card => {
+        card.querySelector(".value").textContent = "--";
+        card.querySelector(".fill").style.width = "0%";
+      });
+    }
+  }
+});
+connectButton.addEventListener("click", async () => {
+  connectButton.disabled = true;
+  disconnectButton.disabled = false;
+  try { await serialTransport.connect(); }
+  catch (error) { document.querySelector("#engine-status").textContent = `Ligação falhou: ${error.message}`; }
+  finally { connectButton.disabled = false; disconnectButton.disabled = true; }
+});
+disconnectButton.addEventListener("click", async () => {
+  disconnectButton.disabled = true;
+  await serialTransport.disconnect();
+});
