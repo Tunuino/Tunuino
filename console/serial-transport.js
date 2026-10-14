@@ -2,7 +2,8 @@
 // Copyright (c) 2026 Tunuino
 import {TelemetryStream} from "./telemetry-stream.js";
 import {TYPE_TUNE_CHUNK} from "./tune-snapshot.js";
-import {allTuneReadRequests} from "./tune-request.js";
+import {makeTuneReadRequest} from "./tune-request.js";
+import {TUNE_SIZE, TUNE_CHUNK_MAX} from "./tune-snapshot.js";
 import {decodeFrame, PROTOCOL_VERSION, TYPE_HELLO, MAX_PAYLOAD} from "./protocol.js";
 // Read-only Web Serial transport. Does not send data or control the ECU.
 export class TunuinoSerialTransport {
@@ -13,6 +14,8 @@ export class TunuinoSerialTransport {
     this.port = null;
     this.reader = null;
     this.writer = null;
+    this.pendingTune = null;
+    this.tuneReading = false;
     this.connected = false;
     this.identified = false;
     this.running = false;
@@ -38,6 +41,7 @@ export class TunuinoSerialTransport {
       throw error;
     } finally {
       this.running = false;
+      this.#clearPendingTune();
       this.connected = false;
       this.identified = false;
       if (this.reader) {
@@ -51,23 +55,54 @@ export class TunuinoSerialTransport {
       this.onStatus("disconnected");
     }
   }
-  async requestTune() {
-    if (!this.connected || !this.identified || !this.port?.writable)
+  async requestTune({timeoutMs = 1200, retries = 2} = {}) {
+    if (!this.connected || !this.identified || !this.running || !this.port?.writable)
       throw new Error("ECU não identificada ou porta indisponível");
-    if (this.writer) throw new Error("Leitura já em curso");
-    this.writer = this.port.writable.getWriter();
+    if (this.tuneReading) throw new Error("Leitura já em curso");
+    this.tuneReading = true;
+    const writer = this.port.writable.getWriter();
+    this.writer = writer;
     try {
-      for (const request of allTuneReadRequests()) {
-        if (!this.running || !this.identified) throw new Error("Ligação interrompida");
-        await this.writer.write(request);
+      for (let offset = 0; offset < TUNE_SIZE; offset += TUNE_CHUNK_MAX) {
+        const count = Math.min(TUNE_CHUNK_MAX, TUNE_SIZE - offset);
+        let received = false;
+        for (let attempt = 0; attempt <= retries && !received; attempt++) {
+          if (!this.running || !this.identified) throw new Error("Ligação interrompida");
+          const acknowledgement = new Promise(resolve => {
+            const pending = {offset, count, resolve, timer: null};
+            pending.timer = setTimeout(() => {
+              if (this.pendingTune === pending) this.pendingTune = null;
+              resolve(false);
+            }, timeoutMs);
+            this.pendingTune = pending;
+          });
+          try {
+            await writer.write(makeTuneReadRequest(offset, count));
+            received = await acknowledgement;
+          } catch (error) {
+            this.#clearPendingTune();
+            throw error;
+          }
+        }
+        if (!received) throw new Error("Sem resposta da ECU no bloco " + offset);
       }
     } finally {
-      this.writer.releaseLock();
+      this.#clearPendingTune();
+      writer.releaseLock();
       this.writer = null;
+      this.tuneReading = false;
     }
+  }
+  #clearPendingTune() {
+    const pending = this.pendingTune;
+    if (!pending) return;
+    this.pendingTune = null;
+    clearTimeout(pending.timer);
+    pending.resolve(false);
   }
   async disconnect() {
     this.running = false;
+    this.#clearPendingTune();
     if (this.reader) await this.reader.cancel();
   }
   #receive(chunk) {
@@ -91,7 +126,17 @@ export class TunuinoSerialTransport {
           this.identified = true;
           this.onStatus("identified");
         } else if (this.identified) {
-          if (frame.type === TYPE_TUNE_CHUNK) this.onTuneChunk(frame.payload);
+          if (frame.type === TYPE_TUNE_CHUNK) {
+            const pending = this.pendingTune;
+            const payload = frame.payload;
+            if (pending && payload.length === pending.count + 3 &&
+                (payload[0] | (payload[1] << 8)) === pending.offset &&
+                payload[2] === pending.count) {
+              this.onTuneChunk(payload);
+              this.#clearPendingTune();
+              pending.resolve(true);
+            }
+          }
           else this.telemetry.push(frameBytes);
         }
       } catch { this.buffer.shift(); }
