@@ -1,31 +1,29 @@
-name: Build Tunuino logo PNG
+name: Publish approved Tunuino PNG
 on:
   workflow_dispatch:
   push:
     paths:
-      - assets/tunuino-logo.svg
       - .github/workflows/build-logo.yml
 permissions:
   contents: write
 jobs:
-  render:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Render PNG
+      - name: Retrieve approved PNG from GitHub blob
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python -m pip install --quiet cairosvg
-          python - <<'PY'
-          import cairosvg
-          cairosvg.svg2png(url="assets/tunuino-logo.svg",write_to="assets/tunuino-logo.png")
-          PY
-      - name: Commit PNG
+          gh api repos/Tunuino/tunuino/git/blobs/f2b627bd29e06c683ab3b884f841c2715f974b3a --jq '.content' | base64 --decode > assets/tunuino-logo.png
+          file assets/tunuino-logo.png
+      - name: Commit approved PNG
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/tunuino-logo.png
           if ! git diff --cached --quiet; then
-            git commit -m "Render Tunuino logo PNG"
+            git commit -m "Publish approved Tunuino PNG logo"
             for attempt in 1 2 3 4 5; do
               git fetch origin master
               git rebase origin/master
