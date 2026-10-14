@@ -11,8 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install ARM toolchain
-        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi
+      - name: Ensure ARM toolchain
+        run: |
+          if command -v arm-none-eabi-gcc >/dev/null 2>&1 && command -v arm-none-eabi-objcopy >/dev/null 2>&1; then
+            arm-none-eabi-gcc --version | head -n 1
+          else
+            sudo apt-get update -qq
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends gcc-arm-none-eabi binutils-arm-none-eabi
+          fi
       - name: Build standalone STM32F429 firmware
         run: make -C firmware/platform/stm32f429
       - name: Verify vector table and export package
