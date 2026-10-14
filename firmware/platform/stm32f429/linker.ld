@@ -12,7 +12,7 @@ MEMORY {
 }
 _estack = ORIGIN(RAM) + LENGTH(RAM);
 SECTIONS {
-  .isr_vector : { KEEP(*(.isr_vector)) } > FLASH
+  .isr_vector : { . = ALIGN(512); KEEP(*(.isr_vector)) } > FLASH
   .text : { *(.text*) *(.rodata*) . = ALIGN(4); } > FLASH
   .ARM.exidx : { *(.ARM.exidx*) } > FLASH
   .data : {
