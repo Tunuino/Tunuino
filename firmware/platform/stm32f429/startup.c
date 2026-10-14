@@ -41,3 +41,10 @@ void Reset_Handler(void) {
 void Default_Handler(void) {
     for (;;) __asm volatile ("wfi");
 }
+
+// Minimal freestanding memory primitive required by protocol initialization.
+void *memset(void *destination, int value, __SIZE_TYPE__ count) {
+    volatile unsigned char *out = (volatile unsigned char *)destination;
+    for (__SIZE_TYPE__ i = 0; i < count; ++i) out[i] = (unsigned char)value;
+    return destination;
+}
