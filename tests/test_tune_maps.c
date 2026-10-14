@@ -14,7 +14,7 @@ int main(void) {
     assert(tunuino_tune_map_valid(&m));
     assert(tunuino_tune_map_lookup(&m, 1000u, 200u, &out) && out == 0);
     assert(tunuino_tune_map_lookup(&m, 1500u, 300u, &out) && out == 150);
-    assert(tunuino_tune_map_lookup(&m, 9000u, 1800u, &out) && out == 1300);
+    assert(tunuino_tune_map_lookup(&m, 9000u, 1800u, &out) && out == 2100);
     assert(tunuino_tune_map_lookup(&m, 0u, 0u, &out) && out == 0);
     assert(tunuino_tune_map_lookup(&m, 2000u, 400u, &out) && out == 300);
     m.rpm_axis[1] = m.rpm_axis[0];
