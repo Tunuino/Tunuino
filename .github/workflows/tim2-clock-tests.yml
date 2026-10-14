@@ -1,0 +1,13 @@
+name: Tunuino TIM2 clock tests
+on:
+  push:
+  pull_request:
+jobs:
+  tim2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile TIM2 clock calculations
+        run: cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/platform/stm32f407/tim2_capture.c tests/test_tim2_clock.c -o /tmp/tunuino_tim2_test
+      - name: Run TIM2 clock tests
+        run: /tmp/tunuino_tim2_test
