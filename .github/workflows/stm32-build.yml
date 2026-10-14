@@ -8,14 +8,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Ensure ARM toolchain
-        run: |
-          if command -v arm-none-eabi-gcc >/dev/null 2>&1 && command -v arm-none-eabi-objcopy >/dev/null 2>&1; then
-            arm-none-eabi-gcc --version | head -n 1
-          else
-            sudo apt-get update -qq
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends gcc-arm-none-eabi binutils-arm-none-eabi
-          fi
+      - name: Install Arm GNU Toolchain (arm-none-eabi-gcc)
+        uses: carlosperate/arm-none-eabi-gcc-action@v1.14.0
+        with:
+          release: '14.2.Rel1'
       - name: Build ELF and BIN
         run: make -C firmware/platform/stm32f429
       - name: Preserve standalone build
