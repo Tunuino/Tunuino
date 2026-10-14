@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Tunuino
 #include <stdint.h>
 extern uint32_t _estack, _sidata, _sdata, _edata, _sbss, _ebss;
+extern const uint32_t vector_table[];
 int main(void);
 void Reset_Handler(void);
 void Default_Handler(void);
@@ -35,6 +36,10 @@ void Reset_Handler(void) {
     const uint32_t *src = &_sidata;
     for (dst = &_sdata; dst < &_edata;) *dst++ = *src++;
     for (dst = &_sbss; dst < &_ebss;) *dst++ = 0u;
+    // Relocate interrupt vectors for applications started by a bootloader.
+    // VTOR is available on Cortex-M4; vector table is aligned by linker.
+    (*(volatile uint32_t *)0xE000ED08u) = (uint32_t)(uintptr_t)vector_table;
+    __asm volatile ("dsb\n\tisb" ::: "memory");
     (void)main();
     Default_Handler();
 }
