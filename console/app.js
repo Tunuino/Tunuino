@@ -72,7 +72,11 @@ export function renderTelemetry(values) {
   const cards = document.querySelectorAll("#gauges .gauge");
   telemetryKeys.forEach((key, index) => {
     const value = values[key];
-    if (!Number.isFinite(value)) return;
+    if (!Number.isFinite(value)) {
+      cards[index].querySelector(".value").textContent = "--";
+      cards[index].querySelector(".fill").style.width = "0%";
+      return;
+    }
     cards[index].querySelector(".value").textContent = String(value);
     const min = metrics[index][2], max = metrics[index][3];
     cards[index].querySelector(".fill").style.width =
