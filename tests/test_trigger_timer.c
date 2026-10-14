@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Tunuino
-#include "../firmware/platform/stm32f407/trigger_timer.h"
+#include "../firmware/platform/stm32f429/trigger_timer.h"
 #include <assert.h>
 #include <stdint.h>
 int main(void) {

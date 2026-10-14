@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Tunuino
-#include "../firmware/platform/stm32f407/startup_contract.h"
+#include "../firmware/platform/stm32f429/startup_contract.h"
 #include <assert.h>
 int main(void) {
     tunuino_startup_t state;

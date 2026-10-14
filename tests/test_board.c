@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Tunuino
-#include "../firmware/platform/stm32f407/board.h"
+#include "../firmware/platform/stm32f429/board.h"
 #include <assert.h>
 int main(void) {
     tunuino_board_status_t status;

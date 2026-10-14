@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Tunuino
-#include "../firmware/platform/stm32f407/usart_console.h"
+#include "../firmware/platform/stm32f429/usart_console.h"
 #include <assert.h>
 int main(void) {
     tunuino_usart_config_t cfg = tunuino_usart_make_config(16000000u, 115200u);
