@@ -20,7 +20,7 @@ build/%.o: %.c | build
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 build/tunuino.elf: $(OBJECTS) linker.ld
-	$(CC) $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@
+	$(CC) $(CFLAGS) $(OBJECTS) $(LDFLAGS) -lgcc -o $@
 	$(SIZE) $@
 build/tunuino.bin: build/tunuino.elf
 	$(OBJCOPY) -O binary $< $@
