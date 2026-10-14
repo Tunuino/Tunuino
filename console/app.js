@@ -153,7 +153,7 @@ const serialTransport = new TunuinoSerialTransport({
 readTuneButton.addEventListener("click", async () => {
   readTuneButton.disabled = true;
   tuneAssembler = new TuneSnapshotAssembler();
-  document.querySelector("#map-notice").textContent = "A solicitar 37 blocos. A aguardar resposta da ECU...";
+  document.querySelector("#map-notice").textContent = "A ler 37 blocos com confirmação e repetição em caso de falha...";
   try {
     await serialTransport.requestTune();
   } catch (error) {
