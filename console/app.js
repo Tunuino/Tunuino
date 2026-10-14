@@ -105,6 +105,7 @@ export const telemetryReceiver = new TelemetryStream(renderTelemetry);
 const connectionLabel = document.querySelector("#connection");
 const connectButton = document.querySelector("#connect-serial");
 const disconnectButton = document.querySelector("#disconnect-serial");
+const readTuneButton = document.querySelector("#read-ecu-map");
 const serialTransport = new TunuinoSerialTransport({
   onTelemetry: renderTelemetry,
   onTuneChunk(payload) {
@@ -139,6 +140,7 @@ const serialTransport = new TunuinoSerialTransport({
       error: "ERRO NA LIGAÇÃO"
     };
     connectionLabel.textContent = labels[status] ?? "SEM ECU";
+    readTuneButton.disabled = status !== "identified";
     disconnectButton.disabled = status === "disconnected" || status === "error";
     if (status === "disconnected" || status === "error") {
       document.querySelectorAll("#gauges .gauge").forEach(card => {
@@ -146,6 +148,19 @@ const serialTransport = new TunuinoSerialTransport({
         card.querySelector(".fill").style.width = "0%";
       });
     }
+  }
+});
+readTuneButton.addEventListener("click", async () => {
+  readTuneButton.disabled = true;
+  tuneAssembler = new TuneSnapshotAssembler();
+  document.querySelector("#map-notice").textContent = "A solicitar 37 blocos. A aguardar resposta da ECU...";
+  try {
+    await serialTransport.requestTune();
+  } catch (error) {
+    tuneAssembler = new TuneSnapshotAssembler();
+    document.querySelector("#map-notice").textContent = "Leitura falhou: " + error.message;
+  } finally {
+    readTuneButton.disabled = !serialTransport.identified;
   }
 });
 connectButton.addEventListener("click", async () => {
