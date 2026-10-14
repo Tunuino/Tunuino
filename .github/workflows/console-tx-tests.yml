@@ -1,0 +1,13 @@
+name: Tunuino Console firmware TX tests
+on:
+  push:
+  pull_request:
+jobs:
+  firmware-tx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile TX tests
+        run: cc -std=c11 -Wall -Wextra -Werror -pedantic firmware/core/console_protocol.c firmware/core/console_tx.c tests/test_console_tx.c -o /tmp/tunuino_console_tx
+      - name: Run TX tests
+        run: /tmp/tunuino_console_tx
