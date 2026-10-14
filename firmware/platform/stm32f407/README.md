@@ -1,6 +1,6 @@
-# Tunuino STM32F407ZGT6 platform
+# Tunuino STM32F429ZIT6 platform
 
-Target: STM32F407ZGT6, Cortex-M4F, LQFP144.
+Target: STM32F429ZIT6, Cortex-M4F, LQFP144.
 
 This directory contains the first **host-testable board state interface**, not a functioning STM32 hardware abstraction layer.
 
@@ -14,4 +14,4 @@ This directory contains the first **host-testable board state interface**, not a
 6. Configure CAN1 with a real transceiver for the external LSU 4.9 controller.
 7. Add cross-compilation and target-level tests.
 
-**Do not connect injectors, coils or an engine to this code.** No GPIO, clocks, timers, CAN or startup code are implemented yet.
+**Do not connect injectors, coils or an engine to this code.** Startup, clock and read-only transport scaffolding exist, but GPIO, CAN and engine power outputs are not enabled.
