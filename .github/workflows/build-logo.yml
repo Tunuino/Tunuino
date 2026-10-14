@@ -26,5 +26,11 @@ jobs:
           git add assets/tunuino-logo.png
           if ! git diff --cached --quiet; then
             git commit -m "Render Tunuino logo PNG"
-            git push
+            for attempt in 1 2 3 4 5; do
+              git fetch origin master
+              git rebase origin/master
+              if git push origin HEAD:master; then exit 0; fi
+              sleep 2
+            done
+            exit 1
           fi
