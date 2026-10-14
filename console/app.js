@@ -111,19 +111,13 @@ const readTuneButton = document.querySelector("#read-ecu-map");
 const serialTransport = new TunuinoSerialTransport({
   onTelemetry: renderTelemetry,
   onTuneChunk(payload) {
-    try {
-      if (!tuneAssembler.addChunk(payload)) return;
+    if (!tuneAssembler.addChunk(payload)) return;
       ecuMaps = tuneAssembler.finish();
       showingEcuMap = true;
       map = ecuMaps[currentType].cells;
       renderMap();
       document.querySelector("#map-notice").textContent =
         "Mapa da ECU, revisão " + ecuMaps.revision + ". Apenas leitura.";
-    } catch (error) {
-      tuneAssembler = new TuneSnapshotAssembler();
-      document.querySelector("#map-notice").textContent =
-        "Dados de afinação rejeitados: " + error.message;
-    }
   },
   onStatus(status) {
     if (status === "disconnected" || status === "error") {
@@ -158,8 +152,13 @@ readTuneButton.addEventListener("click", async () => {
   document.querySelector("#map-notice").textContent = "A ler 37 blocos com confirmação e repetição em caso de falha...";
   try {
     await serialTransport.requestTune();
+    if (!ecuMaps) throw new Error("Leitura incompleta: nenhum mapa validado");
   } catch (error) {
     tuneAssembler = new TuneSnapshotAssembler();
+    ecuMaps = null;
+    showingEcuMap = false;
+    map = demoMaps[currentType];
+    renderMap();
     document.querySelector("#map-notice").textContent = "Leitura falhou: " + error.message;
   } finally {
     readTuneButton.disabled = !serialTransport.identified;
