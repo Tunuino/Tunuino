@@ -2,7 +2,6 @@
 // Copyright (c) 2026 Tunuino
 #include <stdint.h>
 extern uint32_t _estack, _sidata, _sdata, _edata, _sbss, _ebss;
-extern const uint32_t vector_table[];
 int main(void);
 void Reset_Handler(void);
 void Default_Handler(void);
