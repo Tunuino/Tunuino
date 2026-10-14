@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tunuino Console</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header><div><h1>Tunuino <span>Console</span></h1><small>ECU configuration & diagnostics</small></div><strong id="connection" role="status">DEMO · SEM ECU</strong></header>
+  <nav aria-label="Secções">
+    <button class="active" data-page="dashboard">Dashboard</button>
+    <button data-page="maps">Mapas</button>
+    <button data-page="diagnostics">Diagnóstico</button>
+    <button data-page="connection">Ligação</button>
+  </nav>
+  <main>
+    <section id="dashboard" class="page active">
+      <div class="heading"><h2>Monitorização</h2><p>Dados simulados para testar a interface. Não são medições reais.</p></div>
+      <div class="gauges" id="gauges"></div>
+      <div class="panel"><h3>Estado da ECU</h3><p id="engine-status">Sem ECU ligada. Saídas de potência não controladas por esta aplicação.</p></div>
+    </section>
+    <section id="maps" class="page">
+      <div class="heading"><h2>Editor de mapas</h2><p>Mapa VE demonstrativo, guardado apenas em memória. Não é enviado à ECU.</p></div>
+      <div class="toolbar"><label>Mapa <select id="map-type"><option value="ve">VE (%)</option><option value="ignition">Avanço de ignição (°)</option></select></label><button id="reset-map">Repor demonstração</button><button id="export-map">Exportar CSV</button></div>
+      <div class="table-scroll"><table id="map-table" aria-label="Tabela de calibração"></table></div>
+      <p id="map-notice" role="status">Edição local de demonstração.</p>
+    </section>
+    <section id="diagnostics" class="page">
+      <div class="heading"><h2>Diagnóstico</h2><p>Não existem códigos de avaria disponíveis sem ligação à ECU.</p></div>
+      <div class="panel"><h3>Estado</h3><p>ECU desligada · DTC indisponíveis · Registo de dados indisponível</p></div>
+    </section>
+    <section id="connection" class="page">
+      <div class="heading"><h2>Ligação à ECU</h2><p>O protocolo de comunicação Tunuino ainda está em desenvolvimento.</p></div>
+      <div class="panel"><h3>USB / Serial / CAN</h3><p>Esta versão funciona offline em modo demonstração. Não envia comandos ao motor e não estabelece uma ligação física.</p><p>Próxima etapa: definir mensagens, identificação da ECU, telemetria, CRC e controlo de escrita seguro.</p></div>
+    </section>
+  </main>
+  <footer>Tunuino Console · protótipo independente · MIT · © 2026 Tunuino</footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
