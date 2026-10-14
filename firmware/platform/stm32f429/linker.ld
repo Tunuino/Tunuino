@@ -2,8 +2,12 @@
 /* Tunuino STM32F429ZIT6: 2 MiB flash, 256 KiB SRAM including CCM.
  * Initial firmware uses only the contiguous 128 KiB SRAM region. */
 ENTRY(Reset_Handler)
+/* Override via --defsym=APP_FLASH_ORIGIN=... only after bootloader layout verification. */
+APP_FLASH_ORIGIN = DEFINED(APP_FLASH_ORIGIN) ? APP_FLASH_ORIGIN : 0x08000000;
+ASSERT(APP_FLASH_ORIGIN >= 0x08000000 && APP_FLASH_ORIGIN < 0x08200000 &&
+       (APP_FLASH_ORIGIN % 0x4000) == 0, "Invalid application flash origin")
 MEMORY {
-  FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 2048K
+  FLASH (rx)  : ORIGIN = APP_FLASH_ORIGIN, LENGTH = 0x08200000 - APP_FLASH_ORIGIN
   RAM (rwx)   : ORIGIN = 0x20000000, LENGTH = 128K
 }
 _estack = ORIGIN(RAM) + LENGTH(RAM);
