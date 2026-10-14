@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Tunuino
 import {rpmAxis, loadAxis, makeDemoMap, setCell, mapToCsv} from "./map-model.js";
+import {TelemetryStream} from "./telemetry-stream.js";
 const metrics = [
   ["RPM", "rpm", 0, 8000], ["MAP", "kPa", 0, 250],
   ["TPS", "%", 0, 100], ["CLT", "°C", -20, 130],
@@ -62,3 +63,19 @@ document.querySelector("#export-map").addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 renderMap();
+
+// Validated telemetry is rendered only when explicitly delivered by a transport.
+// No transport is attached in this prototype, so the dashboard remains unavailable.
+const telemetryKeys = ["rpm", "map", "tps", "clt", "iat", "afr", "battery"];
+export function renderTelemetry(values) {
+  const cards = document.querySelectorAll("#gauges .gauge");
+  telemetryKeys.forEach((key, index) => {
+    const value = values[key];
+    if (!Number.isFinite(value)) return;
+    cards[index].querySelector(".value").textContent = String(value);
+    const min = metrics[index][2], max = metrics[index][3];
+    cards[index].querySelector(".fill").style.width =
+      `${Math.max(0, Math.min(100, (value - min) / (max - min) * 100))}%`;
+  });
+}
+export const telemetryReceiver = new TelemetryStream(renderTelemetry);
