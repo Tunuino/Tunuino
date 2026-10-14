@@ -32,7 +32,7 @@
     </section>
     <section id="connection" class="page">
       <div class="heading"><h2>Ligação à ECU</h2><p>O protocolo de comunicação Tunuino ainda está em desenvolvimento.</p></div>
-      <div class="panel"><h3>USB / Serial / CAN</h3><p>Esta versão funciona offline em modo demonstração. Não envia comandos ao motor e não estabelece uma ligação física.</p><p>Próxima etapa: definir mensagens, identificação da ECU, telemetria, CRC e controlo de escrita seguro.</p></div>
+      <div class="panel"><h3>USB / Serial / CAN</h3><p><button id="connect-serial" type="button">Ligar USB/Serial</button> <button id="disconnect-serial" type="button" disabled>Desligar</button></p><p>A ligação Web Serial experimental é apenas de leitura. A ECU precisa de enviar uma mensagem HELLO válida antes de mostrar telemetria.</p><p>Próxima etapa: definir mensagens, identificação da ECU, telemetria, CRC e controlo de escrita seguro.</p></div>
     </section>
   </main>
   <footer>Tunuino Console · protótipo independente · MIT · © 2026 Tunuino</footer>
