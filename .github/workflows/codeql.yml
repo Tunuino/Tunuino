@@ -4,12 +4,10 @@ on:
     branches: [master]
     paths:
       - 'firmware/**'
-      - 'console/**'
       - '.github/workflows/codeql.yml'
   pull_request:
     paths:
       - 'firmware/**'
-      - 'console/**'
       - '.github/workflows/codeql.yml'
   workflow_dispatch:
 permissions:
@@ -21,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [cpp, javascript-typescript]
+        language: [cpp]
     steps:
       - uses: actions/checkout@v4
       - uses: github/codeql-action/init@v3
