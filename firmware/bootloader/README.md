@@ -16,3 +16,7 @@ Requirements before enabling firmware updates:
 
 Do not flash the offset-test image onto a board without a matching verified
 bootloader. All firmware programming remains disabled in the Console.
+
+The standalone `flash_layout.h` provides bounds and vector checks for future
+bootloader code. It does not erase/program Flash, enable USB, or establish an
+application offset. The header is not a functional bootloader.
