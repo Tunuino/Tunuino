@@ -14,7 +14,7 @@ jobs:
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tunuino-stm32f407-first-boot
+          name: tunuino-stm32f429-first-boot
           path: |
             firmware/platform/stm32f407/build/tunuino.elf
             firmware/platform/stm32f407/build/tunuino.bin
