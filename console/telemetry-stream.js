@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Tunuino
 import {decodeFrame, decodeTelemetry, TYPE_TELEMETRY, MAX_PAYLOAD} from "./protocol.js";
+import {decodePartialTelemetry, TYPE_PARTIAL_TELEMETRY} from "./partial-telemetry.js";
 // Stateful parser for arbitrary serial chunk boundaries. Read-only.
 // Buffer is bounded to the maximum frame size; invalid frames resync by one byte.
 export class TelemetryStream {
@@ -38,6 +39,9 @@ export class TelemetryStream {
         if (frame.type === TYPE_TELEMETRY) {
           const telemetry = decodeTelemetry(frame.payload);
           this.onTelemetry(telemetry);
+          this.validFrames++;
+        } else if (frame.type === TYPE_PARTIAL_TELEMETRY) {
+          this.onTelemetry(decodePartialTelemetry(frame.payload));
           this.validFrames++;
         }
         this.buffer.splice(0, total);
