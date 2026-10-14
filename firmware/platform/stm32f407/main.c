@@ -9,7 +9,7 @@
 #include "../../core/console_protocol.h"
 #include "../../core/tune_wire.h"
 
-// Read-only communication service. USART3 remains electrically disconnected:
+// Read-only communication service. USART2 remains electrically disconnected:
 // no GPIO alternate function, UE/TE/RE or interrupts are enabled.
 static tunuino_console_tune_link_t console_link;
 static tunuino_tune_wire_t tune_wire;
@@ -17,9 +17,9 @@ static uint8_t service_ready;
 
 static void communication_init(void) {
     const tunuino_usart_config_t config = tunuino_usart_make_config(16000000u, 115200u);
-    if (!tunuino_usart3_init_disconnected(&config)) return;
+    if (!tunuino_usart2_init_disconnected(&config)) return;
     tunuino_console_tune_link_init(&console_link, &tune_wire,
-        tunuino_usart3_tx_ready, tunuino_usart3_send_byte, 0);
+        tunuino_usart2_tx_ready, tunuino_usart2_send_byte, 0);
     // A valid tune snapshot must be explicitly provisioned before any map
     // request can be answered. Never fabricate live ECU maps.
     uint8_t hello[11];
