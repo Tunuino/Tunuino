@@ -1,0 +1,31 @@
+name: Tunuino firmware stack usage
+on:
+  push:
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/firmware-stack-usage.yml'
+  pull_request:
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/firmware-stack-usage.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  stack-usage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ARM toolchain
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi
+      - name: Compile with stack usage reports
+        run: make -C firmware/platform/stm32f429 CFLAGS='-mcpu=cortex-m4 -mthumb -DSTM32F429xx -std=c11 -Os -ffreestanding -fdata-sections -ffunction-sections -Wall -Wextra -Werror -fstack-usage'
+      - name: Collect stack reports
+        run: |
+          mkdir -p stack-reports
+          find firmware/platform/stm32f429/build -name '*.su' -exec cp --parents '{}' stack-reports/ \;
+          test -n "$(find stack-reports -name '*.su' -print -quit)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tunuino-stack-usage
+          path: stack-reports/
