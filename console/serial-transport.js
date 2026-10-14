@@ -5,7 +5,7 @@ import {TYPE_TUNE_CHUNK} from "./tune-snapshot.js";
 import {makeTuneReadRequest} from "./tune-request.js";
 import {TUNE_SIZE, TUNE_CHUNK_MAX} from "./tune-snapshot.js";
 import {decodeFrame, PROTOCOL_VERSION, TYPE_HELLO, MAX_PAYLOAD} from "./protocol.js";
-// Read-only Web Serial transport. Does not send data or control the ECU.
+// Read-only Web Serial transport: sends only tune read requests, never writes ECU calibration.
 export class TunuinoSerialTransport {
   constructor({onTelemetry, onStatus, onTuneChunk}) {
     this.onTuneChunk = onTuneChunk ?? (() => {});
@@ -17,6 +17,7 @@ export class TunuinoSerialTransport {
     this.pendingTune = null;
     this.tuneReading = false;
     this.tuneError = null;
+    this.session = 0;
     this.connected = false;
     this.identified = false;
     this.running = false;
@@ -26,6 +27,9 @@ export class TunuinoSerialTransport {
     if (this.running) throw new Error("Already connecting");
     if (!serial?.requestPort) throw new Error("Web Serial unavailable");
     this.running = true;
+    this.session++;
+    this.buffer = [];
+    this.telemetry.reset?.();
     try {
       this.port = await serial.requestPort();
       await this.port.open({baudRate: 115200});
@@ -45,6 +49,7 @@ export class TunuinoSerialTransport {
       this.#clearPendingTune();
       this.connected = false;
       this.identified = false;
+      this.buffer = [];
       if (this.reader) {
         try { this.reader.releaseLock(); } catch {}
         this.reader = null;
@@ -60,6 +65,8 @@ export class TunuinoSerialTransport {
     if (!this.connected || !this.identified || !this.running || !this.port?.writable)
       throw new Error("ECU não identificada ou porta indisponível");
     if (this.tuneReading) throw new Error("Leitura já em curso");
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || !Number.isInteger(retries) || retries < 0 || retries > 10)
+      throw new Error("Parâmetros de leitura inválidos");
     this.tuneReading = true;
     this.tuneError = null;
     const writer = this.port.writable.getWriter();
