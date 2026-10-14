@@ -1,0 +1,37 @@
+name: Tunuino firmware package
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ARM toolchain
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi
+      - name: Build standalone STM32F429 firmware
+        run: make -C firmware/platform/stm32f429
+      - name: Verify vector table and export package
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          image = Path('firmware/platform/stm32f429/build/tunuino.bin').read_bytes()
+          assert len(image) >= 8
+          sp, reset = struct.unpack_from('<II', image)
+          assert 0x20000000 < sp <= 0x20020000 and sp % 4 == 0
+          assert reset & 1 and 0x08000000 <= (reset & ~1) < 0x08000000 + len(image)
+          print(f'Standalone firmware: {len(image)} bytes, SP={sp:#x}, reset={reset:#x}')
+          PY
+          mkdir -p package
+          cp firmware/platform/stm32f429/build/tunuino.bin package/tunuino-stm32f429-standalone.bin
+          sha256sum package/* > package/SHA256SUMS
+      - name: Publish build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tunuino-stm32f429-standalone-unverified
+          path: package/
