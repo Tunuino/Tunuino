@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "console_tune_read.h"
+#include "console_tx_queue.h"
 #define TUNUINO_CONSOLE_TYPE_TUNE_REQUEST 5u
 // Handles one fully validated Console v1 frame. Read-only.
 // Queues a complete type-4 response atomically, or rejects the request.
