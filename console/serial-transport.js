@@ -16,6 +16,7 @@ export class TunuinoSerialTransport {
     this.writer = null;
     this.pendingTune = null;
     this.tuneReading = false;
+    this.tuneError = null;
     this.connected = false;
     this.identified = false;
     this.running = false;
@@ -60,6 +61,7 @@ export class TunuinoSerialTransport {
       throw new Error("ECU não identificada ou porta indisponível");
     if (this.tuneReading) throw new Error("Leitura já em curso");
     this.tuneReading = true;
+    this.tuneError = null;
     const writer = this.port.writable.getWriter();
     this.writer = writer;
     try {
@@ -68,6 +70,7 @@ export class TunuinoSerialTransport {
         let received = false;
         for (let attempt = 0; attempt <= retries && !received; attempt++) {
           if (!this.running || !this.identified) throw new Error("Ligação interrompida");
+          if (this.tuneError) throw this.tuneError;
           const acknowledgement = new Promise(resolve => {
             const pending = {offset, count, resolve, timer: null};
             pending.timer = setTimeout(() => {
@@ -79,6 +82,7 @@ export class TunuinoSerialTransport {
           try {
             await writer.write(makeTuneReadRequest(offset, count));
             received = await acknowledgement;
+            if (this.tuneError) throw this.tuneError;
           } catch (error) {
             this.#clearPendingTune();
             throw error;
@@ -132,10 +136,11 @@ export class TunuinoSerialTransport {
             if (pending && payload.length === pending.count + 3 &&
                 (payload[0] | (payload[1] << 8)) === pending.offset &&
                 payload[2] === pending.count) {
-              this.onTuneChunk(payload);
+              try { this.onTuneChunk(payload); }
+              catch (error) { this.tuneError = error; }
               this.pendingTune = null;
               clearTimeout(pending.timer);
-              pending.resolve(true);
+              pending.resolve(!this.tuneError);
             }
           }
           else this.telemetry.push(frameBytes);
