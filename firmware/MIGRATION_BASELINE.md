@@ -43,3 +43,18 @@ imported code must remain traceable in the Git history and accompanying notices.
 USB communication, flashing, injection and ignition must not be described as
 working until tested on the target hardware. Never enable engine outputs or
 flash writes merely to make a CI build pass.
+
+## Verified repository layout differences
+
+The reference repository uses `java_console/` for its desktop Console and
+`firmware/console/` for the firmware-side transport. Tunuino currently uses
+`console/` for a browser-based interface, which is not an equivalent Java
+desktop Console. Do not move browser assets into firmware-side transport code.
+
+The reference repository also has `java_tools/`, `unit_tests/`, `simulator/`,
+`bin/`, and `misc/` at its root. Tunuino currently has a different root
+layout. Moving or renaming these modules must include all imports, scripts,
+test commands, workflows, and documentation in the same validated change.
+
+A matching folder name without the original implementation and build wiring
+is not considered a completed migration.
