@@ -1,0 +1,35 @@
+name: Tunuino bootloader build
+on:
+  push:
+    paths:
+      - 'firmware/bootloader/**'
+      - '.github/workflows/bootloader-build.yml'
+  pull_request:
+    paths:
+      - 'firmware/bootloader/**'
+      - '.github/workflows/bootloader-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bootloader:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate bootloader integration
+        run: |
+          test -f firmware/bootloader/README.md
+          if test ! -f firmware/bootloader/Makefile; then
+            echo "::notice::Tunuino bootloader source not integrated yet; no binary produced."
+            exit 0
+          fi
+          if ! grep -q '^all:' firmware/bootloader/Makefile; then
+            echo "::error::Bootloader Makefile requires an all target."
+            exit 1
+          fi
+      - name: Install ARM compiler when bootloader sources exist
+        if: ${{ hashFiles('firmware/bootloader/Makefile') != '' }}
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi
+      - name: Compile bootloader
+        if: ${{ hashFiles('firmware/bootloader/Makefile') != '' }}
+        run: make -C firmware/bootloader
