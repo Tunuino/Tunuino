@@ -176,6 +176,24 @@ public final class BrandingPreview {
         return section;
     }
 
+    private static JPanel demoTuning() {
+        JPanel section = new JPanel(new BorderLayout(12, 12));
+        section.setBackground(TunuinoArtwork.BACKGROUND);
+        JLabel heading = new JLabel("Tuning  |  Read-only demonstration");
+        heading.setForeground(TunuinoArtwork.WHITE);
+        heading.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
+        section.add(heading, BorderLayout.NORTH);
+        JPanel maps = new JPanel(new GridLayout(2, 1, 0, 12));
+        maps.setOpaque(false);
+        maps.add(demoMap("Fuel VE Table", 30));
+        maps.add(demoMap("Ignition Advance", 8));
+        section.add(maps, BorderLayout.CENTER);
+        JLabel notice = new JLabel("DEMO MODE  |  Editing and ECU writes are disabled");
+        notice.setForeground(new Color(0xFFBE65));
+        section.add(notice, BorderLayout.SOUTH);
+        return section;
+    }
+
     private static JPanel dashboard() {
         JPanel content = new JPanel(new BorderLayout(12, 16));
         content.setBackground(TunuinoArtwork.BACKGROUND);
@@ -233,7 +251,9 @@ public final class BrandingPreview {
             if ("Dashboard".equals(item)) continue;
             JPanel section = new JPanel(new BorderLayout(12, 12));
             section.setBackground(TunuinoArtwork.BACKGROUND);
-            if ("Datalogger".equals(item)) {
+            if ("Tuning".equals(item)) {
+                section.add(demoTuning(), BorderLayout.CENTER);
+            } else if ("Datalogger".equals(item)) {
                 section.add(demoDatalogger(), BorderLayout.CENTER);
             } else if ("Diagnostics".equals(item)) {
                 section.add(demoDiagnostics(), BorderLayout.CENTER);
