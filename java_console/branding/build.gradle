@@ -1,0 +1,13 @@
+plugins {
+    id 'java-library'
+}
+
+tasks.register('smokeTest', JavaExec) {
+    group = 'verification'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.tunuino.console.ConsoleBrandingSmokeTest'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('smokeTest')
+}
