@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #include "../firmware/core/console_tx_queue.h"
 #include "../firmware/core/console_tx.h"
