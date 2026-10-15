@@ -29,6 +29,12 @@ tasks.register('supportTest', JavaExec) {
     mainClass = 'org.tunuino.console.ConsoleBrandingSupportSmokeTest'
 }
 
+tasks.register('autotuneTest', JavaExec) {
+    group = 'verification'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.tunuino.console.AutotuneCalculatorSmokeTest'
+}
+
 tasks.register('preview', JavaExec) {
     group = 'application'
     description = 'Preview the blue-and-white Tunuino Swing branding'
@@ -37,5 +43,5 @@ tasks.register('preview', JavaExec) {
 }
 
 tasks.named('check') {
-    dependsOn tasks.named('smokeTest'), tasks.named('artworkTest'), tasks.named('windowBrandingTest'), tasks.named('supportTest')
+    dependsOn tasks.named('smokeTest'), tasks.named('artworkTest'), tasks.named('windowBrandingTest'), tasks.named('supportTest'), tasks.named('autotuneTest')
 }
