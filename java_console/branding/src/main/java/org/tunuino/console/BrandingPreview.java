@@ -55,6 +55,55 @@ public final class BrandingPreview {
         return panel;
     }
 
+    private static JPanel demoGraph() {
+        JPanel panel = new JPanel(new BorderLayout(0, 8));
+        panel.setBackground(PANEL);
+        panel.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
+        JLabel label = new JLabel("Realtime Graphs (demo)");
+        label.setForeground(TunuinoArtwork.WHITE);
+        panel.add(label, BorderLayout.NORTH);
+        JPanel plot = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics graphics) {
+                super.paintComponent(graphics);
+                Graphics2D g = (Graphics2D) graphics.create();
+                try {
+                    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                            RenderingHints.VALUE_ANTIALIAS_ON);
+                    int width = getWidth();
+                    int height = getHeight();
+                    g.setColor(new Color(0x33475C));
+                    for (int i = 1; i < 5; i++) {
+                        int y = i * height / 5;
+                        g.drawLine(0, y, width, y);
+                    }
+                    Color[] colors = {TunuinoArtwork.BLUE, new Color(0xFF6C6C),
+                            new Color(0x60D995)};
+                    for (int series = 0; series < colors.length; series++) {
+                        g.setColor(colors[series]);
+                        int lastX = 0;
+                        int lastY = height / 2;
+                        for (int x = 0; x < width; x += 4) {
+                            double phase = x * 0.022 + series * 1.7;
+                            int y = (int) (height * (0.45 + series * 0.11)
+                                    - Math.sin(phase) * height * 0.12
+                                    - Math.sin(phase * 0.41) * height * 0.07);
+                            if (x != 0) g.drawLine(lastX, lastY, x, y);
+                            lastX = x;
+                            lastY = y;
+                        }
+                    }
+                } finally {
+                    g.dispose();
+                }
+            }
+        };
+        plot.setBackground(new Color(0x111B27));
+        plot.setPreferredSize(new Dimension(200, 115));
+        panel.add(plot, BorderLayout.CENTER);
+        return panel;
+    }
+
     private static JPanel dashboard() {
         JPanel content = new JPanel(new BorderLayout(12, 16));
         content.setBackground(TunuinoArtwork.BACKGROUND);
@@ -98,6 +147,7 @@ public final class BrandingPreview {
         maps.add(demoMap("Fuel VE Table", 30));
         maps.add(demoMap("Ignition Advance", 8));
         mainArea.add(maps, BorderLayout.CENTER);
+        mainArea.add(demoGraph(), BorderLayout.SOUTH);
         middle.add(mainArea, BorderLayout.CENTER);
         content.add(middle, BorderLayout.CENTER);
 
@@ -114,7 +164,7 @@ public final class BrandingPreview {
             frame.setTitle(ConsoleBranding.APPLICATION_NAME + " | Dashboard preview");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setContentPane(dashboard());
-            frame.setSize(1080, 650);
+            frame.setSize(1080, 780);
             frame.setMinimumSize(new Dimension(780, 480));
             frame.setLocationRelativeTo(null);
             frame.setVisible(true);
