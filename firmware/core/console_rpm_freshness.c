@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #include "console_rpm_freshness.h"
 uint8_t tunuino_console_rpm_fresh(const tunuino_engine_state_t *engine,
