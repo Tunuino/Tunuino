@@ -104,6 +104,24 @@ public final class BrandingPreview {
         return panel;
     }
 
+    private static JPanel demoSensors() {
+        JPanel section = new JPanel(new BorderLayout(12, 12));
+        section.setBackground(TunuinoArtwork.BACKGROUND);
+        JPanel sensors = new JPanel(new GridLayout(3, 2, 12, 12));
+        sensors.setOpaque(false);
+        sensors.add(tile("Engine Speed", "3580 RPM"));
+        sensors.add(tile("Manifold Pressure", "98 kPa"));
+        sensors.add(tile("Throttle Position", "32 %"));
+        sensors.add(tile("Wideband Lambda", "1.00 λ"));
+        sensors.add(tile("Coolant Temperature", "92 °C"));
+        sensors.add(tile("Intake Temperature", "36 °C"));
+        section.add(sensors, BorderLayout.CENTER);
+        JLabel notice = new JLabel("DEMO DATA  |  Sensor readings are simulated");
+        notice.setForeground(TunuinoArtwork.BLUE);
+        section.add(notice, BorderLayout.SOUTH);
+        return section;
+    }
+
     private static JPanel dashboard() {
         JPanel content = new JPanel(new BorderLayout(12, 16));
         content.setBackground(TunuinoArtwork.BACKGROUND);
@@ -161,7 +179,9 @@ public final class BrandingPreview {
             if ("Dashboard".equals(item)) continue;
             JPanel section = new JPanel(new BorderLayout(12, 12));
             section.setBackground(TunuinoArtwork.BACKGROUND);
-            if ("Fuel Tables".equals(item) || "Ignition Tables".equals(item)) {
+            if ("Sensors".equals(item)) {
+                section.add(demoSensors(), BorderLayout.CENTER);
+            } else if ("Fuel Tables".equals(item) || "Ignition Tables".equals(item)) {
                 boolean fuel = "Fuel Tables".equals(item);
                 section.add(demoMap(fuel ? "Fuel VE Table" : "Ignition Advance",
                         fuel ? 30 : 8), BorderLayout.CENTER);
