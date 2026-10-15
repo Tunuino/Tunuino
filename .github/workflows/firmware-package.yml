@@ -6,6 +6,9 @@ on:
       - master
     tags:
       - 'v*'
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/firmware-package.yml'
 permissions:
   contents: read
 jobs:
