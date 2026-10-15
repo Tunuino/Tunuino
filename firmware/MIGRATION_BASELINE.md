@@ -58,3 +58,13 @@ test commands, workflows, and documentation in the same validated change.
 
 A matching folder name without the original implementation and build wiring
 is not considered a completed migration.
+
+## Automated architecture coverage report
+
+Run `python3 scripts/report_architecture_coverage.py` to compare the currently
+tracked directory structure with a reference layout snapshot. CI prints this
+report during repository-integrity checks. Missing directories are informational:
+creating empty directories or copying code without its dependencies would not
+constitute a completed port. Update the reference snapshot only after verifying
+upstream changes. This report does not compare implementation, hardware support,
+or build behavior.
