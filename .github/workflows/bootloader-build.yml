@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Validate bootloader integration
         run: |
           test -f firmware/bootloader/README.md
@@ -23,8 +25,8 @@ jobs:
             echo "::notice::Tunuino bootloader source not integrated yet; no binary produced."
             exit 0
           fi
-          if ! grep -q '^all:' firmware/bootloader/Makefile; then
-            echo "::error::Bootloader Makefile requires an all target."
+          if ! make -C firmware/bootloader -n all >/dev/null; then
+            echo "::error::Bootloader Makefile must support the all target."
             exit 1
           fi
       - name: Test bootloader memory guards
