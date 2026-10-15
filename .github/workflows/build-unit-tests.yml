@@ -1,0 +1,48 @@
+name: Tunuino unit tests
+
+on:
+  push:
+    paths:
+      - 'firmware/core/**'
+      - 'firmware/console/**'
+      - 'firmware/platform/**'
+      - 'tests/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/build-unit-tests.yml'
+  pull_request:
+    paths:
+      - 'firmware/core/**'
+      - 'firmware/console/**'
+      - 'firmware/platform/**'
+      - 'tests/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/build-unit-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure native tests
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+      - name: Build native tests
+        run: cmake --build build --parallel 2
+      - name: Run CTest suite
+        run: ctest --test-dir build --output-on-failure
+      - name: Upload CTest diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tunuino-unit-test-logs-${{ matrix.os }}
+          path: build/Testing/Temporary/
+          if-no-files-found: ignore
