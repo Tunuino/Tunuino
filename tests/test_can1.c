@@ -12,5 +12,29 @@ int main(void) {
     assert(!tunuino_can1_make_timing(0u, 500000u).valid);
     assert(!tunuino_can1_make_timing(16000000u, 0u).valid);
     assert(!tunuino_can1_make_timing(16000000u, 400000000u).valid);
+    /* Validate the CAN transport boundary before any hardware TX is added. */
+    tunuino_can1_frame_t frame = {0};
+    assert(tunuino_can1_frame_valid(&frame));
+    frame.identifier = 0x7ffu;
+    frame.length = 8u;
+    assert(tunuino_can1_frame_valid(&frame));
+    frame.identifier = 0x800u;
+    assert(!tunuino_can1_frame_valid(&frame));
+    frame.extended = 1u;
+    assert(tunuino_can1_frame_valid(&frame));
+    frame.identifier = 0x1fffffffu;
+    assert(tunuino_can1_frame_valid(&frame));
+    frame.identifier++;
+    assert(!tunuino_can1_frame_valid(&frame));
+    frame.identifier = 0u;
+    frame.length = 9u;
+    assert(!tunuino_can1_frame_valid(&frame));
+    frame.length = 8u;
+    frame.remote = 1u;
+    assert(!tunuino_can1_frame_valid(&frame));
+    frame.remote = 0u;
+    frame.extended = 2u;
+    assert(!tunuino_can1_frame_valid(&frame));
+    assert(!tunuino_can1_frame_valid(0));
     return 0;
 }

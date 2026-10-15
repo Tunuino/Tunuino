@@ -17,3 +17,9 @@ tunuino_can1_timing_t tunuino_can1_make_timing(uint32_t apb1_hz, uint32_t bitrat
     result.valid = 1u;
     return result;
 }
+
+uint8_t tunuino_can1_frame_valid(const tunuino_can1_frame_t *frame) {
+    if (frame == 0 || frame->length > 8u || frame->extended > 1u ||
+        frame->remote != 0u) return 0u;
+    return (uint8_t)(frame->identifier <= (frame->extended ? 0x1fffffffu : 0x7ffu));
+}
