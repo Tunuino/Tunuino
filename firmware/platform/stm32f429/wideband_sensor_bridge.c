@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #include "wideband_sensor_bridge.h"
 void tunuino_wideband_sensor_bridge_init(tunuino_wideband_sensor_bridge_t *bridge) {
