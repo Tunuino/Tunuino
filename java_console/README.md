@@ -4,12 +4,15 @@ The desktop Console is being migrated incrementally, preserving upstream functio
 
 ## Branding
 
-The `branding` module defines the product title and dedicated Tunuino image resource paths. The actual PNG artwork and Swing desktop UI integration are **not yet present**; these constants alone do not replace the upstream icons. Upstream uses `trigger-ui/BasicLogoHelper.java`, `trigger-ui/LogoHelper.java` and `core_ui` image resources. Replace those integration points when their modules are migrated.
+The `branding` module provides blue-and-white Java2D artwork, reusable Swing window branding and a standalone preview (`./gradlew :branding:preview`). It does not yet provide the complete ECU Console.
+
+The `trigger-ui` module now contains the first migrated logo integration points, `BasicLogoHelper` and `LogoHelper`, wired to the Tunuino artwork. The upstream trigger UI functionality and its other dependencies are **not yet migrated**. Existing hardware-specific logos are not imported; all variants currently use the Tunuino logo.
 
 ## Available modules
 
 - `logging-api`: upstream logging implementation
 - `logging`: upstream file-output utilities adapted to Tunuino namespace
-- `branding`: Tunuino application naming and resource contract
+- `branding`: Tunuino application identity and Swing artwork
+- `trigger-ui`: initial logo integration classes only
 
 Run `./gradlew build` to validate currently registered modules.

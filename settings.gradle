@@ -1,7 +1,8 @@
 rootProject.name = 'tunuino'
-include ':version', ':bin2header', ':logging-api', ':logging', ':branding'
+include ':version', ':bin2header', ':logging-api', ':logging', ':branding', ':trigger-ui'
 project(':version').projectDir = file('java_tools/version')
 project(':bin2header').projectDir = file('java_tools/bin2header')
 project(':logging-api').projectDir = file('java_console/logging-api')
 project(':logging').projectDir = file('java_console/logging')
 project(':branding').projectDir = file('java_console/branding')
+project(':trigger-ui').projectDir = file('java_console/trigger-ui')
