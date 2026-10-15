@@ -1,21 +1,37 @@
-MIT License
+TUNUINO PROPRIETARY SOURCE LICENSE
+Copyright (c) 2026 Tunuino. All rights reserved.
 
-Copyright (c) 2026 Tunuino
+1. Scope
+This notice applies only to original code and documentation for which Tunuino
+owns the copyright and has authority to license. It does not replace or restrict
+licenses of third-party code, submodules, dependencies, or contributions owned
+by others. Their respective notices and licenses remain in effect.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+2. Reservation of rights
+No permission is granted to copy, modify, adapt, translate, distribute,
+sublicense, sell, or create derivative works from the Tunuino-owned material,
+except with prior written authorization from the relevant copyright holder or
+as otherwise permitted by applicable law.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+3. Viewing on GitHub
+The public availability of source code is not a grant of permission to modify
+or redistribute it. Rights required by GitHub's applicable Terms of Service,
+including platform viewing and forking, are unaffected.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+4. Prior licenses
+This notice applies prospectively to material Tunuino has the authority to
+license under these terms. It does not revoke permissions already granted under
+previous licenses for previously released versions.
+
+5. Third-party components
+Third-party components retain their own licenses. Where a file contains
+third-party copyrighted material, this notice does not claim ownership of it
+or override its license. Review each component's license before use or
+redistribution.
+
+6. Disclaimer
+To the extent permitted by law, Tunuino-owned material is provided AS IS,
+without warranties of any kind. This notice does not override mandatory
+statutory rights.
+
+For permissions, contact the Tunuino repository owner via GitHub.

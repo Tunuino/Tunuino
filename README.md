@@ -2,7 +2,7 @@
 
 <img src="assets/tunuino-logo.png" alt="Tunuino" width="600" />
 
-<b>Open-source engine control unit</b>
+<b>Engine control unit development</b>
 
 [![Release](https://img.shields.io/github/v/release/Tunuino/tunuino?style=flat&label=release)](https://github.com/Tunuino/tunuino/releases/latest)
 ![Last Commit](https://img.shields.io/github/last-commit/Tunuino/tunuino?style=flat)
@@ -12,7 +12,7 @@
 
 # Tunuino
 
-Projeto independente de gestão eletrónica de motor, com firmware STM32F429ZIT6 e aplicação **Tunuino Console**. Em desenvolvimento, com licença MIT.
+Projeto independente de gestão eletrónica de motor, com firmware STM32F429ZIT6 e aplicação **Tunuino Console**. Em desenvolvimento. O código original Tunuino está sujeito a **direitos reservados**; componentes de terceiros mantêm as respetivas licenças. Consultar [LICENSE](LICENSE).
 
 # Download
 
