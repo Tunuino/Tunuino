@@ -59,7 +59,15 @@ public final class BrandingPreview {
         JPanel content = new JPanel(new BorderLayout(12, 16));
         content.setBackground(TunuinoArtwork.BACKGROUND);
         content.setBorder(BorderFactory.createEmptyBorder(18, 22, 22, 22));
-        content.add(ConsoleWindowBranding.createHeader(), BorderLayout.NORTH);
+        JPanel top = new JPanel(new BorderLayout(12, 0));
+        top.setOpaque(false);
+        top.add(ConsoleWindowBranding.createHeader(), BorderLayout.CENTER);
+        JLabel connection = new JLabel("ECU DISCONNECTED  |  DEMO MODE");
+        connection.setForeground(new Color(0xFFBE65));
+        connection.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+        connection.setBorder(BorderFactory.createEmptyBorder(0, 12, 0, 12));
+        top.add(connection, BorderLayout.EAST);
+        content.add(top, BorderLayout.NORTH);
 
         JPanel middle = new JPanel(new BorderLayout(12, 12));
         middle.setOpaque(false);
