@@ -8,7 +8,20 @@ void tunuino_wideband_sensor_bridge_init(tunuino_wideband_sensor_bridge_t *bridg
 }
 uint8_t tunuino_wideband_sensor_bridge_receive(tunuino_wideband_sensor_bridge_t *bridge,
     const tunuino_can1_frame_t *frame, uint32_t now_ms) {
-    if (!bridge || !tunuino_wideband_monitor_receive(&bridge->monitor, frame, now_ms))
+    if (!bridge) return 0u;
+    // An explicit not-ready or invalid measurement from our configured sender
+    // revokes the old sample immediately. Ignore unrelated/malformed frames.
+    if (tunuino_can1_frame_valid(frame) && !frame->extended &&
+        frame->identifier == TUNUINO_WIDEBAND_CAN_ID && frame->length == 4u &&
+        (frame->data[2] != 0u ||
+         (frame->data[0] == 0u && frame->data[1] == 0u) ||
+         (frame->data[0] == 0xffu && frame->data[1] == 0xffu))) {
+        bridge->monitor.sample.valid = 0u;
+        bridge->monitor.received = 0u;
+        tunuino_lambda_state_init(&bridge->lambda);
+        return 0u;
+    }
+    if (!tunuino_wideband_monitor_receive(&bridge->monitor, frame, now_ms))
         return 0u;
     tunuino_lambda_state_update(&bridge->lambda,
         bridge->monitor.sample.lambda_milli, now_ms);
