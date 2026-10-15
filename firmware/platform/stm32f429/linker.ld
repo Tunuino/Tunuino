@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT */
+/* SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0 */
 /* Tunuino STM32F429ZIT6: 2 MiB flash, 256 KiB SRAM including CCM.
  * Initial firmware uses only the contiguous 128 KiB SRAM region. */
 ENTRY(Reset_Handler)
