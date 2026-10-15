@@ -38,7 +38,11 @@ jobs:
         run: |
           cmake -S . -B build-codeql -DCMAKE_BUILD_TYPE=Debug
           cmake --build build-codeql --parallel 2
+      - name: Run native tests
+        run: ctest --test-dir build-codeql --output-on-failure
       - uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:cpp/native'
   analyze-stm32:
     runs-on: ubuntu-latest
     timeout-minutes: 35
