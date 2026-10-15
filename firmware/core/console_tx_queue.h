@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Compatibility include for modules not yet migrated to firmware/console.
 #ifndef TUNUINO_CORE_CONSOLE_TX_QUEUE_COMPAT_H
 #define TUNUINO_CORE_CONSOLE_TX_QUEUE_COMPAT_H
