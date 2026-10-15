@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #ifndef TUNUINO_TUNE_MAPS_H
 #define TUNUINO_TUNE_MAPS_H

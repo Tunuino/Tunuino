@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 # Copyright (c) 2026 Tunuino
 # Firmware-level build entry point, following the repository module boundary.
 # The STM32F429 is currently the only supported firmware target.
