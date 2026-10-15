@@ -148,6 +148,34 @@ public final class BrandingPreview {
         return section;
     }
 
+    private static JPanel demoDatalogger() {
+        JPanel section = new JPanel(new BorderLayout(12, 12));
+        section.setBackground(TunuinoArtwork.BACKGROUND);
+        JLabel heading = new JLabel("Datalogger  |  Offline preview");
+        heading.setForeground(TunuinoArtwork.WHITE);
+        heading.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
+        section.add(heading, BorderLayout.NORTH);
+
+        String[] columns = {"Time (s)", "RPM", "MAP (kPa)", "TPS (%)",
+                "Lambda", "CLT (°C)"};
+        JTable log = new JTable(new Object[0][columns.length], columns);
+        log.setEnabled(false);
+        log.setRowHeight(26);
+        log.setBackground(new Color(0x223449));
+        log.setForeground(TEXT);
+        log.setGridColor(new Color(0x3A5269));
+        log.getTableHeader().setBackground(new Color(0x145587));
+        log.getTableHeader().setForeground(Color.WHITE);
+        JScrollPane scroll = new JScrollPane(log);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        section.add(scroll, BorderLayout.CENTER);
+
+        JLabel notice = new JLabel("NO RECORDINGS  |  Logging requires ECU communication");
+        notice.setForeground(new Color(0xFFBE65));
+        section.add(notice, BorderLayout.SOUTH);
+        return section;
+    }
+
     private static JPanel dashboard() {
         JPanel content = new JPanel(new BorderLayout(12, 16));
         content.setBackground(TunuinoArtwork.BACKGROUND);
@@ -205,7 +233,9 @@ public final class BrandingPreview {
             if ("Dashboard".equals(item)) continue;
             JPanel section = new JPanel(new BorderLayout(12, 12));
             section.setBackground(TunuinoArtwork.BACKGROUND);
-            if ("Diagnostics".equals(item)) {
+            if ("Datalogger".equals(item)) {
+                section.add(demoDatalogger(), BorderLayout.CENTER);
+            } else if ("Diagnostics".equals(item)) {
                 section.add(demoDiagnostics(), BorderLayout.CENTER);
             } else if ("Sensors".equals(item)) {
                 section.add(demoSensors(), BorderLayout.CENTER);
