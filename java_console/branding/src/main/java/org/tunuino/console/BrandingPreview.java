@@ -188,6 +188,16 @@ public final class BrandingPreview {
         maps.add(demoMap("Fuel VE Table", 30));
         maps.add(demoMap("Ignition Advance", 8));
         section.add(maps, BorderLayout.CENTER);
+        JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 4));
+        controls.setOpaque(false);
+        JButton autotune = new JButton("Autotune (not available)");
+        autotune.setEnabled(false);
+        autotune.setToolTipText("Requires validated lambda targets, live wideband data and ECU communication");
+        controls.add(autotune);
+        JLabel explanation = new JLabel("VE corrections require live wideband feedback and safety checks");
+        explanation.setForeground(TEXT);
+        controls.add(explanation);
+        section.add(controls, BorderLayout.EAST);
         JLabel notice = new JLabel("DEMO MODE  |  Editing and ECU writes are disabled");
         notice.setForeground(new Color(0xFFBE65));
         section.add(notice, BorderLayout.SOUTH);
