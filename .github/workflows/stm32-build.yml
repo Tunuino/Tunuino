@@ -15,7 +15,7 @@ jobs:
         with:
           release: '14.2.Rel1'
       - name: Build ELF and BIN
-        run: make -C firmware/platform/stm32f429
+        run: make -C firmware BOARD=stm32f429
       - name: Preserve standalone build
         run: |
           mkdir -p firmware-artifacts
@@ -23,8 +23,8 @@ jobs:
           cp firmware/platform/stm32f429/build/tunuino.elf firmware-artifacts/tunuino-standalone.elf
       - name: Validate alternate application origin (bootloader layout smoke test)
         run: |
-          make -C firmware/platform/stm32f429 clean
-          make -C firmware/platform/stm32f429 APP_FLASH_ORIGIN=0x08008000
+          make -C firmware BOARD=stm32f429 clean
+          make -C firmware BOARD=stm32f429 APP_FLASH_ORIGIN=0x08008000
           arm-none-eabi-objdump -h firmware/platform/stm32f429/build/tunuino.elf | grep -E 'isr_vector.*08008000'
           cp firmware/platform/stm32f429/build/tunuino.bin firmware-artifacts/tunuino-offset-test.bin
       - name: Upload firmware artifacts
