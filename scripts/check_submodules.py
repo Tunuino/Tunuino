@@ -32,10 +32,10 @@ def check():
         capture_output=True,
     )
     tracked = set()
-    for entry in result.stdout.split(b"\\0"):
+    for entry in result.stdout.split(b"\0"):
         if not entry:
             continue
-        metadata, filename = entry.split(b"\\t", 1)
+        metadata, filename = entry.split(b"\t", 1)
         if metadata.split(b" ", 1)[0] == b"160000":
             tracked.add(filename.decode("utf-8"))
 
