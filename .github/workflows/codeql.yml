@@ -26,10 +26,12 @@ jobs:
         language: [cpp]
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-          build-mode: none
+          build-mode: manual
+      - name: Build native Tunuino code for CodeQL
+        run: |
+          cmake -S . -B build-codeql -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-codeql --parallel 2
       - uses: github/codeql-action/analyze@v3
