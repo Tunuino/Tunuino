@@ -39,3 +39,21 @@ jobs:
           cmake -S . -B build-codeql -DCMAKE_BUILD_TYPE=Debug
           cmake --build build-codeql --parallel 2
       - uses: github/codeql-action/analyze@v3
+  analyze-stm32:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Install Arm GNU Toolchain
+        uses: carlosperate/arm-none-eabi-gcc-action@v1.14.0
+        with:
+          release: '14.2.Rel1'
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: cpp
+          build-mode: manual
+      - name: Build STM32F429 firmware for CodeQL
+        run: make -C firmware BOARD=stm32f429
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:cpp/stm32f429'
