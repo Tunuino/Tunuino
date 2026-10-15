@@ -1,34 +1,55 @@
-<p align="center"><img src="assets/tunuino-logo.png" alt="Tunuino" width="420"></p>
+<div align="center">
+
+<img src="assets/tunuino-logo.png" alt="Tunuino" width="600" />
+
+<b>Open-source engine control unit</b>
+
+[![Release](https://img.shields.io/github/v/release/Tunuino/tunuino?style=flat&label=release)](https://github.com/Tunuino/tunuino/releases/latest)
+![Last Commit](https://img.shields.io/github/last-commit/Tunuino/tunuino?style=flat)
+[![Commits Since Release](https://img.shields.io/github/commits-since/Tunuino/tunuino/latest?color=blueviolet&label=Commits%20Since%20Release)](https://github.com/Tunuino/tunuino/commits/master/)
+
+</div>
 
 # Tunuino
 
-Firmware de gestão eletrónica de motor e aplicação **Tunuino Console**, em desenvolvimento.
+Projeto independente de gestão eletrónica de motor, com firmware STM32F429ZIT6 e aplicação **Tunuino Console**. Em desenvolvimento, com licença MIT.
 
-- **ECU:** arquitetura experimental STM32F429ZIT6.
-- **Mapas:** combustível VE e ignição 16×16.
-- **Console:** telemetria e leitura experimental de mapas.
-- **TunerStudio:** integração em desenvolvimento, ainda não validada em hardware.
-- **Segurança:** saídas de injeção e ignição não ativadas neste protótipo.
+# Download
 
-Projeto independente, distribuído sob licença MIT.
+Consultar as [Releases](https://github.com/Tunuino/tunuino/releases) para versões publicadas. Os ficheiros dos builds de desenvolvimento estão disponíveis nos [GitHub Actions](https://github.com/Tunuino/tunuino/actions). Ainda não existe uma versão validada para utilização num motor.
 
-> Firmware e comunicação ainda em desenvolvimento. Não utilizar para controlar um motor sem validação completa do hardware e do software.
+# Release Notes
 
-## Repository build entry points
+Consultar o [guia de versões e publicação](docs/releases.md). As versões do firmware são experimentais até à validação em hardware real.
 
-The root `Makefile` provides a single entry point across the existing modules:
-`make test` (native C tests), `make simulator` (native validation harness),
-`make firmware` (STM32F429 cross-compile), `make console` (Java Console modules),
-and `make tools` (Java tools). `make clean` removes native and firmware build
-outputs. The simulator target is a host test harness, **not** a complete engine
-simulator. Java and STM32 toolchains must be installed separately.
+# O que existe no repositório?
 
-## Versions and Releases
+- [Firmware](firmware/) — código de ECU, configuração, arranque e módulos de comunicação.
+- [Hardware](hardware/) — recursos de desenvolvimento de hardware e dependências.
+- [Tunuino Console](java_console/) — módulos Java da interface de diagnóstico.
+- [Ferramentas Java](java_tools/) — utilitários de desenvolvimento.
+- [Simulador](simulator/) — testes nativos; ainda não é um simulador completo de motor.
+- [Testes](unit_tests/) — dependências e infraestrutura de testes; testes C próprios em [tests/](tests/).
+- [Documentação](docs/) — arquitetura, protocolos e progresso da implementação.
 
-[Latest GitHub Release](https://github.com/Tunuino/tunuino/releases/latest) ·
-[All releases](https://github.com/Tunuino/tunuino/releases) ·
-[Versioning and publishing guide](docs/releases.md)
+# Compilação
 
-Version tags `vMAJOR.MINOR.PATCH` trigger an **experimental pre-release**
-with the STM32F429 binary and checksum after CI packaging succeeds. A normal
-commit to `master` does not create a release.
+```sh
+make test       # testes nativos
+make simulator  # ambiente de validação nativo
+make firmware   # firmware STM32F429 (requer arm-none-eabi)
+make console    # módulos Java da Console
+make tools      # ferramentas Java
+```
+
+Consultar [firmware/README.md](firmware/README.md) para os requisitos e limitações do alvo STM32.
+
+# Clonar o repositório
+
+```sh
+git clone https://github.com/Tunuino/tunuino.git
+cd tunuino
+git submodule update --init --recursive
+```
+
+> **Segurança:** firmware e comunicações ainda em desenvolvimento. As saídas de injeção e ignição não estão ativadas neste protótipo. Não ligar a um motor sem validação completa do hardware e software.
