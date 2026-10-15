@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #include <stdint.h>
 extern uint32_t _estack, _sidata, _sdata, _edata, _sbss, _ebss;
