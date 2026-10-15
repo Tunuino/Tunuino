@@ -55,7 +55,7 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          if ! [[ "$TAG" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Invalid release tag: $TAG (expected vMAJOR.MINOR.PATCH)" >&2
             exit 1
           fi
@@ -65,7 +65,7 @@ jobs:
           TAG: ${{ github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
-          gh release create "$TAG" package/tunuino-stm32f429-standalone.bin package/SHA256SUMS \\
-            --repo "$REPO" --verify-tag --prerelease \\
-            --title "Tunuino $TAG (experimental)" \\
+          gh release create "$TAG" package/tunuino-stm32f429-standalone.bin package/SHA256SUMS \
+            --repo "$REPO" --verify-tag --prerelease \
+            --title "Tunuino $TAG (experimental)" \
             --notes "Experimental STM32F429 standalone firmware. Cross-compiled and vector-table checked in CI; not validated on physical hardware. Do not connect to an engine, injectors or ignition coils."
