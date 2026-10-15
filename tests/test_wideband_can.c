@@ -29,5 +29,23 @@ int main(void) {
     assert(!tunuino_wideband_decode(&frame, &sample));
     assert(!tunuino_wideband_decode(0, &sample));
     assert(!tunuino_wideband_decode(&frame, 0));
+    tunuino_wideband_monitor_t monitor;
+    tunuino_wideband_monitor_init(&monitor);
+    assert(!tunuino_wideband_monitor_fresh(&monitor, 0u, 100u));
+    frame.data[0] = 0xe8u;
+    frame.data[1] = 0x03u;
+    assert(tunuino_wideband_monitor_receive(&monitor, &frame, 1000u));
+    assert(tunuino_wideband_monitor_fresh(&monitor, 1100u, 100u));
+    assert(!tunuino_wideband_monitor_fresh(&monitor, 1101u, 100u));
+    assert(!tunuino_wideband_monitor_fresh(&monitor, 1000u, 0u));
+    frame.data[2] = 1u;
+    assert(!tunuino_wideband_monitor_receive(&monitor, &frame, 1200u));
+    assert(!tunuino_wideband_monitor_fresh(&monitor, 1200u, 100u));
+    frame.data[2] = 0u;
+    assert(tunuino_wideband_monitor_receive(&monitor, &frame, 0xfffffff0u));
+    assert(tunuino_wideband_monitor_fresh(&monitor, 0x10u, 40u));
+    assert(!tunuino_wideband_monitor_fresh(&monitor, 0x30u, 40u));
+    assert(!tunuino_wideband_monitor_fresh(0, 0u, 100u));
+    assert(!tunuino_wideband_monitor_receive(0, &frame, 0u));
     return 0;
 }
