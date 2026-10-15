@@ -47,3 +47,14 @@ uint8_t tunuino_wideband_monitor_fresh(const tunuino_wideband_monitor_t *monitor
     // Unsigned subtraction supports the 32-bit millisecond clock wrapping.
     return (uint8_t)((uint32_t)(now_ms - monitor->last_received_ms) <= timeout_ms);
 }
+
+uint8_t tunuino_wideband_monitor_read(const tunuino_wideband_monitor_t *monitor,
+    uint32_t now_ms, uint32_t timeout_ms, tunuino_wideband_sample_t *out) {
+    if (out == 0) return 0u;
+    out->lambda_milli = 0u;
+    out->counter = 0u;
+    out->valid = 0u;
+    if (!tunuino_wideband_monitor_fresh(monitor, now_ms, timeout_ms)) return 0u;
+    *out = monitor->sample;
+    return 1u;
+}

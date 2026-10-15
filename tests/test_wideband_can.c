@@ -53,5 +53,13 @@ int main(void) {
     assert(tunuino_wideband_monitor_fresh(&monitor, 0x31u, 40u));
     assert(!tunuino_wideband_monitor_fresh(0, 0u, 100u));
     assert(!tunuino_wideband_monitor_receive(0, &frame, 0u));
+    tunuino_wideband_sample_t snapshot = {0};
+    assert(tunuino_wideband_monitor_read(&monitor, 0x31u, 40u, &snapshot));
+    assert(snapshot.valid && snapshot.lambda_milli == 1000u);
+    assert(!tunuino_wideband_monitor_read(&monitor, 0x80u, 40u, &snapshot));
+    assert(!snapshot.valid && snapshot.lambda_milli == 0u);
+    assert(!tunuino_wideband_monitor_read(0, 0u, 40u, &snapshot));
+    assert(!snapshot.valid);
+    assert(!tunuino_wideband_monitor_read(&monitor, 0u, 40u, 0));
     return 0;
 }

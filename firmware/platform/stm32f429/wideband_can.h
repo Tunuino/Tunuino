@@ -27,4 +27,7 @@ uint8_t tunuino_wideband_monitor_receive(tunuino_wideband_monitor_t *monitor,
     const tunuino_can1_frame_t *frame, uint32_t now_ms);
 uint8_t tunuino_wideband_monitor_fresh(const tunuino_wideband_monitor_t *monitor,
     uint32_t now_ms, uint32_t timeout_ms);
+// Snapshot is always cleared on failure, preventing use of stale lambda.
+uint8_t tunuino_wideband_monitor_read(const tunuino_wideband_monitor_t *monitor,
+    uint32_t now_ms, uint32_t timeout_ms, tunuino_wideband_sample_t *out);
 #endif
