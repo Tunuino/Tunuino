@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #include "tunerstudio_serial.h"
 void tunuino_ts_serial_init(tunuino_ts_serial_t *serial, tunuino_ts_write_fn write,
