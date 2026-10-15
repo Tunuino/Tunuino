@@ -8,6 +8,20 @@ tasks.register('smokeTest', JavaExec) {
     mainClass = 'org.tunuino.console.ConsoleBrandingSmokeTest'
 }
 
+tasks.register('artworkTest', JavaExec) {
+    group = 'verification'
+    systemProperty 'java.awt.headless', 'true'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.tunuino.console.ArtworkSmokeTest'
+}
+
+tasks.register('preview', JavaExec) {
+    group = 'application'
+    description = 'Preview the blue-and-white Tunuino Swing branding'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.tunuino.console.BrandingPreview'
+}
+
 tasks.named('check') {
-    dependsOn tasks.named('smokeTest')
+    dependsOn tasks.named('smokeTest'), tasks.named('artworkTest')
 }
