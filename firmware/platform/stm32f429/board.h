@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #ifndef TUNUINO_STM32F429_BOARD_H
 #define TUNUINO_STM32F429_BOARD_H
