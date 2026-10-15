@@ -25,6 +25,7 @@ int main(void) {
     assert(tunuino_wideband_sensor_bridge_read(&bridge, 1201u, 100u, &lambda));
     assert(lambda == 1000u);
     frame.data[2] = 1u;
+    frame.data[3] = 3u;
     assert(!tunuino_wideband_sensor_bridge_receive(&bridge, &frame, 1250u));
     assert(!tunuino_wideband_sensor_bridge_read(&bridge, 1250u, 100u, &lambda));
     assert(lambda == 0u);
@@ -42,6 +43,14 @@ int main(void) {
     frame.identifier++;
     assert(!tunuino_wideband_sensor_bridge_receive(&bridge, &frame, 1281u));
     assert(tunuino_wideband_sensor_bridge_read(&bridge, 1282u, 100u, &lambda));
+    frame.identifier = TUNUINO_WIDEBAND_CAN_ID;
+    frame.data[2] = 1u;
+    assert(!tunuino_wideband_sensor_bridge_receive(&bridge, &frame, 1283u));
+    assert(tunuino_wideband_sensor_bridge_read(&bridge, 1284u, 100u, &lambda));
+    assert(lambda == 1000u);
+    frame.data[3] = 4u;
+    assert(!tunuino_wideband_sensor_bridge_receive(&bridge, &frame, 1285u));
+    assert(!tunuino_wideband_sensor_bridge_read(&bridge, 1285u, 100u, &lambda));
     assert(!tunuino_wideband_sensor_bridge_read(0, 0u, 100u, &lambda));
     assert(!tunuino_wideband_sensor_bridge_read(&bridge, 0u, 100u, 0));
     assert(!tunuino_wideband_sensor_bridge_receive(0, &frame, 0u));

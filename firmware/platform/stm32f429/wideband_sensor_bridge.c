@@ -9,6 +9,12 @@ void tunuino_wideband_sensor_bridge_init(tunuino_wideband_sensor_bridge_t *bridg
 uint8_t tunuino_wideband_sensor_bridge_receive(tunuino_wideband_sensor_bridge_t *bridge,
     const tunuino_can1_frame_t *frame, uint32_t now_ms) {
     if (!bridge) return 0u;
+    // Only the configured, correctly formed sender can change sensor state.
+    // A replayed fault must not invalidate a newer valid measurement.
+    if (tunuino_can1_frame_valid(frame) && !frame->extended &&
+        frame->identifier == TUNUINO_WIDEBAND_CAN_ID && frame->length == 4u &&
+        bridge->monitor.received &&
+        bridge->monitor.sample.counter == frame->data[3]) return 0u;
     // An explicit not-ready or invalid measurement from our configured sender
     // revokes the old sample immediately. Ignore unrelated/malformed frames.
     if (tunuino_can1_frame_valid(frame) && !frame->extended &&
