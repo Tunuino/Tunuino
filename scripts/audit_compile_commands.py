@@ -40,7 +40,7 @@ def main():
     print(f"Distinct repository sources compiled: {len(compiled)}")
     for group, paths in groups.items():
         missing = sorted(set(paths) - compiled)
-        print(f"\\n{group}: {len(paths) - len(missing)}/{len(paths)} compiled")
+        print(f"\n{group}: {len(paths) - len(missing)}/{len(paths)} compiled")
         if missing:
             print("Not compiled by this configuration:")
             for path in missing:
