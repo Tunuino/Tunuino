@@ -35,7 +35,7 @@ int main(void) {
     assert(tunuino_wideband_sensor_bridge_read(&bridge, 1261u, 100u, &lambda));
     frame.data[0] = 0u;
     frame.data[1] = 0u;
-    frame.data[3] = 3u; // New counter: invalid sample must revoke the measurement.
+    frame.data[3] = 4u; // New counter: invalid sample must revoke the measurement.
     assert(!tunuino_wideband_sensor_bridge_receive(&bridge, &frame, 1270u));
     assert(!tunuino_wideband_sensor_bridge_read(&bridge, 1270u, 100u, &lambda));
     frame.data[0] = 0xe8u;
@@ -49,7 +49,7 @@ int main(void) {
     assert(!tunuino_wideband_sensor_bridge_receive(&bridge, &frame, 1283u));
     assert(tunuino_wideband_sensor_bridge_read(&bridge, 1284u, 100u, &lambda));
     assert(lambda == 1000u);
-    frame.data[3] = 4u;
+    frame.data[3] = 5u;
     assert(!tunuino_wideband_sensor_bridge_receive(&bridge, &frame, 1285u));
     assert(!tunuino_wideband_sensor_bridge_read(&bridge, 1285u, 100u, &lambda));
     assert(!tunuino_wideband_sensor_bridge_read(0, 0u, 100u, &lambda));
