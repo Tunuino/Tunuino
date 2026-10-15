@@ -44,12 +44,3 @@ make tools      # ferramentas Java
 
 Consultar [firmware/README.md](firmware/README.md) para os requisitos e limitações do alvo STM32.
 
-# Clonar o repositório
-
-```sh
-git clone https://github.com/Tunuino/tunuino.git
-cd tunuino
-git submodule update --init --recursive
-```
-
-> **Segurança:** firmware e comunicações ainda em desenvolvimento. As saídas de injeção e ignição não estão ativadas neste protótipo. Não ligar a um motor sem validação completa do hardware e software.
