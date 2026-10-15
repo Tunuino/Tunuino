@@ -122,11 +122,19 @@ public final class BrandingPreview {
         middle.setOpaque(false);
         JPanel navigation = new JPanel(new GridLayout(0, 1, 0, 10));
         navigation.setOpaque(false);
-        for (String item : new String[] {"Dashboard", "Tuning", "Fuel Tables",
-                "Ignition Tables", "Sensors", "Diagnostics", "Datalogger"}) {
-            JLabel entry = new JLabel(item);
+        JPanel pages = new JPanel(new CardLayout());
+        pages.setOpaque(false);
+        String[] sections = {"Dashboard", "Tuning", "Fuel Tables",
+                "Ignition Tables", "Sensors", "Diagnostics", "Datalogger"};
+        for (String item : sections) {
+            JButton entry = new JButton(item);
+            entry.setHorizontalAlignment(SwingConstants.LEFT);
             entry.setForeground(TEXT);
+            entry.setBackground(PANEL);
+            entry.setFocusPainted(false);
             entry.setBorder(BorderFactory.createEmptyBorder(10, 12, 10, 25));
+            entry.addActionListener(event ->
+                    ((CardLayout) pages.getLayout()).show(pages, item));
             navigation.add(entry);
         }
         middle.add(navigation, BorderLayout.WEST);
@@ -148,7 +156,18 @@ public final class BrandingPreview {
         maps.add(demoMap("Ignition Advance", 8));
         mainArea.add(maps, BorderLayout.CENTER);
         mainArea.add(demoGraph(), BorderLayout.SOUTH);
-        middle.add(mainArea, BorderLayout.CENTER);
+        pages.add(mainArea, "Dashboard");
+        for (String item : sections) {
+            if ("Dashboard".equals(item)) continue;
+            JPanel placeholder = new JPanel(new BorderLayout());
+            placeholder.setBackground(PANEL);
+            JLabel title = new JLabel(item + "  |  Preview only", SwingConstants.CENTER);
+            title.setForeground(TunuinoArtwork.WHITE);
+            title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 24));
+            placeholder.add(title, BorderLayout.CENTER);
+            pages.add(placeholder, item);
+        }
+        middle.add(pages, BorderLayout.CENTER);
         content.add(middle, BorderLayout.CENTER);
 
         JLabel notice = new JLabel("DEMO PREVIEW  |  Simulated values  |  ECU not connected");
