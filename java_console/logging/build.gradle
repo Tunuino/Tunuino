@@ -1,0 +1,8 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    api project(':logging-api')
+    implementation 'io.github.java-diff-utils:java-diff-utils:4.12'
+}
