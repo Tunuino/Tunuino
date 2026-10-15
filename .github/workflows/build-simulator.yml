@@ -1,0 +1,39 @@
+name: Tunuino native simulator validation
+
+on:
+  push:
+    paths:
+      - 'simulator/**'
+      - 'firmware/core/**'
+      - 'tests/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/build-simulator.yml'
+  pull_request:
+    paths:
+      - 'simulator/**'
+      - 'firmware/core/**'
+      - 'tests/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/build-simulator.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-validation:
+    name: Native validation (not full ECU simulation)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure, build and test native harness
+        run: make -C simulator test
+      - name: Preserve CTest logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tunuino-simulator-ctest-logs
+          path: build/simulator/Testing/Temporary/
+          if-no-files-found: ignore
