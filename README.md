@@ -22,3 +22,13 @@ The root `Makefile` provides a single entry point across the existing modules:
 and `make tools` (Java tools). `make clean` removes native and firmware build
 outputs. The simulator target is a host test harness, **not** a complete engine
 simulator. Java and STM32 toolchains must be installed separately.
+
+## Versions and Releases
+
+[Latest GitHub Release](https://github.com/Tunuino/tunuino/releases/latest) ·
+[All releases](https://github.com/Tunuino/tunuino/releases) ·
+[Versioning and publishing guide](docs/releases.md)
+
+Version tags `vMAJOR.MINOR.PATCH` trigger an **experimental pre-release**
+with the STM32F429 binary and checksum after CI packaging succeeds. A normal
+commit to `master` does not create a release.

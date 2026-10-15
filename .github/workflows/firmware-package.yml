@@ -16,7 +16,7 @@ jobs:
         with:
           release: '14.2.Rel1'
       - name: Build standalone STM32F429 firmware
-        run: make -C firmware/platform/stm32f429
+        run: make -C firmware BOARD=stm32f429
       - name: Verify vector table and export package
         run: |
           python3 - <<'PY'
@@ -37,3 +37,25 @@ jobs:
         with:
           name: tunuino-stm32f429-standalone-unverified
           path: package/
+  release:
+    name: Publish experimental GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tunuino-stm32f429-standalone-unverified
+          path: package
+      - name: Publish pre-release with checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh release create "$TAG" package/tunuino-stm32f429-standalone.bin package/SHA256SUMS \\
+            --repo "$REPO" --verify-tag --prerelease \\
+            --title "Tunuino $TAG (experimental)" \\
+            --notes "Experimental STM32F429 standalone firmware. Cross-compiled and vector-table checked in CI; not validated on physical hardware. Do not connect to an engine, injectors or ignition coils."
