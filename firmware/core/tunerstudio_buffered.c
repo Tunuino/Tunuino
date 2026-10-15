@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #include "tunerstudio_buffered.h"
 void tunuino_ts_buffered_init(tunuino_ts_buffered_t *s,
