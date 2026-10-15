@@ -36,10 +36,16 @@ jobs:
           build-mode: manual
       - name: Build native Tunuino code for CodeQL
         run: |
-          cmake -S . -B build-codeql -DCMAKE_BUILD_TYPE=Debug
+          cmake -S . -B build-codeql -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           cmake --build build-codeql --parallel 2
       - name: Run native tests
         run: ctest --test-dir build-codeql --output-on-failure
+      - name: Upload native compilation manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-native-compile-commands
+          path: build-codeql/compile_commands.json
+          retention-days: 14
       - uses: github/codeql-action/analyze@v3
         with:
           category: '/language:cpp/native'
