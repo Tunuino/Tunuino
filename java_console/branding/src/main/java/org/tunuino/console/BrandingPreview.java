@@ -122,6 +122,32 @@ public final class BrandingPreview {
         return section;
     }
 
+    private static JPanel demoDiagnostics() {
+        JPanel section = new JPanel(new BorderLayout(12, 12));
+        section.setBackground(TunuinoArtwork.BACKGROUND);
+        JPanel status = new JPanel(new GridLayout(2, 1, 0, 12));
+        status.setOpaque(false);
+        status.add(tile("ECU Connection", "Disconnected"));
+        status.add(tile("Diagnostic Trouble Codes", "Unavailable"));
+        section.add(status, BorderLayout.NORTH);
+        JTextArea details = new JTextArea();
+        details.setEditable(false);
+        details.setBackground(PANEL);
+        details.setForeground(TEXT);
+        details.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 14));
+        details.setBorder(BorderFactory.createEmptyBorder(18, 20, 18, 20));
+        details.setText("DIAGNOSTICS PREVIEW\\n\\n"
+                + "ECU communication is not implemented in this preview.\\n"
+                + "No diagnostic codes have been read from hardware.\\n"
+                + "Connect a supported ECU in a future Console integration\\n"
+                + "to read actual status and diagnostic information.");
+        section.add(new JScrollPane(details), BorderLayout.CENTER);
+        JLabel notice = new JLabel("OFFLINE  |  No diagnostic data available");
+        notice.setForeground(new Color(0xFFBE65));
+        section.add(notice, BorderLayout.SOUTH);
+        return section;
+    }
+
     private static JPanel dashboard() {
         JPanel content = new JPanel(new BorderLayout(12, 16));
         content.setBackground(TunuinoArtwork.BACKGROUND);
@@ -179,7 +205,9 @@ public final class BrandingPreview {
             if ("Dashboard".equals(item)) continue;
             JPanel section = new JPanel(new BorderLayout(12, 12));
             section.setBackground(TunuinoArtwork.BACKGROUND);
-            if ("Sensors".equals(item)) {
+            if ("Diagnostics".equals(item)) {
+                section.add(demoDiagnostics(), BorderLayout.CENTER);
+            } else if ("Sensors".equals(item)) {
                 section.add(demoSensors(), BorderLayout.CENTER);
             } else if ("Fuel Tables".equals(item) || "Ignition Tables".equals(item)) {
                 boolean fuel = "Fuel Tables".equals(item);
