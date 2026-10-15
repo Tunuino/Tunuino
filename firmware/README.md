@@ -30,3 +30,10 @@ produzem um erro em vez de selecionar silenciosamente outra placa.
 separação por placas, mas não significa compatibilidade com o sistema de
 compilação completo da arquitetura de referência. Não ativa periféricos nem
 saídas de motor.
+
+## Entrada de compilação da configuração da placa
+
+O script `firmware/config/boards/tunuino/compile_tunuino_f4.sh` usa agora o
+mesmo ponto de entrada `firmware/Makefile` utilizado no CI. A configuração
+`board.mk` permanece como metadados para a migração e ainda não está ligada
+à compilação STM32 autónoma. Não implica suporte completo do HAL original.
