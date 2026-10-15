@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 #ifndef TUNUINO_CORE_CONSOLE_UART_PUMP_COMPAT_H
 #define TUNUINO_CORE_CONSOLE_UART_PUMP_COMPAT_H
 #include "../console/console_uart_pump.h"
