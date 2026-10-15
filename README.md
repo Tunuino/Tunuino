@@ -12,7 +12,7 @@
 
 # Tunuino
 
-Projeto independente de gestão eletrónica de motor, com firmware STM32F429ZIT6 e aplicação **Tunuino Console**. Em desenvolvimento. O código original Tunuino está sujeito a **direitos reservados**; componentes de terceiros mantêm as respetivas licenças. Consultar [LICENSE](LICENSE).
+Projeto independente de gestão eletrónica de motor, com firmware STM32F429ZIT6 e aplicação **Tunuino Console**. Em desenvolvimento. O código original Tunuino está sujeito a **direitos reservados**; componentes de terceiros mantêm as respetivas licenças. Consultar [LICENSE](LICENSE) e [licenças de terceiros](THIRD_PARTY_LICENSES.md).
 
 # Download
 
