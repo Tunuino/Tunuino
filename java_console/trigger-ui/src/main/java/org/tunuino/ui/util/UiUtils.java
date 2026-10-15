@@ -15,9 +15,9 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import static com.rusefi.ui.util.LocalizedMessages.CLEAR;
-import static com.rusefi.ui.util.LocalizedMessages.PAUSE;
-import static com.rusefi.ui.util.LocalizedMessages.RESUME;
+import static org.tunuino.ui.util.LocalizedMessages.CLEAR;
+import static org.tunuino.ui.util.LocalizedMessages.PAUSE;
+import static org.tunuino.ui.util.LocalizedMessages.RESUME;
 
 /**
  * 7/7/13

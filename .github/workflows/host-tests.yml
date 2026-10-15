@@ -29,5 +29,11 @@ jobs:
           java-version: '17'
       - name: Validate Gradle wrapper
         run: ./gradlew --version
+      - name: Reject legacy Java namespaces
+        run: |
+          if grep -RInE 'com[.]rusefi|org[.]rusefi' java_console java_tools --include='*.java' --include='*.gradle'; then
+            echo 'Legacy Java namespace found'
+            exit 1
+          fi
       - name: Build Tunuino Java tools
         run: ./gradlew build --no-daemon
