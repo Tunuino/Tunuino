@@ -6,3 +6,14 @@ dependencies {
     api project(':logging-api')
     implementation 'io.github.java-diff-utils:java-diff-utils:4.12'
 }
+
+tasks.register('smokeTest', JavaExec) {
+    group = 'verification'
+    description = 'Exercise the Console LazyFile writer'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.tunuino.util.LazyFileSmokeTest'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('smokeTest')
+}
