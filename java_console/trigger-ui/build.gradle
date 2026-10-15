@@ -27,6 +27,13 @@ tasks.register('uiUtilsTest', JavaExec) {
     mainClass = 'org.tunuino.ui.util.UiUtilsSmokeTest'
 }
 
+tasks.register('statusPanelTest', JavaExec) {
+    group = 'verification'
+    systemProperty 'java.awt.headless', 'true'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.tunuino.ui.ConsoleStatusPanelSmokeTest'
+}
+
 tasks.named('check') {
-    dependsOn tasks.named('smokeTest'), tasks.named('localizedMessagesTest'), tasks.named('uiUtilsTest')
+    dependsOn tasks.named('smokeTest'), tasks.named('localizedMessagesTest'), tasks.named('uiUtilsTest'), tasks.named('statusPanelTest')
 }
