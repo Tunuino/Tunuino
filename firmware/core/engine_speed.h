@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #ifndef TUNUINO_ENGINE_SPEED_H
 #define TUNUINO_ENGINE_SPEED_H

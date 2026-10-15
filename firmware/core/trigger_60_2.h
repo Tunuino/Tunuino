@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #ifndef TUNUINO_TRIGGER_60_2_H
 #define TUNUINO_TRIGGER_60_2_H

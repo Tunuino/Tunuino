@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #include "sensor_state.h"
 void tunuino_lambda_state_init(tunuino_lambda_state_t *state) {
