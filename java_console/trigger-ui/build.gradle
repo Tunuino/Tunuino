@@ -20,6 +20,13 @@ tasks.register('localizedMessagesTest', JavaExec) {
     mainClass = 'org.tunuino.ui.util.LocalizedMessagesSmokeTest'
 }
 
+tasks.register('uiUtilsTest', JavaExec) {
+    group = 'verification'
+    systemProperty 'java.awt.headless', 'true'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.tunuino.ui.util.UiUtilsSmokeTest'
+}
+
 tasks.named('check') {
-    dependsOn tasks.named('smokeTest'), tasks.named('localizedMessagesTest')
+    dependsOn tasks.named('smokeTest'), tasks.named('localizedMessagesTest'), tasks.named('uiUtilsTest')
 }
