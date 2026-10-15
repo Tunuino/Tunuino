@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #include "wideband_can.h"
 uint8_t tunuino_wideband_decode(const tunuino_can1_frame_t *frame,
