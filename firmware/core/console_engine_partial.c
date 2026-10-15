@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #include "console_engine_partial.h"
 uint8_t tunuino_console_engine_partial(const tunuino_engine_state_t *engine,
