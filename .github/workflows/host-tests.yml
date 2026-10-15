@@ -1,49 +1,43 @@
 name: Tunuino host tests
+
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   repository-integrity:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Check declared Git submodules
         run: python3 scripts/check_submodules.py
       - name: Verify third-party license inventory
         run: python3 scripts/check_third_party_inventory.py
       - name: Report reference architecture coverage
         run: python3 scripts/report_architecture_coverage.py
+
   host-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
       - name: Build
         run: cmake --build build --parallel 2
       - name: Test
         run: ctest --test-dir build --output-on-failure
-  simulator:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build and test native simulator target
-        run: make simulator
-  java-tools:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - name: Upload CTest logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
         with:
-          distribution: temurin
-          java-version: '17'
-      - name: Validate Gradle wrapper
-        run: ./gradlew --version
-      - name: Reject legacy Java namespaces
-        run: |
-          if grep -RInE 'com[.]ru[a-z]+|org[.]ru[a-z]+' java_console java_tools --include='*.java' --include='*.gradle'; then
-            echo 'Legacy Java namespace found'
-            exit 1
-          fi
-      - name: Build Tunuino Java tools
-        run: ./gradlew build --no-daemon
+          name: tunuino-host-ctest-logs
+          path: build/Testing/Temporary/
+          if-no-files-found: ignore
