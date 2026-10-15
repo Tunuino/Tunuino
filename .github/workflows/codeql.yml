@@ -6,6 +6,7 @@ on:
       - 'firmware/**'
       - 'tests/**'
       - 'CMakeLists.txt'
+      - 'scripts/audit_compile_commands.py'
       - '.github/workflows/codeql.yml'
   pull_request:
     paths:
@@ -40,6 +41,8 @@ jobs:
           cmake --build build-codeql --parallel 2
       - name: Run native tests
         run: ctest --test-dir build-codeql --output-on-failure
+      - name: Audit native compilation coverage
+        run: python3 scripts/audit_compile_commands.py build-codeql/compile_commands.json
       - name: Upload native compilation manifest
         uses: actions/upload-artifact@v4
         with:
