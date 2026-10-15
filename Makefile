@@ -13,7 +13,7 @@ simulator:
 	$(MAKE) -C simulator test
 
 firmware:
-	$(MAKE) -C firmware/platform/stm32f429 all
+	$(MAKE) -C firmware all
 
 console:
 	./gradlew :branding:build :logging:build :trigger-ui:build --no-daemon
@@ -23,4 +23,4 @@ tools:
 
 clean:
 	$(MAKE) -C simulator clean
-	$(MAKE) -C firmware/platform/stm32f429 clean
+	$(MAKE) -C firmware clean
