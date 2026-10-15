@@ -31,6 +31,10 @@ uint8_t tunuino_wideband_monitor_receive(tunuino_wideband_monitor_t *monitor,
     const tunuino_can1_frame_t *frame, uint32_t now_ms) {
     tunuino_wideband_sample_t sample;
     if (monitor == 0 || !tunuino_wideband_decode(frame, &sample)) return 0u;
+    // Replayed frames must not extend the lifetime of an old measurement.
+    // A changed counter is accepted, including rollover from 255 to 0.
+    if (monitor->received && monitor->sample.counter == sample.counter)
+        return 0u;
     monitor->sample = sample;
     monitor->last_received_ms = now_ms;
     monitor->received = 1u;
