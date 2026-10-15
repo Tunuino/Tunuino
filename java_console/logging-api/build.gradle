@@ -5,3 +5,14 @@ plugins {
 dependencies {
     implementation 'com.google.code.findbugs:jsr305:3.0.2'
 }
+
+tasks.register('smokeTest', JavaExec) {
+    group = 'verification'
+    description = 'Run the imported Console logging implementation'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.tunuino.LoggingSmokeTest'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('smokeTest')
+}
