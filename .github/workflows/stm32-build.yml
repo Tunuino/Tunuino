@@ -1,8 +1,16 @@
 name: Tunuino STM32 firmware build
 on:
   push:
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/stm32-build.yml'
   pull_request:
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/stm32-build.yml'
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   firmware:
     runs-on: ubuntu-latest
