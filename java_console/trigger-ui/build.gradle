@@ -34,6 +34,20 @@ tasks.register('statusPanelTest', JavaExec) {
     mainClass = 'org.tunuino.ui.ConsoleStatusPanelSmokeTest'
 }
 
+tasks.register('preview', JavaExec) {
+    group = 'application'
+    description = 'Launch the Tunuino desktop status viewer'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.tunuino.ui.ConsoleStatusApp'
+}
+
+tasks.register('statusAppTest', JavaExec) {
+    group = 'verification'
+    systemProperty 'java.awt.headless', 'true'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.tunuino.ui.ConsoleStatusAppSmokeTest'
+}
+
 tasks.named('check') {
-    dependsOn tasks.named('smokeTest'), tasks.named('localizedMessagesTest'), tasks.named('uiUtilsTest'), tasks.named('statusPanelTest')
+    dependsOn tasks.named('smokeTest'), tasks.named('localizedMessagesTest'), tasks.named('uiUtilsTest'), tasks.named('statusPanelTest'), tasks.named('statusAppTest')
 }
