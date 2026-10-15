@@ -159,13 +159,25 @@ public final class BrandingPreview {
         pages.add(mainArea, "Dashboard");
         for (String item : sections) {
             if ("Dashboard".equals(item)) continue;
-            JPanel placeholder = new JPanel(new BorderLayout());
-            placeholder.setBackground(PANEL);
-            JLabel title = new JLabel(item + "  |  Preview only", SwingConstants.CENTER);
-            title.setForeground(TunuinoArtwork.WHITE);
-            title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 24));
-            placeholder.add(title, BorderLayout.CENTER);
-            pages.add(placeholder, item);
+            JPanel section = new JPanel(new BorderLayout(12, 12));
+            section.setBackground(TunuinoArtwork.BACKGROUND);
+            if ("Fuel Tables".equals(item) || "Ignition Tables".equals(item)) {
+                boolean fuel = "Fuel Tables".equals(item);
+                section.add(demoMap(fuel ? "Fuel VE Table" : "Ignition Advance",
+                        fuel ? 30 : 8), BorderLayout.CENTER);
+                JLabel note = new JLabel("DEMO DATA  |  Read-only table  |  ECU disconnected");
+                note.setForeground(TunuinoArtwork.BLUE);
+                section.add(note, BorderLayout.SOUTH);
+            } else {
+                JPanel placeholder = new JPanel(new BorderLayout());
+                placeholder.setBackground(PANEL);
+                JLabel title = new JLabel(item + "  |  Preview only", SwingConstants.CENTER);
+                title.setForeground(TunuinoArtwork.WHITE);
+                title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 24));
+                placeholder.add(title, BorderLayout.CENTER);
+                section.add(placeholder, BorderLayout.CENTER);
+            }
+            pages.add(section, item);
         }
         middle.add(pages, BorderLayout.CENTER);
         content.add(middle, BorderLayout.CENTER);
