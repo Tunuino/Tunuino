@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 # Native validation harness. Full ECU simulation is not implemented yet.
 BUILD_DIR ?= ../build/simulator
 .PHONY: all test clean

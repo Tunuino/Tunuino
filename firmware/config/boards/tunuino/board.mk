@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 # Board-specific configuration in the reference firmware board.mk location.
 BOARD_DIR ?= config/boards/tunuino
 IS_STM32F429 = yes
