@@ -16,6 +16,6 @@ Projeto original de ECU para STM32F407ZGT6 (LQFP144).
 
 ## Regras
 
-Código Tunuino original sob licença MIT. Dependências externas exigem revisão de licença e avisos próprios. Não copiar código de outros firmwares sem autorização compatível.
+Código original Tunuino nas versões atuais sob a TUNUINO PROPRIETARY SOFTWARE LICENSE v1.0 (ver LICENSE). Licenças anteriormente concedidas para versões antigas não são revogadas por esta alteração. Dependências externas exigem revisão de licença e avisos próprios. Não copiar código de outros firmwares sem autorização compatível.
 
 A ECU só poderá controlar um motor após testes de compilação, eletrónica, proteção de saídas, sincronização e bancada.
