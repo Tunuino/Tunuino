@@ -15,6 +15,13 @@ tasks.register('artworkTest', JavaExec) {
     mainClass = 'org.tunuino.console.ArtworkSmokeTest'
 }
 
+tasks.register('windowBrandingTest', JavaExec) {
+    group = 'verification'
+    systemProperty 'java.awt.headless', 'true'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.tunuino.console.ConsoleWindowBrandingSmokeTest'
+}
+
 tasks.register('preview', JavaExec) {
     group = 'application'
     description = 'Preview the blue-and-white Tunuino Swing branding'
@@ -23,5 +30,5 @@ tasks.register('preview', JavaExec) {
 }
 
 tasks.named('check') {
-    dependsOn tasks.named('smokeTest'), tasks.named('artworkTest')
+    dependsOn tasks.named('smokeTest'), tasks.named('artworkTest'), tasks.named('windowBrandingTest')
 }
