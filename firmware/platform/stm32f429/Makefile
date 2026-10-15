@@ -10,7 +10,7 @@ LDFLAGS := -mcpu=cortex-m4 -mthumb -nostdlib -Wl,--gc-sections -Wl,-Map=build/tu
 include ../../console/console.mk
 SOURCES := startup.c main.c board.c startup_contract.c mcu_clock.c mcu_tick.c usart_console.c can1.c wideband_can.c \
   ../../core/tune_maps.c ../../core/tune_validation.c ../../core/tune_store.c \
-  ../../core/tune_wire.c $(TUNUINO_CONSOLE_SOURCES)
+  ../../core/tune_wire.c ../../core/sensor_state.c $(TUNUINO_CONSOLE_SOURCES)
 OBJECTS := $(patsubst %.c,build/%.o,$(SOURCES))
 .PHONY: all clean
 all: build/tunuino.elf build/tunuino.bin
