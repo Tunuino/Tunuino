@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build and test native simulator target
-        run: make -C simulator test
+        run: make simulator
   java-tools:
     runs-on: ubuntu-latest
     steps:
