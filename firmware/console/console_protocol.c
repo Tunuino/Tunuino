@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #include "console_protocol.h"
 uint16_t tunuino_console_crc16(const uint8_t *data, size_t size) {
