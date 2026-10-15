@@ -5,3 +5,14 @@ plugins {
 application {
     mainClass = 'org.tunuino.tools.Bin2Header'
 }
+
+tasks.register('smokeTest', JavaExec) {
+    group = 'verification'
+    description = 'Verify conversion of binary input into a C header'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.tunuino.tools.Bin2HeaderSmokeTest'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('smokeTest')
+}
