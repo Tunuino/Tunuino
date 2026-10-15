@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 #include "../flash_regions.h"
 #include <assert.h>
 int main(void) {
