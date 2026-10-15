@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #include "tune_validation.h"
 tunuino_tune_error_t tunuino_tune_validate(const tunuino_tune_maps_t *maps) {

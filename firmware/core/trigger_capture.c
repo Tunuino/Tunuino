@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #include "trigger_capture.h"
 void tunuino_trigger_init(tunuino_trigger_capture_t *capture, uint32_t min_period_us, uint32_t max_period_us) {

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 // Copyright (c) 2026 Tunuino
 #include "console_partial.h"
 size_t tunuino_console_encode_partial(const tunuino_console_partial_t *data,
