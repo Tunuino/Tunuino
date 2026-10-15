@@ -2,6 +2,8 @@ name: Tunuino firmware package
 on:
   workflow_dispatch:
   push:
+    branches:
+      - master
     tags:
       - 'v*'
 permissions:
@@ -41,6 +43,11 @@ jobs:
           mkdir -p package
           cp firmware/platform/stm32f429/build/tunuino.bin package/tunuino-stm32f429-standalone.bin
           (cd package && sha256sum tunuino-stm32f429-standalone.bin > SHA256SUMS && sha256sum --check SHA256SUMS)
+      - name: Check packaged firmware and metadata
+        run: |
+          test -s package/tunuino-stm32f429-standalone.bin
+          test -s package/SHA256SUMS
+          (cd package && sha256sum --check SHA256SUMS)
       - name: Publish build artifact
         uses: actions/upload-artifact@v4
         with:
