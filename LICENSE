@@ -1,37 +1,68 @@
-TUNUINO PROPRIETARY SOURCE LICENSE
-Copyright (c) 2026 Tunuino. All rights reserved.
+TUNUINO PROPRIETARY SOFTWARE LICENSE
+Version 1.0 | Copyright (c) 2026 Tunuino. All rights reserved.
 
-1. Scope
-This notice applies only to original code and documentation for which Tunuino
-owns the copyright and has authority to license. It does not replace or restrict
-licenses of third-party code, submodules, dependencies, or contributions owned
-by others. Their respective notices and licenses remain in effect.
+Tunuino-owned software is made available under proprietary terms, subject to
+the following conditions:
 
-2. Reservation of rights
-No permission is granted to copy, modify, adapt, translate, distribute,
-sublicense, sell, or create derivative works from the Tunuino-owned material,
-except with prior written authorization from the relevant copyright holder or
-as otherwise permitted by applicable law.
+Tunuino #1: Unauthorized modification, adaptation, redistribution or
+commercialization of Tunuino-owned software is prohibited, except as permitted
+by applicable law or by prior written authorization.
 
-3. Viewing on GitHub
-The public availability of source code is not a grant of permission to modify
-or redistribute it. Rights required by GitHub's applicable Terms of Service,
-including platform viewing and forking, are unaffected.
+Tunuino #2: Tunuino software is intended for experimental and off-road
+applications. It has not been certified for road use or compliance with
+automotive environmental regulations.
 
-4. Prior licenses
-This notice applies prospectively to material Tunuino has the authority to
-license under these terms. It does not revoke permissions already granted under
-previous licenses for previously released versions.
+Tunuino #3: Tunuino software is not approved for manned aircraft applications
+or safety-critical systems.
 
-5. Third-party components
-Third-party components retain their own licenses. Where a file contains
-third-party copyrighted material, this notice does not claim ownership of it
-or override its license. Review each component's license before use or
-redistribution.
+Tunuino #4: Third-party software and components remain subject to their
+respective licenses. This license does not override those rights.
 
-6. Disclaimer
-To the extent permitted by law, Tunuino-owned material is provided AS IS,
-without warranties of any kind. This notice does not override mandatory
-statutory rights.
+Tunuino #5: Permissions previously granted under earlier licenses remain
+unaffected for the material and versions to which they applied.
 
-For permissions, contact the Tunuino repository owner via GitHub.
+ALL RIGHTS RESERVED
+
+1. Ownership and scope
+This license applies only to original code, documentation and other material
+for which Tunuino owns the copyright or has the legal authority to impose these
+terms. It does not assert ownership of third-party contributions, libraries,
+submodules or other external material.
+
+2. Restrictions
+Unless expressly authorized in writing by the relevant copyright holder or
+permitted by applicable law, no license is granted to reproduce, modify,
+adapt, translate, distribute, sublicense, sell, commercially exploit or create
+derivative works of Tunuino-owned material. All rights not expressly granted
+are reserved.
+
+3. Public source access
+Public availability on GitHub is not a general license to modify or
+redistribute Tunuino-owned material. Rights granted by GitHub's applicable
+Terms of Service, including platform viewing and forking, remain unaffected.
+
+4. Third-party licenses
+Components supplied under separate licenses retain those licenses, including
+any rights to use, modify and redistribute them. In the event of a conflict,
+the applicable third-party license governs that third-party component.
+This document does not purport to relicense third-party code.
+
+5. Previously published versions
+This license does not revoke rights already granted under earlier licenses for
+previously released copies. Its application is prospective and limited to
+material Tunuino is legally entitled to license under these terms.
+
+6. Safety and regulatory status
+No representation is made that the software is suitable or certified for road
+vehicles, aircraft, emissions compliance, or safety-critical applications.
+Do not use it to control an engine without appropriate independent hardware
+and software validation.
+
+7. Disclaimer
+To the maximum extent permitted by applicable law, Tunuino-owned material is
+provided AS IS, without warranties of any kind. Nothing in this document
+excludes rights or liabilities that cannot lawfully be excluded.
+
+8. Permission requests
+Requests for written authorization should be directed to the Tunuino
+repository owner through GitHub.
