@@ -69,6 +69,13 @@ tasks.register('telemetryStreamTest', JavaExec) {
     mainClass = 'org.tunuino.ui.protocol.TelemetryStreamReaderSmokeTest'
 }
 
+tasks.register('telemetryConnectionTest', JavaExec) {
+    group = 'verification'
+    systemProperty 'java.awt.headless', 'true'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.tunuino.ui.protocol.TelemetryConnectionSmokeTest'
+}
+
 tasks.named('check') {
-    dependsOn tasks.named('smokeTest'), tasks.named('localizedMessagesTest'), tasks.named('uiUtilsTest'), tasks.named('statusPanelTest'), tasks.named('statusAppTest'), tasks.named('telemetryFrameTest'), tasks.named('telemetryPresenterTest'), tasks.named('telemetryStreamTest')
+    dependsOn tasks.named('smokeTest'), tasks.named('localizedMessagesTest'), tasks.named('uiUtilsTest'), tasks.named('statusPanelTest'), tasks.named('statusAppTest'), tasks.named('telemetryFrameTest'), tasks.named('telemetryPresenterTest'), tasks.named('telemetryStreamTest'), tasks.named('telemetryConnectionTest')
 }
