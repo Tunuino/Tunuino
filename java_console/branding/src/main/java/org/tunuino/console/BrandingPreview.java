@@ -24,6 +24,37 @@ public final class BrandingPreview {
         return tile;
     }
 
+    private static JPanel demoMap(String title, int offset) {
+        JPanel panel = new JPanel(new BorderLayout(0, 10));
+        panel.setBackground(PANEL);
+        panel.setBorder(BorderFactory.createEmptyBorder(12, 14, 14, 14));
+        JLabel label = new JLabel(title + " (demo)");
+        label.setForeground(TunuinoArtwork.WHITE);
+        label.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 15));
+        panel.add(label, BorderLayout.NORTH);
+
+        String[] columns = {"kPa / RPM", "1000", "2000", "3000", "4000", "5000"};
+        Object[][] values = new Object[5][6];
+        for (int row = 0; row < 5; row++) {
+            values[row][0] = Integer.toString(20 + row * 30);
+            for (int column = 1; column < 6; column++) {
+                values[row][column] = Integer.toString(offset + row * 4 + column * 3);
+            }
+        }
+        JTable table = new JTable(values, columns);
+        table.setEnabled(false);
+        table.setRowHeight(27);
+        table.setBackground(new Color(0x223449));
+        table.setForeground(TEXT);
+        table.setGridColor(new Color(0x3A5269));
+        table.getTableHeader().setBackground(new Color(0x145587));
+        table.getTableHeader().setForeground(Color.WHITE);
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        panel.add(scroll, BorderLayout.CENTER);
+        return panel;
+    }
+
     private static JPanel dashboard() {
         JPanel content = new JPanel(new BorderLayout(12, 16));
         content.setBackground(TunuinoArtwork.BACKGROUND);
@@ -51,7 +82,15 @@ public final class BrandingPreview {
         instruments.add(tile("AFR", "14.7"));
         instruments.add(tile("Coolant", "92 °C"));
         instruments.add(tile("Intake", "36 °C"));
-        middle.add(instruments, BorderLayout.CENTER);
+        JPanel mainArea = new JPanel(new BorderLayout(12, 12));
+        mainArea.setOpaque(false);
+        mainArea.add(instruments, BorderLayout.NORTH);
+        JPanel maps = new JPanel(new GridLayout(1, 2, 12, 0));
+        maps.setOpaque(false);
+        maps.add(demoMap("Fuel VE Table", 30));
+        maps.add(demoMap("Ignition Advance", 8));
+        mainArea.add(maps, BorderLayout.CENTER);
+        middle.add(mainArea, BorderLayout.CENTER);
         content.add(middle, BorderLayout.CENTER);
 
         JLabel notice = new JLabel("DEMO PREVIEW  |  Simulated values  |  ECU not connected");
