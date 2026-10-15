@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Tunuino
+#include "wideband_sensor_bridge.h"
+void tunuino_wideband_sensor_bridge_init(tunuino_wideband_sensor_bridge_t *bridge) {
+    if (!bridge) return;
+    tunuino_wideband_monitor_init(&bridge->monitor);
+    tunuino_lambda_state_init(&bridge->lambda);
+}
+uint8_t tunuino_wideband_sensor_bridge_receive(tunuino_wideband_sensor_bridge_t *bridge,
+    const tunuino_can1_frame_t *frame, uint32_t now_ms) {
+    if (!bridge || !tunuino_wideband_monitor_receive(&bridge->monitor, frame, now_ms))
+        return 0u;
+    tunuino_lambda_state_update(&bridge->lambda,
+        bridge->monitor.sample.lambda_milli, now_ms);
+    return 1u;
+}
+uint8_t tunuino_wideband_sensor_bridge_read(const tunuino_wideband_sensor_bridge_t *bridge,
+    uint32_t now_ms, uint32_t timeout_ms, uint16_t *lambda_milli) {
+    if (!lambda_milli) return 0u;
+    *lambda_milli = 0u;
+    if (!bridge || !tunuino_wideband_monitor_fresh(&bridge->monitor, now_ms, timeout_ms))
+        return 0u;
+    return tunuino_lambda_state_read(&bridge->lambda, now_ms, timeout_ms, lambda_milli);
+}
