@@ -74,3 +74,7 @@ Four configured top-level submodules still point to `rusefi/*`:
 | `firmware/ext/rusefi-gha` | `rusefi/rusefi-gha` | GitHub reports non-fork; inspect build tooling usage before migration |
 
 GitHub's `fork: false` is not evidence of original copyright ownership. This table does not include nested submodules, which may have separate remotes and notices. None of these four URLs was changed in this step.
+
+## KiCad submodule URL repair (2026-10-16)
+
+The old `hardware/rusefi_lib` URL (`rusefi/kicad-libraries`) redirects. The pinned gitlink commit `6f95125ede0cd79ac943646ba923cc5db0515922` was verified as available at `rusefi/kicad-legacy-libraries`, but not at `rusefi/kicad6-libraries`. The URL was changed to `https://github.com/rusefi/kicad-legacy-libraries.git` without changing the gitlink commit, and `THIRD_PARTY_LICENSES.md` was updated to match. This is a URL repair, **not** removal of the rusEFI dependency. Recursive checkout and CI remain to be verified.
