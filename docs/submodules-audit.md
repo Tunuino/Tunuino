@@ -34,7 +34,7 @@ This inventory reflects the `.gitmodules` file and gitlink entries on `master` a
 
 ## Verification performed
 
-All 17 pinned commits were individually confirmed through GitHub's git commit API at their configured upstream repositories on 2026-10-16. All 17 local gitlinks were present. This establishes commit availability at the remote API, not recursive checkout or successful compilation. No submodule URLs or pinned commits were changed during this audit.
+All 17 pinned commits were individually confirmed through GitHub's git commit API at their configured upstream repositories on 2026-10-16. All 17 local gitlinks were present. This establishes commit availability at the remote API, not recursive checkout or successful compilation. At the time of the initial audit, no submodule URLs or pinned commits were changed. See the direct upstream migration section below.
 
 ## Ownership and upstream provenance (2026-10-16)
 
@@ -55,3 +55,9 @@ The GitHub URL identifies the **host of the configured repository**, not the ori
 The GitHub API reports `fork: false` for `rusefi/libfirmware`, `rusefi/peak-can-basic` and `rusefi/rusefi-gha`; this **does not prove original authorship**. Provenance of `rusefi/kicad-libraries` was not established from the metadata returned and requires manual inspection. No conclusion about copyright ownership can be drawn from fork status alone.
 
 **Migration caution:** The pinned commit in a modified fork may not exist in its upstream parent. Before switching URLs, check that the exact pinned commit is available in the proposed target, or create a suitable Tunuino fork retaining the required history and notices. Do not replace a modified fork with its upstream without checking compatibility, branch differences, licensing, and CI.
+
+## Direct upstream migration (2026-10-16)
+
+The nine fork-hosted submodules identified above now use their original upstream GitHub URLs in `.gitmodules`, instead of `rusefi/*` URLs. Each original upstream was verified via GitHub's commit API to contain the exact existing gitlink commit before migration. All gitlink commit hashes remain unchanged.
+
+Fork-specific `branch` settings for these nine submodules were removed because they may not exist at the original upstream. The other eight URLs remain unchanged. After pulling this change, run `git submodule sync --recursive` and `git submodule update --init --recursive`. A full recursive checkout and build are still required to validate the migration end-to-end.
