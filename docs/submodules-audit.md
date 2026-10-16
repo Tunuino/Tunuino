@@ -34,4 +34,4 @@ This inventory reflects the `.gitmodules` file and gitlink entries on `master` a
 
 ## Verification performed
 
-The pinned commits were found through GitHub's git commit API in `google/googletest`, `Neargye/magic_enum`, `rusefi/ChibiOS` and `rusefi/wideband`. The remaining remote commits have not yet been individually verified. All 17 local gitlinks were present. No submodule URLs or pinned commits were changed during this audit.
+All 17 pinned commits were individually confirmed through GitHub's git commit API at their configured upstream repositories on 2026-10-16. All 17 local gitlinks were present. This establishes commit availability at the remote API, not recursive checkout or successful compilation. No submodule URLs or pinned commits were changed during this audit.
