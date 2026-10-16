@@ -78,3 +78,11 @@ GitHub's `fork: false` is not evidence of original copyright ownership. This tab
 ## KiCad submodule URL repair (2026-10-16)
 
 The old `hardware/rusefi_lib` URL (`rusefi/kicad-libraries`) redirects. The pinned gitlink commit `6f95125ede0cd79ac943646ba923cc5db0515922` was verified as available at `rusefi/kicad-legacy-libraries`, but not at `rusefi/kicad6-libraries`. The URL was changed to `https://github.com/rusefi/kicad-legacy-libraries.git` without changing the gitlink commit, and `THIRD_PARTY_LICENSES.md` was updated to match. This is a URL repair, **not** removal of the rusEFI dependency. Recursive checkout and CI remain to be verified.
+
+## libfirmware migration assessment (2026-10-16)
+
+Current gitlink: `firmware/libfirmware` -> `rusefi/libfirmware` at `dffa2426620039f6711def5a794c41c5dd03194f`.
+
+The pinned upstream tree contains 130 Git tree entries, including board IDs, CAN shared interfaces, PT2001 controller headers and project assets, build/test scripts, and a nested `ext/googletest` submodule pinned at `bea621c3c39d8a7f71f07bd543c3a58bfa684f92`. Paths include `pt2001/include/rusefi/` and `pt2001/project/rusefi/`. Those paths must not be renamed without updating all corresponding include/build/project references.
+
+No new replacement repository or verified equivalent gitlink revision is available. Preserve the current submodule pin until a migration repository, file-level provenance/license review, reference updates, and CI validation are ready. Hosting a copy does not transfer third-party copyright.
