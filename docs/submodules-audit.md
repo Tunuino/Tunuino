@@ -35,3 +35,23 @@ This inventory reflects the `.gitmodules` file and gitlink entries on `master` a
 ## Verification performed
 
 All 17 pinned commits were individually confirmed through GitHub's git commit API at their configured upstream repositories on 2026-10-16. All 17 local gitlinks were present. This establishes commit availability at the remote API, not recursive checkout or successful compilation. No submodule URLs or pinned commits were changed during this audit.
+
+## Ownership and upstream provenance (2026-10-16)
+
+The GitHub URL identifies the **host of the configured repository**, not the original author or copyright holder. GitHub repository metadata identifies the following configured `rusefi/*` repositories as forks:
+
+| Configured repository | GitHub upstream (parent) |
+| --- | --- |
+| rusefi/ChibiOS | ChibiOS/ChibiOS |
+| rusefi/ChibiOS-Contrib | ChibiOS/ChibiOS-Contrib |
+| rusefi/lua | lua/lua |
+| rusefi/openblt | feaser/openblt |
+| rusefi/wideband | mck1117/wideband |
+| rusefi/luaaa | gengyong/luaaa |
+| rusefi/hex2dfu | encedo/hex2dfu |
+| rusefi/luaformatter | neoedmund/luaformatter |
+| rusefi/gethla | a-v-s/gethla |
+
+The GitHub API reports `fork: false` for `rusefi/libfirmware`, `rusefi/peak-can-basic` and `rusefi/rusefi-gha`; this **does not prove original authorship**. Provenance of `rusefi/kicad-libraries` was not established from the metadata returned and requires manual inspection. No conclusion about copyright ownership can be drawn from fork status alone.
+
+**Migration caution:** The pinned commit in a modified fork may not exist in its upstream parent. Before switching URLs, check that the exact pinned commit is available in the proposed target, or create a suitable Tunuino fork retaining the required history and notices. Do not replace a modified fork with its upstream without checking compatibility, branch differences, licensing, and CI.
