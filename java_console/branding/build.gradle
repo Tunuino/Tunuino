@@ -41,6 +41,12 @@ tasks.register('veMapCellTest', JavaExec) {
     mainClass = 'org.tunuino.console.VeMapCellSelectorSmokeTest'
 }
 
+tasks.register('lambdaFilterTest', JavaExec) {
+    group = 'verification'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.tunuino.console.LambdaSampleFilterSmokeTest'
+}
+
 tasks.register('preview', JavaExec) {
     group = 'application'
     description = 'Preview the blue-and-white Tunuino Swing branding'
@@ -49,5 +55,5 @@ tasks.register('preview', JavaExec) {
 }
 
 tasks.named('check') {
-    dependsOn tasks.named('smokeTest'), tasks.named('artworkTest'), tasks.named('windowBrandingTest'), tasks.named('supportTest'), tasks.named('autotuneTest'), tasks.named('veMapCellTest')
+    dependsOn tasks.named('smokeTest'), tasks.named('artworkTest'), tasks.named('windowBrandingTest'), tasks.named('supportTest'), tasks.named('autotuneTest'), tasks.named('veMapCellTest'), tasks.named('lambdaFilterTest')
 }
