@@ -61,3 +61,16 @@ The GitHub API reports `fork: false` for `rusefi/libfirmware`, `rusefi/peak-can-
 The nine fork-hosted submodules identified above now use their original upstream GitHub URLs in `.gitmodules`, instead of `rusefi/*` URLs. Each original upstream was verified via GitHub's commit API to contain the exact existing gitlink commit before migration. All gitlink commit hashes remain unchanged.
 
 Fork-specific `branch` settings for these nine submodules were removed because they may not exist at the original upstream. The other eight URLs remain unchanged. After pulling this change, run `git submodule sync --recursive` and `git submodule update --init --recursive`. A full recursive checkout and build are still required to validate the migration end-to-end.
+
+## Remaining rusefi-hosted submodules (2026-10-16)
+
+Four configured top-level submodules still point to `rusefi/*`:
+
+| Path | Current URL | GitHub metadata / next action |
+| --- | --- | --- |
+| `hardware/rusefi_lib` | `rusefi/kicad-libraries` | Repository API reports a permanent move; resolve the canonical destination and inspect hardware library contents before any migration |
+| `firmware/libfirmware` | `rusefi/libfirmware` | GitHub reports a non-fork shared firmware repository; evaluate a Tunuino-owned compatible fork only if needed |
+| `java_console/peak-can-basic` | `rusefi/peak-can-basic` | GitHub reports non-fork; identify vendor provenance, licenses and integration before migration |
+| `firmware/ext/rusefi-gha` | `rusefi/rusefi-gha` | GitHub reports non-fork; inspect build tooling usage before migration |
+
+GitHub's `fork: false` is not evidence of original copyright ownership. This table does not include nested submodules, which may have separate remotes and notices. None of these four URLs was changed in this step.
