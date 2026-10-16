@@ -10,21 +10,21 @@ submodule revision and its license, notices, and attribution requirements.
 
 | Submodule path | Upstream repository | License status |
 | --- | --- | --- |
-| `firmware/ChibiOS` | [Upstream](https://github.com/rusefi/ChibiOS.git) | Review pinned revision |
-| `firmware/ChibiOS-Contrib` | [Upstream](https://github.com/rusefi/ChibiOS-Contrib.git) | Review pinned revision |
+| `firmware/ChibiOS` | [Upstream](https://github.com/ChibiOS/ChibiOS.git) | Review pinned revision |
+| `firmware/ChibiOS-Contrib` | [Upstream](https://github.com/ChibiOS/ChibiOS-Contrib.git) | Review pinned revision |
 | `unit_tests/googletest` | [Upstream](https://github.com/google/googletest.git) | Review pinned revision |
 | `hardware/rusefi_lib` | [Upstream](https://github.com/rusefi/kicad-libraries) | Review pinned revision |
 | `hardware/InteractiveHtmlBom` | [Upstream](https://github.com/openscopeproject/InteractiveHtmlBom.git) | Review pinned revision |
-| `firmware/controllers/can/wideband_firmware` | [Upstream](https://github.com/rusefi/wideband) | Review pinned revision |
+| `firmware/controllers/can/wideband_firmware` | [Upstream](https://github.com/mck1117/wideband.git) | Review pinned revision |
 | `firmware/ext/uzlib` | [Upstream](https://github.com/pfalcon/uzlib) | Review pinned revision |
-| `firmware/ext/lua` | [Upstream](https://github.com/rusefi/lua) | Review pinned revision |
-| `firmware/controllers/lua/luaaa` | [Upstream](https://github.com/rusefi/luaaa) | Review pinned revision |
-| `firmware/ext/openblt` | [Upstream](https://github.com/rusefi/openblt) | Review pinned revision |
-| `misc/hex2dfu` | [Upstream](https://github.com/rusefi/hex2dfu) | Review pinned revision |
-| `java_console/luaformatter` | [Upstream](https://github.com/rusefi/luaformatter) | Review pinned revision |
+| `firmware/ext/lua` | [Upstream](https://github.com/lua/lua.git) | Review pinned revision |
+| `firmware/controllers/lua/luaaa` | [Upstream](https://github.com/gengyong/luaaa.git) | Review pinned revision |
+| `firmware/ext/openblt` | [Upstream](https://github.com/feaser/openblt.git) | Review pinned revision |
+| `misc/hex2dfu` | [Upstream](https://github.com/encedo/hex2dfu.git) | Review pinned revision |
+| `java_console/luaformatter` | [Upstream](https://github.com/neoedmund/luaformatter.git) | Review pinned revision |
 | `firmware/libfirmware` | [Upstream](https://github.com/rusefi/libfirmware.git) | Review pinned revision |
 | `java_console/peak-can-basic` | [Upstream](https://github.com/rusefi/peak-can-basic) | Review pinned revision |
-| `.github/workflows/hw-ci/gethla` | [Upstream](https://github.com/rusefi/gethla/) | Review pinned revision |
+| `.github/workflows/hw-ci/gethla` | [Upstream](https://github.com/a-v-s/gethla.git) | Review pinned revision |
 | `firmware/ext/rusefi-gha` | [Upstream](https://github.com/rusefi/rusefi-gha) | Review pinned revision |
 | `firmware/ext/magic_enum` | [Upstream](https://github.com/Neargye/magic_enum) | Review pinned revision |
 
