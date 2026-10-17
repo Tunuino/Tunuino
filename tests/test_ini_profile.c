@@ -19,6 +19,10 @@ int main(void) {
     const char *duplicate_query="[MegaTune]\nsignature=\"ECU-A\"\nqueryCommand=\"Q\"\nqueryCommand=\"S\"\n";
     assert(!tunuino_ini_profile_parse(duplicate_signature,strlen(duplicate_signature),&p));
     assert(!tunuino_ini_profile_parse(duplicate_query,strlen(duplicate_query),&p));
+    memset(&p,0xA5,sizeof(p));
+    assert(!tunuino_ini_profile_parse(NULL,0u,&p));
+    assert(!p.signature_found && !p.query_found);
+    assert(p.signature[0]=='\0' && p.query_command[0]=='\0');
     assert(!tunuino_ini_profile_parse("[MegaTune]\nsignature = \"unterminated",35,&p));
     return 0;
 }
