@@ -2,6 +2,7 @@
 #include "output_config.h"
 uint8_t tunuino_output_validate(const tunuino_output_port_t *ports, uint8_t port_count, const tunuino_output_assignment_t *assignments, uint8_t assignment_count) {
     if (ports == 0 || (assignments == 0 && assignment_count != 0u)) return 0u;
+    if (port_count == 0u && assignment_count != 0u) return 0u;
     for (uint8_t i=0u;i<assignment_count;i++) {
         const tunuino_output_assignment_t *a=&assignments[i];
         if (a->port >= port_count || ports[a->port].reserved) return 0u;
