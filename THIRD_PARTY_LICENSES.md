@@ -13,7 +13,7 @@ submodule revision and its license, notices, and attribution requirements.
 | `firmware/ChibiOS` | [Upstream](https://github.com/ChibiOS/ChibiOS.git) | Review pinned revision |
 | `firmware/ChibiOS-Contrib` | [Upstream](https://github.com/ChibiOS/ChibiOS-Contrib.git) | Review pinned revision |
 | `unit_tests/googletest` | [Upstream](https://github.com/google/googletest.git) | Review pinned revision |
-| `hardware/rusefi_lib` | [Upstream](https://github.com/Tunuino/Tunuino-KiCad-Library.git) | Review pinned revision |
+| `hardware/tunuino-kicad-library` | [Upstream](https://github.com/Tunuino/Tunuino-KiCad-Library.git) | Review pinned revision |
 | `hardware/InteractiveHtmlBom` | [Upstream](https://github.com/openscopeproject/InteractiveHtmlBom.git) | Review pinned revision |
 | `firmware/controllers/can/wideband_firmware` | [Upstream](https://github.com/mck1117/wideband.git) | Review pinned revision |
 | `firmware/ext/uzlib` | [Upstream](https://github.com/pfalcon/uzlib) | Review pinned revision |

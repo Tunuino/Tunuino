@@ -8,8 +8,8 @@
 	path = unit_tests/googletest
 	url = https://github.com/google/googletest.git
 	branch = main
-[submodule "hardware/rusefi_lib"]
-	path = hardware/rusefi_lib
+[submodule "hardware/tunuino-kicad-library"]
+	path = hardware/tunuino-kicad-library
 	url = https://github.com/Tunuino/Tunuino-KiCad-Library.git
 [submodule "hardware/InteractiveHtmlBom"]
 	path = hardware/InteractiveHtmlBom

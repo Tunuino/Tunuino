@@ -106,3 +106,7 @@ The `firmware/ext/rusefi-gha` gitlink now references `https://github.com/Tunuino
 ## Submodule directory rename (2026-10-17)
 
 The submodule formerly at `firmware/ext/rusefi-gha` has been moved to `firmware/ext/tunuino-gha` without changing its pinned commit or binary. Code search found no references outside `.gitmodules`, this audit, and the third-party inventory. Historical references above are retained as migration history.
+
+## KiCad submodule directory rename (2026-10-17)
+
+The imported KiCad library submodule has moved from `hardware/rusefi_lib` to `hardware/tunuino-kicad-library` at unchanged pinned revision `8093ed2da45f49bdcb94a4e2152aebf2736088f4`. Indexed code search found references to the old path only in `.gitmodules`, the third-party inventory, and this audit; older historical audit entries are retained. KiCad project-level path resolution and library compatibility require separate validation.
