@@ -10,5 +10,14 @@ int main(void) {
     a[1].port=2; assert(!tunuino_output_validate(ports,3,a,2));
     a[1].port=1; a[1].mode=TUNUINO_OUT_STEPPER; a[1].pwm_hz=0;
     a[0].pwm_hz=0; assert(!tunuino_output_validate(ports,3,a,2));
+    a[0].port=0; a[0].mode=TUNUINO_OUT_DIGITAL; a[0].pwm_hz=0;
+    a[1].port=1; a[1].mode=TUNUINO_OUT_DISABLED; a[1].pwm_hz=0;
+    assert(tunuino_output_validate(ports,3,a,2));
+    a[0].mode=(tunuino_output_mode_t)99;
+    assert(!tunuino_output_validate(ports,3,a,2));
+    a[0].mode=TUNUINO_OUT_DIGITAL;
+    assert(!tunuino_output_validate(ports,0,a,2));
+    assert(!tunuino_output_validate(0,3,a,2));
+    assert(!tunuino_output_validate(ports,3,0,2));
     return 0;
 }
