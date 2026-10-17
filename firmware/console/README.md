@@ -34,10 +34,10 @@ transport layer or speculative hardware driver is introduced.
 
 ## USB compatibility target
 
-Follow the proven rusEFI Console separation of USB serial diagnostics,
+Follow the Tunuino Console separation of USB serial diagnostics,
 ECU signature and configuration protocol negotiation, and firmware flashing.
 Do not treat the current experimental single-byte `S`/`A` protocol as wire-compatible
-with rusEFI Console. USB CDC enumeration and the STM32F429 USB device stack are
+with other console implementations. USB CDC enumeration and the STM32F429 USB device stack are
 not implemented yet. Desktop-side serial probing is preliminary only.
 
 Tunuino-generated TunerStudio INI files must advertise a Tunuino signature
