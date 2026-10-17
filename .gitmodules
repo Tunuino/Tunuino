@@ -37,7 +37,7 @@
 	url = https://github.com/neoedmund/luaformatter.git
 [submodule "firmware/libfirmware"]
 	path = firmware/libfirmware
-	url = https://github.com/rusefi/libfirmware.git
+	url = https://github.com/Tunuino/Tunuino-LibFirmware.git
 [submodule "java_console/peak-can-basic"]
 	path = java_console/peak-can-basic
 	url = https://github.com/rusefi/peak-can-basic

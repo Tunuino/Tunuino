@@ -86,3 +86,7 @@ Current gitlink: `firmware/libfirmware` -> `rusefi/libfirmware` at `dffa24266200
 The pinned upstream tree contains 130 Git tree entries, including board IDs, CAN shared interfaces, PT2001 controller headers and project assets, build/test scripts, and a nested `ext/googletest` submodule pinned at `bea621c3c39d8a7f71f07bd543c3a58bfa684f92`. Paths include `pt2001/include/rusefi/` and `pt2001/project/rusefi/`. Those paths must not be renamed without updating all corresponding include/build/project references.
 
 No new replacement repository or verified equivalent gitlink revision is available. Preserve the current submodule pin until a migration repository, file-level provenance/license review, reference updates, and CI validation are ready. Hosting a copy does not transfer third-party copyright.
+
+## libfirmware migration integration (2026-10-17)
+
+The `firmware/libfirmware` submodule now points to `https://github.com/Tunuino/Tunuino-LibFirmware.git` at `d2e5b907763f8cc972a8ebb17bd9f8066b4f8843`. Its Linux/macOS and Windows unit-test workflows passed at this revision. The nested `ext/googletest` gitlink is restored at `bea621c3c39d8a7f71f07bd543c3a58bfa684f92`. Full main ECU firmware compilation and file-level third-party license audit remain separate validation tasks.
