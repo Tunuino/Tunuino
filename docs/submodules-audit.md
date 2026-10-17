@@ -98,3 +98,7 @@ The `java_console/peak-can-basic` gitlink is updated to `Tunuino/peak-can-basic`
 ## rusefi-gha dependency inspection (2026-10-17)
 
 The `firmware/ext/rusefi-gha` gitlink remains pinned at `55184e40b177deb524f9d8294ef456b1bab06eae`. The pinned tree has just one file, `static-content/silent_st_drivers2.exe`, plus its parent directory. GitHub code search found the submodule path only in `.gitmodules`, `THIRD_PARTY_LICENSES.md`, and this audit document; no indexed references to `silent_st_drivers2.exe` were found. This is not proof that build scripts or workflows never use the binary (search indexing can be incomplete). Do not rebrand or redistribute this Windows executable without verifying its provenance, signature, license, and actual build dependency. Keep the pin unchanged pending that review.
+
+## Tunuino-gha submodule migration (2026-10-17)
+
+The `firmware/ext/rusefi-gha` gitlink now references `https://github.com/Tunuino/Tunuino-gha.git` at `7147e28d00cff9cd5da0700685e2b6a3379daab6`. The only imported file, `static-content/silent_st_drivers2.exe`, is blob-identical to the prior upstream pinned revision `55184e40b177deb524f9d8294ef456b1bab06eae` (blob `01d0779eadd90a981227f4ee3cb238396a58c69f`, 5,848,642 bytes). The folder path retains its previous name to avoid unverified build path changes. This does not establish the binary's authenticity, security, or redistribution license. Review those separately.

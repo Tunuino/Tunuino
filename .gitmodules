@@ -46,7 +46,7 @@
 	url = https://github.com/a-v-s/gethla.git
 [submodule "firmware/ext/rusefi-gha"]
 	path = firmware/ext/rusefi-gha
-	url = https://github.com/rusefi/rusefi-gha
+	url = https://github.com/Tunuino/Tunuino-gha.git
 [submodule "firmware/ext/magic_enum"]
 	path = firmware/ext/magic_enum
 	url = https://github.com/Neargye/magic_enum
