@@ -19,5 +19,8 @@ int main(void) {
     assert(!tunuino_output_runtime_commit(&s,ports,2,a,13,1,1));
     assert(tunuino_output_runtime_commit(&s,ports,2,a,1,1,1));
     assert(s.count == 1u && s.assignments[1].mode == TUNUINO_OUT_DISABLED);
+    s.revision = UINT32_MAX;
+    assert(!tunuino_output_runtime_commit(&s,ports,2,a,1,1,1));
+    assert(s.revision == UINT32_MAX && s.count == 1u);
     return 0;
 }

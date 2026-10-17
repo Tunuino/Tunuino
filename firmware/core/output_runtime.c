@@ -14,7 +14,7 @@ uint8_t tunuino_output_runtime_commit(tunuino_output_runtime_t *runtime,
     const tunuino_output_port_t *ports, uint8_t port_count,
     const tunuino_output_assignment_t *requested, uint8_t count,
     uint8_t engine_stopped, uint8_t outputs_disarmed) {
-    if (runtime == 0 || count > TUNUINO_MAX_AUX_OUTPUTS ||
+    if (runtime == 0 || runtime->revision == UINT32_MAX || count > TUNUINO_MAX_AUX_OUTPUTS ||
         engine_stopped != 1u || outputs_disarmed != 1u ||
         !tunuino_output_validate(ports, port_count, requested, count)) return 0u;
     // No partial update on validation failure.
