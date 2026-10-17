@@ -45,8 +45,10 @@ int main(void) {
     (void)tunuino_startup_advance(&startup, TUNUINO_STARTUP_CLOCKS_READY);
     tunuino_tick_init();
     communication_init();
+    // Polling mode has no enabled interrupt source to wake from WFI.
+    // Keep servicing the queue until an interrupt-driven transport is ready.
     for (;;) {
         if (service_ready) (void)tunuino_console_tune_link_step(&console_link);
-        __asm volatile ("wfi");
+        __asm volatile ("nop");
     }
 }
