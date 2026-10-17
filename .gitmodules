@@ -44,8 +44,8 @@
 [submodule ".github/workflows/hw-ci/gethla"]
 	path = .github/workflows/hw-ci/gethla
 	url = https://github.com/a-v-s/gethla.git
-[submodule "firmware/ext/rusefi-gha"]
-	path = firmware/ext/rusefi-gha
+[submodule "firmware/ext/tunuino-gha"]
+	path = firmware/ext/tunuino-gha
 	url = https://github.com/Tunuino/Tunuino-gha.git
 [submodule "firmware/ext/magic_enum"]
 	path = firmware/ext/magic_enum

@@ -25,7 +25,7 @@ submodule revision and its license, notices, and attribution requirements.
 | `firmware/libfirmware` | [Upstream](https://github.com/Tunuino/Tunuino-LibFirmware.git) | Review pinned revision |
 | `java_console/peak-can-basic` | [Upstream](https://github.com/Tunuino/peak-can-basic.git) | Review pinned revision |
 | `.github/workflows/hw-ci/gethla` | [Upstream](https://github.com/a-v-s/gethla.git) | Review pinned revision |
-| `firmware/ext/rusefi-gha` | [Upstream](https://github.com/Tunuino/Tunuino-gha.git) | Review pinned revision |
+| `firmware/ext/tunuino-gha` | [Upstream](https://github.com/Tunuino/Tunuino-gha.git) | Review pinned revision |
 | `firmware/ext/magic_enum` | [Upstream](https://github.com/Neargye/magic_enum) | Review pinned revision |
 
 ## Compliance notes

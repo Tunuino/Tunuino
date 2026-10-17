@@ -102,3 +102,7 @@ The `firmware/ext/rusefi-gha` gitlink remains pinned at `55184e40b177deb524f9d82
 ## Tunuino-gha submodule migration (2026-10-17)
 
 The `firmware/ext/rusefi-gha` gitlink now references `https://github.com/Tunuino/Tunuino-gha.git` at `7147e28d00cff9cd5da0700685e2b6a3379daab6`. The only imported file, `static-content/silent_st_drivers2.exe`, is blob-identical to the prior upstream pinned revision `55184e40b177deb524f9d8294ef456b1bab06eae` (blob `01d0779eadd90a981227f4ee3cb238396a58c69f`, 5,848,642 bytes). The folder path retains its previous name to avoid unverified build path changes. This does not establish the binary's authenticity, security, or redistribution license. Review those separately.
+
+## Submodule directory rename (2026-10-17)
+
+The submodule formerly at `firmware/ext/rusefi-gha` has been moved to `firmware/ext/tunuino-gha` without changing its pinned commit or binary. Code search found no references outside `.gitmodules`, this audit, and the third-party inventory. Historical references above are retained as migration history.
