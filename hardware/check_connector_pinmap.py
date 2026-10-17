@@ -12,7 +12,7 @@ assert len(rows) == 70, "Expected exactly 70 pinmap rows"
 assert {(r["connector"], int(r["pin"])) for r in rows} == {
     (c, p) for c in ("J102", "J103") for p in range(1, 36)
 }, "Missing/duplicated connector positions"
-labels = re.findall(r'\\(label "([^"]+)" \\(at ([\\d.]+) ([\\d.]+) 0\\)', sch)
+labels = re.findall(r'\(label "([^"]+)" \(at ([\d.]+) ([\d.]+) 0\)', sch)
 assert len(labels) == 70, "Expected exactly 70 schematic net labels"
 actual = {}
 for name, x, y in labels:
