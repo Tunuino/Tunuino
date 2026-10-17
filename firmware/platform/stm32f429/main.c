@@ -45,10 +45,10 @@ int main(void) {
     (void)tunuino_startup_advance(&startup, TUNUINO_STARTUP_CLOCKS_READY);
     tunuino_tick_init();
     communication_init();
-    // Polling mode has no enabled interrupt source to wake from WFI.
-    // Keep servicing the queue until an interrupt-driven transport is ready.
+    // SysTick is enabled above and wakes WFI every millisecond.
+    // Service the transmit queue on each wake without busy-spinning.
     for (;;) {
         if (service_ready) (void)tunuino_console_tune_link_step(&console_link);
-        __asm volatile ("nop");
+        __asm volatile ("wfi");
     }
 }
