@@ -2,6 +2,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 MODULE = Path(__file__).resolve().parents[1] / "firmware" / "console" / "usb_serial_probe.py"
 spec = importlib.util.spec_from_file_location("usb_serial_probe", MODULE)
@@ -43,6 +44,18 @@ class ProbeTests(unittest.TestCase):
     def test_reject_short_write(self):
         with self.assertRaises(IOError):
             probe_module.probe("COM4", serial_factory=lambda **kw: FakeSerial(written=0))
+    def test_cli_rejects_wrong_ini_signature(self):
+        with patch("sys.argv", ["usb_serial_probe.py", "COM4", "--expected-signature", "Tunuino-TS-0.1"]), \
+             patch.object(probe_module, "probe", return_value="Tunuino-TS-0.2"):
+            with self.assertRaises(SystemExit) as caught:
+                probe_module.main()
+            self.assertEqual(caught.exception.code, 2)
+
+    def test_cli_accepts_matching_ini_signature(self):
+        with patch("sys.argv", ["usb_serial_probe.py", "COM4", "--expected-signature", "Tunuino-TS-0.1"]), \
+             patch.object(probe_module, "probe", return_value="Tunuino-TS-0.1"):
+            probe_module.main()
+
     def test_reject_invalid_timeout(self):
         with self.assertRaises(ValueError):
             probe_module.probe("COM4", timeout=0, serial_factory=FakeSerial)
