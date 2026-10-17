@@ -25,7 +25,7 @@ def validate_image(path: Path) -> None:
         raise ValueError("Invalid STM32 initial stack pointer or reset vector")
 
 
-def flash(image: Path, programmer: str, confirmed: bool, dry_run: bool = False, expected_sha256: str = "") -> list[str]:
+def flash(image: Path, programmer: str, confirmed: bool, dry_run: bool = False, expected_sha256: str = "", expected_device_id: str = "") -> list[str]:
     validate_image(image)
     if not re.fullmatch(r"[0-9a-fA-F]{64}", expected_sha256):
         raise ValueError("Approved firmware SHA-256 is required")
@@ -33,11 +33,18 @@ def flash(image: Path, programmer: str, confirmed: bool, dry_run: bool = False, 
         raise ValueError("Firmware SHA-256 mismatch")
     if not confirmed:
         raise ValueError("Explicit --confirm required; disconnect ignition/injector loads")
+    if not dry_run:
+        if not re.fullmatch(r"0x[0-9a-fA-F]{3,4}", expected_device_id):
+            raise ValueError("Expected STM32 device ID required for physical flashing")
     executable = shutil.which(programmer)
     if not executable and not dry_run:
         raise FileNotFoundError("STM32_Programmer_CLI not found")
     command = [executable or programmer, "-c", "port=SWD", "-w", str(image.resolve()), hex(FLASH_BASE), "-v"]
     if not dry_run:
+        probe = subprocess.run([executable, "-c", "port=SWD"], check=True, capture_output=True, text=True)
+        reported = re.search(r"Device ID\\s*:\\s*(0x[0-9a-fA-F]+)", probe.stdout + probe.stderr, re.IGNORECASE)
+        if not reported or int(reported.group(1), 16) != int(expected_device_id, 16):
+            raise ValueError("Connected STM32 device ID does not match approved target")
         subprocess.run(command, check=True)
     return command
 
@@ -48,10 +55,11 @@ def main() -> int:
     parser.add_argument("--programmer", default="STM32_Programmer_CLI")
     parser.add_argument("--confirm", action="store_true", help="Confirm correct STM32F429 board, power and disconnected loads")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--expected-device-id", default="", help="Approved STM32 device ID, checked against CubeProgrammer probe")
     parser.add_argument("--expected-sha256", required=True, help="Expected SHA-256 of approved firmware image")
     args = parser.parse_args()
     try:
-        command = flash(args.image, args.programmer, args.confirm, args.dry_run, args.expected_sha256)
+        command = flash(args.image, args.programmer, args.confirm, args.dry_run, args.expected_sha256, args.expected_device_id)
         print(" ".join(command))
         print("Dry run only" if args.dry_run else "Programmer completed write and verify")
         return 0

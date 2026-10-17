@@ -24,8 +24,9 @@ class FlashTests(unittest.TestCase):
             self.assertIn("port=SWD", command)
             with patch.object(flash_stm32.shutil, "which", return_value="/usr/bin/stm32cli"):
                 with patch.object(flash_stm32.subprocess, "run") as run:
-                    flash_stm32.flash(path, "STM32_Programmer_CLI", True, False, sha)
-                    run.assert_called_once()
+                    with patch.object(flash_stm32.subprocess, "run", side_effect=[__import__("subprocess").CompletedProcess([], 0, "Device ID : 0x419", ""), __import__("subprocess").CompletedProcess([], 0)]) as run:
+                        flash_stm32.flash(path, "STM32_Programmer_CLI", True, False, sha, "0x419")
+                    self.assertEqual(run.call_count, 2)
                     self.assertTrue(run.call_args.kwargs["check"])
 
     def test_bad_vector_rejected(self):
