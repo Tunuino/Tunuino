@@ -23,7 +23,7 @@ submodule revision and its license, notices, and attribution requirements.
 | `misc/hex2dfu` | [Upstream](https://github.com/encedo/hex2dfu.git) | Review pinned revision |
 | `java_console/luaformatter` | [Upstream](https://github.com/neoedmund/luaformatter.git) | Review pinned revision |
 | `firmware/libfirmware` | [Upstream](https://github.com/Tunuino/Tunuino-LibFirmware.git) | Review pinned revision |
-| `java_console/peak-can-basic` | [Upstream](https://github.com/rusefi/peak-can-basic) | Review pinned revision |
+| `java_console/peak-can-basic` | [Upstream](https://github.com/Tunuino/peak-can-basic.git) | Review pinned revision |
 | `.github/workflows/hw-ci/gethla` | [Upstream](https://github.com/a-v-s/gethla.git) | Review pinned revision |
 | `firmware/ext/rusefi-gha` | [Upstream](https://github.com/rusefi/rusefi-gha) | Review pinned revision |
 | `firmware/ext/magic_enum` | [Upstream](https://github.com/Neargye/magic_enum) | Review pinned revision |

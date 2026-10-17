@@ -90,3 +90,7 @@ No new replacement repository or verified equivalent gitlink revision is availab
 ## libfirmware migration integration (2026-10-17)
 
 The `firmware/libfirmware` submodule now points to `https://github.com/Tunuino/Tunuino-LibFirmware.git` at `d2e5b907763f8cc972a8ebb17bd9f8066b4f8843`. Its Linux/macOS and Windows unit-test workflows passed at this revision. The nested `ext/googletest` gitlink is restored at `bea621c3c39d8a7f71f07bd543c3a58bfa684f92`. Full main ECU firmware compilation and file-level third-party license audit remain separate validation tasks.
+
+## peak-can-basic import (2026-10-17)
+
+The `java_console/peak-can-basic` gitlink is updated to `Tunuino/peak-can-basic` at `12c1bba2a759ad5464218c5c559ab91e7a27a51d`. The imported tree has the same 37 paths as upstream pinned `7053f7d3ea3bd08fb47f9a8df4e107917dd3310c`. The only content change identified is line 72 of `src/main/java/peak/can/basic/TPCANMsg.java`: a comment changes the original upstream issue URL to `https://github.com/tunuino/tunuino/issues/4370`, which is not verified as an equivalent issue. Code behavior is otherwise blob-identical across the compared paths. No standalone license file or repository Actions runs were present. Verify the issue attribution and applicable upstream permissions before relicensing; main Console build and integration checks remain necessary.

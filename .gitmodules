@@ -40,7 +40,7 @@
 	url = https://github.com/Tunuino/Tunuino-LibFirmware.git
 [submodule "java_console/peak-can-basic"]
 	path = java_console/peak-can-basic
-	url = https://github.com/rusefi/peak-can-basic
+	url = https://github.com/Tunuino/peak-can-basic.git
 [submodule ".github/workflows/hw-ci/gethla"]
 	path = .github/workflows/hw-ci/gethla
 	url = https://github.com/a-v-s/gethla.git
