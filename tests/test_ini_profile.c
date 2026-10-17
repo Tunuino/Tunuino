@@ -15,6 +15,10 @@ int main(void) {
     assert(tunuino_ini_signature_matches(&p,"Tunuino-STM32F429"));
     assert(tunuino_ini_profile_parse(other,strlen(other),&p));
     assert(tunuino_ini_signature_matches(&p,"Tunuino-STM32F429"));
+    const char *duplicate_signature="[MegaTune]\nsignature=\"ECU-A\"\nsignature=\"ECU-B\"\n";
+    const char *duplicate_query="[MegaTune]\nsignature=\"ECU-A\"\nqueryCommand=\"Q\"\nqueryCommand=\"S\"\n";
+    assert(!tunuino_ini_profile_parse(duplicate_signature,strlen(duplicate_signature),&p));
+    assert(!tunuino_ini_profile_parse(duplicate_query,strlen(duplicate_query),&p));
     assert(!tunuino_ini_profile_parse("[MegaTune]\nsignature = \"unterminated",35,&p));
     return 0;
 }
