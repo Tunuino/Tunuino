@@ -26,12 +26,15 @@ def main():
     parser = argparse.ArgumentParser(description="Read ECU identity over USB CDC serial")
     parser.add_argument("port", help="e.g. COM4 or /dev/ttyACM0")
     parser.add_argument("--baudrate", type=int, default=115200)
+    parser.add_argument("--expected-signature", help="Require exact match with the selected INI signature")
     args = parser.parse_args()
     try:
         identity = probe(args.port, args.baudrate)
     except (OSError, ValueError, RuntimeError) as exc:
         parser.exit(1, f"USB signature probe failed: {exc}\n")
     print(f"ECU signature: {identity}")
+    if args.expected_signature is not None and identity != args.expected_signature:
+        parser.exit(2, "ECU signature does not match the selected INI profile; connection rejected.\\n")
     print("Tunuino profile" if identity.startswith("Tunuino") else
           "External ECU profile: do not use Tunuino INI without matching signature")
 
