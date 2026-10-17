@@ -60,3 +60,32 @@ This table is extracted from **labels directly at the connector pin coordinates 
 3. Assign each external net to an actual STM32F429 pin or dedicated driver, checking timer/ADC/CAN/USB constraints.
 4. Verify boot/reset and hardware output-disable behaviour before enabling injection or ignition.
 5. Bench-test without injectors, coils or engine attached; do not use this table as an installation wiring harness diagram yet.
+
+## Proposed two-connector integration plan
+
+**Keep the verified connector labels fixed** while adapting the internal electronics to the STM32F429. The following is a design allocation, not a verified MCU netlist:
+
+| ECU function | Connector pin(s) | Status / requirement |
+|---|---|---|
+| Injector 1–8 | J102: 3, 15, 4, 16, 5, 6, 7, 19 (LS1–LS8 respectively) | Candidate only; confirm saturated driver ratings, flyback and ordering |
+| Smart ignition 1–8 | J102: 35, 34, 22, 33, 32, 31, 30, 29 (IGN1–IGN8 respectively) | Candidate only; confirm logic-level outputs, polarity and failsafe state |
+| Analogue sensor inputs | J103: 13–18, 24–28 (AV1–AV11) | Verify voltage protection and ADC conditioning |
+| Temperature sensor inputs | J103: 19, 30, 20, 31 (AT1–AT4 respectively) | Verify pull-ups and analogue scaling |
+| Knock sensors | J103: 34, 35 | Requires suitable analogue knock frontend |
+| Sensor 5 V | J103: 9, 21, 32 (rail 1); 10, 22, 33 (rail 2) | Verify source, current budget and grounds |
+| Crank/cam | **No connector pins allocated** | Must trace existing unlabeled pins and provide protected trigger conditioning |
+| Wideband CAN H/L | **No connector pins allocated** | Must trace existing unlabeled pins and provide CAN transceiver and termination strategy |
+| Battery, switched power, sensor ground, power ground | **Not yet resolved** | Mandatory full netlist and power-domain review |
+| USB/console | **No connector pins allocated** | Prefer independent verified USB service connector; USART2 pin declarations alone do not imply an external connector route |
+
+### Critical integration constraint
+
+The selected J102/J103 pins may not provide all essential power, ground, crank/cam and CAN connections after excluding J101. **Do not repurpose any position marked unresolved** until tracing its actual net in the source schematic and PCB. If there is insufficient capacity, revise the connector allocation or add a dedicated service connection explicitly; do not claim a complete usable ECU pinout prematurely.
+
+### MCU mapping workflow
+
+1. Resolve every unlabeled connector pin by netlist and document its electrical function.
+2. Draw the Tunuino STM32F429ZIT6 PCB netlist, separating external connector pin, conditioning/driver circuit and MCU pin.
+3. Assign two independent trigger-capable timer inputs for crank and cam, ADC channels for sensors, CAN1 RX/TX to a physical CAN transceiver, and USB or serial service pins without alternate-function conflicts.
+4. Allocate eight independent timed injector controls and eight smart-coil logic outputs, with hardware disable circuitry that defaults OFF during reset and firmware faults.
+5. Generate and review a machine-checkable pin map before enabling any output in firmware.
