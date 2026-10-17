@@ -1,9 +1,8 @@
-# Hardware Tunuino
+# Hardware Tunuino ECU
 
-MCU previsto: STM32F407ZGT6 LQFP144.
+**Plataforma alvo:** STM32F429ZIT6 (LQFP144). **Conectores automóveis externos:** J102 e J103, 35 contactos cada. A Proteus F4 é apenas uma referência de circuitos e conectores; a Tunuino requer esquema e PCB próprios.
 
-Pinagem do conector inspirada na Hellen AlphaX-8chan. O mapeamento para o microcontrolador e o esquema elétrico precisam de validação independente.
+- [Mapa de 70 contactos, com separação entre sinais da Proteus e atribuições novas](../docs/proteus-f4-connectors.md)
+- [Plano de desenho do esquema elétrico e da PCB](../docs/tunuino-hardware-design.md)
 
-O MCU não pode alimentar diretamente injetores ou bobinas. São necessários drivers, proteção elétrica, condicionamento de sensores, alimentação automóvel e transceiver CAN.
-
-Nenhuma PCB foi validada para fabrico ou utilização num motor.
+O projeto ainda não dispõe de um esquema elétrico Tunuino validado nem de uma PCB pronta para fabricar. Os pinos do MCU, as proteções, os drivers e as ligações de potência devem ser confirmados antes de produzir Gerbers.
