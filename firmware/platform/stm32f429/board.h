@@ -7,8 +7,10 @@
 extern "C" {
 #endif
 #define TUNUINO_BOARD_NAME "Tunuino STM32F429ZI"
-#define TUNUINO_INJECTOR_COUNT 8u
-#define TUNUINO_IGNITION_COUNT 8u
+#define TUNUINO_INJECTOR_COUNT 6u
+#define TUNUINO_IGNITION_COUNT 6u
+#define TUNUINO_STEPPER_PHASE_COUNT 4u
+#define TUNUINO_DBW_ENABLED 0u
 #define TUNUINO_CAN_WIDEBAND_BUS 1u
 // Proteus F4 reference assignments; these are MCU pins, not connector proof.
 #define TUNUINO_CONSOLE_USART 2u

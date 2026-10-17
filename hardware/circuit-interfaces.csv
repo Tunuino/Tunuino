@@ -14,13 +14,13 @@ injection,INJ3,J102,4,power_output,saturated_low_side_driver,off,flyback_current
 injection,INJ4,J102,16,power_output,saturated_low_side_driver,off,flyback_current_thermal_fault
 injection,INJ5,J102,5,power_output,saturated_low_side_driver,off,flyback_current_thermal_fault
 injection,INJ6,J102,6,power_output,saturated_low_side_driver,off,flyback_current_thermal_fault
-injection,INJ7,J102,7,power_output,saturated_low_side_driver,off,flyback_current_thermal_fault
-injection,INJ8,J102,19,power_output,saturated_low_side_driver,off,flyback_current_thermal_fault
 ignition,IGN1,J102,35,logic_output,smart_coil_interface,off,logic_polarity_reset_fault
 ignition,IGN2,J102,34,logic_output,smart_coil_interface,off,logic_polarity_reset_fault
 ignition,IGN3,J102,22,logic_output,smart_coil_interface,off,logic_polarity_reset_fault
 ignition,IGN4,J102,33,logic_output,smart_coil_interface,off,logic_polarity_reset_fault
 ignition,IGN5,J102,32,logic_output,smart_coil_interface,off,logic_polarity_reset_fault
 ignition,IGN6,J102,31,logic_output,smart_coil_interface,off,logic_polarity_reset_fault
-ignition,IGN7,J102,30,logic_output,smart_coil_interface,off,logic_polarity_reset_fault
-ignition,IGN8,J102,29,logic_output,smart_coil_interface,off,logic_polarity_reset_fault
+stepper,STEPPER_A1,J102,7,motor_output,protected_bipolar_stepper_driver,off,coil_current_thermal_fault
+stepper,STEPPER_A2,J102,19,motor_output,protected_bipolar_stepper_driver,off,coil_current_thermal_fault
+stepper,STEPPER_B1,J102,30,motor_output,protected_bipolar_stepper_driver,off,coil_current_thermal_fault
+stepper,STEPPER_B2,J102,29,motor_output,protected_bipolar_stepper_driver,off,coil_current_thermal_fault

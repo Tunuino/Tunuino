@@ -9,3 +9,7 @@
 - No `.kicad_pcb`, Gerber, BOM or pick-and-place has been released; do not manufacture from this file.
 
 The original Proteus design is a reference only. The target net names describe a **new board design** and are not a verified mapping of the existing Proteus PCB.
+
+## Six-cylinder revision
+
+The connector labels now reserve J102 pins 7, 19, 30 and 29 for the mandatory four-wire bipolar idle stepper (A1/A2/B1/B2). Six injector and six smart-coil channels remain. These are **motor-side connector outputs** requiring a dedicated current-controlled driver; the previous injector/ignition hardware is not reusable without redesign. DBW is not assigned any connector contacts and is disabled. All 70 labels remain draft until complete electrical and PCB validation.
