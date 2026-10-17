@@ -5,8 +5,8 @@ This command-line programmer is a first executable flashing path for the Console
 **This is not yet USB/DFU flashing and not a graphical Console control.** It does not automatically identify the target MCU. The operator must independently confirm the connected target is the intended STM32F429 board, disconnect injector/ignition loads and ensure stable power. Never flash an unknown ECU.
 
 ```sh
-python3 firmware/console/flash_stm32.py firmware.bin --confirm --dry-run
-python3 firmware/console/flash_stm32.py firmware.bin --confirm
+python3 firmware/console/flash_stm32.py firmware.bin --expected-sha256 YOUR_APPROVED_SHA256 --confirm --dry-run
+python3 firmware/console/flash_stm32.py firmware.bin --expected-sha256 YOUR_APPROVED_SHA256 --confirm
 ```
 
 Only `.bin` images with plausible Cortex-M initial stack pointer and reset vector are accepted. This **does not authenticate the firmware** or prove board compatibility. Programming uses STM32CubeProgrammer SWD write at `0x08000000` with `-v` verification. A successful verify does not establish engine safety or hardware validation.

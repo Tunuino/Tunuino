@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Tunuino STM32 SWD firmware programmer. Requires STM32CubeProgrammer CLI."""
 import argparse
+import hashlib
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -23,8 +25,12 @@ def validate_image(path: Path) -> None:
         raise ValueError("Invalid STM32 initial stack pointer or reset vector")
 
 
-def flash(image: Path, programmer: str, confirmed: bool, dry_run: bool = False) -> list[str]:
+def flash(image: Path, programmer: str, confirmed: bool, dry_run: bool = False, expected_sha256: str = "") -> list[str]:
     validate_image(image)
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", expected_sha256):
+        raise ValueError("Approved firmware SHA-256 is required")
+    if hashlib.sha256(image.read_bytes()).hexdigest() != expected_sha256.lower():
+        raise ValueError("Firmware SHA-256 mismatch")
     if not confirmed:
         raise ValueError("Explicit --confirm required; disconnect ignition/injector loads")
     executable = shutil.which(programmer)
@@ -42,9 +48,10 @@ def main() -> int:
     parser.add_argument("--programmer", default="STM32_Programmer_CLI")
     parser.add_argument("--confirm", action="store_true", help="Confirm correct STM32F429 board, power and disconnected loads")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--expected-sha256", required=True, help="Expected SHA-256 of approved firmware image")
     args = parser.parse_args()
     try:
-        command = flash(args.image, args.programmer, args.confirm, args.dry_run)
+        command = flash(args.image, args.programmer, args.confirm, args.dry_run, args.expected_sha256)
         print(" ".join(command))
         print("Dry run only" if args.dry_run else "Programmer completed write and verify")
         return 0

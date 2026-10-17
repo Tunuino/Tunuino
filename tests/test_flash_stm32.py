@@ -1,5 +1,6 @@
 """Host tests for the STM32F429 SWD flashing entry point."""
 import tempfile
+import hashlib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -13,14 +14,17 @@ class FlashTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "firmware.bin"
             path.write_bytes((0x20020000).to_bytes(4, "little") + (0x08000101).to_bytes(4, "little") + bytes(128))
+            sha = hashlib.sha256(path.read_bytes()).hexdigest()
             with self.assertRaises(ValueError):
-                flash_stm32.flash(path, "STM32_Programmer_CLI", False, True)
-            command = flash_stm32.flash(path, "STM32_Programmer_CLI", True, True)
+                flash_stm32.flash(path, "STM32_Programmer_CLI", False, True, sha)
+            with self.assertRaises(ValueError):
+                flash_stm32.flash(path, "STM32_Programmer_CLI", True, True, "0" * 64)
+            command = flash_stm32.flash(path, "STM32_Programmer_CLI", True, True, sha)
             self.assertIn("-v", command)
             self.assertIn("port=SWD", command)
             with patch.object(flash_stm32.shutil, "which", return_value="/usr/bin/stm32cli"):
                 with patch.object(flash_stm32.subprocess, "run") as run:
-                    flash_stm32.flash(path, "STM32_Programmer_CLI", True)
+                    flash_stm32.flash(path, "STM32_Programmer_CLI", True, False, sha)
                     run.assert_called_once()
                     self.assertTrue(run.call_args.kwargs["check"])
 
