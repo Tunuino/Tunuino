@@ -7,6 +7,8 @@ int main(void) {
     uint8_t out[32] = {0};
     assert(tunuino_ts_reply('S', 0, out, sizeof(out)) == strlen(TUNUINO_TS_SIGNATURE));
     assert(memcmp(out, TUNUINO_TS_SIGNATURE, strlen(TUNUINO_TS_SIGNATURE)) == 0);
+    assert(strncmp(TUNUINO_TS_SIGNATURE, "Tunuino", 7u) == 0);
+    assert(tunuino_ts_reply('S', 0, out, strlen(TUNUINO_TS_SIGNATURE) - 1u) == 0u);
     const tunuino_ts_values_t data = {1234u, 1013u, 1250u, 1u, 0u, 1u};
     assert(tunuino_ts_reply('A', &data, out, 8u) == 8u);
     assert(out[0] == 0xd2u && out[1] == 0x04u);
