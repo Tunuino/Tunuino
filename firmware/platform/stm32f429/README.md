@@ -20,5 +20,5 @@ This directory contains the first **host-testable board state interface**, not a
 
 - Console: USART2 TX PD5, RX PD6, AF7.
 - Wideband external controller: CAN1 RX PD0, TX PD1, AF9.
-- Pin assignments follow the rusEFI Proteus F4 board configuration; connector wiring and CAN transceiver must be verified before enabling GPIO alternate functions or sending frames.
+- Pin assignments use the Tunuino STM32F429 board configuration; connector wiring, actual MCU alternate functions, and the CAN transceiver must be verified before enabling GPIO or sending frames.
 - No injector or ignition GPIO is assigned or enabled.
