@@ -22,3 +22,11 @@ This directory contains the first **host-testable board state interface**, not a
 - Wideband external controller: CAN1 RX PD0, TX PD1, AF9.
 - Pin assignments use the Tunuino STM32F429 board configuration; connector wiring, actual MCU alternate functions, and the CAN transceiver must be verified before enabling GPIO or sending frames.
 - No injector or ignition GPIO is assigned or enabled.
+
+## Connector-specific development baseline
+
+Tunuino is now planned around **Proteus F4 J102 and J103 only**. The source-derived 70-pin signal table and candidate eight-channel injector/ignition assignments are in [docs/proteus-f4-connectors.md](../../../docs/proteus-f4-connectors.md). J101 is not part of the Tunuino external connector plan.
+
+The source schematic does not yet prove how power, grounds, crank/cam and CAN are routed through the selected two connectors. Before implementing live peripheral GPIO mux or enabling power drivers, export the complete KiCad netlist and validate those connections and STM32F429 alternate functions. In particular, the current USART2 and CAN1 MCU pin declarations are **not** evidence that these signals reach J102/J103.
+
+The cross-compiled `tunuino.bin` is a **bench-development image only**. It is not yet a tested ECU control firmware, and the current serial interface remains intentionally disconnected.
