@@ -29,7 +29,9 @@ uint8_t tunuino_ini_profile_parse(const char *data, size_t length, tunuino_ini_p
     if (!data || !out || length>1024u*1024u) return 0u;
     memset(out,0,sizeof(*out));
     uint8_t in_megatune=0u;
-    size_t pos=0u;
+    // TunerStudio INI files may begin with a UTF-8 byte order mark.
+    size_t pos=(length>=3u && (unsigned char)data[0]==0xEFu &&
+                (unsigned char)data[1]==0xBBu && (unsigned char)data[2]==0xBFu) ? 3u : 0u;
     while (pos<length) {
         size_t end=pos;
         while (end<length && data[end]!='\n') end++;
