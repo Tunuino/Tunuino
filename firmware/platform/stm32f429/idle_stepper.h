@@ -11,6 +11,7 @@ typedef struct {
     int32_t target_steps;
 } tunuino_idle_stepper_t;
 void tunuino_idle_stepper_init(tunuino_idle_stepper_t *motor);
+void tunuino_idle_stepper_disarm(tunuino_idle_stepper_t *motor);
 void tunuino_idle_stepper_fault(tunuino_idle_stepper_t *motor);
 uint8_t tunuino_idle_stepper_set_target(tunuino_idle_stepper_t *motor, int32_t target);
 uint8_t tunuino_idle_stepper_outputs_allowed(const tunuino_idle_stepper_t *motor);

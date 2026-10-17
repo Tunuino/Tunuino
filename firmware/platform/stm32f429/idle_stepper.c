@@ -9,11 +9,15 @@ void tunuino_idle_stepper_init(tunuino_idle_stepper_t *motor) {
     motor->target_valid = 0u;
     motor->target_steps = 0;
 }
+void tunuino_idle_stepper_disarm(tunuino_idle_stepper_t *motor) {
+    if (motor == 0) return;
+    motor->driver_enabled = 0u;
+    motor->target_valid = 0u;
+}
 void tunuino_idle_stepper_fault(tunuino_idle_stepper_t *motor) {
     if (motor == 0) return;
     motor->fault_latched = 1u;
-    motor->driver_enabled = 0u;
-    motor->target_valid = 0u;
+    tunuino_idle_stepper_disarm(motor);
 }
 uint8_t tunuino_idle_stepper_set_target(tunuino_idle_stepper_t *motor, int32_t target) {
     if (motor == 0 || motor->fault_latched || !motor->hardware_verified) return 0u;

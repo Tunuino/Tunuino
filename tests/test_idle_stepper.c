@@ -11,6 +11,12 @@ int main(void) {
     assert(!tunuino_idle_stepper_outputs_allowed(&s));
     s.driver_enabled = 1u;
     assert(tunuino_idle_stepper_outputs_allowed(&s));
+    tunuino_idle_stepper_disarm(&s);
+    assert(!tunuino_idle_stepper_outputs_allowed(&s));
+    assert(tunuino_idle_stepper_set_target(&s, 50));
+    assert(!tunuino_idle_stepper_outputs_allowed(&s));
+    s.driver_enabled = 1u;
+    assert(tunuino_idle_stepper_outputs_allowed(&s));
     tunuino_idle_stepper_fault(&s);
     assert(!tunuino_idle_stepper_outputs_allowed(&s));
     assert(!tunuino_idle_stepper_set_target(&s, 20));
