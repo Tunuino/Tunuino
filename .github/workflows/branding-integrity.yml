@@ -1,0 +1,13 @@
+name: Tunuino branding integrity
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  check-branding:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tracked text files
+        run: python3 scripts/check_branding.py
