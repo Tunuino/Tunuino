@@ -1,27 +1,62 @@
-# Tunuino connector pinout baseline: Proteus F4
+# Tunuino STM32F429: J102 + J103 connector map
 
-## Hardware decision
+## Source and scope
 
-The Tunuino ECU uses **both Proteus F4 external connectors** as the reference for its connector-side signal assignment. The MCU remains **STM32F429ZIT6 (LQFP144)**.
+Connector reference: [Tunuino/proteus](https://github.com/Tunuino/proteus/blob/master/proteus.kicad_sch), root schematic, revision v0.7 (title block). Connector J102: 35-pin Ampseal footprint `ampseal-35`, PN 776231-1. Connector J103: 35-pin Ampseal footprint `ampseal-35-2`, PN 776231-2. **J101 is excluded from the Tunuino connector plan.**
 
-This decision fixes the connector family and the intended external wiring reference; it does **not** establish verified connector pin numbers or MCU GPIO mappings.
+This table is extracted from **labels directly at the connector pin coordinates in the root schematic**. Entries without a direct label are deliberately unresolved: they can connect to other nets through wires, power symbols or sheet hierarchy. Do not treat them as unused or safe to reassign until the complete netlist is verified.
 
-## Mapping rules
+| Pin | J102 | J103 |
+|---:|---|---|
+| 1 | HS2 | A confirmar (ligação sem etiqueta direta) |
+| 2 | HS1 | A confirmar (ligação sem etiqueta direta) |
+| 3 | LS1 | A confirmar (ligação sem etiqueta direta) |
+| 4 | LS3 | A confirmar (ligação sem etiqueta direta) |
+| 5 | LS5 | A confirmar (ligação sem etiqueta direta) |
+| 6 | LS6 | A confirmar (ligação sem etiqueta direta) |
+| 7 | LS7 | A confirmar (ligação sem etiqueta direta) |
+| 8 | LS9 | A confirmar (ligação sem etiqueta direta) |
+| 9 | LS11 | 5V_SENSOR_1 |
+| 10 | LS13 | 5V_SENSOR_2 |
+| 11 | LS14 | A confirmar (ligação sem etiqueta direta) |
+| 12 | LS15 | A confirmar (ligação sem etiqueta direta) |
+| 13 | HS3 | AV1 |
+| 14 | HS4 | AV3 |
+| 15 | LS2 | AV5 |
+| 16 | LS4 | AV7 |
+| 17 | A confirmar (ligação sem etiqueta direta) | AV9 |
+| 18 | A confirmar (ligação sem etiqueta direta) | AV11 |
+| 19 | LS8 | AT1 |
+| 20 | LS10 | AT3 |
+| 21 | LS12 | 5V_SENSOR_1 |
+| 22 | IGN3 | 5V_SENSOR_2 |
+| 23 | LS16 | A confirmar (ligação sem etiqueta direta) |
+| 24 | A confirmar (ligação sem etiqueta direta) | AV2 |
+| 25 | IGN12 | AV4 |
+| 26 | IGN11 | AV6 |
+| 27 | IGN10 | AV8 |
+| 28 | IGN9 | AV10 |
+| 29 | IGN8 | A confirmar (ligação sem etiqueta direta) |
+| 30 | IGN7 | AT2 |
+| 31 | IGN6 | AT4 |
+| 32 | IGN5 | 5V_SENSOR_1 |
+| 33 | IGN4 | 5V_SENSOR_2 |
+| 34 | IGN2 | KNOCK_1 |
+| 35 | IGN1 | KNOCK_2 |
 
-1. Obtain the exact Proteus F4 connector pinout and identify the board revision and connector orientation (mating-face versus PCB view).
-2. Document every pin on connector 1 and connector 2, including power, grounds, reserved positions and unused pins.
-3. Preserve the external connector signal assignment wherever electrically compatible with the Tunuino hardware.
-4. Independently assign STM32F429 GPIO and alternate functions using the MCU datasheet and verified PCB schematic.
-5. Support up to eight high-impedance saturated injector channels and eight logic-level outputs for smart ignition coils, subject to driver validation.
-6. Include crank/cam inputs, analog sensors, communications and external LSU 4.9 wideband CAN input as permitted by the verified connector assignment.
-7. Check current limits, input protection, grounding, driver fault states and power-up behaviour before any output is enabled.
+## Tunuino channel allocation (provisional)
 
-## Verification status
+- Injector drivers (high-impedance saturated): reserve eight suitable low-side channels, **LS1–LS8**, subject to driver current, flyback and PCB trace validation. The reference signal name alone does not prove electrical suitability.
+- Smart ignition coils: reserve **IGN1–IGN8**, subject to verification of logic levels, driver topology, connector-side protection and safe reset states.
+- Other low-side, high-side and ignition-labelled connector pins are not automatically assigned to Tunuino functions.
+- J103 analogue inputs AV/AT, knock inputs and sensor supply nets require analogue-front-end and grounding verification before use.
+- CAN1 and crank/cam assignments **are not established** by the direct labels of J102/J103. The third connector J101 is excluded, so these essential functions need a deliberate allocation and electrical design review rather than silently inheriting the three-connector Proteus design.
+- STM32F429ZIT6 GPIO/alternate-function mapping remains **unassigned** until the exact two-connector PCB netlist is verified.
 
-**Connector pin numbers: pending authoritative source.**
+## Safety gates before firmware activation
 
-**MCU-to-connector netlist: pending schematic review.**
-
-**Injector/ignition outputs: disabled pending hardware validation.**
-
-Do not invent connector pin numbers from unrelated ECU variants or infer them from the MCU package. A cross-compiling firmware binary does not validate connector wiring.
+1. Export and cross-check the complete KiCad netlist, including wires, power symbols and hierarchical connections, against connector numbering and mating-face orientation.
+2. Verify all power and ground pins, protections, external drivers, sensor supply limits and MCU voltage domains.
+3. Assign each external net to an actual STM32F429 pin or dedicated driver, checking timer/ADC/CAN/USB constraints.
+4. Verify boot/reset and hardware output-disable behaviour before enabling injection or ignition.
+5. Bench-test without injectors, coils or engine attached; do not use this table as an installation wiring harness diagram yet.
