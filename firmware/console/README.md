@@ -1,7 +1,7 @@
 # Tunuino firmware console
 
-This directory mirrors the ECU-side console location in the reference firmware
-tree. It is **not** the browser-based application, which remains in `/console`.
+This directory is the Tunuino firmware-side console integration location.
+The complete desktop tuning application is not yet implemented in this repository.
 
 ## Reference-compatible module layout
 
@@ -31,3 +31,16 @@ transport layer or speculative hardware driver is introduced.
 4. Do not enable flash writes, injector/ignition outputs or USB peripherals
    before verified hardware and recovery support.
 5. Maintain original project identity and respect upstream source licenses.
+
+## USB compatibility target
+
+Follow the proven rusEFI Console separation of USB serial diagnostics,
+ECU signature and configuration protocol negotiation, and firmware flashing.
+Do not treat the current experimental single-byte `S`/`A` protocol as wire-compatible
+with rusEFI Console. USB CDC enumeration and the STM32F429 USB device stack are
+not implemented yet. Desktop-side serial probing is preliminary only.
+
+Tunuino-generated TunerStudio INI files must advertise a Tunuino signature
+matching the firmware response. Other ECU INI files retain their own signatures.
+When integrating upstream code, retain all legally required upstream license
+and copyright notices.
