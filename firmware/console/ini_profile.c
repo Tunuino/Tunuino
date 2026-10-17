@@ -49,15 +49,18 @@ uint8_t tunuino_ini_profile_parse(const char *data, size_t length, tunuino_ini_p
                 while (keyend>start && whitespace(data[keyend-1u])) keyend--;
                 if (keyend-start==9u && memcmp(data+start,"signature",9u)==0) {
                     if (!extract(data+eq+1u,stop-eq-1u,out->signature,sizeof(out->signature))) return 0u;
+                    if (out->signature_found) return 0u;
                     out->signature_found=1u;
                 } else if (keyend-start==12u && memcmp(data+start,"queryCommand",12u)==0) {
                     if (!extract(data+eq+1u,stop-eq-1u,out->query_command,sizeof(out->query_command))) return 0u;
+                    if (out->query_found) return 0u;
                     out->query_found=1u;
                 }
             }
         }
         pos=end<length?end+1u:end;
     }
+    // An INI with repeated conflicting identities must not be trusted.
     return out->signature_found;
 }
 uint8_t tunuino_ini_signature_matches(const tunuino_ini_profile_t *profile, const char *ecu_signature) {
