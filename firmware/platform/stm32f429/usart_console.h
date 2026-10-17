@@ -3,7 +3,7 @@
 #ifndef TUNUINO_USART_CONSOLE_H
 #define TUNUINO_USART_CONSOLE_H
 #include <stdint.h>
-// STM32F407 USART2 on PD5 (TX), PD6 (RX), AF7, as rusEFI Proteus F4 reference.\n// APB1 clock; no GPIO, NVIC or UART enable performed.
+// USART2 reference pin mapping: PD5 (TX), PD6 (RX), AF7.\n// Verify STM32F429 board pin assignments before use; no GPIO, NVIC or UART enable performed.
 typedef struct {
     uint32_t peripheral_clock_hz;
     uint32_t baud_rate;
