@@ -62,3 +62,11 @@ The current 70-contact target allocation already assigns **every J102/J103 conta
 **Design decision:** prioritize the idle stepper as mandatory; during the next connector revision, reallocate four **J102 auxiliary low-side/high-side positions** to a properly rated stepper output stage, after verifying connector current capacity and return paths. Keep the eight injector and eight ignition outputs unchanged. Reserve DBW footprint/MCU resources on the PCB only if practical, with motor output and sensor connector contacts **unallocated** until a second reviewed pinmap revision. If 70 contacts cannot support all functions safely, the requirements must be reduced or connector strategy revised before fabrication.
 
 No firmware should energize the stepper or DBW motor before the driver design and pinout are verified.
+
+## Approved six-cylinder baseline (2026-10-17)
+
+The project baseline is now **six high-impedance injectors and six smart ignition coils**, with **one mandatory four-wire bipolar idle stepper** and **optional DBW provision**. STM32F429ZIT6, J102/J103, CAN wideband, USB console and 16x16 calibration tables remain targets.
+
+This decision supersedes the earlier eight-channel requirements **for the new Tunuino board**. The older 70-pin CSV and draft KiCad schematic still show INJ7/INJ8 and IGN7/IGN8 and are **not yet revised**. Do not fabricate or wire a harness from that obsolete draft. The next connector-map revision must explicitly assign four stepper motor contacts and review DBW capacity, power returns and driver hardware before the KiCad schematic is treated as authoritative.
+
+The firmware's existing eight-channel constants and logic must be migrated and regression-tested before claiming six-cylinder readiness. DBW remains disabled until a separately validated safety design exists.
