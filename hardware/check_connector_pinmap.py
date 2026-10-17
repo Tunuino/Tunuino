@@ -53,3 +53,20 @@ board = (HERE.parent / "firmware/platform/stm32f429/board.h").read_text(encoding
 for macro, expected in (("TUNUINO_INJECTOR_COUNT", 6), ("TUNUINO_IGNITION_COUNT", 6), ("TUNUINO_STEPPER_PHASE_COUNT", 4), ("TUNUINO_DBW_ENABLED", 0)):
     assert re.search(rf"^#define {macro} {expected}u$", board, re.MULTILINE), macro
 print("OK: six injectors, six ignitions, four stepper wires and disabled DBW match firmware and circuit register")
+
+# Provisional auxiliary connector inventory must never claim hardware readiness.
+with (HERE / "auxiliary-output-inventory.csv").open(newline="", encoding="utf-8") as f:
+    auxiliaries = list(csv.DictReader(f))
+assert len(auxiliaries) == 12, "Expected twelve auxiliary outputs"
+assert {int(r["port"]) for r in auxiliaries} == set(range(12)), "Auxiliary logical IDs must be unique and contiguous"
+seen_aux = set()
+for row in auxiliaries:
+    key = (row["connector"], int(row["pin"]))
+    assert key not in seen_aux, ("Duplicate auxiliary contact", key)
+    seen_aux.add(key)
+    assert row["connector"] == "J102", key
+    assert actual[key] == row["net"], (key, row["net"], actual[key])
+    assert row["net"].startswith(("HS_AUX", "LS_AUX")), row["net"]
+    assert row["capability_draft"] == ("DIGITAL" if row["net"].startswith("HS_") else "DIGITAL_PWM")
+    assert row["hardware_status"] == "UNVERIFIED", "Do not mark hardware verified without full electrical review"
+print("OK: twelve draft auxiliary ports map to unique J102 contacts; no hardware is marked verified")
