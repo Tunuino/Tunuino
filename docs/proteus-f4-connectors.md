@@ -89,3 +89,97 @@ The selected J102/J103 pins may not provide all essential power, ground, crank/c
 3. Assign two independent trigger-capable timer inputs for crank and cam, ADC channels for sensors, CAN1 RX/TX to a physical CAN transceiver, and USB or serial service pins without alternate-function conflicts.
 4. Allocate eight independent timed injector controls and eight smart-coil logic outputs, with hardware disable circuitry that defaults OFF during reset and firmware faults.
 5. Generate and review a machine-checkable pin map before enabling any output in firmware.
+
+## Tunuino two-connector target allocation (design decision, PCB redesign required)
+
+This section is the **chosen Tunuino external interface**, not the as-built Proteus v0.7 netlist. The source-derived table above remains the reference for the original hardware. Pins marked **REWORK** require electrical schematic and PCB changes; no firmware GPIO should be enabled on the strength of this table alone. Connector numbering must be checked from the mating face before making a harness.
+
+### J102: power outputs (35 positions)
+
+| Pin | Tunuino function | Source net / disposition |
+|---:|---|---|
+| 1 | High-side auxiliary 2 | HS2 retained |
+| 2 | High-side auxiliary 1 | HS1 retained |
+| 3 | Injector 1 | LS1, validate saturated driver |
+| 4 | Injector 3 | LS3, validate saturated driver |
+| 5 | Injector 5 | LS5, validate saturated driver |
+| 6 | Injector 6 | LS6, validate saturated driver |
+| 7 | Injector 7 | LS7, validate saturated driver |
+| 8 | Low-side auxiliary 9 | LS9 retained |
+| 9 | Low-side auxiliary 11 | LS11 retained |
+| 10 | Low-side auxiliary 13 | LS13 retained |
+| 11 | Low-side auxiliary 14 | LS14 retained |
+| 12 | Low-side auxiliary 15 | LS15 retained |
+| 13 | High-side auxiliary 3 | HS3 retained |
+| 14 | High-side auxiliary 4 | HS4 retained |
+| 15 | Injector 2 | LS2, validate saturated driver |
+| 16 | Injector 4 | LS4, validate saturated driver |
+| 17 | Power ground A | REWORK: trace original net, high-current return design |
+| 18 | Power ground B | REWORK: trace original net, high-current return design |
+| 19 | Injector 8 | LS8, validate saturated driver |
+| 20 | Low-side auxiliary 10 | LS10 retained |
+| 21 | Low-side auxiliary 12 | LS12 retained |
+| 22 | Ignition 3 | IGN3, smart-coil logic output only |
+| 23 | Low-side auxiliary 16 | LS16 retained |
+| 24 | Switched +12 V sense / supply | REWORK: fused and protected supply architecture |
+| 25 | Ignition auxiliary 12 | IGN12 retained, disabled by default |
+| 26 | Ignition auxiliary 11 | IGN11 retained, disabled by default |
+| 27 | Ignition auxiliary 10 | IGN10 retained, disabled by default |
+| 28 | Ignition auxiliary 9 | IGN9 retained, disabled by default |
+| 29 | Ignition 8 | IGN8, smart-coil logic output only |
+| 30 | Ignition 7 | IGN7, smart-coil logic output only |
+| 31 | Ignition 6 | IGN6, smart-coil logic output only |
+| 32 | Ignition 5 | IGN5, smart-coil logic output only |
+| 33 | Ignition 4 | IGN4, smart-coil logic output only |
+| 34 | Ignition 2 | IGN2, smart-coil logic output only |
+| 35 | Ignition 1 | IGN1, smart-coil logic output only |
+
+### J103: sensors, trigger, CAN and sensor supply (35 positions)
+
+| Pin | Tunuino function | Source net / disposition |
+|---:|---|---|
+| 1 | Crank VR+ / conditioned trigger input path | REWORK: dedicated VR/Hall conditioner; do not connect raw VR to MCU |
+| 2 | Crank VR- / sensor return | REWORK: dedicated differential conditioner and grounding |
+| 3 | Cam VR+ / conditioned trigger input path | REWORK: dedicated VR/Hall conditioner; do not connect raw VR to MCU |
+| 4 | Cam VR- / sensor return | REWORK: dedicated differential conditioner and grounding |
+| 5 | CAN1 H | REWORK: protected CAN transceiver and bus wiring |
+| 6 | CAN1 L | REWORK: protected CAN transceiver and bus wiring |
+| 7 | Sensor ground A | REWORK: analogue ground strategy |
+| 8 | Sensor ground B | REWORK: analogue ground strategy |
+| 9 | Sensor 5 V rail 1 | 5V_SENSOR_1 retained |
+| 10 | Sensor 5 V rail 2 | 5V_SENSOR_2 retained |
+| 11 | Battery voltage sense | REWORK: divider and protection; not direct battery voltage to MCU |
+| 12 | Ignition-switched sense | REWORK: divider, protection and power sequencing |
+| 13 | Analogue voltage 1 | AV1 retained |
+| 14 | Analogue voltage 3 | AV3 retained |
+| 15 | Analogue voltage 5 | AV5 retained |
+| 16 | Analogue voltage 7 | AV7 retained |
+| 17 | Analogue voltage 9 | AV9 retained |
+| 18 | Analogue voltage 11 | AV11 retained |
+| 19 | Temperature 1 | AT1 retained |
+| 20 | Temperature 3 | AT3 retained |
+| 21 | Sensor 5 V rail 1 | 5V_SENSOR_1 retained |
+| 22 | Sensor 5 V rail 2 | 5V_SENSOR_2 retained |
+| 23 | Sensor ground C | REWORK: verify net and analogue return |
+| 24 | Analogue voltage 2 | AV2 retained |
+| 25 | Analogue voltage 4 | AV4 retained |
+| 26 | Analogue voltage 6 | AV6 retained |
+| 27 | Analogue voltage 8 | AV8 retained |
+| 28 | Analogue voltage 10 | AV10 retained |
+| 29 | Sensor ground D | REWORK: verify net and analogue return |
+| 30 | Temperature 2 | AT2 retained |
+| 31 | Temperature 4 | AT4 retained |
+| 32 | Sensor 5 V rail 1 | 5V_SENSOR_1 retained |
+| 33 | Sensor 5 V rail 2 | 5V_SENSOR_2 retained |
+| 34 | Knock sensor 1 | KNOCK_1 retained; analogue frontend required |
+| 35 | Knock sensor 2 | KNOCK_2 retained; analogue frontend required |
+
+### Non-negotiable implementation rules
+
+- This is a **new PCB design allocation**, not a pinout that can be applied to an unmodified Proteus F4 board or wiring loom.
+- The J102 pin 24 switched +12 V allocation is **not** a sufficient ECU power design on its own. Validate current, connector contact ratings, fuse, reverse polarity, transient suppression, ground returns and required permanent/switched feeds. Redesign if the power budget requires more contacts.
+- J103 pins 1–4 are **sensor-side** crank/cam wiring. The MCU must see the protected, conditioned logic signals, never raw VR voltage. Hall support needs a separately verified input mode.
+- J103 pins 5–6 carry differential CAN H/L on the external connector, **not** MCU CAN RX/TX. Fit a transceiver, common-mode protection and deliberate termination.
+- The 8 injector and 8 ignition channel allocations specify external pins only; final MCU GPIO/timer assignment depends on the validated STM32F429ZIT6 board netlist and driver topology.
+- Dedicated USB programming/debug (SWD/BOOT) must be accessible via a **separate on-board service header or USB connector**, not an invented signal on J102/J103. This does not add a third automotive harness connector.
+- No engine test or output arming before netlist/ERC/DRC review, electrical protection validation and bench measurements.
