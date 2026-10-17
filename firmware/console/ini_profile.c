@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-Tunuino-Proprietary-1.0
 #include "ini_profile.h"
 #include <string.h>
-static uint8_t whitespace(char c) { return (uint8_t)(c==' ' || c=='\\t' || c=='\\r'); }
+static uint8_t whitespace(char c) { return (uint8_t)(c==' ' || c=='\t' || c=='\r'); }
 static uint8_t extract(const char *value, size_t n, char *out, size_t cap) {
     size_t i=0u, k=0u;
     while (i<n && whitespace(value[i])) i++;
@@ -22,7 +22,7 @@ static uint8_t extract(const char *value, size_t n, char *out, size_t cap) {
     if (k==0u) return 0u;
     while (i<n && whitespace(value[i])) i++;
     if (i<n && value[i]!=';') return 0u;
-    out[k]='\\0';
+    out[k]='\0';
     return 1u;
 }
 uint8_t tunuino_ini_profile_parse(const char *data, size_t length, tunuino_ini_profile_t *out) {
@@ -32,7 +32,7 @@ uint8_t tunuino_ini_profile_parse(const char *data, size_t length, tunuino_ini_p
     size_t pos=0u;
     while (pos<length) {
         size_t end=pos;
-        while (end<length && data[end]!='\\n') end++;
+        while (end<length && data[end]!='\n') end++;
         size_t start=pos;
         while (start<end && whitespace(data[start])) start++;
         size_t stop=end;
