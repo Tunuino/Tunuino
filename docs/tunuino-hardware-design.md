@@ -48,3 +48,17 @@
 - Independent bench validation of power, reset and outputs-safe state before connecting any engine hardware.
 
 **No fabricated board or validated production outputs exist at this stage.**
+
+## Idle stepper and optional electronic throttle (new requirement)
+
+**Idle air stepper motor: required.** Reserve one dedicated **four-wire bipolar stepper** interface, driven through a purpose-built current-controlled H-bridge/stepper driver with thermal/short-circuit protection and defined power-off behaviour. The stepper must not be connected directly to STM32 GPIOs. Confirm actual actuator coil resistance, operating current and supply before selecting a driver.
+
+**DBW (drive-by-wire electronic throttle): optional design provision only**, not an enabled feature. Reserve design space and MCU resources for redundant accelerator pedal channels, redundant throttle-position feedback, a suitably rated bidirectional motor H-bridge, independent motor-power cutoff, plausibility checking, watchdog/fault response and validated mechanical return spring. DBW must remain **hardware disabled** until the entire safety case and bench/vehicle validation are complete. Never reuse a generic injector/ignition driver as the DBW motor stage.
+
+### Connector capacity and design conflict
+
+The current 70-contact target allocation already assigns **every J102/J103 contact**. A four-wire stepper requires four external motor contacts. DBW typically requires two motor contacts plus redundant pedal/throttle sensor connections and sensor return/supply provisions. Therefore **neither actuator is wired in the current connector map**. Do not silently reassign a net, assume that an unlabelled original pin is free, or claim the PCB can support either actuator as-is.
+
+**Design decision:** prioritize the idle stepper as mandatory; during the next connector revision, reallocate four **J102 auxiliary low-side/high-side positions** to a properly rated stepper output stage, after verifying connector current capacity and return paths. Keep the eight injector and eight ignition outputs unchanged. Reserve DBW footprint/MCU resources on the PCB only if practical, with motor output and sensor connector contacts **unallocated** until a second reviewed pinmap revision. If 70 contacts cannot support all functions safely, the requirements must be reduced or connector strategy revised before fabrication.
+
+No firmware should energize the stepper or DBW motor before the driver design and pinout are verified.
