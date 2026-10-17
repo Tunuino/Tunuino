@@ -17,4 +17,4 @@ Physical programming probes the STM32 device ID before writing; the example `0x4
 
 ## Desktop firmware panel
 
-Run `python3 firmware/console/firmware_panel.py` on a desktop with Python Tkinter and STM32CubeProgrammer installed. This initial graphical firmware panel selects a `.bin` image, displays its SHA-256, requests an independently approved SHA-256 and device ID, and invokes the SWD flashing tool only after two confirmations. It is **not** the complete rusEFI-like tuning Console, and does not yet support USB DFU, OpenBLT, or automatic board identity verification. Never program an ECU with injector/ignition loads connected.
+Run `python3 firmware/console/firmware_panel.py` on a desktop with Python Tkinter and STM32CubeProgrammer installed. This initial graphical firmware panel selects a `.bin` image, displays its SHA-256, requests an independently approved SHA-256 and device ID, and invokes the SWD flashing tool only after two confirmations. It is **not** the complete full tuning Console, and does not yet support USB DFU, OpenBLT, or automatic board identity verification. Never program an ECU with injector/ignition loads connected.
