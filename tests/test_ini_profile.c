@@ -10,6 +10,9 @@ int main(void) {
     assert(p.query_found && strcmp(p.query_command,"Q")==0);
     assert(tunuino_ini_signature_matches(&p,"speeduino 202504-dev"));
     assert(!tunuino_ini_signature_matches(&p,"Tunuino-STM32F429"));
+    const char *utf8_bom="\xEF\xBB\xBF[MegaTune]\nsignature = \"Tunuino-STM32F429\"\n";
+    assert(tunuino_ini_profile_parse(utf8_bom,strlen(utf8_bom),&p));
+    assert(tunuino_ini_signature_matches(&p,"Tunuino-STM32F429"));
     assert(tunuino_ini_profile_parse(other,strlen(other),&p));
     assert(tunuino_ini_signature_matches(&p,"Tunuino-STM32F429"));
     assert(!tunuino_ini_profile_parse("[MegaTune]\nsignature = \"unterminated",35,&p));
