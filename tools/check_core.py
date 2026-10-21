@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import random
 import shutil
+import struct
 import subprocess
 import tempfile
 import zlib
@@ -40,6 +41,15 @@ def main():
         if zlib.crc32(identity_body) != int.from_bytes(encoded_identity[-4:], "big"):
             raise AssertionError("C identity CRC mismatch")
         print(identity_output[1])
+        live_exe = work / ("live-check.exe" if os.name == "nt" else "live-check")
+        run(flags + ["firmware/src/frame.c", "firmware/src/live_data.c", "firmware/tests/test_live_data.c", "-o", str(live_exe)])
+        live_output = run([str(live_exe)]).splitlines()
+        live_vector = live_output[0]
+        live_packet = bytes.fromhex(live_vector)
+        expected_live = struct.pack(">BBBBQIIIi", 0, 1, 15, 0, 0x123456789AB, 950125, 98765, 1023456, -12345)
+        if live_packet[2:-4] != expected_live or zlib.crc32(expected_live) != int.from_bytes(live_packet[-4:], "big"):
+            raise AssertionError("C live data differs from independent wire layout")
+        print(live_output[1])
         library_path = work / ("frame.dll" if os.name == "nt" else "frame.so")
         shared_flags = ["-shared"] + ([] if os.name == "nt" else ["-fPIC"])
         run(flags + shared_flags + ["firmware/src/frame.c", "-o", str(library_path)])
@@ -67,14 +77,18 @@ def main():
                    java_root / "datalog/CsvLogReader.java", java_root / "transport/SerialChannel.java",
                    java_root / "transport/PacketSession.java",
                    java_root / "protocol/DeviceIdentity.java", java_root / "protocol/IdentityClient.java",
+                   java_root / "protocol/LiveDataClient.java", java_root / "datalog/CsvLogWriter.java",
+                   java_root / "datalog/LiveDataRecorder.java",
                    ROOT / "console/src/test/java/io/tunuino/CoreChecks.java",
                    ROOT / "console/src/test/java/io/tunuino/TransportChecks.java",
-                   ROOT / "console/src/test/java/io/tunuino/IdentityChecks.java"]
+                   ROOT / "console/src/test/java/io/tunuino/IdentityChecks.java",
+                   ROOT / "console/src/test/java/io/tunuino/LiveDataChecks.java"]
         javac = ["javac"] if shutil.which("javac") else ["java", "--module", "jdk.compiler/com.sun.tools.javac.Main"]
         run(javac + ["-encoding", "UTF-8", "--release", "17", "-d", str(work)] + [str(p) for p in sources])
         print(run(["java", "-cp", str(work), "io.tunuino.CoreChecks", c_vector]))
         print(run(["java", "-cp", str(work), "io.tunuino.TransportChecks"]))
         print(run(["java", "-cp", str(work), "io.tunuino.IdentityChecks", identity_vector]))
+        print(run(["java", "-cp", str(work), "io.tunuino.LiveDataChecks", live_vector]))
     print("Portable core verified. JavaFX UI and hardware builds require separate validation.")
 
 
