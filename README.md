@@ -15,6 +15,8 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 - Pedido de identificação explícito na Console e rejeição de família diferente da selecionada.
 - Protocolo de dados em tempo real em C/Java e gravação CSV com início/paragem na Console.
 - Gráfico de RPM durante a gravação, limitado a 600 pontos; os dados válidos continuam a ser gravados no ficheiro.
+- Mapas VE e ignição até 32×32, com validação, CRC e interpolação bilinear em C/Java.
+- Consulta offline de ficheiros `.tnmap` na Console, com tabela RPM/MAP e cálculo de um ponto.
 
 ## Por implementar e validar
 
@@ -60,3 +62,9 @@ Depois de identificar a centralina, **Gravar datalog** fica disponível se o fir
 Usa **Parar gravação** para terminar o pedido em curso e fechar o ficheiro. A ligação fica aberta numa paragem normal. Não são criadas amostras quando os sinais estiverem indisponíveis. Um erro interrompe a gravação, mantendo as linhas que já foram escritas. Recuos do relógio da ECU também interrompem a gravação.
 
 A pausa entre pedidos é de 100 ms, acrescida do tempo necessário à comunicação. O formato está em [live-data-protocol.md](docs/live-data-protocol.md). Os testes usam amostras sintéticas; o projeto ainda não lê sensores físicos nem produz uma imagem STM32 gravável.
+
+## Consultar mapas
+
+Usa **Abrir mapa** para carregar um ficheiro `.tnmap` válido. A janela mostra o tipo de mapa, os eixos RPM/MAP e as células. Introduz RPM e MAP em kPa e usa **Calcular ponto** para consultar a interpolação. Se o ponto ficar fora dos eixos, a janela assinala que foi limitado à borda.
+
+Esta consulta é offline e apenas de leitura. Ainda não existe edição de mapas na interface, envio para a ECU ou aplicação a injeção/ignição. Não existem mapas padrão de motor. O formato e os limites estão em [calibration-format.md](docs/calibration-format.md).

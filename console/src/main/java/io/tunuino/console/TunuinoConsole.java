@@ -9,6 +9,7 @@ import io.tunuino.protocol.DeviceIdentity;
 import io.tunuino.protocol.IdentityClient;
 import io.tunuino.protocol.LiveDataClient;
 import io.tunuino.datalog.LiveDataRecorder;
+import io.tunuino.calibration.CalibrationMap;
 import java.io.File;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -92,6 +93,7 @@ public final class TunuinoConsole extends Application {
         hardware.getItems().addAll(DeviceIdentity.Family.values());
         hardware.setValue(DeviceIdentity.Family.PROTEUS);
         Button open = new Button("Abrir datalog CSV");
+        Button openMap = new Button("Abrir mapa");
         Label status = new Label("Offline · nenhuma ECU identificada");
         Label identityDetails = new Label("Identificação da ECU pendente");
         ComboBox<UsbSerialPorts.Port> ports = new ComboBox<>();
@@ -117,6 +119,7 @@ public final class TunuinoConsole extends Application {
                 && (identifiedDevice.capabilities() & LiveDataClient.CAPABILITY) != 0;
             capture.setDisable(!captureActive && (serialBusy || !connected || !liveAvailable || fileReading));
             open.setDisable(captureActive || fileReading);
+            openMap.setDisable(captureActive || fileReading);
         };
         Consumer<Throwable> usbFailure = error -> {
             identifiedDevice = null;
@@ -237,9 +240,41 @@ public final class TunuinoConsole extends Application {
         VBox footer = new VBox(8, summary, identityDetails, status);
         footer.setPadding(new Insets(12));
         BorderPane root = new BorderPane(chart);
-        root.setTop(new VBox(new ToolBar(new Label("Tunuino"), hardware, open),
+        root.setTop(new VBox(new ToolBar(new Label("Tunuino"), hardware, open, openMap),
             new ToolBar(ports, scan, connect, identify, capture)));
         root.setBottom(footer);
+        openMap.setOnAction(event -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Abrir mapa Tunuino");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Mapa Tunuino", "*.tnmap"));
+            File selected = chooser.showOpenDialog(stage);
+            if (selected == null) { return; }
+            fileReading = true;
+            refreshConnection.run();
+            Task<CalibrationMap> task = new Task<>() {
+                @Override protected CalibrationMap call() throws Exception {
+                    return CalibrationMap.read(selected.toPath());
+                }
+            };
+            task.setOnSucceeded(done -> {
+                fileReading = false;
+                if (!stopping.get()) {
+                    CalibrationViewer.show(stage, selected.getName(), task.getValue());
+                    refreshConnection.run();
+                }
+            });
+            task.setOnFailed(done -> {
+                fileReading = false;
+                if (!stopping.get()) {
+                    Alert alert = new Alert(Alert.AlertType.ERROR, task.getException().getMessage());
+                    alert.initOwner(stage);
+                    alert.setHeaderText("Mapa inválido");
+                    alert.showAndWait();
+                    refreshConnection.run();
+                }
+            });
+            fileWorker.submit(task);
+        });
         capture.setOnAction(event -> {
             if (captureActive) {
                 keepCapturing.set(false);

@@ -30,6 +30,12 @@ O botão de identificação usa `IdentityClient` na thread USB e valida uma resp
 
 O CSV é criado com exclusividade e recebe cada amostra válida. O gráfico mantém até 600 pontos e as atualizações são agregadas para limitar trabalho pendente na thread JavaFX. Falhas de comunicação invalidam a sessão; erros de ficheiro ou tempo fora de ordem interrompem a gravação. O firmware de teste não anuncia dados em tempo real na identidade padrão: essa capacidade depende da integração do fornecedor de snapshots.
 
+## Calibração
+
+`tunuino_map` contém eixos RPM/MAP e células de VE ou ignição em inteiros com escala explícita. O módulo C valida os mapas e usa interpolação bilinear, sinalizando consultas fora dos eixos. O chamador deve fornecer um mapa estável; a avaliação ainda não foi integrada num ciclo de controlo STM32.
+
+`CalibrationMap` implementa o mesmo formato na Console com armazenamento imutável. A leitura recusa dimensões, valores ou CRC inválidos antes de disponibilizar o mapa. `CalibrationViewer` apresenta uma tabela apenas de leitura e permite consultar pontos offline. Não há comando de escrita de calibração nem aplicação dos valores ao motor neste bloco. O formato está em `calibration-format.md`.
+
 ## Hardware
 
 Os projetos KiCad de Proteus e uaEFI são fontes de verdade para as ligações elétricas. O futuro gerador deve relacionar referência do conector, contacto, rede, circuito intermédio e pino MCU. Cada mapa precisa da revisão de hardware e do estado de validação. A seleção de uma família na interface não confirma compatibilidade de uma imagem de firmware.
