@@ -20,7 +20,15 @@ Java 21 e JavaFX, destinada ao Windows. O processamento de ficheiros e o protoco
 
 `UsbSerialPorts` usa jSerialComm para enumerar e abrir portas. A lista não classifica uma porta como ECU apenas pelo nome, VID/PID ou seleção de família. As operações nativas de descoberta, abertura e fecho decorrem numa thread dedicada.
 
-O botão de identificação usa `IdentityClient` na thread USB e valida uma resposta Tunuino de versão conhecida e família correspondente. `DeviceIdentity` contém dados declarados pelo firmware. O núcleo C usa `tunuino_identity_reply` sobre o pacote completo com CRC e exige configuração explícita fornecida pela camada da placa. O protocolo está em `identity-protocol.md`. Calibração e gravação continuam por implementar; a identidade recebida não autoriza essas operações.
+O botão de identificação usa `IdentityClient` na thread USB e valida uma resposta Tunuino de versão conhecida e família correspondente. `DeviceIdentity` contém dados declarados pelo firmware. O núcleo C usa `tunuino_identity_reply` sobre o pacote completo com CRC e exige configuração explícita fornecida pela camada da placa. O protocolo está em `identity-protocol.md`. Calibração e gravação de firmware continuam por implementar; a identidade recebida não autoriza essas operações.
+
+## Datalogging
+
+`tunuino_live_reply` serializa um snapshot de sensores em inteiros com escala explícita, sem depender do layout de estruturas ou do formato de floats do compilador. A camada da placa continua responsável pela aquisição, pelo relógio e pela validade dos sinais. O formato está em `live-data-protocol.md`.
+
+`LiveDataClient` exige a capacidade anunciada na identidade. `LiveDataRecorder` faz pedidos sequenciais na thread USB e escreve as amostras com `CsvLogWriter`, usando o mesmo formato do leitor offline. A paragem normal termina a transação em curso. A interface bloqueia ações USB concorrentes enquanto grava; o cancelamento usa uma flag que não interrompe uma transação válida a meio.
+
+O CSV é criado com exclusividade e recebe cada amostra válida. O gráfico mantém até 600 pontos e as atualizações são agregadas para limitar trabalho pendente na thread JavaFX. Falhas de comunicação invalidam a sessão; erros de ficheiro ou tempo fora de ordem interrompem a gravação. O firmware de teste não anuncia dados em tempo real na identidade padrão: essa capacidade depende da integração do fornecedor de snapshots.
 
 ## Hardware
 

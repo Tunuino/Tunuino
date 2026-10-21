@@ -102,6 +102,23 @@ public final class LiveDataChecks {
             }
             check(CsvLogReader.read(csv).equals(java.util.List.of(sample)), "Live/offline CSV interoperability");
             check(Files.readString(csv).contains("950.125,98.765,1.023456,-12.345"), "Locale-independent decimals");
+            byte[] corruptBody = body.clone();
+            corruptBody[1] = 2;
+            byte[] badFrame = FrameCodec.encode(corruptBody);
+            byte[] interruptedReplies = new byte[cPacket.length + badFrame.length];
+            System.arraycopy(cPacket, 0, interruptedReplies, 0, cPacket.length);
+            System.arraycopy(badFrame, 0, interruptedReplies, cPacket.length, badFrame.length);
+            Path partial = directory.resolve("partial.csv");
+            try (PacketSession session = new PacketSession(new Channel(interruptedReplies))) {
+                try {
+                    LiveDataRecorder.record(session, identity(1), partial, Duration.ofMillis(10),
+                        () -> true, value -> {});
+                    throw new AssertionError("Malformed second sample was accepted");
+                } catch (IOException expected) {
+                    check(!session.isOpen(), "Fault during recording closes session");
+                    check(CsvLogReader.read(partial).equals(java.util.List.of(sample)), "Partial recording remains readable");
+                }
+            }
             String original = Files.readString(csv);
             try {
                 new CsvLogWriter(csv);

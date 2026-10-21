@@ -7,8 +7,12 @@ import io.tunuino.transport.PacketSession;
 import io.tunuino.transport.UsbSerialPorts;
 import io.tunuino.protocol.DeviceIdentity;
 import io.tunuino.protocol.IdentityClient;
+import io.tunuino.protocol.LiveDataClient;
+import io.tunuino.datalog.LiveDataRecorder;
 import java.io.File;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
@@ -18,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
@@ -41,6 +46,12 @@ public final class TunuinoConsole extends Application {
         return thread;
     });
     private Task<List<LogSample>> activeRead;
+    private DeviceIdentity identifiedDevice;
+    private boolean fileReading;
+    private boolean captureActive;
+    private boolean serialBusy;
+    private long captureGeneration;
+    private final AtomicBoolean keepCapturing = new AtomicBoolean();
     private final AtomicBoolean stopping = new AtomicBoolean();
     private final AtomicReference<PacketSession> connection = new AtomicReference<>();
     private final ExecutorService serialWorker = Executors.newSingleThreadExecutor(r -> {
@@ -50,17 +61,20 @@ public final class TunuinoConsole extends Application {
     });
 
     private <T> void serialTask(Callable<T> operation, Consumer<T> success, Consumer<Throwable> failure) {
+        serialBusy = true;
         Task<T> task = new Task<>() {
             @Override protected T call() throws Exception {
                 return operation.call();
             }
         };
         task.setOnSucceeded(event -> {
+            serialBusy = false;
             if (!stopping.get()) {
                 success.accept(task.getValue());
             }
         });
         task.setOnFailed(event -> {
+            serialBusy = false;
             if (!stopping.get()) {
                 failure.accept(task.getException());
             }
@@ -86,25 +100,33 @@ public final class TunuinoConsole extends Application {
         Button scan = new Button("Atualizar portas");
         Button connect = new Button("Ligar USB");
         Button identify = new Button("Identificar ECU");
+        Button capture = new Button("Gravar datalog");
         identify.setDisable(true);
         connect.setDisable(true);
         Runnable refreshConnection = () -> {
             PacketSession current = connection.get();
             boolean connected = current != null && current.isOpen();
             connect.setText(connected ? "Desligar USB" : "Ligar USB");
-            connect.setDisable(!connected && ports.getValue() == null);
-            scan.setDisable(connected);
-            ports.setDisable(connected);
-            hardware.setDisable(connected);
-            identify.setDisable(!connected);
+            connect.setDisable(serialBusy || captureActive || (!connected && ports.getValue() == null));
+            scan.setDisable(serialBusy || connected || captureActive);
+            ports.setDisable(serialBusy || connected || captureActive);
+            hardware.setDisable(serialBusy || connected || captureActive);
+            identify.setDisable(serialBusy || !connected || captureActive);
+            capture.setText(captureActive ? "Parar gravação" : "Gravar datalog");
+            boolean liveAvailable = identifiedDevice != null
+                && (identifiedDevice.capabilities() & LiveDataClient.CAPABILITY) != 0;
+            capture.setDisable(!captureActive && (serialBusy || !connected || !liveAvailable || fileReading));
+            open.setDisable(captureActive || fileReading);
         };
         Consumer<Throwable> usbFailure = error -> {
+            identifiedDevice = null;
             identityDetails.setText("Identificação da ECU pendente");
             status.setText("Falha USB: " + error.getMessage());
             refreshConnection.run();
         };
         ports.setOnAction(event -> refreshConnection.run());
         scan.setOnAction(event -> {
+            capture.setDisable(true);
             scan.setDisable(true);
             connect.setDisable(true);
             ports.setDisable(true);
@@ -118,6 +140,8 @@ public final class TunuinoConsole extends Application {
             }, usbFailure);
         });
         connect.setOnAction(event -> {
+            capture.setDisable(true);
+            identifiedDevice = null;
             identityDetails.setText("Identificação da ECU pendente");
             identify.setDisable(true);
             connect.setDisable(true);
@@ -168,6 +192,7 @@ public final class TunuinoConsole extends Application {
             }
         });
         identify.setOnAction(event -> {
+            capture.setDisable(true);
             PacketSession current = connection.get();
             if (current == null || !current.isOpen()) {
                 refreshConnection.run();
@@ -177,6 +202,7 @@ public final class TunuinoConsole extends Application {
             identify.setDisable(true);
             connect.setDisable(true);
             status.setText("A identificar a ECU…");
+            identifiedDevice = null;
             identityDetails.setText("Identificação da ECU pendente");
             serialTask(() -> {
                 try {
@@ -186,10 +212,13 @@ public final class TunuinoConsole extends Application {
                     throw error;
                 }
             }, identity -> {
+                identifiedDevice = identity;
                 identityDetails.setText(identity.family() + " · " + identity.mcuSeries()
                     + " · revisão " + identity.hardwareRevision()
                     + " · firmware " + identity.firmwareVersion() + " · UID " + identity.uid());
-                status.setText("ECU Tunuino reconhecida pelo protocolo de identificação");
+                status.setText((identity.capabilities() & LiveDataClient.CAPABILITY) != 0
+                    ? "ECU identificada · dados em tempo real disponíveis"
+                    : "ECU identificada · firmware sem dados em tempo real");
                 refreshConnection.run();
             }, usbFailure);
         });
@@ -209,8 +238,77 @@ public final class TunuinoConsole extends Application {
         footer.setPadding(new Insets(12));
         BorderPane root = new BorderPane(chart);
         root.setTop(new VBox(new ToolBar(new Label("Tunuino"), hardware, open),
-            new ToolBar(ports, scan, connect, identify)));
+            new ToolBar(ports, scan, connect, identify, capture)));
         root.setBottom(footer);
+        capture.setOnAction(event -> {
+            if (captureActive) {
+                keepCapturing.set(false);
+                capture.setDisable(true);
+                status.setText("A terminar a gravação…");
+                return;
+            }
+            PacketSession current = connection.get();
+            DeviceIdentity device = identifiedDevice;
+            if (current == null || !current.isOpen() || device == null
+                    || (device.capabilities() & LiveDataClient.CAPABILITY) == 0 || fileReading) {
+                refreshConnection.run();
+                return;
+            }
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Guardar novo datalog");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Datalog CSV", "*.csv"));
+            chooser.setInitialFileName("tunuino-" + LocalDateTime.now()
+                .format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".csv");
+            File destination = chooser.showSaveDialog(stage);
+            if (destination == null) { return; }
+            captureActive = true;
+            keepCapturing.set(true);
+            long generation = ++captureGeneration;
+            refreshConnection.run();
+            status.setText("A gravar datalog · à espera de amostras válidas");
+            XYChart.Series<Number, Number> series = new XYChart.Series<>();
+            AtomicReference<LogSample> latest = new AtomicReference<>();
+            AtomicBoolean renderPending = new AtomicBoolean();
+            Consumer<LogSample> renderSample = sample -> {
+                latest.set(sample);
+                if (!stopping.get() && renderPending.compareAndSet(false, true)) {
+                    Platform.runLater(() -> {
+                        renderPending.set(false);
+                        if (stopping.get() || !captureActive || captureGeneration != generation) { return; }
+                        LogSample value = latest.getAndSet(null);
+                        if (value == null) { return; }
+                        if (!chart.getData().contains(series)) {
+                            chart.getData().clear();
+                            chart.getData().add(series);
+                            chart.setTitle("Datalog em tempo real");
+                        }
+                        series.getData().add(new XYChart.Data<>(value.timeMs() / 1000.0, value.rpm()));
+                        if (series.getData().size() > 600) { series.getData().remove(0); }
+                        summary.setText(String.format(Locale.ROOT,
+                            "RPM %.1f · MAP %.2f kPa · lambda %.3f · líquido %.1f °C",
+                            value.rpm(), value.mapKpa(), value.lambda(), value.coolantC()));
+                    });
+                }
+            };
+            serialTask(() -> LiveDataRecorder.record(current, device, destination.toPath(),
+                Duration.ofMillis(100), keepCapturing::get, renderSample), count -> {
+                    captureActive = false;
+                    keepCapturing.set(false);
+                    summary.setText(count + " amostras gravadas em " + destination.getName());
+                    status.setText("Gravação terminada");
+                    refreshConnection.run();
+                }, error -> {
+                    captureActive = false;
+                    keepCapturing.set(false);
+                    if (!current.isOpen()) {
+                        connection.compareAndSet(current, null);
+                        identifiedDevice = null;
+                        identityDetails.setText("Identificação da ECU pendente");
+                    }
+                    status.setText("Gravação interrompida: " + error.getMessage());
+                    refreshConnection.run();
+                });
+        });
         open.setOnAction(event -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Abrir datalog Tunuino");
@@ -220,6 +318,8 @@ public final class TunuinoConsole extends Application {
                 return;
             }
             open.setDisable(true);
+            fileReading = true;
+            refreshConnection.run();
             summary.setText("A ler " + selected.getName() + "…");
             activeRead = new Task<>() {
                 @Override protected List<LogSample> call() throws Exception {
@@ -240,11 +340,13 @@ public final class TunuinoConsole extends Application {
                 }
                 chart.getData().clear();
                 chart.getData().add(series);
+                chart.setTitle("Datalog offline");
                 double maxRpm = samples.stream().mapToDouble(LogSample::rpm).max().orElse(0);
                 summary.setText(String.format(Locale.ROOT,
                     "%s · %d amostras · RPM máximo %.0f · gráfico reduzido a %d pontos",
                     selected.getName(), samples.size(), maxRpm, series.getData().size()));
-                open.setDisable(false);
+                fileReading = false;
+                refreshConnection.run();
             });
             activeRead.setOnFailed(done -> {
                 summary.setText("Não foi possível abrir o datalog. O gráfico anterior foi mantido.");
@@ -252,12 +354,14 @@ public final class TunuinoConsole extends Application {
                 alert.initOwner(stage);
                 alert.setHeaderText("Datalog inválido");
                 alert.showAndWait();
-                open.setDisable(false);
+                fileReading = false;
+                refreshConnection.run();
             });
             fileWorker.submit(activeRead);
         });
         stage.setScene(new Scene(root, 1060, 650));
         stage.show();
+        refreshConnection.run();
         scan.fire();
     }
 
@@ -266,6 +370,7 @@ public final class TunuinoConsole extends Application {
         if (!stopping.compareAndSet(false, true)) {
             return;
         }
+        keepCapturing.set(false);
         if (activeRead != null) {
             activeRead.cancel(true);
         }

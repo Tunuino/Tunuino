@@ -13,13 +13,15 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 - Sessão de pedidos/respostas com limite de tempo total, leituras e escritas parciais, cancelamento e invalidação após erro.
 - Protocolo de identificação Tunuino em C e Java, com família, série MCU, revisão, versão de firmware e UID.
 - Pedido de identificação explícito na Console e rejeição de família diferente da selecionada.
+- Protocolo de dados em tempo real em C/Java e gravação CSV com início/paragem na Console.
+- Gráfico de RPM durante a gravação, limitado a 600 pontos; os dados válidos continuam a ser gravados no ficheiro.
 
 ## Por implementar e validar
 
 - Validação USB física e da identificação no Windows com firmware Tunuino nas centralinas, e recuperação de ligação.
 - Firmware STM32, descodificação de cambota/árvore de cames e controlo do motor.
 - Drivers, bootloader e gravação específicos de cada variante de hardware.
-- Datalogging em tempo real, definições INI para TunerStudio e Autotune online/offline.
+- Aquisição física e validação do datalogging nas placas, definições INI para TunerStudio e Autotune online/offline.
 - Extração KiCad e validação de conectores, circuitos e pinos STM32.
 
 ## Verificar o núcleo
@@ -50,3 +52,11 @@ Usa **Identificar ECU** para enviar o pedido de leitura ao firmware Tunuino. Uma
 O transporte binário admite um pedido de cada vez e encerra a sessão após timeout, erro de CRC ou resposta incompleta. Não repete automaticamente comandos. Os testes usam um transporte simulado; a integração nativa com jSerialComm e a interface JavaFX ainda precisam de compilação e ensaio no Windows com as centralinas.
 
 O núcleo de identificação recusa UID, revisão ou família não configurados. A camada específica de cada placa ainda precisa de fornecer os dados reais. Os dados de identificação dos testes são sintéticos e não validam pinagem ou compatibilidade de gravação. O formato está em [identity-protocol.md](docs/identity-protocol.md).
+
+## Gravar datalog
+
+Depois de identificar a centralina, **Gravar datalog** fica disponível se o firmware anunciar suporte de dados em tempo real. Escolhe um nome de ficheiro novo; ficheiros existentes são preservados. A Console grava tempo, RPM, MAP, lambda e temperatura do líquido, e mostra os valores recebidos durante a gravação.
+
+Usa **Parar gravação** para terminar o pedido em curso e fechar o ficheiro. A ligação fica aberta numa paragem normal. Não são criadas amostras quando os sinais estiverem indisponíveis. Um erro interrompe a gravação, mantendo as linhas que já foram escritas. Recuos do relógio da ECU também interrompem a gravação.
+
+A pausa entre pedidos é de 100 ms, acrescida do tempo necessário à comunicação. O formato está em [live-data-protocol.md](docs/live-data-protocol.md). Os testes usam amostras sintéticas; o projeto ainda não lê sensores físicos nem produz uma imagem STM32 gravável.
