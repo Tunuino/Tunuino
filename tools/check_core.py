@@ -50,6 +50,15 @@ def main():
         if live_packet[2:-4] != expected_live or zlib.crc32(expected_live) != int.from_bytes(live_packet[-4:], "big"):
             raise AssertionError("C live data differs from independent wire layout")
         print(live_output[1])
+        map_exe = work / ("map-check.exe" if os.name == "nt" else "map-check")
+        run(flags + ["firmware/src/frame.c", "firmware/src/calibration.c", "firmware/tests/test_calibration.c", "-lm", "-o", str(map_exe)])
+        map_output = run([str(map_exe)]).splitlines()
+        map_vector, ignition_vector = map_output[0:2]
+        map_packet = bytes.fromhex(map_vector)
+        expected_map = b"TUNUINOM" + bytes([1, 1, 2, 2]) + struct.pack(">8i", 1000, 3000, 50000, 100000, 40000, 60000, 80000, 100000)
+        if map_packet[:-4] != expected_map or zlib.crc32(expected_map) != int.from_bytes(map_packet[-4:], "big"):
+            raise AssertionError("C map differs from independent file layout")
+        print(map_output[2])
         library_path = work / ("frame.dll" if os.name == "nt" else "frame.so")
         shared_flags = ["-shared"] + ([] if os.name == "nt" else ["-fPIC"])
         run(flags + shared_flags + ["firmware/src/frame.c", "-o", str(library_path)])
@@ -79,16 +88,19 @@ def main():
                    java_root / "protocol/DeviceIdentity.java", java_root / "protocol/IdentityClient.java",
                    java_root / "protocol/LiveDataClient.java", java_root / "datalog/CsvLogWriter.java",
                    java_root / "datalog/LiveDataRecorder.java",
+                   java_root / "calibration/CalibrationMap.java",
                    ROOT / "console/src/test/java/io/tunuino/CoreChecks.java",
                    ROOT / "console/src/test/java/io/tunuino/TransportChecks.java",
                    ROOT / "console/src/test/java/io/tunuino/IdentityChecks.java",
-                   ROOT / "console/src/test/java/io/tunuino/LiveDataChecks.java"]
+                   ROOT / "console/src/test/java/io/tunuino/LiveDataChecks.java",
+                   ROOT / "console/src/test/java/io/tunuino/CalibrationChecks.java"]
         javac = ["javac"] if shutil.which("javac") else ["java", "--module", "jdk.compiler/com.sun.tools.javac.Main"]
         run(javac + ["-encoding", "UTF-8", "--release", "17", "-d", str(work)] + [str(p) for p in sources])
         print(run(["java", "-cp", str(work), "io.tunuino.CoreChecks", c_vector]))
         print(run(["java", "-cp", str(work), "io.tunuino.TransportChecks"]))
         print(run(["java", "-cp", str(work), "io.tunuino.IdentityChecks", identity_vector]))
         print(run(["java", "-cp", str(work), "io.tunuino.LiveDataChecks", live_vector]))
+        print(run(["java", "-cp", str(work), "io.tunuino.CalibrationChecks", map_vector, ignition_vector]))
     print("Portable core verified. JavaFX UI and hardware builds require separate validation.")
 
 
