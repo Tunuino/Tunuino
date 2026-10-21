@@ -3,11 +3,17 @@ package io.tunuino.console;
 
 import io.tunuino.datalog.CsvLogReader;
 import io.tunuino.datalog.LogSample;
+import io.tunuino.transport.PacketSession;
+import io.tunuino.transport.UsbSerialPorts;
 import java.io.File;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import javafx.application.Application;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
@@ -32,6 +38,32 @@ public final class TunuinoConsole extends Application {
         return thread;
     });
     private Task<List<LogSample>> activeRead;
+    private final AtomicBoolean stopping = new AtomicBoolean();
+    private final AtomicReference<PacketSession> connection = new AtomicReference<>();
+    private final ExecutorService serialWorker = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "tunuino-usb");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    private <T> void serialTask(Callable<T> operation, Consumer<T> success, Consumer<Throwable> failure) {
+        Task<T> task = new Task<>() {
+            @Override protected T call() throws Exception {
+                return operation.call();
+            }
+        };
+        task.setOnSucceeded(event -> {
+            if (!stopping.get()) {
+                success.accept(task.getValue());
+            }
+        });
+        task.setOnFailed(event -> {
+            if (!stopping.get()) {
+                failure.accept(task.getException());
+            }
+        });
+        serialWorker.submit(task);
+    }
 
     @Override
     public void start(Stage stage) {
@@ -43,7 +75,86 @@ public final class TunuinoConsole extends Application {
         hardware.getItems().addAll("Proteus", "uaEFI");
         hardware.setValue("Proteus");
         Button open = new Button("Abrir datalog CSV");
-        Label status = new Label("Offline · USB e gravação ainda em desenvolvimento");
+        Label status = new Label("Offline · nenhuma ECU identificada");
+        ComboBox<UsbSerialPorts.Port> ports = new ComboBox<>();
+        ports.setPromptText("Selecionar porta USB");
+        ports.setPrefWidth(290);
+        Button scan = new Button("Atualizar portas");
+        Button connect = new Button("Ligar USB");
+        connect.setDisable(true);
+        Runnable refreshConnection = () -> {
+            PacketSession current = connection.get();
+            boolean connected = current != null && current.isOpen();
+            connect.setText(connected ? "Desligar USB" : "Ligar USB");
+            connect.setDisable(!connected && ports.getValue() == null);
+            scan.setDisable(connected);
+            ports.setDisable(connected);
+            hardware.setDisable(connected);
+        };
+        Consumer<Throwable> usbFailure = error -> {
+            status.setText("Falha USB: " + error.getMessage());
+            refreshConnection.run();
+        };
+        ports.setOnAction(event -> refreshConnection.run());
+        scan.setOnAction(event -> {
+            scan.setDisable(true);
+            connect.setDisable(true);
+            ports.setDisable(true);
+            status.setText("A procurar portas…");
+            serialTask(UsbSerialPorts::list, found -> {
+                ports.getItems().setAll(found);
+                ports.setValue(null);
+                status.setText(found.isEmpty() ? "Nenhuma porta encontrada" : "Seleciona a porta da centralina");
+                refreshConnection.run();
+            }, usbFailure);
+        });
+        connect.setOnAction(event -> {
+            connect.setDisable(true);
+            scan.setDisable(true);
+            ports.setDisable(true);
+            hardware.setDisable(true);
+            UsbSerialPorts.Port selected = ports.getValue();
+            if (connection.get() != null && connection.get().isOpen()) {
+                serialTask(() -> {
+                    PacketSession old = connection.getAndSet(null);
+                    if (old != null) {
+                        old.close();
+                    }
+                    return Boolean.TRUE;
+                }, ignored -> {
+                    status.setText("Offline · ligação encerrada");
+                    refreshConnection.run();
+                }, usbFailure);
+            } else if (selected != null) {
+                status.setText("A abrir " + selected.name() + "…");
+                serialTask(() -> {
+                    PacketSession old = connection.getAndSet(null);
+                    if (old != null) {
+                        old.close();
+                    }
+                    PacketSession opened = UsbSerialPorts.open(selected);
+                    if (stopping.get()) {
+                        opened.close();
+                        return Boolean.FALSE;
+                    }
+                    connection.set(opened);
+                    // stop() may race with completion of the native open operation.
+                    if (stopping.get()) {
+                        PacketSession pending = connection.getAndSet(null);
+                        if (pending != null) {
+                            pending.close();
+                        }
+                        return Boolean.FALSE;
+                    }
+                    return Boolean.TRUE;
+                }, opened -> {
+                    status.setText("Porta " + selected.name() + " aberta · ECU ainda por identificar");
+                    refreshConnection.run();
+                }, usbFailure);
+            } else {
+                refreshConnection.run();
+            }
+        });
         NumberAxis time = new NumberAxis();
         time.setLabel("Tempo (s)");
         time.setForceZeroInRange(false);
@@ -58,7 +169,8 @@ public final class TunuinoConsole extends Application {
         VBox footer = new VBox(8, summary, status);
         footer.setPadding(new Insets(12));
         BorderPane root = new BorderPane(chart);
-        root.setTop(new ToolBar(new Label("Tunuino"), hardware, open));
+        root.setTop(new VBox(new ToolBar(new Label("Tunuino"), hardware, open),
+            new ToolBar(ports, scan, connect)));
         root.setBottom(footer);
         open.setOnAction(event -> {
             FileChooser chooser = new FileChooser();
@@ -107,14 +219,29 @@ public final class TunuinoConsole extends Application {
         });
         stage.setScene(new Scene(root, 1060, 650));
         stage.show();
+        scan.fire();
     }
 
     @Override
     public void stop() {
+        if (!stopping.compareAndSet(false, true)) {
+            return;
+        }
         if (activeRead != null) {
             activeRead.cancel(true);
         }
         fileWorker.shutdownNow();
+        serialWorker.execute(() -> {
+            PacketSession current = connection.getAndSet(null);
+            if (current != null) {
+                try {
+                    current.close();
+                } catch (java.io.IOException e) {
+                    System.err.println("Tunuino: " + e.getMessage());
+                }
+            }
+        });
+        serialWorker.shutdown();
     }
 
     public static void main(String[] args) {

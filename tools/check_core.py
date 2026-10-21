@@ -52,10 +52,14 @@ def main():
             _ctypes.FreeLibrary(library._handle)
         java_root = ROOT / "console/src/main/java/io/tunuino"
         sources = [java_root / "protocol/FrameCodec.java", java_root / "datalog/LogSample.java",
-                   java_root / "datalog/CsvLogReader.java", ROOT / "console/src/test/java/io/tunuino/CoreChecks.java"]
+                   java_root / "datalog/CsvLogReader.java", java_root / "transport/SerialChannel.java",
+                   java_root / "transport/PacketSession.java",
+                   ROOT / "console/src/test/java/io/tunuino/CoreChecks.java",
+                   ROOT / "console/src/test/java/io/tunuino/TransportChecks.java"]
         javac = ["javac"] if shutil.which("javac") else ["java", "--module", "jdk.compiler/com.sun.tools.javac.Main"]
         run(javac + ["-encoding", "UTF-8", "--release", "17", "-d", str(work)] + [str(p) for p in sources])
         print(run(["java", "-cp", str(work), "io.tunuino.CoreChecks", c_vector]))
+        print(run(["java", "-cp", str(work), "io.tunuino.TransportChecks"]))
     print("Portable core verified. JavaFX UI and hardware builds require separate validation.")
 
 

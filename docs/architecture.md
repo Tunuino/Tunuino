@@ -16,6 +16,10 @@ O codec constitui apenas o enquadramento binário. Os comandos, códigos de resp
 
 Java 21 e JavaFX, destinada ao Windows. O processamento de ficheiros e o protocolo são independentes da interface gráfica. A interface abre datalogs CSV offline. O transporte USB e a gravação devem executar fora da thread JavaFX, com timeout, cancelamento e verificação da identidade de hardware.
 
+`SerialChannel` separa o acesso à porta da lógica binária. `PacketSession` usa um prazo total por pedido, incluindo espera por exclusividade da sessão. Trata transferências parciais e fecha a ligação quando um pedido iniciado falha, impedindo a reutilização de bytes de uma resposta atrasada. Um pedido que expire enquanto espera por outro não encerra a transação já em curso.
+
+`UsbSerialPorts` usa jSerialComm para enumerar e abrir portas. A lista não classifica uma porta como ECU apenas pelo nome, VID/PID ou seleção de família. As operações nativas de descoberta, abertura e fecho decorrem numa thread dedicada. A interface ainda não envia comandos de identificação, calibração ou gravação.
+
 ## Hardware
 
 Os projetos KiCad de Proteus e uaEFI são fontes de verdade para as ligações elétricas. O futuro gerador deve relacionar referência do conector, contacto, rede, circuito intermédio e pino MCU. Cada mapa precisa da revisão de hardware e do estado de validação. A seleção de uma família na interface não confirma compatibilidade de uma imagem de firmware.
