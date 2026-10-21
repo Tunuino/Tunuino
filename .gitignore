@@ -1,0 +1,6 @@
+/build/
+/console/target/
+*.class
+__pycache__/
+.idea/
+.vscode/
