@@ -5,7 +5,10 @@ import io.tunuino.datalog.CsvLogReader;
 import io.tunuino.datalog.LogSample;
 import io.tunuino.transport.PacketSession;
 import io.tunuino.transport.UsbSerialPorts;
+import io.tunuino.protocol.DeviceIdentity;
+import io.tunuino.protocol.IdentityClient;
 import java.io.File;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
@@ -71,16 +74,19 @@ public final class TunuinoConsole extends Application {
             throw new IllegalStateException("Tunuino Console destina-se ao Windows");
         }
         stage.setTitle("Tunuino Console");
-        ComboBox<String> hardware = new ComboBox<>();
-        hardware.getItems().addAll("Proteus", "uaEFI");
-        hardware.setValue("Proteus");
+        ComboBox<DeviceIdentity.Family> hardware = new ComboBox<>();
+        hardware.getItems().addAll(DeviceIdentity.Family.values());
+        hardware.setValue(DeviceIdentity.Family.PROTEUS);
         Button open = new Button("Abrir datalog CSV");
         Label status = new Label("Offline · nenhuma ECU identificada");
+        Label identityDetails = new Label("Identificação da ECU pendente");
         ComboBox<UsbSerialPorts.Port> ports = new ComboBox<>();
         ports.setPromptText("Selecionar porta USB");
         ports.setPrefWidth(290);
         Button scan = new Button("Atualizar portas");
         Button connect = new Button("Ligar USB");
+        Button identify = new Button("Identificar ECU");
+        identify.setDisable(true);
         connect.setDisable(true);
         Runnable refreshConnection = () -> {
             PacketSession current = connection.get();
@@ -90,8 +96,10 @@ public final class TunuinoConsole extends Application {
             scan.setDisable(connected);
             ports.setDisable(connected);
             hardware.setDisable(connected);
+            identify.setDisable(!connected);
         };
         Consumer<Throwable> usbFailure = error -> {
+            identityDetails.setText("Identificação da ECU pendente");
             status.setText("Falha USB: " + error.getMessage());
             refreshConnection.run();
         };
@@ -100,6 +108,7 @@ public final class TunuinoConsole extends Application {
             scan.setDisable(true);
             connect.setDisable(true);
             ports.setDisable(true);
+            identify.setDisable(true);
             status.setText("A procurar portas…");
             serialTask(UsbSerialPorts::list, found -> {
                 ports.getItems().setAll(found);
@@ -109,12 +118,15 @@ public final class TunuinoConsole extends Application {
             }, usbFailure);
         });
         connect.setOnAction(event -> {
+            identityDetails.setText("Identificação da ECU pendente");
+            identify.setDisable(true);
             connect.setDisable(true);
             scan.setDisable(true);
             ports.setDisable(true);
             hardware.setDisable(true);
             UsbSerialPorts.Port selected = ports.getValue();
-            if (connection.get() != null && connection.get().isOpen()) {
+            PacketSession current = connection.get();
+            if (current != null && current.isOpen()) {
                 serialTask(() -> {
                     PacketSession old = connection.getAndSet(null);
                     if (old != null) {
@@ -155,6 +167,32 @@ public final class TunuinoConsole extends Application {
                 refreshConnection.run();
             }
         });
+        identify.setOnAction(event -> {
+            PacketSession current = connection.get();
+            if (current == null || !current.isOpen()) {
+                refreshConnection.run();
+                return;
+            }
+            DeviceIdentity.Family expected = hardware.getValue();
+            identify.setDisable(true);
+            connect.setDisable(true);
+            status.setText("A identificar a ECU…");
+            identityDetails.setText("Identificação da ECU pendente");
+            serialTask(() -> {
+                try {
+                    return IdentityClient.identify(current, expected, Duration.ofSeconds(3));
+                } catch (java.io.IOException error) {
+                    connection.compareAndSet(current, null);
+                    throw error;
+                }
+            }, identity -> {
+                identityDetails.setText(identity.family() + " · " + identity.mcuSeries()
+                    + " · revisão " + identity.hardwareRevision()
+                    + " · firmware " + identity.firmwareVersion() + " · UID " + identity.uid());
+                status.setText("ECU Tunuino reconhecida pelo protocolo de identificação");
+                refreshConnection.run();
+            }, usbFailure);
+        });
         NumberAxis time = new NumberAxis();
         time.setLabel("Tempo (s)");
         time.setForceZeroInRange(false);
@@ -166,11 +204,12 @@ public final class TunuinoConsole extends Application {
         chart.setLegendVisible(false);
         chart.setTitle("Datalog offline");
         Label summary = new Label("Escolhe um datalog local para analisar.");
-        VBox footer = new VBox(8, summary, status);
+        identityDetails.setWrapText(true);
+        VBox footer = new VBox(8, summary, identityDetails, status);
         footer.setPadding(new Insets(12));
         BorderPane root = new BorderPane(chart);
         root.setTop(new VBox(new ToolBar(new Label("Tunuino"), hardware, open),
-            new ToolBar(ports, scan, connect)));
+            new ToolBar(ports, scan, connect, identify)));
         root.setBottom(footer);
         open.setOnAction(event -> {
             FileChooser chooser = new FileChooser();

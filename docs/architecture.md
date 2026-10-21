@@ -18,7 +18,9 @@ Java 21 e JavaFX, destinada ao Windows. O processamento de ficheiros e o protoco
 
 `SerialChannel` separa o acesso à porta da lógica binária. `PacketSession` usa um prazo total por pedido, incluindo espera por exclusividade da sessão. Trata transferências parciais e fecha a ligação quando um pedido iniciado falha, impedindo a reutilização de bytes de uma resposta atrasada. Um pedido que expire enquanto espera por outro não encerra a transação já em curso.
 
-`UsbSerialPorts` usa jSerialComm para enumerar e abrir portas. A lista não classifica uma porta como ECU apenas pelo nome, VID/PID ou seleção de família. As operações nativas de descoberta, abertura e fecho decorrem numa thread dedicada. A interface ainda não envia comandos de identificação, calibração ou gravação.
+`UsbSerialPorts` usa jSerialComm para enumerar e abrir portas. A lista não classifica uma porta como ECU apenas pelo nome, VID/PID ou seleção de família. As operações nativas de descoberta, abertura e fecho decorrem numa thread dedicada.
+
+O botão de identificação usa `IdentityClient` na thread USB e valida uma resposta Tunuino de versão conhecida e família correspondente. `DeviceIdentity` contém dados declarados pelo firmware. O núcleo C usa `tunuino_identity_reply` sobre o pacote completo com CRC e exige configuração explícita fornecida pela camada da placa. O protocolo está em `identity-protocol.md`. Calibração e gravação continuam por implementar; a identidade recebida não autoriza essas operações.
 
 ## Hardware
 
