@@ -145,6 +145,7 @@ def main():
                      "firmware/src/stream_rx.c", "firmware/src/stream_tx.c", "firmware/src/link.c",
                      "firmware/src/crank.c", "firmware/src/position.c", "firmware/src/capture_queue.c",
                      "firmware/src/capture_processor.c", "firmware/src/telemetry.c",
+                     "firmware/src/analog.c",
                      "firmware/tests/link_peer.c", "-lm", "-o", str(peer_exe)])
         library_path = work / ("frame.dll" if os.name == "nt" else "frame.so")
         shared_flags = ["-shared"] + ([] if os.name == "nt" else ["-fPIC"])

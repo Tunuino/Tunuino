@@ -155,6 +155,51 @@ public final class FirmwareLinkChecks {
                 }
                 check(stopped.process.exitValue() == 0,"Stopped-crank peer terminates cleanly");
             }
+            for (DeviceIdentity.Family family : DeviceIdentity.Family.values()) {
+                String board = family == DeviceIdentity.Family.PROTEUS ? "proteus" : "uaefi";
+                Peer sensors = new Peer(executable,board,"sensor-recover");
+                try (PacketSession session = new PacketSession(sensors)) {
+                    DeviceIdentity identity = identify(session,family);
+                    long previous = -1;
+                    for (int step = 0; step < 8; ++step) {
+                        var result = LiveDataClient.read(session,identity,Duration.ofSeconds(2));
+                        boolean available = step == 0 || step == 4 || step == 7;
+                        check(result.isPresent() == available,"Raw sensor fault/freshness sequence step " + step);
+                        if (available) {
+                            var sample = result.orElseThrow();
+                            check(sample.rpm() == 1666.667 && sample.mapKpa() == 98.765
+                                && sample.lambda() == 1.023456 && sample.coolantC() == -12.345,
+                                "Interpolated raw readings and decoded RPM reach Java");
+                            check(sample.timeMs() > previous,"Recovery supplies a new timestamp");
+                            previous = sample.timeMs();
+                        }
+                        check(session.isOpen(),"Sensor unavailability preserves the communication session");
+                    }
+                }
+                check(sensors.process.exitValue() == 0,"Sensor sequence peer terminates cleanly");
+                Peer recordingPeer = new Peer(executable,board,"sensor-recover");
+                try (PacketSession session = new PacketSession(recordingPeer)) {
+                    DeviceIdentity identity = identify(session,family);
+                    AtomicInteger budget = new AtomicInteger(), delivered = new AtomicInteger();
+                    Path csv = directory.resolve(family.name() + "-sensor-recovery.csv");
+                    // Two running checks per iteration bound this recording to eight requests.
+                    long saved = LiveDataRecorder.record(session,identity,csv,Duration.ofMillis(10),
+                        () -> budget.getAndIncrement() < 16,value -> delivered.incrementAndGet());
+                    var samples = CsvLogReader.read(csv);
+                    check(saved == 3 && delivered.get() == 3 && samples.size() == 3,
+                        "Recorder skips all five invalid sensor states and resumes twice");
+                    check(samples.get(1).timeMs() - samples.get(0).timeMs() == 4
+                        && samples.get(2).timeMs() - samples.get(1).timeMs() == 3,
+                        "CSV retains acquisition-time gaps across unavailable sensors");
+                    for (var sample : samples) {
+                        check(sample.rpm() == 1666.667 && sample.mapKpa() == 98.765
+                            && sample.lambda() == 1.023456 && sample.coolantC() == -12.345,
+                            "CSV contains calibrated measurements rather than zero substitutes");
+                    }
+                    check(session.isOpen(),"Recording recovers without reconnecting");
+                }
+                check(recordingPeer.process.exitValue() == 0,"Sensor recovery recorder peer terminates cleanly");
+            }
             for (String mode : new String[] {"stale-map","drop-mid-map","not-ready"}) {
                 Peer peer = new Peer(executable,"proteus",mode);
                 try (PacketSession session = new PacketSession(peer)) {
@@ -176,6 +221,6 @@ public final class FirmwareLinkChecks {
             try (var paths = Files.list(directory)) { for (Path file : paths.toList()) { Files.delete(file); } }
             Files.delete(directory);
         }
-        System.out.println("Java clients <-> live C link: both families, full maps, live CSV, fragmentation, stale snapshot, CRC, disconnect and decoded-crank telemetry checks passed");
+        System.out.println("Java clients <-> live C link: both families, full maps, live CSV, fragmentation, stale snapshot, CRC, disconnect, decoded-crank and calibrated-sensor recovery checks passed");
     }
 }

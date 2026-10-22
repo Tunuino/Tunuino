@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Tunuino. Test-only process peer; no physical ECU defaults. */
 #include "tunuino/link.h"
 #include "tunuino/telemetry.h"
+#include "tunuino/analog.h"
 #include <stdio.h>
 #include <string.h>
 #ifdef _WIN32
@@ -12,6 +13,8 @@ static tunuino_map map;
 static tunuino_map_snapshot ve, ignition;
 static tunuino_capture_processor captures;
 static uint64_t capture_time;
+static int use_analog;
+static unsigned sensor_step;
 static const tunuino_position_config capture_config = {{36,1,30,15000,300000},9,11,0};
 static int synthetic_edge(uint64_t interval) {
     capture_time += interval;
@@ -21,6 +24,26 @@ static int synthetic_edge(uint64_t interval) {
 }
 static int synthetic_telemetry(tunuino_live_sample *live) {
     tunuino_telemetry_sensors sensors = {capture_time,capture_time,capture_time,98765,1023456,-12345,TUNUINO_TELEMETRY_SENSOR_MASK};
+    if (use_analog) {
+        /* Synthetic curves and raw codes only; not calibrations for either ECU. */
+        const tunuino_analog_point map_points[] = {{100,48765},{300,148765}};
+        const tunuino_analog_point lambda_points[] = {{100,923456},{300,1123456}};
+        const tunuino_analog_point coolant_points[] = {{100,37655},{300,-62345}};
+        tunuino_analog_curve map_curve = {map_points,2,48765,148765};
+        tunuino_analog_curve lambda_curve = {lambda_points,2,923456,1123456};
+        tunuino_analog_curve coolant_curve = {coolant_points,sensor_step == 3 ? 1u : 2u,-62345,37655};
+        tunuino_analog_status map_status = tunuino_analog_update(&sensors,TUNUINO_ANALOG_MAP,
+            &map_curve,sensor_step == 1 ? 301 : 200,1,capture_time);
+        tunuino_analog_status lambda_status = tunuino_analog_update(&sensors,TUNUINO_ANALOG_LAMBDA,
+            &lambda_curve,200,sensor_step != 2,capture_time);
+        tunuino_analog_status coolant_status = tunuino_analog_update(&sensors,TUNUINO_ANALOG_COOLANT,
+            &coolant_curve,200,1,capture_time);
+        if (map_status != (sensor_step == 1 ? TUNUINO_ANALOG_OUT_OF_RANGE : TUNUINO_ANALOG_OK)
+            || lambda_status != (sensor_step == 2 ? TUNUINO_ANALOG_INVALID_SAMPLE : TUNUINO_ANALOG_OK)
+            || coolant_status != (sensor_step == 3 ? TUNUINO_ANALOG_CONFIGURATION : TUNUINO_ANALOG_OK)) { return 0; }
+        if (sensor_step == 5) { sensors.map_time_us = capture_time - 10000u; }
+        if (sensor_step == 6) { sensors.lambda_time_us = capture_time + 1u; }
+    }
     tunuino_telemetry_policy policy = {10000,10000,10000};
     return tunuino_telemetry_build(&captures,&sensors,&policy,capture_time,live) != TUNUINO_TELEMETRY_ARGUMENT;
 }
@@ -38,14 +61,16 @@ int main(int argc, char **argv) {
     if (strcmp(mode,"normal") != 0 && strcmp(mode,"stale-map") != 0
         && strcmp(mode,"bad-crc") != 0 && strcmp(mode,"truncated") != 0
         && strcmp(mode,"drop-mid-map") != 0 && strcmp(mode,"not-ready") != 0
-        && strcmp(mode,"crank-live") != 0 && strcmp(mode,"crank-stall") != 0) { return 2; }
+        && strcmp(mode,"crank-live") != 0 && strcmp(mode,"crank-stall") != 0
+        && strcmp(mode,"sensor-recover") != 0) { return 2; }
 #ifdef _WIN32
     if (_setmode(_fileno(stdin),_O_BINARY) < 0 || _setmode(_fileno(stdout),_O_BINARY) < 0) { return 3; }
 #endif
     tunuino_identity identity = {TUNUINO_PROTEUS,TUNUINO_STM32_F4,1,0,1,0,3,{1,2,3,4,5,6,7,8,9,10,11,12}};
     if (strcmp(argv[1],"uaefi") == 0) { identity.family = TUNUINO_UAEFI; identity.mcu_series = TUNUINO_STM32_F7; }
     tunuino_live_sample live = {1234,950125,98765,1023456,-12345,15};
-    int use_captures = strcmp(mode,"crank-live") == 0 || strcmp(mode,"crank-stall") == 0;
+    use_analog = strcmp(mode,"sensor-recover") == 0;
+    int use_captures = strcmp(mode,"crank-live") == 0 || strcmp(mode,"crank-stall") == 0 || use_analog;
     int stalled = 0;
     if (use_captures && !start_captures(&live)) { return 11; }
     map.rpm_count = map.load_count = 32;
@@ -90,6 +115,9 @@ int main(int argc, char **argv) {
             if (output[5] == 1) { ++ve.generation; } else { ++ignition.generation; }
         }
         if (use_captures) {
+            /* Advance the injection sequence only for live-data responses. */
+            if (use_analog && ((total == 34 && output[2] == 0 && output[3] == 1 && output[4] == 15)
+                || (total == 7 && output[2] == 1))) { ++sensor_step; }
             if (strcmp(mode,"crank-stall") == 0 && total == 34 && output[2] == 0 && output[3] == 1 && output[4] == 15) { stalled = 1; }
             if (stalled) {
                 capture_time += capture_config.crank.timeout_us;
