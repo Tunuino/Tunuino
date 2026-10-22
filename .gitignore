@@ -1,4 +1,6 @@
 /build/
+/.deps/
+/.toolchains/
 /console/target/
 *.class
 __pycache__/
