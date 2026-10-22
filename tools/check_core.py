@@ -102,6 +102,12 @@ def main():
                      "firmware/src/stream_rx.c", "firmware/src/stream_tx.c",
                      "firmware/tests/test_stream_tx.c", "-lm", "-o", str(tx_exe)])
         print(run([str(tx_exe)]))
+        link_exe = work / ("link-check.exe" if os.name == "nt" else "link-check")
+        run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/src/live_data.c",
+                     "firmware/src/calibration.c", "firmware/src/map_read.c", "firmware/src/dispatch.c",
+                     "firmware/src/stream_rx.c", "firmware/src/stream_tx.c", "firmware/src/link.c",
+                     "firmware/tests/test_link.c", "-lm", "-o", str(link_exe)])
+        print(run([str(link_exe)]))
         library_path = work / ("frame.dll" if os.name == "nt" else "frame.so")
         shared_flags = ["-shared"] + ([] if os.name == "nt" else ["-fPIC"])
         run(flags + shared_flags + ["firmware/src/frame.c", "-o", str(library_path)])

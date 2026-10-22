@@ -5,6 +5,10 @@
 #include "tunuino/live_data.h"
 #include "tunuino/map_read.h"
 
+/* Largest response of the current read-only handlers, including framing.
+ * Update when introducing a handler with a larger response. */
+#define TUNUINO_DISPATCH_RESPONSE_MAX (TUNUINO_MAP_CHUNK_MAX + 18u)
+
 #define TUNUINO_DISPATCH_LIVE UINT32_C(1)
 #define TUNUINO_DISPATCH_MAP_READ UINT32_C(2)
 /* Board-owned snapshots. Serialize dispatch with all updates, including DMA/ISR

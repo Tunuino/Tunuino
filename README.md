@@ -17,6 +17,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 - Gráfico de RPM durante a gravação, limitado a 600 pontos; os dados válidos continuam a ser gravados no ficheiro.
 - Mapas VE e ignição até 32×32, com validação, CRC e interpolação bilinear em C/Java.
 - Consulta offline de ficheiros `.tnmap` na Console, com tabela RPM/MAP e cálculo de um ponto.
+- Ciclo C de pedido/resposta que liga receção, dispatcher e envio, bloqueando pedidos novos até terminar a resposta.
 - Transmissão incremental em C, com cópia validada da resposta, conclusões parciais, prazo total e bloqueio após falha.
 - Receção incremental em C, com buffer limitado, CRC, prazo total e tratamento de pacotes fragmentados ou juntos.
 - Dispatcher C para identificação, datalog e mapas, com validação de capacidades e fornecedores configurados.
@@ -58,7 +59,7 @@ Usa **Identificar ECU** para enviar o pedido de leitura ao firmware Tunuino. Uma
 
 O transporte binário admite um pedido de cada vez e encerra a sessão após timeout, erro de CRC ou resposta incompleta. Não repete automaticamente comandos. Os testes usam um transporte simulado; a integração nativa com jSerialComm e a interface JavaFX ainda precisam de compilação e ensaio no Windows com as centralinas.
 
-O núcleo de identificação recusa UID, revisão ou família não configurados. A camada específica de cada placa ainda precisa de fornecer os dados reais. Os dados de identificação dos testes são sintéticos e não validam pinagem ou compatibilidade de gravação. O formato está em [identity-protocol.md](docs/identity-protocol.md). O encaminhamento comum dos pedidos está documentado em [firmware-dispatch.md](docs/firmware-dispatch.md); a receção incremental está em [stream-reception.md](docs/stream-reception.md). O envio incremental está em [stream-transmission.md](docs/stream-transmission.md). A ligação destes módulos ao driver USB STM32 continua pendente.
+O núcleo de identificação recusa UID, revisão ou família não configurados. A camada específica de cada placa ainda precisa de fornecer os dados reais. Os dados de identificação dos testes são sintéticos e não validam pinagem ou compatibilidade de gravação. O formato está em [identity-protocol.md](docs/identity-protocol.md). O encaminhamento comum dos pedidos está documentado em [firmware-dispatch.md](docs/firmware-dispatch.md); a receção incremental está em [stream-reception.md](docs/stream-reception.md). O envio incremental está em [stream-transmission.md](docs/stream-transmission.md). O ciclo comum está em [communication-link.md](docs/communication-link.md). A ligação ao driver USB STM32 continua pendente.
 
 ## Gravar datalog
 
