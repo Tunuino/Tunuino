@@ -39,6 +39,11 @@ def main():
         analog_exe = work / ("analog-check.exe" if os.name == "nt" else "analog-check")
         run(flags + ["firmware/src/analog.c", "firmware/tests/test_analog.c", "-o", str(analog_exe)])
         print(run([str(analog_exe)]))
+        clock_exe = work / ("clock-check.exe" if os.name == "nt" else "clock-check")
+        run(flags + ["firmware/src/clock32.c", "firmware/src/capture_queue.c", "firmware/src/crank.c",
+                     "firmware/src/position.c", "firmware/src/capture_processor.c",
+                     "firmware/tests/test_clock32.c", "-lm", "-o", str(clock_exe)])
+        print(run([str(clock_exe)]))
         crank_exe = work / ("crank-check.exe" if os.name == "nt" else "crank-check")
         run(flags + ["firmware/src/crank.c", "firmware/tests/test_crank.c", "-lm", "-o", str(crank_exe)])
         print(run([str(crank_exe)]))
