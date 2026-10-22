@@ -155,6 +155,16 @@ def main():
                      "firmware/src/stream_rx.c", "firmware/src/stream_tx.c", "firmware/src/link.c",
                      "firmware/src/live_mailbox.c", "firmware/tests/test_link.c", "-lm", "-o", str(link_exe)])
         print(run([str(link_exe)]))
+        bench_object = work / "usb-bench-loop.o"
+        bench_include = ["-Ifirmware/tests/usb_bench_stub"]
+        run(flags + bench_include + ["-Dmain=tunuino_usb_bench_main", "-c",
+            "firmware/boards/proteus_v07/usb_bench/main.c", "-o", str(bench_object)])
+        bench_exe = work / ("usb-bench-check.exe" if os.name == "nt" else "usb-bench-check")
+        core_sources = [str(p.relative_to(ROOT)) for p in sorted((ROOT / "firmware/src").glob("*.c"))]
+        run(flags + bench_include + core_sources + ["firmware/tests/test_usb_bench.c",
+            str(bench_object), "-lm", "-o", str(bench_exe)])
+        for mode in ("normal", "timeout", "corrupt", "close"):
+            print(run([str(bench_exe), mode], timeout=10))
         peer_exe = work / ("link-peer.exe" if os.name == "nt" else "link-peer")
         run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/src/live_data.c",
                      "firmware/src/calibration.c", "firmware/src/map_read.c", "firmware/src/dispatch.c",
