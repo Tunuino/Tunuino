@@ -25,3 +25,13 @@ Executar `python3 tools/check_core.py`. Não requer JavaFX, jSerialComm, rede ou
 O adaptador Java de pipes existe apenas em `src/test`: limita as partes entregues, verifica o prazo das leituras e encerra o processo no fecho. A execução deste teste Java tem um limite externo de 30 segundos no runner Python. Os processos normais e os cenários de mapa têm de terminar com código zero; os ficheiros temporários são removidos no final.
 
 O relógio do peer C é sintético e fixo. Os testes específicos de RX/TX/link continuam a verificar prazos e relógios separadamente. Este teste não mede latência real, não compila a interface JavaFX, não carrega o driver série nativo e não valida USB/DMA/callbacks STM32. Ainda é necessário compilar e ensaiar no Windows e nas placas.
+
+## RPM calculadas de capturas simuladas
+
+Os modos exclusivos de teste `crank-live` e `crank-stall` percorrem captura simulada→fila→descodificador de cambota→processador→montador de telemetria→link C→cliente Java→CSV. Usam uma roda sintética 36−1 e fontes sintéticas de MAP/lambda/temperatura; não fornecem dados à Console de produção.
+
+Para cada família, o teste grava e reabre 45 amostras com RPM calculadas dos intervalos entre dentes. A gravação atravessa a falha da roda, verifica a manutenção das RPM e confirma os passos de timestamp de 1/2 ms do cenário.
+
+No cenário de paragem, a primeira amostra é válida; depois deixam de chegar dentes enquanto as outras fontes são renovadas. A expiração das RPM produz `NOT_READY`. O cliente mantém a ligação e o gravador não escreve amostras antigas ou zeros: o ficheiro criado nesta verificação contém apenas o cabeçalho. O leitor offline continua a recusar um datalog sem amostras, conforme o seu contrato.
+
+Os instantes de captura são simulados e avançam por pedido de teste, sem medir tempo real, latência USB ou desempenho de um motor. Estes cenários não substituem a aquisição STM32 e o ensaio nas placas.

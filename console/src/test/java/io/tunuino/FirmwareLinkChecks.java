@@ -115,6 +115,46 @@ public final class FirmwareLinkChecks {
                 }
                 check(peer.process.exitValue() == 0,"Normal C peer terminated cleanly");
             }
+            for (DeviceIdentity.Family family : DeviceIdentity.Family.values()) {
+                String board = family == DeviceIdentity.Family.PROTEUS ? "proteus" : "uaefi";
+                Peer measured = new Peer(executable,board,"crank-live");
+                try (PacketSession session = new PacketSession(measured)) {
+                    DeviceIdentity identity = identify(session,family);
+                    var sample = LiveDataClient.read(session,identity,Duration.ofSeconds(2)).orElseThrow();
+                    check(Math.abs(sample.rpm() - 1666.667) < 1e-9 && sample.mapKpa() == 98.765
+                        && sample.lambda() == 1.023456 && sample.coolantC() == -12.345,"Decoded crank RPM reaches Java with sensor scalings");
+                    AtomicBoolean recording = new AtomicBoolean(true); AtomicInteger count = new AtomicInteger();
+                    Path csv = directory.resolve(family.name() + "-decoded.csv");
+                    long saved = LiveDataRecorder.record(session,identity,csv,Duration.ofMillis(10),recording::get,
+                        value -> { if (count.incrementAndGet() == 45) { recording.set(false); } });
+                    var samples = CsvLogReader.read(csv);
+                    check(saved == 45 && samples.size() == 45 && session.isOpen(),"Decoded crank CSV completes normally");
+                    boolean crossedGap = false;
+                    for (int i = 0; i < samples.size(); ++i) {
+                        check(Math.abs(samples.get(i).rpm() - 1666.667) < 1e-9,"Missing-tooth interval does not lower logged RPM");
+                        if (i > 0) {
+                            long delta = samples.get(i).timeMs() - samples.get(i - 1).timeMs();
+                            check(delta == 1 || delta == 2,"Capture timestamps survive the telemetry path");
+                            crossedGap |= delta == 2;
+                        }
+                    }
+                    check(crossedGap,"Recording spans a missing-tooth gap");
+                }
+                check(measured.process.exitValue() == 0,"Decoded-crank peer terminates cleanly");
+                Peer stopped = new Peer(executable,board,"crank-stall");
+                try (PacketSession session = new PacketSession(stopped)) {
+                    DeviceIdentity identity = identify(session,family);
+                    check(LiveDataClient.read(session,identity,Duration.ofSeconds(2)).isPresent(),"Crank initially available");
+                    check(LiveDataClient.read(session,identity,Duration.ofSeconds(2)).isEmpty(),"Crank timeout produces NOT_READY");
+                    AtomicInteger budget = new AtomicInteger();
+                    Path csv = directory.resolve(family.name() + "-stopped.csv");
+                    long saved = LiveDataRecorder.record(session,identity,csv,Duration.ofMillis(10),
+                        () -> budget.getAndIncrement() < 6,value -> { throw new AssertionError("Stale crank sample delivered"); });
+                    check(saved == 0 && Files.readAllLines(csv).equals(java.util.List.of("time_ms,rpm,map_kpa,lambda,coolant_c"))
+                        && session.isOpen(),"Stopped crank does not create CSV rows or close a healthy link");
+                }
+                check(stopped.process.exitValue() == 0,"Stopped-crank peer terminates cleanly");
+            }
             for (String mode : new String[] {"stale-map","drop-mid-map","not-ready"}) {
                 Peer peer = new Peer(executable,"proteus",mode);
                 try (PacketSession session = new PacketSession(peer)) {
@@ -136,6 +176,6 @@ public final class FirmwareLinkChecks {
             try (var paths = Files.list(directory)) { for (Path file : paths.toList()) { Files.delete(file); } }
             Files.delete(directory);
         }
-        System.out.println("Java clients <-> live C link: both families, full maps, live CSV, fragmentation, stale snapshot, CRC and disconnect checks passed");
+        System.out.println("Java clients <-> live C link: both families, full maps, live CSV, fragmentation, stale snapshot, CRC, disconnect and decoded-crank telemetry checks passed");
     }
 }

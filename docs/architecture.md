@@ -48,6 +48,8 @@ O botão de identificação usa `IdentityClient` na thread USB e valida uma resp
 
 O CSV é criado com exclusividade e recebe cada amostra válida. O gráfico mantém até 600 pontos e as atualizações são agregadas para limitar trabalho pendente na thread JavaFX. Falhas de comunicação invalidam a sessão; erros de ficheiro ou tempo fora de ordem interrompem a gravação. O firmware de teste não anuncia dados em tempo real na identidade padrão: essa capacidade depende da integração do fornecedor de snapshots.
 
+`tunuino_telemetry_build` lê as RPM válidas do processador de capturas e combina-as com fontes estáveis de MAP, lambda e temperatura, verificando máscara e idade individual. Só um conjunto completo origina uma amostra disponível no protocolo existente. Os campos inválidos são limpos, sem criar medições zero no CSV. A publicação entre aquisição e USB deve ser sincronizada pela camada da placa. O contrato está em `telemetry-assembly.md`.
+
 ## Calibração
 
 `tunuino_map` contém eixos RPM/MAP e células de VE ou ignição em inteiros com escala explícita. O módulo C valida os mapas e usa interpolação bilinear, sinalizando consultas fora dos eixos. O chamador deve fornecer um mapa estável; a avaliação ainda não foi integrada num ciclo de controlo STM32.
