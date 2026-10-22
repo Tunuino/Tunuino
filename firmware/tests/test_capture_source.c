@@ -42,6 +42,65 @@ static void no_rpm(tunuino_capture_status queue_fault) {
     tunuino_capture_event event = {1,TUNUINO_CAPTURE_CRANK};
     assert(tunuino_capture_take(&source.processor.queue,&event) == queue_fault && event.time_us == 0 && event.kind == 0);
 }
+static void batch_checks(void) {
+    const uint64_t origin = (uint64_t)UINT32_MAX - 100;
+    uint64_t time = 123;
+    tunuino_capture_event event;
+    tunuino_raw_capture pair[2] = {{20,TUNUINO_CAPTURE_CAM},{UINT32_MAX - 20,TUNUINO_CAPTURE_CRANK}};
+    assert(tunuino_capture_source_init(&source,&config,(uint32_t)origin,origin,1000,500) == TUNUINO_SOURCE_OK);
+    assert(tunuino_capture_source_sample(&source,50,pair,2,0,&time) == TUNUINO_SOURCE_OK);
+    assert(time == (uint64_t)UINT32_MAX + 51);
+    assert(tunuino_capture_take(&source.processor.queue,&event) == TUNUINO_CAPTURE_OK);
+    assert(event.kind == TUNUINO_CAPTURE_CRANK && event.time_us == (uint64_t)UINT32_MAX - 20);
+    assert(tunuino_capture_take(&source.processor.queue,&event) == TUNUINO_CAPTURE_OK);
+    assert(event.kind == TUNUINO_CAPTURE_CAM && event.time_us == (uint64_t)UINT32_MAX + 21);
+    pair[0].counter = pair[1].counter = 60;
+    assert(tunuino_capture_source_sample(&source,70,pair,2,0,&time) == TUNUINO_SOURCE_OK);
+    assert(tunuino_capture_take(&source.processor.queue,&event) == TUNUINO_CAPTURE_OK && event.kind == TUNUINO_CAPTURE_CRANK);
+    assert(tunuino_capture_take(&source.processor.queue,&event) == TUNUINO_CAPTURE_OK && event.kind == TUNUINO_CAPTURE_CAM);
+    assert(tunuino_capture_source_sample(&source,80,NULL,0,0,&time) == TUNUINO_SOURCE_OK);
+    assert(time == (uint64_t)UINT32_MAX + 81);
+    /* A genuinely older cam must precede crank, independent of channel order. */
+    pair[0] = (tunuino_raw_capture){90,TUNUINO_CAPTURE_CRANK};
+    pair[1] = (tunuino_raw_capture){85,TUNUINO_CAPTURE_CAM};
+    assert(tunuino_capture_source_sample(&source,95,pair,2,0,&time) == TUNUINO_SOURCE_OK);
+    assert(tunuino_capture_take(&source.processor.queue,&event) == TUNUINO_CAPTURE_OK && event.kind == TUNUINO_CAPTURE_CAM);
+    assert(tunuino_capture_take(&source.processor.queue,&event) == TUNUINO_CAPTURE_OK && event.kind == TUNUINO_CAPTURE_CRANK);
+    /* The valid first capture must not publish if the second is future. */
+    pair[0].counter = 90; pair[1].counter = 101;
+    unsigned written = atomic_load(&source.processor.queue.written);
+    assert(tunuino_capture_source_sample(&source,100,pair,2,0,&time) == TUNUINO_SOURCE_CAPTURE && time == 0);
+    assert(atomic_load(&source.processor.queue.written) == written);
+    assert(tunuino_capture_source_sample(&source,110,NULL,0,0,&time) == TUNUINO_SOURCE_CAPTURE && time == 0);
+    initialize();
+    assert(tunuino_capture_source_sample(&source,(uint32_t)now_us,NULL,0,1,&time) == TUNUINO_SOURCE_LOST && time == 0);
+    no_rpm(TUNUINO_CAPTURE_SOURCE_FAULT);
+    initialize();
+    pair[0] = pair[1] = (tunuino_raw_capture){(uint32_t)event_us,TUNUINO_CAPTURE_CRANK};
+    assert(tunuino_capture_source_sample(&source,(uint32_t)now_us,pair,2,0,&time) == TUNUINO_SOURCE_ARGUMENT && time == 0);
+    no_rpm(TUNUINO_CAPTURE_SOURCE_FAULT);
+    initialize();
+    assert(tunuino_capture_source_sample(&source,(uint32_t)now_us,NULL,1,0,&time) == TUNUINO_SOURCE_ARGUMENT && time == 0);
+    no_rpm(TUNUINO_CAPTURE_SOURCE_FAULT);
+    initialize();
+    assert(tunuino_capture_source_sample(&source,(uint32_t)now_us,pair,3,0,&time) == TUNUINO_SOURCE_ARGUMENT && time == 0);
+    no_rpm(TUNUINO_CAPTURE_SOURCE_FAULT);
+    initialize();
+    assert(tunuino_capture_source_sample(&source,(uint32_t)now_us,NULL,0,0,NULL) == TUNUINO_SOURCE_ARGUMENT);
+    assert(tunuino_capture_source_sample(&source,(uint32_t)now_us,NULL,0,0,&time) == TUNUINO_SOURCE_OK);
+    assert(tunuino_capture_source_sample(NULL,0,NULL,0,0,&time) == TUNUINO_SOURCE_ARGUMENT && time == 0);
+    initialize();
+    for (unsigned i = 0; i < TUNUINO_CAPTURE_CAPACITY - 1; ++i)
+        assert(tunuino_capture_source_push(&source,(uint32_t)event_us,TUNUINO_CAPTURE_CRANK) == TUNUINO_SOURCE_OK);
+    pair[0] = (tunuino_raw_capture){(uint32_t)event_us,TUNUINO_CAPTURE_CAM};
+    pair[1] = (tunuino_raw_capture){(uint32_t)event_us,TUNUINO_CAPTURE_CRANK};
+    assert(tunuino_capture_source_sample(&source,(uint32_t)now_us,pair,2,0,&time) == TUNUINO_SOURCE_QUEUE && time == 0);
+    no_rpm(TUNUINO_CAPTURE_OVERFLOW);
+    initialize();
+    assert(tunuino_capture_source_sample(&source,(uint32_t)(now_us + 10001),NULL,0,0,&time) == TUNUINO_SOURCE_CLOCK && time == 0);
+    no_rpm(TUNUINO_CAPTURE_SOURCE_FAULT);
+    puts("C capture snapshot: wrap ordering, crank/cam ties, heartbeat, prevalidation and sticky loss passed");
+}
 int main(void) {
     uint64_t time = 99;
     assert(tunuino_capture_source_observe(&source,0,&time) == TUNUINO_SOURCE_ARGUMENT && time == 0);
@@ -96,6 +155,7 @@ int main(void) {
     initialize();
     assert(tunuino_capture_source_init(&source,&config,0,0,100,0) == TUNUINO_SOURCE_ARGUMENT);
     assert(tunuino_capture_processor_read(&source.processor,0,&reading) == TUNUINO_PROCESS_ARGUMENT && !reading.crank_valid);
+    batch_checks();
     puts("C capture source: clock/queue bridge, wrap, delayed edges, reported loss, sticky faults, RPM invalidation and quiescent recovery passed");
     return 0;
 }

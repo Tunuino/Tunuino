@@ -34,4 +34,19 @@ tunuino_capture_source_status tunuino_capture_source_push(tunuino_capture_source
 /* Producer reports overcapture, timer reset, suspend, or a missed timing bound.
  * Latches LOST without publishing an event. No automatic recovery. */
 tunuino_capture_source_status tunuino_capture_source_lost(tunuino_capture_source *source);
+typedef struct { uint32_t counter; tunuino_capture_kind kind; } tunuino_raw_capture;
+/* Producer adapter for one timer snapshot, at most one capture per channel.
+ * Driver latches ALL pending captures before sampling current_counter, checks
+ * overcapture/reset/timing loss, then calls this function. It must guarantee no
+ * older pending capture remains for the next call. No hardware register reads
+ * are performed here. Zero captures provides a periodic clock observation.
+ * Captures are validated before publishing and sorted by extended time, crank
+ * first on ties. Invalid input/capture or reported loss latches acquisition off.
+ * Publication is NOT atomic as a batch; queue failure can follow a published
+ * event. Consumers must retain the existing queue-fault/freshness checks.
+ * time_us is zero on errors; NULL output is a nonfatal argument error.
+ * Buffers must not overlap source or each other. */
+tunuino_capture_source_status tunuino_capture_source_sample(tunuino_capture_source *source,
+    uint32_t current_counter, const tunuino_raw_capture *captures, size_t count,
+    unsigned events_lost, uint64_t *time_us);
 #endif
