@@ -16,6 +16,8 @@ O codec constitui apenas o enquadramento binário. Os comandos, códigos de resp
 
 `tunuino_stream_rx` recebe fragmentos sem alocação dinâmica, valida o comprimento após o cabeçalho e só expõe frames completos com CRC válido. Um prazo total limita a receção desde o primeiro byte; polling deteta transferências paradas. A receção para no primeiro frame e devolve a contagem consumida para preservar bytes do próximo pedido. Falhas ficam retidas até uma reinicialização com transporte limpo. O módulo ainda precisa de ser ligado ao driver USB STM32. O contrato está em `stream-reception.md`.
 
+`tunuino_stream_tx` copia uma resposta válida e acompanha os bytes cuja transferência foi concluída pelo driver. O prazo total começa no início do envio e não é prolongado por progresso parcial. Só uma resposta pode estar pendente; uma falha bloqueia o emissor até limpeza do transporte e reinicialização. O teste integrado percorre receção, dispatcher e emissão parcial. Faltam o driver STM32 e os callbacks USB reais. O contrato está em `stream-transmission.md`.
+
 ## Console
 
 Java 21 e JavaFX, destinada ao Windows. O processamento de ficheiros e o protocolo são independentes da interface gráfica. A interface abre datalogs CSV offline. O transporte USB e a gravação devem executar fora da thread JavaFX, com timeout, cancelamento e verificação da identidade de hardware.

@@ -29,4 +29,4 @@ Argumentos inválidos devolvem `ARGUMENT`, com contagem consumida a zero quando 
 
 Os testes exercitam todos os pontos de divisão para os comprimentos selecionados, incluindo o limite de 4096 bytes, receção byte a byte, pacotes juntos, pausa sem bytes, prazo total, CRC, cabeçalhos inválidos, desconexão, relógio e encaminhamento de um pedido fragmentado ao dispatcher real.
 
-O coletor ainda precisa de ser ligado ao USB STM32. Faltam o driver, filas de receção, transmissão parcial com prazo, sincronização com interrupções e ensaio físico em Proteus/uaEFI. Esta implementação não configura periféricos nem controla saídas do motor.
+O coletor ainda precisa de ser ligado ao USB STM32. O módulo portátil de transmissão parcial com prazo está em `stream-transmission.md`. Faltam o driver, filas de receção, callbacks reais de conclusão de envio, sincronização com interrupções e ensaio físico em Proteus/uaEFI. Esta implementação não configura periféricos nem controla saídas do motor.
