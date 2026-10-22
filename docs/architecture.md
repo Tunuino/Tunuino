@@ -54,6 +54,6 @@ O CSV é criado com exclusividade e recebe cada amostra válida. O gráfico mant
 
 ## Hardware
 
-`tools/import_kicad_netlist.py` já importa pertença exata de contactos a redes XML KiCad, com revisão da folha raiz, commit declarado e hashes do ficheiro. Conectores e alvos são explícitos; a ferramenta não atravessa circuitos nem interpreta etiquetas como pinos MCU validados. O relatório USB uaEFI F3 referencia o módulo M6 e permanece sem revisão elétrica. As fontes, limites e exportação Proteus pendente estão em `hardware/README.md`.
+`tools/import_kicad_netlist.py` já importa pertença exata de contactos a redes XML KiCad, com revisão da folha raiz, commit declarado e hashes do ficheiro. Conectores e alvos são explícitos; a ferramenta não atravessa circuitos nem interpreta etiquetas como pinos MCU validados. O relatório USB uaEFI F3 referencia o módulo M6 e permanece sem revisão elétrica. `tools/import_kicad_pcb.py` extrai atribuições de pads do PCB legado Proteus, preservando ausência de revisão, pads repetidos na mesma rede e contagens de endpoints sem referência. Não verifica continuidade de cobre nem equivalência ao esquema. As fontes, limites e netlist XML Proteus pendente estão em `hardware/README.md`.
 
 Os projetos KiCad de Proteus e uaEFI são fontes de verdade para as ligações elétricas. O futuro gerador deve relacionar referência do conector, contacto, rede, circuito intermédio e pino MCU. Cada mapa precisa da revisão de hardware e do estado de validação. A seleção de uma família na interface não confirma compatibilidade de uma imagem de firmware.

@@ -6,7 +6,7 @@ A ferramenta original Tunuino `tools/import_kicad_netlist.py` extrai a pertença
 
 | Família | Repositório e commit | Conteúdo observado | Estado |
 |---|---|---|---|
-| Proteus | [Tunuino/proteus](https://github.com/Tunuino/proteus/tree/383558bf7ca1c53ad8bbd8fdc9dd3a4187013c46) | Projeto `proteus.kicad_pro`, esquema principal, folhas hierárquicas e PCB; esquema principal declara `v0.7` | Não foi encontrada netlist XML exportada na árvore deste commit; importação pendente |
+| Proteus | [Tunuino/proteus](https://github.com/Tunuino/proteus/tree/383558bf7ca1c53ad8bbd8fdc9dd3a4187013c46) | Projeto `proteus.kicad_pro`, esquema principal, folhas hierárquicas e PCB; esquema principal declara `v0.7` | Netlist XML pendente; atribuições USB do PCB extraídas, sem revisão declarada no PCB |
 | uaEFI | [Tunuino/uaefi](https://github.com/Tunuino/uaefi/tree/fefb25a22f8b1968a828ce377363717c529c712f) | Projeto, esquemas, PCB e `gerber/uaefi.net`; a folha raiz da netlist declara `F3` | Relatório USB extraído, ainda não revisto eletricamente |
 
 Os commits fixam as fontes consultadas. Não identificam por si a revisão de uma placa física. A netlist exportada pode estar desatualizada face ao esquema ou PCB do mesmo repositório; essa correspondência ainda tem de ser verificada. O projeto Proteus tem várias folhas e não pode ser mapeado apenas por nomes de etiquetas no esquema principal.
@@ -48,3 +48,28 @@ Para Proteus, ainda é necessário exportar uma netlist XML da hierarquia comple
 `python3 tools/check_core.py` inclui os testes do importador: pertença exata, recusa de ambiguidades, revisão, metadados, XML inválido e preservação de ficheiros. Os testes sintéticos não substituem revisão dos circuitos reais.
 
 Continuam pendentes o circuito intermédio completo, a validação de variantes MCU/PCB, geração de definições de pinos e integração STM32.
+
+## Extração PCB Proteus
+
+`tools/import_kicad_pcb.py` lê o formato PCB legado `20171130`, observado no ficheiro `proteus.kicad_pcb` do commit Proteus indicado acima. Usa um leitor de S-expressions próprio e limitado, sem executar o conteúdo do ficheiro. Outros formatos são recusados até terem suporte explícito.
+
+`review/proteus-pcb-usb.json` seleciona J1501, J1504 e U1501. Contém dez contactos numerados distintos e cinco redes. O PCB identifica U1501 como `STM32F427ZGTx`, encapsulamento LQFP-144. A atribuição de rede associa `/USB_D-` ao pad 103 e `/USB_D+` ao pad 104 desse componente. São números de pads do PCB; não são uma configuração GPIO validada nem prova do componente montado.
+
+O ficheiro tem 1052 footprints, dos quais 355 elétricos com referência e 694 elétricos sem referência. Os pads numerados são agrupados por contacto dentro de cada footprint. Vários pads físicos com o mesmo número e a mesma rede, como a blindagem J1501.5, mantêm a contagem `pad_instances`. O mesmo número em redes diferentes é recusado. Os endpoints sem referência são contabilizados por rede em `anonymous_endpoint_count`, sem lhes inventar referências de componentes; `named_nodes` contém apenas os nós com referência.
+
+O PCB não declara revisão no bloco de título: o relatório mantém `revision: null` e `revision_status: not_declared_in_pcb`. Não recebe a revisão `v0.7` do esquema. A origem é fixada pelo commit e pelo blob `6ad405f5072b949968824d5d1161cfbc3664f24d`, verificado contra o ficheiro obtido. Ainda é preciso comparar PCB, esquema hierárquico e placa física.
+
+Para reproduzir, obter o PCB exato num diretório separado e usar um nome de saída novo:
+
+```sh
+python3 tools/import_kicad_pcb.py /caminho/proteus.kicad_pcb \
+  --family proteus --repository Tunuino/proteus \
+  --commit 383558bf7ca1c53ad8bbd8fdc9dd3a4187013c46 \
+  --source-path proteus.kicad_pcb \
+  --connector J1501 --connector J1504 --target U1501 \
+  --output proteus-pcb-usb-review.json
+```
+
+A ferramenta lê atribuições de redes dos pads, sem calcular continuidade das pistas, vias ou zonas e sem comparar com uma netlist esquemática. Um pad numerado sem rede atribuída aparece com `net: null`; isso não autoriza tratá-lo como pino livre. A netlist XML Proteus continua pendente.
+
+O leitor limita o ficheiro a 16 MiB, 1,5 milhões de tokens e 64 níveis de listas. O importador limita footprints, redes e endpoints, valida referências e correspondência entre código/nome de rede e recusa ambiguidades elétricas. A criação da saída é exclusiva. O resultado permanece `unreviewed` e nunca gera definições de firmware. Os testes sintéticos do PCB fazem parte de `tools/check_core.py`.

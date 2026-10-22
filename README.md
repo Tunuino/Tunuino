@@ -8,6 +8,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 
 - Codificação e validação de pacotes com tamanho e CRC32, em C e Java.
 - Testes de integridade, limites e interoperabilidade entre as duas implementações.
+- Importador PCB KiCad legado, com relatório USB Proteus rastreado ao ficheiro e sem revisão elétrica.
 - Importador de netlists XML KiCad, com rastreio da fonte e relatório USB da uaEFI F3 ainda não revisto.
 - Teste entre processos Java/C com clientes reais, ciclo do firmware, mapas completos, CSV e falhas injetadas.
 - Base da Console em Java 21 e JavaFX, com visualização de datalogs CSV offline.
@@ -32,7 +33,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 - Firmware STM32, descodificação de cambota/árvore de cames e controlo do motor.
 - Drivers, bootloader e gravação específicos de cada variante de hardware.
 - Aquisição física e validação do datalogging nas placas, definições INI para TunerStudio e Autotune online/offline.
-- Exportação/importação Proteus, rastreio dos circuitos intermédios, validação elétrica de conectores/pinos STM32 e geração de definições de hardware.
+- Exportação da netlist Proteus e comparação com o PCB, rastreio dos circuitos intermédios, validação elétrica de conectores/pinos STM32 e geração de definições de hardware.
 
 ## Verificar o núcleo
 
@@ -87,4 +88,4 @@ A edição é offline. Ainda não existe envio de mapas para a ECU ou aplicaçã
 
 ## Hardware KiCad
 
-As fontes Proteus/uaEFI e o procedimento de importação estão em [hardware/README.md](hardware/README.md). O primeiro relatório identifica contactos e redes USB da uaEFI F3 até ao módulo M6. Continua sem validação elétrica e não gera pinagem de firmware.
+As fontes Proteus/uaEFI e o procedimento de importação estão em [hardware/README.md](hardware/README.md). Os relatórios identificam contactos e redes USB da uaEFI F3 até ao módulo M6 e as atribuições dos pads USB do PCB Proteus. Continuam sem validação elétrica e não geram pinagem de firmware. O PCB Proteus não declara revisão; a comparação com o esquema continua pendente.
