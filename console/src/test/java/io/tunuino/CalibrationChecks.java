@@ -2,6 +2,7 @@
 package io.tunuino;
 
 import io.tunuino.calibration.CalibrationMap;
+import io.tunuino.calibration.CalibrationDocument;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.FileAlreadyExistsException;
@@ -59,6 +60,34 @@ public final class CalibrationChecks {
         CalibrationMap spark = CalibrationMap.decode(ignition);
         check(spark.kind() == CalibrationMap.Kind.IGNITION && spark.cell(0, 0) == -10
             && spark.lookup(2000, 75).value() == 15 && Arrays.equals(ignition, spark.encode()), "Signed ignition interoperability");
+        CalibrationDocument document = new CalibrationDocument(map);
+        check(!document.isModified() && !document.canUndo() && !document.canRedo(), "Initial clean document");
+        check(document.editCell(0, 0, "45.125") && document.isModified(), "Exact decimal edit");
+        check(map.cell(0, 0) == 40 && document.snapshot().cell(0, 0) == 45.125, "Source snapshot preserved");
+        check(document.snapshot().lookup(2000, 75).value() == 71.28125, "Interpolation follows edit");
+        check(!document.editCell(0, 0, "45.125"), "No-op edit");
+        byte[] stable = document.snapshot().encode();
+        for (String invalid : new String[] {"", "NaN", "Infinity", "1,2", "1e2", "1.2345", "-0.001", "300.001", "9".repeat(65)}) {
+            try { document.editCell(0, 0, invalid); throw new AssertionError("Invalid edit accepted: " + invalid); }
+            catch (IllegalArgumentException expected) { check(Arrays.equals(stable, document.snapshot().encode()), "Invalid edit changes nothing"); }
+        }
+        check(document.undo() && !document.isModified() && document.canRedo(), "Undo restores saved state");
+        check(!document.editCell(0, 0, "40.000") && document.canRedo(), "No-op preserves redo history");
+        check(document.redo() && document.snapshot().cell(0, 0) == 45.125, "Redo restores edit");
+        document.undo();
+        document.editCell(0, 0, "41");
+        check(!document.canRedo(), "New edit clears redo branch");
+        document.editCell(0, 0, "40");
+        check(!document.isModified(), "Content equality restores clean state");
+        check(spark.withCell(0, 0, "-90.000").cell(0, 0) == -90, "Negative ignition edit");
+        check(map.withCell(0, 0, ".125").cell(0, 0) == 0.125, "Leading decimal point");
+        check(map.withCell(0, 0, "300").cell(0, 0) == 300, "Upper storage boundary");
+        CalibrationDocument bounded = new CalibrationDocument(map);
+        for (int i = 1; i <= 110; ++i) { bounded.editCell(0, 0, Integer.toString(i)); }
+        int undos = 0; while (bounded.undo()) { ++undos; }
+        check(undos == CalibrationDocument.HISTORY_LIMIT && bounded.snapshot().cell(0, 0) == 10, "History is bounded");
+        int redos = 0; while (bounded.redo()) { ++redos; }
+        check(redos == 100 && bounded.snapshot().cell(0, 0) == 110, "Bounded redo restores latest state");
         int[] axis = new int[32]; int[][] cells = new int[32][32];
         for (int i = 0; i < 32; ++i) { axis[i] = i * 1000; Arrays.fill(cells[i], 50000); }
         CalibrationMap maximum = new CalibrationMap(CalibrationMap.Kind.VE, axis, axis, cells);
@@ -68,6 +97,21 @@ public final class CalibrationChecks {
         var path = directory.resolve("test.tnmap");
         try {
             map.writeNew(path);
+            var editedPath = directory.resolve("edited.tnmap");
+            try {
+                document.editCell(0, 0, "42");
+                document.saveAsNew(editedPath);
+                check(!document.isModified() && document.savedPath().equals(editedPath), "Successful save establishes baseline");
+                check(CalibrationMap.read(editedPath).cell(0, 0) == 42, "Edited file reopens");
+                document.editCell(0, 0, "43");
+                try { document.saveAsNew(editedPath); throw new AssertionError("Document overwrote existing file"); }
+                catch (FileAlreadyExistsException expected) {
+                    check(document.isModified() && CalibrationMap.read(editedPath).cell(0, 0) == 42, "Failed save preserves baseline and file");
+                }
+                document.undo();
+                check(!document.isModified(), "Undo returns to saved edited copy");
+                check(Arrays.equals(Files.readAllBytes(path), file), "Original file unaffected by editing");
+            } finally { Files.deleteIfExists(editedPath); }
             check(Arrays.equals(CalibrationMap.read(path).encode(), file), "Disk round trip");
             try { spark.writeNew(path); throw new AssertionError("Existing map overwritten"); }
             catch (FileAlreadyExistsException expected) { check(Arrays.equals(Files.readAllBytes(path), file), "Existing map preserved"); }
@@ -75,6 +119,6 @@ public final class CalibrationChecks {
             try { CalibrationMap.read(path); throw new AssertionError("Oversized map accepted"); }
             catch (IOException expected) { /* bounded input rejected */ }
         } finally { Files.deleteIfExists(path); Files.delete(directory); }
-        System.out.println("C/Java calibration format, interpolation, immutability and file validation checks passed");
+        System.out.println("C/Java calibration, exact edits, undo/redo, saved state and file preservation checks passed");
     }
 }

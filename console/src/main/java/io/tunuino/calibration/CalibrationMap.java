@@ -2,6 +2,7 @@
 package io.tunuino.calibration;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -61,6 +62,28 @@ public final class CalibrationMap {
     public int rpmAt(int column) { return rpm[column]; }
     public double loadKpaAt(int row) { return loadMilliKpa[row] / 1000.0; }
     public double cell(int row, int column) { return cells[row][column] / 1000.0; }
+
+    /** Returns a new validated map. Decimal edits never silently round to file precision. */
+    public CalibrationMap withCell(int row, int column, String text) {
+        java.util.Objects.checkIndex(row, rows());
+        java.util.Objects.checkIndex(column, columns());
+        String value = java.util.Objects.requireNonNull(text, "text").trim();
+        if (value.length() > 64 || !value.matches("[+-]?(?:[0-9]+(?:\\.[0-9]{0,3})?|\\.[0-9]{1,3})")) {
+            throw new IllegalArgumentException("Usa ponto decimal e até três casas decimais");
+        }
+        int scaled;
+        try { scaled = new BigDecimal(value).movePointRight(3).intValueExact(); }
+        catch (ArithmeticException e) { throw new IllegalArgumentException("Valor fora dos limites do mapa", e); }
+        if (scaled < kind.minimum || scaled > kind.maximum) {
+            throw new IllegalArgumentException("Valor deve estar entre " + kind.minimum / 1000.0
+                + " e " + kind.maximum / 1000.0);
+        }
+        if (scaled == cells[row][column]) { return this; }
+        int[][] changed = cells.clone();
+        changed[row] = cells[row].clone();
+        changed[row][column] = scaled;
+        return new CalibrationMap(kind, rpm, loadMilliKpa, changed);
+    }
 
     public Lookup lookup(double speed, double loadKpa) {
         if (!Double.isFinite(speed) || !Double.isFinite(loadKpa) || speed < 0 || loadKpa < 0) {

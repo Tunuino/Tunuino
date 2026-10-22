@@ -89,6 +89,7 @@ def main():
                    java_root / "protocol/LiveDataClient.java", java_root / "datalog/CsvLogWriter.java",
                    java_root / "datalog/LiveDataRecorder.java",
                    java_root / "calibration/CalibrationMap.java",
+                   java_root / "calibration/CalibrationDocument.java",
                    ROOT / "console/src/test/java/io/tunuino/CoreChecks.java",
                    ROOT / "console/src/test/java/io/tunuino/TransportChecks.java",
                    ROOT / "console/src/test/java/io/tunuino/IdentityChecks.java",
