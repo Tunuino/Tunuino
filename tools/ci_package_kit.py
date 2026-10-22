@@ -19,8 +19,17 @@ def main():
     jar = root / "console/app/tunuino-console.jar"
     if hashlib.sha256(jar.read_bytes()).hexdigest() != console["main_jar_sha256"]:
         raise SystemExit("Console artifact checksum mismatch")
+    programmers = json.loads((root / "console/tools/tools-manifest.json").read_text())
+    for folder, entries in programmers["bundled"].items():
+        if folder not in ("drivers", "STM32_Programmer_CLI", "openblt"):
+            raise SystemExit("Unknown programmer distribution")
+        base = root / "console" / ("drivers" if folder == "drivers" else "tools/" + folder)
+        for name, digest in entries.items():
+            path = base / name
+            if not path.resolve().is_relative_to(base.resolve()) or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+                raise SystemExit("Programmer tool checksum mismatch")
     manifest = {"source_commit": commit, "run_id": os.environ["GITHUB_RUN_ID"],
-                "firmware": firmware, "console": console,
+                "firmware": firmware, "console": console, "programmers": programmers,
                 "physical_ecu_validation": False}
     (root / "kit-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (root / "START-HERE.txt").write_text(

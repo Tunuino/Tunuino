@@ -266,7 +266,7 @@ public final class TunuinoConsole extends Application {
             () -> connection.get() == null && !serialBusy && !captureActive,
             () -> ports.getValue() == null ? null : ports.getValue().name(),
             () -> hardware.getValue() == DeviceIdentity.Family.PROTEUS);
-        root.setBottom(new VBox(firmwarePanel, footer));
+        root.setBottom(footer);
         portRefresh = new javafx.animation.Timeline(new javafx.animation.KeyFrame(
             javafx.util.Duration.seconds(3), event -> {
                 if (serialBusy || captureActive || connection.get() != null || firmwarePanel.isBusy()) return;
@@ -450,7 +450,13 @@ public final class TunuinoConsole extends Application {
             });
             fileWorker.submit(activeRead);
         });
-        stage.setScene(new Scene(root, 1160, 900));
+        javafx.scene.control.TabPane sections = new javafx.scene.control.TabPane(
+            new javafx.scene.control.Tab("Dados e mapas", root),
+            new javafx.scene.control.Tab("Firmware e USB", firmwarePanel));
+        sections.setTabClosingPolicy(javafx.scene.control.TabPane.TabClosingPolicy.UNAVAILABLE);
+        javafx.geometry.Rectangle2D screen = javafx.stage.Screen.getPrimary().getVisualBounds();
+        stage.setScene(new Scene(sections, Math.min(1160, screen.getWidth() - 60),
+            Math.min(720, screen.getHeight() - 80)));
         stage.setOnCloseRequest(event -> {
             if (firmwarePanel.isBusy()) {
                 event.consume();

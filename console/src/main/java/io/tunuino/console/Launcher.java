@@ -5,7 +5,6 @@ import io.tunuino.transport.UsbSerialPorts;
 import io.tunuino.maintenance.WindowsDfu;
 import javafx.application.Platform;
 import javafx.scene.Scene;
-import javafx.scene.control.Label;
 import javafx.stage.Stage;
 
 /** Classpath entry point for the Windows application image. */

@@ -53,6 +53,7 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
         Button refresh = button("Pesquisar DFU", this::scan);
         flashDfu.setOnAction(e -> flash(false)); flashBlt.setOnAction(e -> flash(true));
         log.setEditable(false); log.setPrefRowCount(5); log.setWrapText(true);
+        VBox.setVgrow(log, javafx.scene.layout.Priority.ALWAYS);
         state.setWrapText(true); imageInfo.setWrapText(true);
         getChildren().addAll(new ToolBar(selectImage, chooseSt, chooseBlt, drivers),
             new ToolBar(usbPorts, refresh, flashDfu, flashBlt), state, imageInfo, log);
