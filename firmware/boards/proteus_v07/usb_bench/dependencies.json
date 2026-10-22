@@ -1,0 +1,17 @@
+{
+  "tinyusb": {
+    "repository": "hathach/tinyusb",
+    "commit": "86ad6e56c1700e85f1c5678607a762cfe3aa2f47",
+    "license": "LICENSE"
+  },
+  "cmsis_device": {
+    "repository": "STMicroelectronics/cmsis-device-f4",
+    "commit": "9192c7b9df75a142f2027ab266601fe061fc00b3",
+    "license": "LICENSE.md"
+  },
+  "cmsis_core": {
+    "repository": "ARM-software/CMSIS_6",
+    "commit": "acf7392d0eee2ce58a98c8e8faa793e0f13f9307",
+    "license": "LICENSE"
+  }
+}
