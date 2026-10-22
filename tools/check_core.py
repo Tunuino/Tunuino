@@ -23,6 +23,8 @@ def main():
     print("KiCad XML membership, ambiguity, provenance and file preservation checks passed")
     run([sys.executable, "tools/check_kicad_pcb.py"], timeout=15)
     print("KiCad PCB parser, pad membership, anonymous nodes and file preservation checks passed")
+    run([sys.executable, "tools/check_kicad_components.py"], timeout=15)
+    print("KiCad component/hierarchy comparison and MCU ambiguity checks passed")
     compiler = os.environ.get("CC", "cc")
     for command in (compiler, "java"):
         if not shutil.which(command):

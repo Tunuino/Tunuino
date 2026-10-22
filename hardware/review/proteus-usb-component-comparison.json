@@ -1,0 +1,98 @@
+{
+  "format": "tunuino-component-comparison-v1",
+  "family": "proteus",
+  "validation": "unreviewed",
+  "result": "requires_review",
+  "firmware_pin_definitions_generated": false,
+  "mcu_compatibility_validated": false,
+  "scope": "selected component fields and one direct sheet instance; no schematic net or copper comparison",
+  "source": {
+    "repository": "Tunuino/proteus",
+    "commit": "383558bf7ca1c53ad8bbd8fdc9dd3a4187013c46",
+    "pcb": {
+      "repository": "Tunuino/proteus",
+      "commit": "383558bf7ca1c53ad8bbd8fdc9dd3a4187013c46",
+      "path": "proteus.kicad_pcb",
+      "file_format_version": "20171130",
+      "sha256": "67243188a87679fb8c332f70d42c4c54f350283acc7d7115c240efeecb497792",
+      "git_blob_sha1": "6ad405f5072b949968824d5d1161cfbc3664f24d"
+    },
+    "root_schematic": {
+      "path": "proteus.kicad_sch",
+      "sha256": "26309fb971611ab9337a78a6ab19b6f9bdfbfbbbab1a7606a86004ab9943cc56",
+      "git_blob_sha1": "d2a0cdd665c95d7f49bca965d498a10a61f2556a"
+    },
+    "leaf_schematic": {
+      "path": "mcu.kicad_sch",
+      "sha256": "99d504e2ddd9c4afc444ef6302040045527fae23a2f54534d28e1ad034771d85",
+      "git_blob_sha1": "c809625df0509e63833a0a6210d38e46b8755645"
+    }
+  },
+  "root_schematic_revision": "v0.7",
+  "leaf_schematic_revision": "v0.7",
+  "pcb_revision": null,
+  "comparisons": [
+    {
+      "ref": "J1501",
+      "pcb": {
+        "value": "USB_B",
+        "footprint": "Connector_USB:USB_B_TE_5787834_Vertical"
+      },
+      "schematic": {
+        "value": "USB_B",
+        "footprint": "Connector_USB:USB_B_TE_5787834_Vertical",
+        "part_number": "5787834-1",
+        "matching_instance_path": "/da96cc1d-20c0-47ba-9881-2a73783a20fb/00000000-0000-0000-0000-00005d99e6ee",
+        "other_instance_paths": []
+      },
+      "fields_match": true
+    },
+    {
+      "ref": "J1504",
+      "pcb": {
+        "value": "USB_B",
+        "footprint": "conn_5_2.5mm:conn_5_2.5mm"
+      },
+      "schematic": {
+        "value": "USB_B",
+        "footprint": "conn_5_2.5mm:conn_5_2.5mm",
+        "part_number": "UB-20PMFP-LC7002",
+        "matching_instance_path": "/da96cc1d-20c0-47ba-9881-2a73783a20fb/00000000-0000-0000-0000-00005d99e6ee",
+        "other_instance_paths": []
+      },
+      "fields_match": true
+    },
+    {
+      "ref": "U1501",
+      "pcb": {
+        "value": "STM32F427ZGTx",
+        "footprint": "Package_QFP:LQFP-144_20x20mm_P0.5mm"
+      },
+      "schematic": {
+        "value": "STM32F427ZGTx",
+        "footprint": "Package_QFP:LQFP-144_20x20mm_P0.5mm",
+        "part_number": "STM32F767ZIT6",
+        "matching_instance_path": "/da96cc1d-20c0-47ba-9881-2a73783a20fb/00000000-0000-0000-0000-00005d99e6ee",
+        "other_instance_paths": [
+          "/da96cc1d-20c0-47ba-9881-2a73783a20fb"
+        ]
+      },
+      "fields_match": true
+    }
+  ],
+  "findings": [
+    {
+      "code": "MCU_SYMBOL_PART_REQUIRES_REVIEW",
+      "ref": "U1501",
+      "symbol_value": "STM32F427ZGTx",
+      "part_number": "STM32F767ZIT6"
+    },
+    {
+      "code": "ADDITIONAL_SYMBOL_INSTANCE_PATHS",
+      "ref": "U1501",
+      "paths": [
+        "/da96cc1d-20c0-47ba-9881-2a73783a20fb"
+      ]
+    }
+  ]
+}

@@ -8,6 +8,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 
 - Codificação e validação de pacotes com tamanho e CRC32, em C e Java.
 - Testes de integridade, limites e interoperabilidade entre as duas implementações.
+- Comparação de componentes PCB/esquema Proteus, com deteção da ambiguidade STM32F427/STM32F767 e de instâncias adicionais.
 - Importador PCB KiCad legado, com relatório USB Proteus rastreado ao ficheiro e sem revisão elétrica.
 - Importador de netlists XML KiCad, com rastreio da fonte e relatório USB da uaEFI F3 ainda não revisto.
 - Teste entre processos Java/C com clientes reais, ciclo do firmware, mapas completos, CSV e falhas injetadas.
@@ -89,3 +90,5 @@ A edição é offline. Ainda não existe envio de mapas para a ECU ou aplicaçã
 ## Hardware KiCad
 
 As fontes Proteus/uaEFI e o procedimento de importação estão em [hardware/README.md](hardware/README.md). Os relatórios identificam contactos e redes USB da uaEFI F3 até ao módulo M6 e as atribuições dos pads USB do PCB Proteus. Continuam sem validação elétrica e não geram pinagem de firmware. O PCB Proteus não declara revisão; a comparação com o esquema continua pendente.
+
+A comparação Proteus encontrou uma ambiguidade no MCU: U1501 usa o valor `STM32F427ZGTx`, mas a propriedade `PN` indica `STM32F767ZIT6`. A variante física e a configuração STM32 continuam por confirmar. O detalhe está em [hardware/README.md](hardware/README.md).

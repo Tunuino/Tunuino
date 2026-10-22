@@ -73,3 +73,37 @@ python3 tools/import_kicad_pcb.py /caminho/proteus.kicad_pcb \
 A ferramenta lê atribuições de redes dos pads, sem calcular continuidade das pistas, vias ou zonas e sem comparar com uma netlist esquemática. Um pad numerado sem rede atribuída aparece com `net: null`; isso não autoriza tratá-lo como pino livre. A netlist XML Proteus continua pendente.
 
 O leitor limita o ficheiro a 16 MiB, 1,5 milhões de tokens e 64 níveis de listas. O importador limita footprints, redes e endpoints, valida referências e correspondência entre código/nome de rede e recusa ambiguidades elétricas. A criação da saída é exclusiva. O resultado permanece `unreviewed` e nunca gera definições de firmware. Os testes sintéticos do PCB fazem parte de `tools/check_core.py`.
+
+## Comparação de componentes Proteus
+
+`tools/compare_kicad_components.py` compara os componentes selecionados no relatório PCB com uma folha diretamente referenciada pelo esquema raiz. Nesta etapa lê o formato de esquema `20230121`, verifica UUIDs/caminhos da instância e compara os campos `Value` e `Footprint`. Não compara as redes esquemáticas nem resolve a hierarquia completa.
+
+`review/proteus-usb-component-comparison.json` usa `proteus.kicad_sch` e `mcu.kicad_sch` do mesmo commit Proteus. Os blobs são, respetivamente, `d2a0cdd665c95d7f49bca965d498a10a61f2556a` e `c809625df0509e63833a0a6210d38e46b8755645`; ambos foram conferidos com os ficheiros obtidos. Os esquemas declaram `v0.7`, enquanto o PCB continua sem revisão declarada.
+
+Os valores e footprints de J1501, J1504 e U1501 coincidem nos campos comparados. Existe, porém, uma ambiguidade que exige revisão antes de definir a variante STM32:
+
+| Campo de U1501 | Valor observado |
+|---|---|
+| Value do símbolo e valor no PCB | `STM32F427ZGTx` |
+| Propriedade PN no esquema | `STM32F767ZIT6` |
+| Footprint em ambos | `Package_QFP:LQFP-144_20x20mm_P0.5mm` |
+
+O relatório assinala `MCU_SYMBOL_PART_REQUIRES_REVIEW`. O comparador compara o prefixo do dispositivo nas duas cadeias; não consulta datasheets nem valida equivalência de pinagem, clocks, memória ou periféricos. A coincidência do encapsulamento não resolve a variante. O MCU realmente montado e a configuração de firmware precisam de confirmação.
+
+U1501 também contém um caminho de instância adicional correspondente à raiz do projeto, além do caminho esperado da folha MCU. O relatório preserva-o e assinala `ADDITIONAL_SYMBOL_INSTANCE_PATHS`, sem o remover da fonte nem escolher silenciosamente uma interpretação.
+
+Para reproduzir, obter os dois esquemas exatos e executar com um nome de saída novo:
+
+```sh
+python3 tools/compare_kicad_components.py \
+  --pcb-report hardware/review/proteus-pcb-usb.json \
+  --root-schematic /caminho/proteus.kicad_sch --root-path proteus.kicad_sch \
+  --sheet-schematic /caminho/mcu.kicad_sch --sheet-path mcu.kicad_sch \
+  --output proteus-usb-component-review.json
+```
+
+O contexto de repositório/commit é herdado do relatório PCB; os hashes dos esquemas são calculados a partir dos ficheiros fornecidos. A ferramenta não verifica remotamente se esses ficheiros pertencem ao commit declarado. Essa conferência foi feita para o relatório incluído.
+
+O resultado atual é `requires_review`. Mesmo quando os campos coincidem e não há alertas, o resultado permanece `unreviewed`, `mcu_compatibility_validated: false` e sem geração de definições de pinos. Uma folha ausente, reutilizada sem seleção inequívoca, um projeto de instância diferente ou um caminho incompatível são recusados. Símbolos ausentes ou ambíguos nos componentes selecionados são assinalados. Ficheiros de saída existentes são preservados.
+
+Os testes cobrem conflito entre símbolo e PN mesmo quando PCB/esquema coincidem, dados incompletos, valores/footprints diferentes, revisão de folha divergente, caminhos adicionais, recusa de hierarquias não demonstradas e preservação de saídas. A comparação elétrica completa e a escolha da variante MCU continuam pendentes.
