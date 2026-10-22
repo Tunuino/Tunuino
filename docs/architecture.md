@@ -12,7 +12,9 @@ Nenhum pino de injeção, ignição, acelerador ou relé será definido por supo
 
 `tunuino_position` contém o descodificador de cambota e valida um impulso de cames numa janela de dentes configurada. Só expõe a fase do ciclo depois de confirmar dois impulsos separados por duas voltas. Cames inválidas retiram a fase; perda da cambota limpa ambas as referências. O protótipo usa índices do último dente, sem interpolação angular ou relação com cilindros/PMS, e continua sem aquisição física ou atuação. O contrato está em `cycle-position.md`.
 
-`tunuino_capture_queue` guarda 64 timestamps de cambota/cames num contrato de um produtor serializado e um consumidor. Usa índices C11 atómicos sempre lock-free e retém falhas de capacidade/ordem, sem entregar uma sequência incompleta após overflow. A integração deve invalidar o descodificador na falha e coordenar a publicação de capturas com o polling; essa tarefa e os drivers físicos ainda faltam. O contrato está em `capture-queue.md`.
+`tunuino_capture_queue` guarda 64 timestamps de cambota/cames num contrato de um produtor serializado e um consumidor. Usa índices C11 atómicos sempre lock-free e retém falhas de capacidade/ordem, sem entregar uma sequência incompleta após overflow. O processador de capturas abaixo impede a exposição de leituras depois de observar uma falha; a tarefa e os drivers físicos ainda faltam. O contrato está em `capture-queue.md`.
+
+`tunuino_capture_processor` drena um número limitado de eventos e mantém separado o relógio de eventos da hora usada para verificar frescura. Oculta leituras enquanto há trabalho pendente, adia um evento futuro e limpa a fase ao expirar o sinal. Falhas da fila/relógio ficam retidas. A ligação foi testada com sinais sintéticos e ainda precisa da tarefa de captura STM32. O contrato está em `capture-processor.md`.
 
 ## Comunicação
 

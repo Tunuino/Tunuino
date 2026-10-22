@@ -6,6 +6,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 
 ## Implementado
 
+- Processamento limitado da fila para cambota/cames, com leituras inválidas perante atraso pendente, expiração ou falha.
 - Fila C11 de 64 capturas cambota/cames, com ordem temporal, falhas retidas e testes de produtor/consumidor concorrentes.
 - Protótipo C de identificação do ciclo de 720° por cames, com confirmação em duas voltas e invalidação independente da fase.
 - Protótipo C de descodificação de cambota com dentes em falta, confirmação de sincronização, RPM e perda de sinal, testado com sequências sintéticas.
@@ -102,4 +103,4 @@ O protótipo portátil e os limites estão em [crank-decoder.md](docs/crank-deco
 
 A extensão experimental para um impulso de cames por ciclo está em [cycle-position.md](docs/cycle-position.md). Distingue a validade das RPM da fase de 720°; falta a captura física e a referência PMS/cilindro.
 
-A fila de eventos e as condições de integração com interrupções estão em [capture-queue.md](docs/capture-queue.md). Falta ligá-la à captura física STM32 e coordenar a drenagem com o polling.
+A fila de eventos e as condições de integração com interrupções estão em [capture-queue.md](docs/capture-queue.md). A ligação portátil ao descodificador está em [capture-processor.md](docs/capture-processor.md). Falta integrar e validar a tarefa e a captura física STM32.

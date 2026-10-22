@@ -28,7 +28,7 @@ O consumidor entrega cada evento, por ordem, a `tunuino_position_crank_edge` ou 
 
 A integração ainda tem de resolver a ordenação entre capturas pendentes e polling. Antes de avançar o relógio do descodificador para um instante de polling, deve garantir que nenhuma captura anterior fica pendente ou pode ser publicada depois desse avanço. Isso exige coordenação com o produtor/captura física; observar a fila vazia numa única leitura não fornece essa garantia. Sem essa coordenação, o descodificador recusa posteriormente o timestamp antigo e perde sincronização.
 
-O teste de integração desta etapa entrega sinais sintéticos da fila ao descodificador real e confirma o ciclo de 720°. Não implementa ainda a tarefa de drenagem/polling concorrente nem o driver STM32.
+Para usar o descodificador diretamente, continuam a aplicar-se as regras de ordenação acima. `tunuino_capture_processor` fornece agora uma alternativa portátil: processa a fila sem avançar o relógio de eventos durante leituras de frescura, oculta leituras pendentes e trata expiração/falhas. O contrato está em `capture-processor.md`. Ainda não implementa a tarefa física STM32 nem o driver.
 
 ## Verificação
 
