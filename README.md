@@ -6,6 +6,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 
 ## Implementado
 
+- Protótipo C de identificação do ciclo de 720° por cames, com confirmação em duas voltas e invalidação independente da fase.
 - Protótipo C de descodificação de cambota com dentes em falta, confirmação de sincronização, RPM e perda de sinal, testado com sequências sintéticas.
 - Codificação e validação de pacotes com tamanho e CRC32, em C e Java.
 - Testes de integridade, limites e interoperabilidade entre as duas implementações.
@@ -32,7 +33,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 ## Por implementar e validar
 
 - Validação USB física e da identificação no Windows com firmware Tunuino nas centralinas, e recuperação de ligação.
-- Firmware STM32, aquisição/validação física da cambota, descodificação da árvore de cames e controlo do motor.
+- Firmware STM32, aquisição/validação física de cambota e cames, padrões adicionais e controlo do motor.
 - Drivers, bootloader e gravação específicos de cada variante de hardware.
 - Aquisição física e validação do datalogging nas placas, definições INI para TunerStudio e Autotune online/offline.
 - Exportação da netlist Proteus e comparação com o PCB, rastreio dos circuitos intermédios, validação elétrica de conectores/pinos STM32 e geração de definições de hardware.
@@ -97,3 +98,5 @@ A comparação Proteus encontrou uma ambiguidade no MCU: U1501 usa o valor `STM3
 ## Núcleo de cambota
 
 O protótipo portátil e os limites estão em [crank-decoder.md](docs/crank-decoder.md). Só expõe RPM depois de confirmar a falha e a contagem de dentes. Ainda não lê entradas físicas nem comanda injeção/ignição.
+
+A extensão experimental para um impulso de cames por ciclo está em [cycle-position.md](docs/cycle-position.md). Distingue a validade das RPM da fase de 720°; falta a captura física e a referência PMS/cilindro.

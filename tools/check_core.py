@@ -39,6 +39,10 @@ def main():
         crank_exe = work / ("crank-check.exe" if os.name == "nt" else "crank-check")
         run(flags + ["firmware/src/crank.c", "firmware/tests/test_crank.c", "-lm", "-o", str(crank_exe)])
         print(run([str(crank_exe)]))
+        position_exe = work / ("position-check.exe" if os.name == "nt" else "position-check")
+        run(flags + ["firmware/src/crank.c", "firmware/src/position.c", "firmware/tests/test_position.c",
+                     "-lm", "-o", str(position_exe)])
+        print(run([str(position_exe)]))
         identity_exe = work / ("identity-check.exe" if os.name == "nt" else "identity-check")
         run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/tests/test_identity.c", "-o", str(identity_exe)])
         identity_output = run([str(identity_exe)]).splitlines()

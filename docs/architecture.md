@@ -8,7 +8,9 @@ Nenhum pino de injeção, ignição, acelerador ou relé será definido por supo
 
 ## Cambota
 
-`tunuino_crank` recebe arestas temporizadas de uma roda uniforme com uma região de dentes em falta. Exige duas falhas com contagem correta antes de expor RPM e índice relativo. Uma leitura verifica timeout e limpa dados inválidos. Ruído/contagem incorreta retiram a sincronização e um recuo de relógio exige reinicialização. O protótipo é independente de GPIO, transporte e atuação; os sinais dos testes são sintéticos. Faltam aquisição STM32, validação durante arranque, referência PMS, árvore de cames e controlo de saídas. O contrato está em `crank-decoder.md`.
+`tunuino_crank` recebe arestas temporizadas de uma roda uniforme com uma região de dentes em falta. Exige duas falhas com contagem correta antes de expor RPM e índice relativo. Uma leitura verifica timeout e limpa dados inválidos. Ruído/contagem incorreta retiram a sincronização e um recuo de relógio exige reinicialização. O protótipo é independente de GPIO, transporte e atuação; os sinais dos testes são sintéticos. Faltam aquisição STM32, validação durante arranque, referência PMS, captura física de cames e controlo de saídas. O contrato está em `crank-decoder.md`.
+
+`tunuino_position` contém o descodificador de cambota e valida um impulso de cames numa janela de dentes configurada. Só expõe a fase do ciclo depois de confirmar dois impulsos separados por duas voltas. Cames inválidas retiram a fase; perda da cambota limpa ambas as referências. O protótipo usa índices do último dente, sem interpolação angular ou relação com cilindros/PMS, e continua sem aquisição física ou atuação. O contrato está em `cycle-position.md`.
 
 ## Comunicação
 
