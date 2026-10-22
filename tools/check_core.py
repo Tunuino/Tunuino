@@ -43,6 +43,11 @@ def main():
         run(flags + ["firmware/src/crank.c", "firmware/src/position.c", "firmware/tests/test_position.c",
                      "-lm", "-o", str(position_exe)])
         print(run([str(position_exe)]))
+        capture_exe = work / ("capture-check.exe" if os.name == "nt" else "capture-check")
+        thread_flags = [] if os.name == "nt" else ["-pthread"]
+        run(flags + thread_flags + ["firmware/src/capture_queue.c", "firmware/src/crank.c", "firmware/src/position.c",
+                     "firmware/tests/test_capture_queue.c", "-lm", "-o", str(capture_exe)])
+        print(run([str(capture_exe)], timeout=15))
         identity_exe = work / ("identity-check.exe" if os.name == "nt" else "identity-check")
         run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/tests/test_identity.c", "-o", str(identity_exe)])
         identity_output = run([str(identity_exe)]).splitlines()

@@ -12,6 +12,8 @@ Nenhum pino de injeção, ignição, acelerador ou relé será definido por supo
 
 `tunuino_position` contém o descodificador de cambota e valida um impulso de cames numa janela de dentes configurada. Só expõe a fase do ciclo depois de confirmar dois impulsos separados por duas voltas. Cames inválidas retiram a fase; perda da cambota limpa ambas as referências. O protótipo usa índices do último dente, sem interpolação angular ou relação com cilindros/PMS, e continua sem aquisição física ou atuação. O contrato está em `cycle-position.md`.
 
+`tunuino_capture_queue` guarda 64 timestamps de cambota/cames num contrato de um produtor serializado e um consumidor. Usa índices C11 atómicos sempre lock-free e retém falhas de capacidade/ordem, sem entregar uma sequência incompleta após overflow. A integração deve invalidar o descodificador na falha e coordenar a publicação de capturas com o polling; essa tarefa e os drivers físicos ainda faltam. O contrato está em `capture-queue.md`.
+
 ## Comunicação
 
 O transporte entrega um corpo binário com 1 a 4096 bytes. O pacote contém comprimento de 16 bits em ordem de rede, corpo e CRC32 de 32 bits em ordem de rede. O CRC cobre apenas o corpo. O algoritmo usa polinómio refletido 0xEDB88320, valor inicial 0xFFFFFFFF e complemento final.
