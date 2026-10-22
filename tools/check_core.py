@@ -33,6 +33,11 @@ def main():
         work = Path(directory)
         executable = work / ("frame-check.exe" if os.name == "nt" else "frame-check")
         flags = [compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-pedantic", "-Ifirmware/include"]
+        mailbox_exe = work / ("mailbox-check.exe" if os.name == "nt" else "mailbox-check")
+        mailbox_threads = [] if os.name == "nt" else ["-pthread"]
+        run(flags + mailbox_threads + ["firmware/src/live_mailbox.c", "firmware/tests/test_live_mailbox.c",
+                                      "-o", str(mailbox_exe)])
+        print(run([str(mailbox_exe)], timeout=15))
         run(flags + ["firmware/src/frame.c", "firmware/tests/test_frame.c", "-o", str(executable)])
         c_vector = run([str(executable)])
         print("C CRC, corruption, capacity, boundary and overlap checks passed")
@@ -157,6 +162,7 @@ def main():
                      "firmware/src/crank.c", "firmware/src/position.c", "firmware/src/capture_queue.c",
                      "firmware/src/capture_processor.c", "firmware/src/telemetry.c",
                      "firmware/src/analog.c", "firmware/src/clock32.c", "firmware/src/capture_source.c",
+                     "firmware/src/live_mailbox.c",
                      "firmware/tests/link_peer.c", "-lm", "-o", str(peer_exe)])
         library_path = work / ("frame.dll" if os.name == "nt" else "frame.so")
         shared_flags = ["-shared"] + ([] if os.name == "nt" else ["-fPIC"])

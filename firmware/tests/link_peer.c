@@ -3,6 +3,7 @@
 #include "tunuino/telemetry.h"
 #include "tunuino/analog.h"
 #include "tunuino/capture_source.h"
+#include "tunuino/live_mailbox.h"
 #include <stdio.h>
 #include <string.h>
 #ifdef _WIN32
@@ -13,6 +14,7 @@ static tunuino_link link;
 static tunuino_map map;
 static tunuino_map_snapshot ve, ignition;
 static tunuino_capture_source capture_source;
+static tunuino_live_mailbox mailbox;
 static uint64_t capture_time;
 static int use_analog;
 static unsigned sensor_step;
@@ -49,7 +51,14 @@ static int synthetic_telemetry(tunuino_live_sample *live) {
         if (sensor_step == 6) { sensors.lambda_time_us = capture_time + 1u; }
     }
     tunuino_telemetry_policy policy = {10000,10000,10000};
-    return tunuino_telemetry_build(&capture_source.processor,&sensors,&policy,capture_time,live) != TUNUINO_TELEMETRY_ARGUMENT;
+    tunuino_live_sample acquired;
+    if (tunuino_telemetry_build(&capture_source.processor,&sensors,&policy,capture_time,&acquired)
+        == TUNUINO_TELEMETRY_ARGUMENT) { return 0; }
+    if (tunuino_live_mailbox_publish(&mailbox,&acquired) != TUNUINO_MAILBOX_READY) { return 0; }
+    /* The real board must run this read on the USB owner, serialized with
+     * dispatch. Concurrent ownership is checked by test_live_mailbox.c. */
+    tunuino_live_mailbox_status status = tunuino_live_mailbox_read(&mailbox,capture_time / 1000u,10,live);
+    return status == TUNUINO_MAILBOX_READY || status == TUNUINO_MAILBOX_NOT_READY;
 }
 static int start_captures(tunuino_live_sample *live, int wrap) {
     capture_time = wrap ? (uint64_t)UINT32_MAX - 60000u : 0;
@@ -81,6 +90,7 @@ int main(int argc, char **argv) {
     int use_captures = strcmp(mode,"crank-live") == 0 || strcmp(mode,"crank-stall") == 0
         || strcmp(mode,"capture-loss") == 0 || wrap || use_analog;
     int stalled = 0;
+    if (tunuino_live_mailbox_init(&mailbox) != TUNUINO_MAILBOX_READY) { return 18; }
     if (use_captures && !start_captures(&live,wrap)) { return 11; }
     map.rpm_count = map.load_count = 32;
     for (unsigned i = 0; i < 32; ++i) { map.rpm[i] = (int32_t)(i * 250); map.load_milli_kpa[i] = (int32_t)(i * 10000); }

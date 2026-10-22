@@ -12,7 +12,10 @@
 #define TUNUINO_DISPATCH_LIVE UINT32_C(1)
 #define TUNUINO_DISPATCH_MAP_READ UINT32_C(2)
 /* Board-owned snapshots. Serialize dispatch with all updates, including DMA/ISR
- * producers. No acquisition, USB driver, storage or engine actuation here. */
+ * producers. live_mailbox may transfer acquisition data to a USB-owner local
+ * live snapshot; serialize mailbox reads into that copy with dispatch. Never
+ * point live at a mailbox slot or at storage being written by another task.
+ * No acquisition, USB driver, storage or engine actuation here. */
 typedef struct {
     const tunuino_identity *identity;
     const tunuino_live_sample *live;
