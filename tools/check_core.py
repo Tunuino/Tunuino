@@ -7,6 +7,7 @@ import random
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 import zlib
 
@@ -18,6 +19,8 @@ def run(args, timeout=None):
 
 
 def main():
+    run([sys.executable, "tools/check_kicad.py"], timeout=15)
+    print("KiCad XML membership, ambiguity, provenance and file preservation checks passed")
     compiler = os.environ.get("CC", "cc")
     for command in (compiler, "java"):
         if not shutil.which(command):

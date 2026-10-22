@@ -8,6 +8,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 
 - Codificação e validação de pacotes com tamanho e CRC32, em C e Java.
 - Testes de integridade, limites e interoperabilidade entre as duas implementações.
+- Importador de netlists XML KiCad, com rastreio da fonte e relatório USB da uaEFI F3 ainda não revisto.
 - Teste entre processos Java/C com clientes reais, ciclo do firmware, mapas completos, CSV e falhas injetadas.
 - Base da Console em Java 21 e JavaFX, com visualização de datalogs CSV offline.
 - Enumeração de portas série e abertura/fecho da ligação USB na Console, através de jSerialComm.
@@ -31,7 +32,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 - Firmware STM32, descodificação de cambota/árvore de cames e controlo do motor.
 - Drivers, bootloader e gravação específicos de cada variante de hardware.
 - Aquisição física e validação do datalogging nas placas, definições INI para TunerStudio e Autotune online/offline.
-- Extração KiCad e validação de conectores, circuitos e pinos STM32.
+- Exportação/importação Proteus, rastreio dos circuitos intermédios, validação elétrica de conectores/pinos STM32 e geração de definições de hardware.
 
 ## Verificar o núcleo
 
@@ -83,3 +84,7 @@ Faz duplo clique numa célula para editar o valor. **Enter** confirma e **Esc** 
 Depois de identificar uma ECU cujo firmware anuncie leitura de mapas, seleciona VE ou ignição e usa **Ler mapa da ECU**. A Console valida a transferência completa antes de abrir uma cópia no editor. A integração do handler no firmware STM32 e o ensaio físico continuam pendentes. O protocolo está em [map-read-protocol.md](docs/map-read-protocol.md).
 
 A edição é offline. Ainda não existe envio de mapas para a ECU ou aplicação a injeção/ignição. Não existem mapas padrão de motor. O formato e os limites estão em [calibration-format.md](docs/calibration-format.md).
+
+## Hardware KiCad
+
+As fontes Proteus/uaEFI e o procedimento de importação estão em [hardware/README.md](hardware/README.md). O primeiro relatório identifica contactos e redes USB da uaEFI F3 até ao módulo M6. Continua sem validação elétrica e não gera pinagem de firmware.
