@@ -59,6 +59,33 @@ def main():
         if map_packet[:-4] != expected_map or zlib.crc32(expected_map) != int.from_bytes(map_packet[-4:], "big"):
             raise AssertionError("C map differs from independent file layout")
         print(map_output[2])
+        read_exe = work / ("map-read-check.exe" if os.name == "nt" else "map-read-check")
+        run(flags + ["firmware/src/frame.c", "firmware/src/calibration.c", "firmware/src/map_read.c",
+                     "firmware/tests/test_map_read.c", "-lm", "-o", str(read_exe)])
+        read_output = run([str(read_exe)]).splitlines()
+        for kind in (1, 2):
+            packets, file = (bytes.fromhex(v) for v in read_output[(kind - 1) * 2:kind * 2])
+            if len(file) != 4368 or file[:12] != b"TUNUINOM" + bytes([1, kind, 32, 32]):
+                raise AssertionError("Unexpected maximum map fixture")
+            cursor, offset = 0, 0
+            while cursor < len(packets):
+                length = int.from_bytes(packets[cursor:cursor + 2], "big")
+                body = packets[cursor + 2:cursor + 2 + length]
+                crc = int.from_bytes(packets[cursor + 2 + length:cursor + 6 + length], "big")
+                if zlib.crc32(body) != crc:
+                    raise AssertionError("Map transfer frame CRC differs from Python")
+                if cursor == 0:
+                    expected = struct.pack(">BBBBIHI", 0, 1, 0, kind, 0xFEDCBA98, len(file), zlib.crc32(file))
+                else:
+                    count = min(256, len(file) - offset)
+                    expected = struct.pack(">BBBBIHH", 0, 1, 1, kind, 0xFEDCBA98, offset, count) + file[offset:offset + count]
+                    offset += count
+                if body != expected:
+                    raise AssertionError("C map transfer differs from independent wire layout")
+                cursor += length + 6
+            if cursor != len(packets) or offset != len(file):
+                raise AssertionError("Incomplete map fixture")
+        print(read_output[4])
         library_path = work / ("frame.dll" if os.name == "nt" else "frame.so")
         shared_flags = ["-shared"] + ([] if os.name == "nt" else ["-fPIC"])
         run(flags + shared_flags + ["firmware/src/frame.c", "-o", str(library_path)])
@@ -86,6 +113,7 @@ def main():
                    java_root / "datalog/CsvLogReader.java", java_root / "transport/SerialChannel.java",
                    java_root / "transport/PacketSession.java",
                    java_root / "protocol/DeviceIdentity.java", java_root / "protocol/IdentityClient.java",
+                   java_root / "protocol/MapReadClient.java",
                    java_root / "protocol/LiveDataClient.java", java_root / "datalog/CsvLogWriter.java",
                    java_root / "datalog/LiveDataRecorder.java",
                    java_root / "calibration/CalibrationMap.java",
@@ -94,7 +122,8 @@ def main():
                    ROOT / "console/src/test/java/io/tunuino/TransportChecks.java",
                    ROOT / "console/src/test/java/io/tunuino/IdentityChecks.java",
                    ROOT / "console/src/test/java/io/tunuino/LiveDataChecks.java",
-                   ROOT / "console/src/test/java/io/tunuino/CalibrationChecks.java"]
+                   ROOT / "console/src/test/java/io/tunuino/CalibrationChecks.java",
+                   ROOT / "console/src/test/java/io/tunuino/MapReadChecks.java"]
         javac = ["javac"] if shutil.which("javac") else ["java", "--module", "jdk.compiler/com.sun.tools.javac.Main"]
         run(javac + ["-encoding", "UTF-8", "--release", "17", "-d", str(work)] + [str(p) for p in sources])
         print(run(["java", "-cp", str(work), "io.tunuino.CoreChecks", c_vector]))
@@ -102,6 +131,9 @@ def main():
         print(run(["java", "-cp", str(work), "io.tunuino.IdentityChecks", identity_vector]))
         print(run(["java", "-cp", str(work), "io.tunuino.LiveDataChecks", live_vector]))
         print(run(["java", "-cp", str(work), "io.tunuino.CalibrationChecks", map_vector, ignition_vector]))
+        read_fixture = work / "map-read-vectors.txt"
+        read_fixture.write_text("\n".join(read_output[:4]), encoding="ascii")
+        print(run(["java", "-cp", str(work), "io.tunuino.MapReadChecks", str(read_fixture)]))
     print("Portable core verified. JavaFX UI and hardware builds require separate validation.")
 
 

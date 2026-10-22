@@ -1,6 +1,6 @@
 # Mapas de calibração Tunuino, versão 1
 
-O ficheiro `.tnmap` representa uma tabela independente de VE ou ignição. A leitura de um ficheiro não altera uma ECU. O projeto ainda não implementa páginas de calibração, envio USB destes mapas, persistência na ECU ou integração destes valores no controlo físico do motor.
+O ficheiro `.tnmap` representa uma tabela independente de VE ou ignição. A leitura de um ficheiro não altera uma ECU. O projeto ainda não implementa páginas de calibração, escrita USB destes mapas, persistência na ECU ou integração destes valores no controlo físico do motor.
 
 | Offset | Tamanho | Conteúdo |
 | --- | --- | --- |
@@ -24,6 +24,6 @@ O modelo Java é imutável: uma edição válida devolve um novo snapshot e mant
 
 `CalibrationDocument` mantém o snapshot atual, o último snapshot guardado e até 100 alterações de desfazer/refazer. Uma edição inválida não altera o documento nem o histórico. Uma gravação só atualiza a referência guardada após a escrita bem-sucedida; uma falha mantém o estado de alterações pendentes. Se o conteúdo regressar ao último snapshot guardado, deixa de estar marcado como alterado.
 
-A gravação em ficheiro cria um destino novo, preservando ficheiros existentes. A leitura do disco limita a quantidade de dados antes de os interpretar. O tamanho máximo é 4368 bytes, pelo que um futuro envio USB terá de usar transferência em blocos; o ficheiro não é um pacote binário nem uma definição INI TunerStudio.
+A gravação em ficheiro cria um destino novo, preservando ficheiros existentes. A leitura do disco limita a quantidade de dados antes de os interpretar. O tamanho máximo é 4368 bytes. A leitura ECU→Console usa os blocos descritos em `map-read-protocol.md`; a escrita para a ECU continua por implementar; o ficheiro não é um pacote binário nem uma definição INI TunerStudio.
 
 Os mapas dos testes são superfícies matemáticas sintéticas. Não existem mapas padrão de motor neste bloco. A associação a uma configuração de motor, a uma revisão de hardware e a limites de aplicação continua por implementar.
