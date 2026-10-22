@@ -3,12 +3,13 @@
 #define TUNUINO_CLOCK32_H
 #include <stdint.h>
 typedef enum {
-    TUNUINO_CLOCK32_OK = 0, TUNUINO_CLOCK32_FAULT, TUNUINO_CLOCK32_ARGUMENT
+    TUNUINO_CLOCK32_OK = 0, TUNUINO_CLOCK32_FAULT, TUNUINO_CLOCK32_ARGUMENT,
+    TUNUINO_CLOCK32_REJECTED
 } tunuino_clock32_status;
 /* Private fields. One serialized caller; zero initialization is safe but
  * init is required. Not an atomic clock shared between tasks/interrupts. */
 typedef struct {
-    uint64_t time_us;
+    uint64_t time_us, origin_us;
     uint32_t previous, max_step_us;
     unsigned initialized, fault;
 } tunuino_clock32;
@@ -27,4 +28,14 @@ tunuino_clock32_status tunuino_clock32_init(tunuino_clock32 *clock,
  * invalidate its acquisition pipeline on FAULT; no other object is changed. */
 tunuino_clock32_status tunuino_clock32_observe(tunuino_clock32 *clock,
     uint32_t counter, uint64_t *time_us);
+/* Resolves an older capture against the latest observed counter without
+ * moving the clock. Same serialized caller as observe. max_age_us is an
+ * inclusive bound, 1..INT32_MAX; older/future/pre-init captures are REJECTED.
+ * First latch the capture, then observe a coherent current counter from
+ * the SAME timer. Driver must guarantee capture age <= max_age_us and no
+ * overcapture/reset/missed wrap; raw bits cannot prove those conditions.
+ * Errors zero output, which must not overlap clock storage. No automatic
+ * queue invalidation or event ordering. */
+tunuino_clock32_status tunuino_clock32_capture(const tunuino_clock32 *clock,
+    uint32_t captured_counter, uint32_t max_age_us, uint64_t *time_us);
 #endif

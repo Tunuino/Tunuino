@@ -9,8 +9,23 @@ tunuino_clock32_status tunuino_clock32_init(tunuino_clock32 *clock,
     if (max_step_us == 0 || max_step_us > INT32_MAX) return TUNUINO_CLOCK32_ARGUMENT;
     clock->previous = first_counter;
     clock->time_us = first_us;
+    clock->origin_us = first_us;
     clock->max_step_us = max_step_us;
     clock->initialized = 1;
+    return TUNUINO_CLOCK32_OK;
+}
+
+tunuino_clock32_status tunuino_clock32_capture(const tunuino_clock32 *clock,
+    uint32_t captured_counter, uint32_t max_age_us, uint64_t *time_us) {
+    if (time_us == NULL) return TUNUINO_CLOCK32_ARGUMENT;
+    *time_us = 0;
+    if (clock == NULL || !clock->initialized || max_age_us == 0 || max_age_us > INT32_MAX)
+        return TUNUINO_CLOCK32_ARGUMENT;
+    if (clock->fault) return TUNUINO_CLOCK32_FAULT;
+    const uint32_t age = clock->previous - captured_counter;
+    if (age > max_age_us || (uint64_t)age > clock->time_us - clock->origin_us)
+        return TUNUINO_CLOCK32_REJECTED;
+    *time_us = clock->time_us - age;
     return TUNUINO_CLOCK32_OK;
 }
 
