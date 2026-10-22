@@ -17,6 +17,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 - Gráfico de RPM durante a gravação, limitado a 600 pontos; os dados válidos continuam a ser gravados no ficheiro.
 - Mapas VE e ignição até 32×32, com validação, CRC e interpolação bilinear em C/Java.
 - Consulta offline de ficheiros `.tnmap` na Console, com tabela RPM/MAP e cálculo de um ponto.
+- Leitura de mapas por blocos em C/Java, com geração do snapshot, CRC e prazo total; botão na Console condicionado à capacidade do firmware.
 - Edição offline das células VE/ignição, validação decimal exata, desfazer/refazer e gravação de uma nova cópia.
 
 ## Por implementar e validar
@@ -71,5 +72,7 @@ Usa **Abrir mapa** para carregar um ficheiro `.tnmap` válido. A janela mostra o
 Faz duplo clique numa célula para editar o valor. **Enter** confirma e **Esc** cancela. Usa ponto decimal e até três casas decimais; valores inválidos são recusados, sem arredondamento silencioso. Os eixos RPM/MAP continuam fixos. **Desfazer** e **Refazer** mantêm até 100 alterações no histórico da janela.
 
 **Guardar cópia** pede um ficheiro novo e preserva os ficheiros existentes. Depois de guardar, a cópia pode ser aberta novamente. O título assinala alterações pendentes com `*`. Ao fechar o mapa ou a Console, podes guardar uma cópia, descartar as alterações ou cancelar o fecho. Confirma ou cancela uma célula ainda em edição antes de guardar ou fechar.
+
+Depois de identificar uma ECU cujo firmware anuncie leitura de mapas, seleciona VE ou ignição e usa **Ler mapa da ECU**. A Console valida a transferência completa antes de abrir uma cópia no editor. A integração do handler no firmware STM32 e o ensaio físico continuam pendentes. O protocolo está em [map-read-protocol.md](docs/map-read-protocol.md).
 
 A edição é offline. Ainda não existe envio de mapas para a ECU ou aplicação a injeção/ignição. Não existem mapas padrão de motor. O formato e os limites estão em [calibration-format.md](docs/calibration-format.md).

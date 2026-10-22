@@ -8,6 +8,7 @@ import io.tunuino.transport.UsbSerialPorts;
 import io.tunuino.protocol.DeviceIdentity;
 import io.tunuino.protocol.IdentityClient;
 import io.tunuino.protocol.LiveDataClient;
+import io.tunuino.protocol.MapReadClient;
 import io.tunuino.datalog.LiveDataRecorder;
 import io.tunuino.calibration.CalibrationMap;
 import java.io.File;
@@ -51,6 +52,7 @@ public final class TunuinoConsole extends Application {
     private boolean fileReading;
     private boolean captureActive;
     private boolean serialBusy;
+    private Runnable refreshControls = () -> {};
     private long captureGeneration;
     private final AtomicBoolean keepCapturing = new AtomicBoolean();
     private final AtomicBoolean stopping = new AtomicBoolean();
@@ -63,6 +65,7 @@ public final class TunuinoConsole extends Application {
 
     private <T> void serialTask(Callable<T> operation, Consumer<T> success, Consumer<Throwable> failure) {
         serialBusy = true;
+        refreshControls.run();
         Task<T> task = new Task<>() {
             @Override protected T call() throws Exception {
                 return operation.call();
@@ -94,6 +97,10 @@ public final class TunuinoConsole extends Application {
         hardware.setValue(DeviceIdentity.Family.PROTEUS);
         Button open = new Button("Abrir datalog CSV");
         Button openMap = new Button("Abrir mapa");
+        ComboBox<CalibrationMap.Kind> mapKind = new ComboBox<>();
+        mapKind.getItems().addAll(CalibrationMap.Kind.values());
+        mapKind.setValue(CalibrationMap.Kind.VE);
+        Button readMap = new Button("Ler mapa da ECU");
         Label status = new Label("Offline · nenhuma ECU identificada");
         Label identityDetails = new Label("Identificação da ECU pendente");
         ComboBox<UsbSerialPorts.Port> ports = new ComboBox<>();
@@ -118,9 +125,14 @@ public final class TunuinoConsole extends Application {
             boolean liveAvailable = identifiedDevice != null
                 && (identifiedDevice.capabilities() & LiveDataClient.CAPABILITY) != 0;
             capture.setDisable(!captureActive && (serialBusy || !connected || !liveAvailable || fileReading));
+            boolean mapAvailable = identifiedDevice != null
+                && (identifiedDevice.capabilities() & MapReadClient.CAPABILITY) != 0;
+            readMap.setDisable(serialBusy || captureActive || fileReading || !connected || !mapAvailable);
+            mapKind.setDisable(serialBusy || captureActive || fileReading);
             open.setDisable(captureActive || fileReading);
             openMap.setDisable(captureActive || fileReading);
         };
+        refreshControls = refreshConnection;
         Consumer<Throwable> usbFailure = error -> {
             identifiedDevice = null;
             identityDetails.setText("Identificação da ECU pendente");
@@ -241,8 +253,28 @@ public final class TunuinoConsole extends Application {
         footer.setPadding(new Insets(12));
         BorderPane root = new BorderPane(chart);
         root.setTop(new VBox(new ToolBar(new Label("Tunuino"), hardware, open, openMap),
-            new ToolBar(ports, scan, connect, identify, capture)));
+            new ToolBar(ports, scan, connect, identify, capture),
+            new ToolBar(new Label("Mapa da ECU"), mapKind, readMap)));
         root.setBottom(footer);
+        readMap.setOnAction(event -> {
+            PacketSession current = connection.get();
+            DeviceIdentity device = identifiedDevice;
+            CalibrationMap.Kind kind = mapKind.getValue();
+            if (serialBusy || captureActive || fileReading || current == null || !current.isOpen()
+                    || device == null || kind == null || (device.capabilities() & MapReadClient.CAPABILITY) == 0) {
+                refreshConnection.run();
+                return;
+            }
+            status.setText("A ler mapa da ECU…");
+            serialTask(() -> MapReadClient.read(current, device, kind, Duration.ofSeconds(5)), map -> {
+                CalibrationViewer.show(stage, device.family() + " · " + kind + " · cópia lida da ECU", map);
+                status.setText("Mapa validado · podes consultar, editar e guardar uma cópia offline");
+                refreshConnection.run();
+            }, error -> {
+                connection.compareAndSet(current, null);
+                usbFailure.accept(error);
+            });
+        });
         openMap.setOnAction(event -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Abrir mapa Tunuino");

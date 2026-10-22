@@ -20,7 +20,7 @@ Java 21 e JavaFX, destinada ao Windows. O processamento de ficheiros e o protoco
 
 `UsbSerialPorts` usa jSerialComm para enumerar e abrir portas. A lista não classifica uma porta como ECU apenas pelo nome, VID/PID ou seleção de família. As operações nativas de descoberta, abertura e fecho decorrem numa thread dedicada.
 
-O botão de identificação usa `IdentityClient` na thread USB e valida uma resposta Tunuino de versão conhecida e família correspondente. `DeviceIdentity` contém dados declarados pelo firmware. O núcleo C usa `tunuino_identity_reply` sobre o pacote completo com CRC e exige configuração explícita fornecida pela camada da placa. O protocolo está em `identity-protocol.md`. Calibração e gravação de firmware continuam por implementar; a identidade recebida não autoriza essas operações.
+O botão de identificação usa `IdentityClient` na thread USB e valida uma resposta Tunuino de versão conhecida e família correspondente. `DeviceIdentity` contém dados declarados pelo firmware. O núcleo C usa `tunuino_identity_reply` sobre o pacote completo com CRC e exige configuração explícita fornecida pela camada da placa. O protocolo está em `identity-protocol.md`. A escrita de calibração e a gravação de firmware continuam por implementar; a identidade recebida não autoriza essas operações.
 
 ## Datalogging
 
@@ -37,6 +37,8 @@ O CSV é criado com exclusividade e recebe cada amostra válida. O gráfico mant
 `CalibrationMap` implementa o mesmo formato na Console com armazenamento imutável. A leitura recusa dimensões, valores ou CRC inválidos antes de disponibilizar o mapa. `CalibrationDocument` aplica edições exatas sobre novos snapshots, mantém um histórico limitado e distingue o conteúdo atual do último conteúdo guardado.
 
 `CalibrationViewer` permite editar células e consultar pontos offline. A gravação de cópias corre numa thread própria e bloqueia novas edições durante a escrita. O fecho da janela e da Console passa pelo tratamento de alterações pendentes. Uma falha de gravação mantém o editor aberto e as alterações pendentes. Não há comando de escrita de calibração nem aplicação dos valores ao motor neste bloco. O formato está em `calibration-format.md`.
+
+`tunuino_map_snapshot_prepare` cria um ficheiro validado num snapshot com geração explícita. `tunuino_map_read_reply` serve metadados e blocos de até 256 bytes; uma mudança de geração impede continuar uma leitura antiga. O chamador serializa preparação/resposta e gere as gerações. `MapReadClient` valida a transferência completa dentro de um prazo total antes de expor um mapa imutável. A Console exige a capacidade de leitura e executa o pedido na thread USB; o resultado abre como cópia offline. O protocolo está em `map-read-protocol.md`. Ainda falta integrar estes handlers com mapas reais no STM32.
 
 ## Hardware
 
