@@ -170,7 +170,7 @@ jobs:
         cache-dependency-path: console/pom.xml
     - name: Compile and collect runtime dependencies
       run: mvn --batch-mode --no-transfer-progress --file console/pom.xml verify org.apache.maven.plugins:maven-dependency-plugin:3.8.1:copy-dependencies
-        -DincludeScope=runtime -DoutputDirectory=target/app/lib -Dtunuino.sourceCommit=${{ github.sha }}
+        -DincludeScope=runtime -DoutputDirectory=target/app/lib "-Dtunuino.sourceCommit=${{ github.sha }}"
     - name: Firmware validation and programmer failure checks on Windows
       run: python tools/check_maintenance.py
     - name: Test the actual release JAR with simulated programmer output
