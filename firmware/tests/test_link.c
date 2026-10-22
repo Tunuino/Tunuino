@@ -43,6 +43,65 @@ static void sticky(tunuino_link_status expected, uint64_t now) {
     assert(tunuino_link_tx_view(&link, now, &view, &remaining) == expected && view == NULL && remaining == 0);
     assert(tunuino_link_tx_advance(&link, 1, now) == expected);
 }
+static void mailbox_checks(void) {
+    static tunuino_live_mailbox mailbox;
+    tunuino_live_mailbox unconfigured = {0};
+    assert(tunuino_live_mailbox_init(&mailbox) == TUNUINO_MAILBOX_READY);
+    tunuino_dispatch_context providers = context;
+    providers.live = NULL; /* The mailbox supplies the live provider. */
+    assert(tunuino_link_init_mailbox(&link,&providers,&mailbox,10,100,100,100) == TUNUINO_LINK_RECEIVING);
+    size_t consumed, length;
+    text_query("TUNUINO:L");
+    assert(tunuino_link_feed(&link,request,request_length,100,&consumed) == TUNUINO_LINK_RESPONDING);
+    const uint8_t *body = drain(100,&length);
+    assert(length == 1 && body[0] == 1);
+    tunuino_live_sample sample = {100,1234000,100000,1000000,-12345,15};
+    assert(tunuino_live_mailbox_publish(&mailbox,&sample) == TUNUINO_MAILBOX_READY);
+    assert(tunuino_link_feed(&link,request,1,109,&consumed) == TUNUINO_LINK_RECEIVING && consumed == 1);
+    assert(tunuino_link_feed(&link,request + 1,request_length - 1,110,&consumed) == TUNUINO_LINK_RESPONDING);
+    body = drain(110,&length); assert(length == 1 && body[0] == 1);
+    /* Freshness is checked at completion; a response already built is immutable. */
+    sample.time_ms = 110;
+    assert(tunuino_live_mailbox_publish(&mailbox,&sample) == TUNUINO_MAILBOX_READY);
+    assert(tunuino_link_feed(&link,request,request_length,110,&consumed) == TUNUINO_LINK_RESPONDING);
+    sample.valid_mask = 0;
+    assert(tunuino_live_mailbox_publish(&mailbox,&sample) == TUNUINO_MAILBOX_READY);
+    body = drain(111,&length); assert(length == 28 && body[2] == 15);
+    assert(tunuino_link_feed(&link,request,request_length,111,&consumed) == TUNUINO_LINK_RESPONDING);
+    body = drain(111,&length); assert(length == 1 && body[0] == 1);
+    sample.valid_mask = 15; sample.time_ms = 112;
+    assert(tunuino_live_mailbox_publish(&mailbox,&sample) == TUNUINO_MAILBOX_READY);
+    assert(tunuino_link_feed(&link,request,request_length,112,&consumed) == TUNUINO_LINK_RESPONDING);
+    body = drain(112,&length); assert(length == 28 && body[2] == 15);
+    sample.time_ms = 120;
+    assert(tunuino_live_mailbox_publish(&mailbox,&sample) == TUNUINO_MAILBOX_READY);
+    assert(tunuino_link_feed(&link,request,request_length,113,&consumed) == TUNUINO_LINK_RESPONDING);
+    body = drain(113,&length); assert(length == 1 && body[0] == 1);
+    assert(tunuino_link_feed(&link,request,request_length,120,&consumed) == TUNUINO_LINK_RESPONDING);
+    body = drain(120,&length); assert(length == 28);
+    assert(tunuino_link_feed(&link,request,request_length,130,&consumed) == TUNUINO_LINK_RESPONDING);
+    body = drain(130,&length); assert(length == 1 && body[0] == 1);
+    text_query("TUNUINO?");
+    assert(tunuino_link_feed(&link,request,request_length,130,&consumed) == TUNUINO_LINK_RESPONDING);
+    body = drain(130,&length); assert(length == 32);
+    uint8_t map_query[] = {'T','U','N','U','I','N','O',':','M',0,1};
+    query(map_query,sizeof(map_query));
+    assert(tunuino_link_feed(&link,request,request_length,130,&consumed) == TUNUINO_LINK_RESPONDING);
+    body = drain(130,&length); assert(length == 14);
+    assert(tunuino_link_init_mailbox(NULL,&providers,&mailbox,10,100,100,0) == TUNUINO_LINK_ARGUMENT);
+    assert(tunuino_link_init_mailbox(&link,NULL,&mailbox,10,100,100,0) == TUNUINO_LINK_ARGUMENT);
+    assert(tunuino_link_init_mailbox(&link,&providers,NULL,10,100,100,0) == TUNUINO_LINK_ARGUMENT);
+    assert(tunuino_link_init_mailbox(&link,&providers,&mailbox,0,100,100,0) == TUNUINO_LINK_ARGUMENT);
+    assert(tunuino_link_init_mailbox(&link,&providers,&unconfigured,10,100,100,0) == TUNUINO_LINK_ARGUMENT);
+    sticky(TUNUINO_LINK_ARGUMENT,0);
+    identity.hardware_revision = 0;
+    assert(tunuino_link_init_mailbox(&link,&providers,&mailbox,10,100,100,0) == TUNUINO_LINK_DISPATCH_ERROR);
+    identity.hardware_revision = 1;
+    init(100,100,0); text_query("TUNUINO:L");
+    assert(tunuino_link_feed(&link,request,request_length,0,&consumed) == TUNUINO_LINK_RESPONDING);
+    body = drain(0,&length); assert(length == 28); /* Ordinary re-init unbinds. */
+    puts("C mailbox link: freshness at request completion, immutable TX, expiry/recovery and unaffected identity/maps passed");
+}
 int main(void) {
     map.rpm_count = map.load_count = 32;
     for (unsigned i = 0; i < 32; ++i) {
@@ -157,6 +216,7 @@ int main(void) {
     assert(tunuino_link_tx_advance(NULL,1,0) == TUNUINO_LINK_ARGUMENT);
     assert(tunuino_link_tx_advance(&link,1,0) == TUNUINO_LINK_ARGUMENT && link.state == TUNUINO_LINK_RECEIVING);
     tunuino_link_abort(NULL);
+    mailbox_checks();
     puts("C link: serialized RX/dispatch/TX, coalesced requests, full VE/ignition reads, provider isolation and terminal errors passed");
     return 0;
 }

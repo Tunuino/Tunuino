@@ -29,6 +29,26 @@ tunuino_link_status tunuino_link_init(tunuino_link *link, const tunuino_dispatch
     link->state = TUNUINO_LINK_RECEIVING;
     return link->state;
 }
+tunuino_link_status tunuino_link_init_mailbox(tunuino_link *link,
+    const tunuino_dispatch_context *context, tunuino_live_mailbox *mailbox,
+    uint32_t max_age_ms, uint32_t rx_timeout_ms, uint32_t tx_timeout_ms, uint64_t now_ms) {
+    if (link == NULL) return TUNUINO_LINK_ARGUMENT;
+    if (context == NULL || mailbox == NULL || max_age_ms == 0)
+        return tunuino_link_init(link,NULL,rx_timeout_ms,tx_timeout_ms,now_ms);
+    tunuino_dispatch_context local = *context;
+    const tunuino_live_sample unavailable = {0};
+    local.live = &unavailable;
+    tunuino_link_status status = tunuino_link_init(link,&local,rx_timeout_ms,tx_timeout_ms,now_ms);
+    link->context.live = &link->live_snapshot;
+    if (status != TUNUINO_LINK_RECEIVING) return status;
+    tunuino_live_mailbox_status live_status = tunuino_live_mailbox_read(mailbox,
+        now_ms,max_age_ms,&link->live_snapshot);
+    if (live_status != TUNUINO_MAILBOX_READY && live_status != TUNUINO_MAILBOX_NOT_READY)
+        return fail(link,TUNUINO_LINK_ARGUMENT);
+    link->live_source = mailbox;
+    link->live_max_age_ms = max_age_ms;
+    return link->state;
+}
 tunuino_link_status tunuino_link_poll(tunuino_link *link, uint64_t now_ms) {
     if (link == NULL) { return TUNUINO_LINK_ARGUMENT; }
     if (link->state == TUNUINO_LINK_RECEIVING) {
@@ -54,6 +74,14 @@ tunuino_link_status tunuino_link_feed(tunuino_link *link, const uint8_t *bytes,
     if (link->rx_status != TUNUINO_RX_READY) { return fail(link, TUNUINO_LINK_RX_ERROR); }
     uint8_t response[TUNUINO_DISPATCH_RESPONSE_MAX];
     size_t written;
+    if (link->live_source != NULL) {
+        tunuino_live_mailbox_status live_status = tunuino_live_mailbox_read(link->live_source,
+            now_ms,link->live_max_age_ms,&link->live_snapshot);
+        if (live_status != TUNUINO_MAILBOX_READY && live_status != TUNUINO_MAILBOX_NOT_READY) {
+            link->dispatch_status = TUNUINO_DISPATCH_SOURCE_ERROR;
+            return fail(link,TUNUINO_LINK_DISPATCH_ERROR);
+        }
+    }
     link->dispatch_status = tunuino_dispatch_reply(&link->context, packet, packet_length,
         response, sizeof(response), &written);
     if (link->dispatch_status != TUNUINO_DISPATCH_OK) { return fail(link, TUNUINO_LINK_DISPATCH_ERROR); }

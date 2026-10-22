@@ -54,11 +54,8 @@ static int synthetic_telemetry(tunuino_live_sample *live) {
     tunuino_live_sample acquired;
     if (tunuino_telemetry_build(&capture_source.processor,&sensors,&policy,capture_time,&acquired)
         == TUNUINO_TELEMETRY_ARGUMENT) { return 0; }
-    if (tunuino_live_mailbox_publish(&mailbox,&acquired) != TUNUINO_MAILBOX_READY) { return 0; }
-    /* The real board must run this read on the USB owner, serialized with
-     * dispatch. Concurrent ownership is checked by test_live_mailbox.c. */
-    tunuino_live_mailbox_status status = tunuino_live_mailbox_read(&mailbox,capture_time / 1000u,10,live);
-    return status == TUNUINO_MAILBOX_READY || status == TUNUINO_MAILBOX_NOT_READY;
+    *live = acquired; /* Test setup copy only; mailbox-bound link owns its reader. */
+    return tunuino_live_mailbox_publish(&mailbox,&acquired) == TUNUINO_MAILBOX_READY;
 }
 static int start_captures(tunuino_live_sample *live, int wrap) {
     capture_time = wrap ? (uint64_t)UINT32_MAX - 60000u : 0;
@@ -77,7 +74,7 @@ int main(int argc, char **argv) {
         && strcmp(mode,"drop-mid-map") != 0 && strcmp(mode,"not-ready") != 0
         && strcmp(mode,"crank-live") != 0 && strcmp(mode,"crank-stall") != 0
         && strcmp(mode,"sensor-recover") != 0 && strcmp(mode,"capture-wrap") != 0
-        && strcmp(mode,"capture-loss") != 0) { return 2; }
+        && strcmp(mode,"capture-loss") != 0 && strcmp(mode,"mailbox-expiry") != 0) { return 2; }
 #ifdef _WIN32
     if (_setmode(_fileno(stdin),_O_BINARY) < 0 || _setmode(_fileno(stdout),_O_BINARY) < 0) { return 3; }
 #endif
@@ -87,8 +84,10 @@ int main(int argc, char **argv) {
     use_analog = strcmp(mode,"sensor-recover") == 0;
     int wrap = strcmp(mode,"capture-wrap") == 0;
     int lost = 0;
+    int expiry = strcmp(mode,"mailbox-expiry") == 0;
+    unsigned publication_step = 0;
     int use_captures = strcmp(mode,"crank-live") == 0 || strcmp(mode,"crank-stall") == 0
-        || strcmp(mode,"capture-loss") == 0 || wrap || use_analog;
+        || strcmp(mode,"capture-loss") == 0 || wrap || use_analog || expiry;
     int stalled = 0;
     if (tunuino_live_mailbox_init(&mailbox) != TUNUINO_MAILBOX_READY) { return 18; }
     if (use_captures && !start_captures(&live,wrap)) { return 11; }
@@ -104,15 +103,19 @@ int main(int argc, char **argv) {
     if (strcmp(mode,"not-ready") == 0) { live.valid_mask = 0; ve.generation = ignition.generation = 0; }
     tunuino_dispatch_context context = {&identity,&live,&ve,&ignition};
     /* Deterministic synthetic time; receiver/transmitter deadline tests are separate. */
-    if (tunuino_link_init(&link,&context,1000,1000,0) != TUNUINO_LINK_RECEIVING) { return 5; }
+    tunuino_link_status initial = use_captures
+        ? tunuino_link_init_mailbox(&link,&context,&mailbox,10,1000,1000,capture_time / 1000u)
+        : tunuino_link_init(&link,&context,1000,1000,0);
+    if (initial != TUNUINO_LINK_RECEIVING) { return 5; }
     int byte;
     while ((byte = getchar()) != EOF) {
         uint8_t input = (uint8_t)byte; size_t consumed;
-        tunuino_link_status status = tunuino_link_feed(&link,&input,1,0,&consumed);
+        uint64_t io_time = use_captures ? capture_time / 1000u : 0;
+        tunuino_link_status status = tunuino_link_feed(&link,&input,1,io_time,&consumed);
         if (consumed != 1 || (status != TUNUINO_LINK_RECEIVING && status != TUNUINO_LINK_RESPONDING)) { return 6; }
         if (status != TUNUINO_LINK_RESPONDING) { continue; }
         const uint8_t *view; size_t remaining;
-        if (tunuino_link_tx_view(&link,0,&view,&remaining) != TUNUINO_LINK_RESPONDING
+        if (tunuino_link_tx_view(&link,io_time,&view,&remaining) != TUNUINO_LINK_RESPONDING
             || remaining > TUNUINO_DISPATCH_RESPONSE_MAX) { return 7; }
         uint8_t output[TUNUINO_DISPATCH_RESPONSE_MAX]; size_t total = remaining;
         memcpy(output,view,total);
@@ -126,7 +129,7 @@ int main(int argc, char **argv) {
             size_t count = limit - offset; if (count > 3) { count = 3; }
             if (fwrite(output + offset,1,count,stdout) != count || fflush(stdout) != 0) { return 8; }
             offset += count;
-            if (tunuino_link_tx_advance(&link,count,0) != (offset == total ? TUNUINO_LINK_RECEIVING : TUNUINO_LINK_RESPONDING)) { return 9; }
+            if (tunuino_link_tx_advance(&link,count,io_time) != (offset == total ? TUNUINO_LINK_RECEIVING : TUNUINO_LINK_RESPONDING)) { return 9; }
         }
         if (truncate) { tunuino_link_abort(&link); return 0; }
         if (meta && strcmp(mode,"stale-map") == 0) {
@@ -134,6 +137,20 @@ int main(int argc, char **argv) {
             if (output[5] == 1) { ++ve.generation; } else { ++ignition.generation; }
         }
         if (use_captures) {
+            if (expiry && ((total == 34 && output[2] == 0 && output[3] == 1 && output[4] == 15)
+                || (total == 7 && output[2] == 1))) {
+                ++publication_step;
+                /* Captures continue while publication is deliberately suspended. */
+                unsigned edges = publication_step <= 2 ? 10 : 1;
+                for (unsigned i = 0; i < edges; ++i) {
+                    tunuino_position_reading position;
+                    if (tunuino_capture_processor_read(&capture_source.processor,capture_time,&position)
+                        != TUNUINO_PROCESS_READY || !position.crank_valid
+                        || !synthetic_edge(position.tooth_index == 34 ? 2000 : 1000)) { return 19; }
+                }
+                if (publication_step > 2 && !synthetic_telemetry(&live)) { return 20; }
+                continue;
+            }
             /* Advance the injection sequence only for live-data responses. */
             if (use_analog && ((total == 34 && output[2] == 0 && output[3] == 1 && output[4] == 15)
                 || (total == 7 && output[2] == 1))) { ++sensor_step; }

@@ -153,7 +153,7 @@ def main():
         run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/src/live_data.c",
                      "firmware/src/calibration.c", "firmware/src/map_read.c", "firmware/src/dispatch.c",
                      "firmware/src/stream_rx.c", "firmware/src/stream_tx.c", "firmware/src/link.c",
-                     "firmware/tests/test_link.c", "-lm", "-o", str(link_exe)])
+                     "firmware/src/live_mailbox.c", "firmware/tests/test_link.c", "-lm", "-o", str(link_exe)])
         print(run([str(link_exe)]))
         peer_exe = work / ("link-peer.exe" if os.name == "nt" else "link-peer")
         run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/src/live_data.c",

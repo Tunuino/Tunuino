@@ -167,6 +167,41 @@ public final class FirmwareLinkChecks {
             }
             for (DeviceIdentity.Family family : DeviceIdentity.Family.values()) {
                 String board = family == DeviceIdentity.Family.PROTEUS ? "proteus" : "uaefi";
+                Peer expiring = new Peer(executable,board,"mailbox-expiry");
+                try (PacketSession session = new PacketSession(expiring)) {
+                    DeviceIdentity identity = identify(session,family);
+                    long first = -1;
+                    for (int step = 0; step < 4; ++step) {
+                        var result = LiveDataClient.read(session,identity,Duration.ofSeconds(2));
+                        check(result.isPresent() == (step == 0 || step == 3),
+                            "Mailbox publication stops, expires and resumes at request boundaries");
+                        if (result.isPresent()) {
+                            var sample = result.orElseThrow();
+                            check(sample.rpm() == 1666.667,"Fresh mailbox preserves measured RPM");
+                            if (step == 0) { first = sample.timeMs(); }
+                            else { check(sample.timeMs() - first == 21,"Recovery has a new acquisition timestamp"); }
+                        }
+                        check(session.isOpen(),"Mailbox expiry keeps communication open");
+                    }
+                }
+                check(expiring.process.exitValue() == 0,"Expiring mailbox peer terminates cleanly");
+                Peer recordingPeer = new Peer(executable,board,"mailbox-expiry");
+                try (PacketSession session = new PacketSession(recordingPeer)) {
+                    DeviceIdentity identity = identify(session,family);
+                    AtomicInteger budget = new AtomicInteger(), delivered = new AtomicInteger();
+                    Path csv = directory.resolve(family.name() + "-mailbox-expiry.csv");
+                    long saved = LiveDataRecorder.record(session,identity,csv,Duration.ofMillis(10),
+                        () -> budget.getAndIncrement() < 8,value -> delivered.incrementAndGet());
+                    var samples = CsvLogReader.read(csv);
+                    check(saved == 2 && delivered.get() == 2 && samples.size() == 2
+                        && samples.get(1).timeMs() - samples.get(0).timeMs() == 21,
+                        "CSV skips expired mailbox data and resumes with the real time gap");
+                    check(session.isOpen(),"Mailbox recording resumes without reconnecting");
+                }
+                check(recordingPeer.process.exitValue() == 0,"Mailbox expiry recording peer terminates cleanly");
+            }
+            for (DeviceIdentity.Family family : DeviceIdentity.Family.values()) {
+                String board = family == DeviceIdentity.Family.PROTEUS ? "proteus" : "uaefi";
                 Peer peer = new Peer(executable,board,"capture-loss");
                 try (PacketSession session = new PacketSession(peer)) {
                     DeviceIdentity identity = identify(session,family);
@@ -248,6 +283,6 @@ public final class FirmwareLinkChecks {
             try (var paths = Files.list(directory)) { for (Path file : paths.toList()) { Files.delete(file); } }
             Files.delete(directory);
         }
-        System.out.println("Java clients <-> live C link: both families, full maps, live CSV, fragmentation, stale snapshot, CRC, disconnect, capture-source wrap/loss, decoded-crank and calibrated-sensor recovery checks passed");
+        System.out.println("Java clients <-> live C link: both families, full maps, live CSV, fragmentation, stale snapshot, CRC, disconnect, mailbox expiry/recovery, capture-source wrap/loss, decoded-crank and calibrated-sensor recovery checks passed");
     }
 }
