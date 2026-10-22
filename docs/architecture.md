@@ -14,6 +14,8 @@ O codec constitui apenas o enquadramento binário. Os comandos, códigos de resp
 
 `tunuino_dispatch_reply` encaminha pacotes completos para os handlers de identificação, sensores e mapas. A configuração exige identidade válida e fornecedores para as capacidades anunciadas; capacidades ainda sem implementação são recusadas. Mapas VE e ignição são selecionados separadamente. Os estados C de erro não geram respostas transmissíveis. O contrato, a sincronização dos snapshots e o trabalho pendente no transporte estão em `firmware-dispatch.md`.
 
+`tunuino_stream_rx` recebe fragmentos sem alocação dinâmica, valida o comprimento após o cabeçalho e só expõe frames completos com CRC válido. Um prazo total limita a receção desde o primeiro byte; polling deteta transferências paradas. A receção para no primeiro frame e devolve a contagem consumida para preservar bytes do próximo pedido. Falhas ficam retidas até uma reinicialização com transporte limpo. O módulo ainda precisa de ser ligado ao driver USB STM32. O contrato está em `stream-reception.md`.
+
 ## Console
 
 Java 21 e JavaFX, destinada ao Windows. O processamento de ficheiros e o protocolo são independentes da interface gráfica. A interface abre datalogs CSV offline. O transporte USB e a gravação devem executar fora da thread JavaFX, com timeout, cancelamento e verificação da identidade de hardware.

@@ -24,7 +24,7 @@ O dispatcher valida o frame, incluindo CRC, e depois o contexto antes de encamin
 
 Erros de argumento, enquadramento, configuração, comando desconhecido, capacidade desativada, pedido inválido, fornecedor inválido ou capacidade insuficiente do buffer devolvem um estado C e deixam `written` a zero. Não é criado um novo formato de erro no fio. O transporte não deve transmitir bytes de um buffer cujo resultado tenha sido um erro; deve aplicar a política de ligação definida pela integração.
 
-A integração USB ainda tem de reunir bytes até obter um pacote completo, limitar o tamanho e o tempo de receção, chamar o dispatcher, transmitir a resposta completa e tratar desconexões. Uma leitura USB não equivale necessariamente a um pacote. A versão atual não implementa essa montagem do fluxo, relógios, periféricos STM32, persistência, pinos nem controlo do motor.
+`tunuino_stream_rx` já reúne bytes até obter um pacote completo e limita tamanho e prazo de receção; o contrato está em `stream-reception.md`. A integração USB ainda tem de fornecer os blocos recebidos e o relógio, chamar o dispatcher, transmitir a resposta completa e tratar desconexões. Uma leitura USB não equivale necessariamente a um pacote. A versão atual não implementa o driver, filas USB, transmissão com prazo, periféricos STM32, persistência, pinos nem controlo do motor.
 
 ## Verificação
 

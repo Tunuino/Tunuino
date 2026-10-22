@@ -91,6 +91,11 @@ def main():
                      "firmware/src/calibration.c", "firmware/src/map_read.c", "firmware/src/dispatch.c",
                      "firmware/tests/test_dispatch.c", "-lm", "-o", str(dispatch_exe)])
         print(run([str(dispatch_exe)]))
+        rx_exe = work / ("rx-check.exe" if os.name == "nt" else "rx-check")
+        run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/src/live_data.c",
+                     "firmware/src/calibration.c", "firmware/src/map_read.c", "firmware/src/dispatch.c",
+                     "firmware/src/stream_rx.c", "firmware/tests/test_stream_rx.c", "-lm", "-o", str(rx_exe)])
+        print(run([str(rx_exe)]))
         library_path = work / ("frame.dll" if os.name == "nt" else "frame.so")
         shared_flags = ["-shared"] + ([] if os.name == "nt" else ["-fPIC"])
         run(flags + shared_flags + ["firmware/src/frame.c", "-o", str(library_path)])

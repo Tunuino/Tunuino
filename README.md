@@ -17,6 +17,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 - Gráfico de RPM durante a gravação, limitado a 600 pontos; os dados válidos continuam a ser gravados no ficheiro.
 - Mapas VE e ignição até 32×32, com validação, CRC e interpolação bilinear em C/Java.
 - Consulta offline de ficheiros `.tnmap` na Console, com tabela RPM/MAP e cálculo de um ponto.
+- Receção incremental em C, com buffer limitado, CRC, prazo total e tratamento de pacotes fragmentados ou juntos.
 - Dispatcher C para identificação, datalog e mapas, com validação de capacidades e fornecedores configurados.
 - Leitura de mapas por blocos em C/Java, com geração do snapshot, CRC e prazo total; botão na Console condicionado à capacidade do firmware.
 - Edição offline das células VE/ignição, validação decimal exata, desfazer/refazer e gravação de uma nova cópia.
@@ -56,7 +57,7 @@ Usa **Identificar ECU** para enviar o pedido de leitura ao firmware Tunuino. Uma
 
 O transporte binário admite um pedido de cada vez e encerra a sessão após timeout, erro de CRC ou resposta incompleta. Não repete automaticamente comandos. Os testes usam um transporte simulado; a integração nativa com jSerialComm e a interface JavaFX ainda precisam de compilação e ensaio no Windows com as centralinas.
 
-O núcleo de identificação recusa UID, revisão ou família não configurados. A camada específica de cada placa ainda precisa de fornecer os dados reais. Os dados de identificação dos testes são sintéticos e não validam pinagem ou compatibilidade de gravação. O formato está em [identity-protocol.md](docs/identity-protocol.md). O encaminhamento comum dos pedidos está documentado em [firmware-dispatch.md](docs/firmware-dispatch.md); a montagem do fluxo USB e a integração STM32 continuam pendentes.
+O núcleo de identificação recusa UID, revisão ou família não configurados. A camada específica de cada placa ainda precisa de fornecer os dados reais. Os dados de identificação dos testes são sintéticos e não validam pinagem ou compatibilidade de gravação. O formato está em [identity-protocol.md](docs/identity-protocol.md). O encaminhamento comum dos pedidos está documentado em [firmware-dispatch.md](docs/firmware-dispatch.md); a receção incremental está em [stream-reception.md](docs/stream-reception.md). A ligação ao driver USB STM32 e o envio da resposta continuam pendentes.
 
 ## Gravar datalog
 
