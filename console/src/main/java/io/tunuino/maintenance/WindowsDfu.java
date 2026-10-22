@@ -83,7 +83,8 @@ public final class WindowsDfu {
         image.verifyUnchanged();
         CommandRunner.Result info = executor.run(List.of(tool.toString(), "-c", "port=" + live.port(),
             "sn=" + live.serial()), tool.getParent(), Duration.ofSeconds(20), log);
-        if (info.exitCode() != 0 || !Pattern.compile("(?im)Device\\s+ID\\s*:\\s*0x419\\b").matcher(info.output()).find())
+        // CubeProgrammer versions print the same numeric ID as 0x419 or 0x0419.
+        if (info.exitCode() != 0 || !Pattern.compile("(?im)^\\h*Device\\h+ID\\h*:\\h*0x0*419\\h*$").matcher(info.output()).find())
             throw new IOException("O dispositivo não confirmou o grupo STM32F42x/F43x esperado. Nenhuma gravação iniciada.");
         // No mass erase, unprotect, option-byte changes, or start-at-base command.
         try (FirmwareImage.Staged staged = image.stage()) {

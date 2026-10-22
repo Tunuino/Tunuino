@@ -71,6 +71,34 @@ public final class FirmwareProgrammingChecks {
             };
             WindowsDfu.flash(tool, usb, fw, ignored -> {}, good);
             check(writes.get() == 1, "Exactly one write expected");
+            for (String id : List.of("0x0419", "0X000419")) {
+                AtomicInteger paddedWrites = new AtomicInteger();
+                WindowsDfu.flash(tool, usb, fw, ignored -> {}, (cmd, cwd, timeout, log) -> {
+                    if (cmd.contains("-l")) return result("Device Index : USB1\r\nSerial number : ABC123\r\n");
+                    if (cmd.contains("-w")) {
+                        paddedWrites.incrementAndGet();
+                        return result("Download verified successfully");
+                    }
+                    // CubeProgrammer v2.19.0 output reported on a physical Proteus v0.7.
+                    return result("STM32CubeProgrammer v2.19.0\r\n"
+                        + "Product ID : STM32 BOOTLOADER\r\n"
+                        + "Device ID : " + id + "\r\nDevice name : STM32F42xxx/F43xxx\r\n"
+                        + "Flash size : 2 MBytes (default)\r\nDevice CPU : Cortex-M4\r\n");
+                });
+                check(paddedWrites.get() == 1, "Padded F427 device ID must allow one verified write: " + id);
+            }
+            for (String id : List.of("0x0450", "0x04190", "0x4190", "", "unreadable")) {
+                reject(() -> WindowsDfu.flash(tool, usb, fw, ignored -> {}, (cmd, cwd, timeout, log) -> {
+                    if (cmd.contains("-l")) return result("Device Index : USB1\nSerial number : ABC123\n");
+                    check(!cmd.contains("-w"), "Unknown or different device ID must stop before writing");
+                    return result("Device ID : " + id);
+                }));
+            }
+            reject(() -> WindowsDfu.flash(tool, usb, fw, ignored -> {}, (cmd, cwd, timeout, log) -> {
+                if (cmd.contains("-l")) return result("Device Index : USB1\nSerial number : ABC123\n");
+                check(!cmd.contains("-w"), "Failed connection must stop before writing even with matching ID");
+                return new CommandRunner.Result(1, "Device ID : 0x0419");
+            }));
             reject(() -> WindowsDfu.flash(tool, usb, fw, ignored -> {}, (cmd, cwd, timeout, log) -> {
                 if (cmd.contains("-l")) return result("Device Index : USB1\nSerial number : ABC123\n");
                 check(!cmd.contains("-w"), "Wrong MCU must stop before writing");
