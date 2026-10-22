@@ -6,6 +6,10 @@ O núcleo C portátil contém contratos e funções verificáveis no computador.
 
 Nenhum pino de injeção, ignição, acelerador ou relé será definido por suposição. A ativação de saídas depende de um mapa de hardware validado e de um estado de funcionamento explícito. O núcleo de comunicação atual não configura periféricos nem comanda saídas.
 
+## Cambota
+
+`tunuino_crank` recebe arestas temporizadas de uma roda uniforme com uma região de dentes em falta. Exige duas falhas com contagem correta antes de expor RPM e índice relativo. Uma leitura verifica timeout e limpa dados inválidos. Ruído/contagem incorreta retiram a sincronização e um recuo de relógio exige reinicialização. O protótipo é independente de GPIO, transporte e atuação; os sinais dos testes são sintéticos. Faltam aquisição STM32, validação durante arranque, referência PMS, árvore de cames e controlo de saídas. O contrato está em `crank-decoder.md`.
+
 ## Comunicação
 
 O transporte entrega um corpo binário com 1 a 4096 bytes. O pacote contém comprimento de 16 bits em ordem de rede, corpo e CRC32 de 32 bits em ordem de rede. O CRC cobre apenas o corpo. O algoritmo usa polinómio refletido 0xEDB88320, valor inicial 0xFFFFFFFF e complemento final.

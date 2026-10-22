@@ -6,6 +6,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 
 ## Implementado
 
+- Protótipo C de descodificação de cambota com dentes em falta, confirmação de sincronização, RPM e perda de sinal, testado com sequências sintéticas.
 - Codificação e validação de pacotes com tamanho e CRC32, em C e Java.
 - Testes de integridade, limites e interoperabilidade entre as duas implementações.
 - Comparação de componentes PCB/esquema Proteus, com deteção da ambiguidade STM32F427/STM32F767 e de instâncias adicionais.
@@ -31,7 +32,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 ## Por implementar e validar
 
 - Validação USB física e da identificação no Windows com firmware Tunuino nas centralinas, e recuperação de ligação.
-- Firmware STM32, descodificação de cambota/árvore de cames e controlo do motor.
+- Firmware STM32, aquisição/validação física da cambota, descodificação da árvore de cames e controlo do motor.
 - Drivers, bootloader e gravação específicos de cada variante de hardware.
 - Aquisição física e validação do datalogging nas placas, definições INI para TunerStudio e Autotune online/offline.
 - Exportação da netlist Proteus e comparação com o PCB, rastreio dos circuitos intermédios, validação elétrica de conectores/pinos STM32 e geração de definições de hardware.
@@ -92,3 +93,7 @@ A edição é offline. Ainda não existe envio de mapas para a ECU ou aplicaçã
 As fontes Proteus/uaEFI e o procedimento de importação estão em [hardware/README.md](hardware/README.md). Os relatórios identificam contactos e redes USB da uaEFI F3 até ao módulo M6 e as atribuições dos pads USB do PCB Proteus. Continuam sem validação elétrica e não geram pinagem de firmware. O PCB Proteus não declara revisão; a comparação com o esquema continua pendente.
 
 A comparação Proteus encontrou uma ambiguidade no MCU: U1501 usa o valor `STM32F427ZGTx`, mas a propriedade `PN` indica `STM32F767ZIT6`. A variante física e a configuração STM32 continuam por confirmar. O detalhe está em [hardware/README.md](hardware/README.md).
+
+## Núcleo de cambota
+
+O protótipo portátil e os limites estão em [crank-decoder.md](docs/crank-decoder.md). Só expõe RPM depois de confirmar a falha e a contagem de dentes. Ainda não lê entradas físicas nem comanda injeção/ignição.
