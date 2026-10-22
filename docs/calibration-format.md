@@ -20,6 +20,10 @@ A consulta usa interpolação bilinear e devolve percentagem VE ou graus de igni
 
 O núcleo C valida o ficheiro completo antes de alterar o mapa de destino. O destino deve usar armazenamento separado da entrada e permanecer estável durante uma consulta. O mapa tem armazenamento fornecido pelo chamador; não existe alocação dinâmica no módulo C. A implementação ainda não foi medida num ciclo de controlo STM32.
 
-O modelo Java é imutável e a gravação em ficheiro cria um destino novo, preservando ficheiros existentes. A leitura do disco limita a quantidade de dados antes de os interpretar. O tamanho máximo é 4368 bytes, pelo que um futuro envio USB terá de usar transferência em blocos; o ficheiro não é um pacote binário nem uma definição INI TunerStudio.
+O modelo Java é imutável: uma edição válida devolve um novo snapshot e mantém o anterior. A edição aceita números decimais com ponto e até três casas, converte-os exatamente para os inteiros do formato e recusa entradas que exigiriam arredondamento. Eixos e tipo não são alterados pela edição de células.
+
+`CalibrationDocument` mantém o snapshot atual, o último snapshot guardado e até 100 alterações de desfazer/refazer. Uma edição inválida não altera o documento nem o histórico. Uma gravação só atualiza a referência guardada após a escrita bem-sucedida; uma falha mantém o estado de alterações pendentes. Se o conteúdo regressar ao último snapshot guardado, deixa de estar marcado como alterado.
+
+A gravação em ficheiro cria um destino novo, preservando ficheiros existentes. A leitura do disco limita a quantidade de dados antes de os interpretar. O tamanho máximo é 4368 bytes, pelo que um futuro envio USB terá de usar transferência em blocos; o ficheiro não é um pacote binário nem uma definição INI TunerStudio.
 
 Os mapas dos testes são superfícies matemáticas sintéticas. Não existem mapas padrão de motor neste bloco. A associação a uma configuração de motor, a uma revisão de hardware e a limites de aplicação continua por implementar.

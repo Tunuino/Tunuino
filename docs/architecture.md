@@ -34,7 +34,9 @@ O CSV é criado com exclusividade e recebe cada amostra válida. O gráfico mant
 
 `tunuino_map` contém eixos RPM/MAP e células de VE ou ignição em inteiros com escala explícita. O módulo C valida os mapas e usa interpolação bilinear, sinalizando consultas fora dos eixos. O chamador deve fornecer um mapa estável; a avaliação ainda não foi integrada num ciclo de controlo STM32.
 
-`CalibrationMap` implementa o mesmo formato na Console com armazenamento imutável. A leitura recusa dimensões, valores ou CRC inválidos antes de disponibilizar o mapa. `CalibrationViewer` apresenta uma tabela apenas de leitura e permite consultar pontos offline. Não há comando de escrita de calibração nem aplicação dos valores ao motor neste bloco. O formato está em `calibration-format.md`.
+`CalibrationMap` implementa o mesmo formato na Console com armazenamento imutável. A leitura recusa dimensões, valores ou CRC inválidos antes de disponibilizar o mapa. `CalibrationDocument` aplica edições exatas sobre novos snapshots, mantém um histórico limitado e distingue o conteúdo atual do último conteúdo guardado.
+
+`CalibrationViewer` permite editar células e consultar pontos offline. A gravação de cópias corre numa thread própria e bloqueia novas edições durante a escrita. O fecho da janela e da Console passa pelo tratamento de alterações pendentes. Uma falha de gravação mantém o editor aberto e as alterações pendentes. Não há comando de escrita de calibração nem aplicação dos valores ao motor neste bloco. O formato está em `calibration-format.md`.
 
 ## Hardware
 

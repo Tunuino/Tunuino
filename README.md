@@ -17,6 +17,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 - Gráfico de RPM durante a gravação, limitado a 600 pontos; os dados válidos continuam a ser gravados no ficheiro.
 - Mapas VE e ignição até 32×32, com validação, CRC e interpolação bilinear em C/Java.
 - Consulta offline de ficheiros `.tnmap` na Console, com tabela RPM/MAP e cálculo de um ponto.
+- Edição offline das células VE/ignição, validação decimal exata, desfazer/refazer e gravação de uma nova cópia.
 
 ## Por implementar e validar
 
@@ -63,8 +64,12 @@ Usa **Parar gravação** para terminar o pedido em curso e fechar o ficheiro. A 
 
 A pausa entre pedidos é de 100 ms, acrescida do tempo necessário à comunicação. O formato está em [live-data-protocol.md](docs/live-data-protocol.md). Os testes usam amostras sintéticas; o projeto ainda não lê sensores físicos nem produz uma imagem STM32 gravável.
 
-## Consultar mapas
+## Editar e consultar mapas
 
 Usa **Abrir mapa** para carregar um ficheiro `.tnmap` válido. A janela mostra o tipo de mapa, os eixos RPM/MAP e as células. Introduz RPM e MAP em kPa e usa **Calcular ponto** para consultar a interpolação. Se o ponto ficar fora dos eixos, a janela assinala que foi limitado à borda.
 
-Esta consulta é offline e apenas de leitura. Ainda não existe edição de mapas na interface, envio para a ECU ou aplicação a injeção/ignição. Não existem mapas padrão de motor. O formato e os limites estão em [calibration-format.md](docs/calibration-format.md).
+Faz duplo clique numa célula para editar o valor. **Enter** confirma e **Esc** cancela. Usa ponto decimal e até três casas decimais; valores inválidos são recusados, sem arredondamento silencioso. Os eixos RPM/MAP continuam fixos. **Desfazer** e **Refazer** mantêm até 100 alterações no histórico da janela.
+
+**Guardar cópia** pede um ficheiro novo e preserva os ficheiros existentes. Depois de guardar, a cópia pode ser aberta novamente. O título assinala alterações pendentes com `*`. Ao fechar o mapa ou a Console, podes guardar uma cópia, descartar as alterações ou cancelar o fecho. Confirma ou cancela uma célula ainda em edição antes de guardar ou fechar.
+
+A edição é offline. Ainda não existe envio de mapas para a ECU ou aplicação a injeção/ignição. Não existem mapas padrão de motor. O formato e os limites estão em [calibration-format.md](docs/calibration-format.md).

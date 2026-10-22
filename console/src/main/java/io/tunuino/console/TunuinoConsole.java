@@ -395,6 +395,9 @@ public final class TunuinoConsole extends Application {
             fileWorker.submit(activeRead);
         });
         stage.setScene(new Scene(root, 1060, 650));
+        stage.setOnCloseRequest(event -> {
+            if (!CalibrationViewer.closeAll()) { event.consume(); }
+        });
         stage.show();
         refreshConnection.run();
         scan.fire();
