@@ -17,6 +17,10 @@ static tunuino_capture_status fail(tunuino_capture_queue *q, tunuino_capture_sta
     atomic_store_explicit(&q->fault,(unsigned)status,memory_order_release);
     return status;
 }
+tunuino_capture_status tunuino_capture_abort(tunuino_capture_queue *q) {
+    tunuino_capture_status status = tunuino_capture_state(q);
+    return status == TUNUINO_CAPTURE_OK ? fail(q,TUNUINO_CAPTURE_SOURCE_FAULT) : status;
+}
 tunuino_capture_status tunuino_capture_push(tunuino_capture_queue *q, tunuino_capture_event event) {
     tunuino_capture_status status = tunuino_capture_state(q);
     if (status != TUNUINO_CAPTURE_OK) { return status; }

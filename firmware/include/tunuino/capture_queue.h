@@ -12,7 +12,7 @@ typedef enum { TUNUINO_CAPTURE_CRANK = 1, TUNUINO_CAPTURE_CAM = 2 } tunuino_capt
 typedef struct { uint64_t time_us; tunuino_capture_kind kind; } tunuino_capture_event;
 typedef enum {
     TUNUINO_CAPTURE_OK = 0, TUNUINO_CAPTURE_EMPTY, TUNUINO_CAPTURE_ARGUMENT,
-    TUNUINO_CAPTURE_OVERFLOW, TUNUINO_CAPTURE_ORDER
+    TUNUINO_CAPTURE_OVERFLOW, TUNUINO_CAPTURE_ORDER, TUNUINO_CAPTURE_SOURCE_FAULT
 } tunuino_capture_status;
 /* Exactly one serialized producer and one consumer. No reentrant/nested
  * producers. Initialize/reset only while both sides and hardware are stopped.
@@ -28,6 +28,9 @@ tunuino_capture_status tunuino_capture_init(tunuino_capture_queue *queue);
 /* Producer only. Nondecreasing extended timestamps; at equal timestamps crank
  * must precede cam. Overflow/order/invalid kind latch a failure, never retry. */
 tunuino_capture_status tunuino_capture_push(tunuino_capture_queue *queue, tunuino_capture_event event);
+/* Producer only: latch a reported acquisition fault, preserving a prior fault.
+ * Pending events are no longer deliverable. Reset only with both sides stopped. */
+tunuino_capture_status tunuino_capture_abort(tunuino_capture_queue *queue);
 /* Consumer only. EMPTY/errors zero the event. No dequeue after latched fault. */
 tunuino_capture_status tunuino_capture_take(tunuino_capture_queue *queue, tunuino_capture_event *event);
 tunuino_capture_status tunuino_capture_state(const tunuino_capture_queue *queue);

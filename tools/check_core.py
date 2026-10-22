@@ -44,6 +44,12 @@ def main():
                      "firmware/src/position.c", "firmware/src/capture_processor.c",
                      "firmware/tests/test_clock32.c", "-lm", "-o", str(clock_exe)])
         print(run([str(clock_exe)]))
+        source_exe = work / ("source-check.exe" if os.name == "nt" else "source-check")
+        run(flags + ["firmware/src/clock32.c", "firmware/src/capture_source.c", "firmware/src/capture_queue.c",
+                     "firmware/src/crank.c", "firmware/src/position.c", "firmware/src/capture_processor.c",
+                     "firmware/src/telemetry.c", "firmware/src/live_data.c", "firmware/src/frame.c",
+                     "firmware/tests/test_capture_source.c", "-lm", "-o", str(source_exe)])
+        print(run([str(source_exe)]))
         crank_exe = work / ("crank-check.exe" if os.name == "nt" else "crank-check")
         run(flags + ["firmware/src/crank.c", "firmware/tests/test_crank.c", "-lm", "-o", str(crank_exe)])
         print(run([str(crank_exe)]))
