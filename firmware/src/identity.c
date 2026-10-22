@@ -2,21 +2,22 @@
 #include "tunuino/identity.h"
 #include <string.h>
 
-static int configured(const tunuino_identity *identity) {
+tunuino_identity_status tunuino_identity_validate(const tunuino_identity *identity) {
+    if (identity == NULL) { return TUNUINO_IDENTITY_ARGUMENT; }
     if (identity->family != TUNUINO_PROTEUS && identity->family != TUNUINO_UAEFI) {
-        return 0;
+        return TUNUINO_IDENTITY_UNCONFIGURED;
     }
     if (identity->mcu_series < TUNUINO_STM32_F4 || identity->mcu_series > TUNUINO_STM32_H7
             || identity->hardware_revision == 0
             || (identity->capabilities & ~TUNUINO_CAPABILITY_MASK) != 0) {
-        return 0;
+        return TUNUINO_IDENTITY_UNCONFIGURED;
     }
     unsigned nonzero = 0, nonff = 0;
     for (size_t i = 0; i < sizeof(identity->uid); ++i) {
         nonzero |= identity->uid[i];
         nonff |= identity->uid[i] ^ 0xFFu;
     }
-    return nonzero != 0 && nonff != 0;
+    return nonzero != 0 && nonff != 0 ? TUNUINO_IDENTITY_OK : TUNUINO_IDENTITY_UNCONFIGURED;
 }
 
 tunuino_identity_status tunuino_identity_reply(const tunuino_identity *identity,
@@ -37,7 +38,7 @@ tunuino_identity_status tunuino_identity_reply(const tunuino_identity *identity,
     if (length != sizeof(query) || memcmp(request, query, sizeof(query)) != 0) {
         return TUNUINO_IDENTITY_BAD_REQUEST;
     }
-    if (!configured(identity)) {
+    if (tunuino_identity_validate(identity) != TUNUINO_IDENTITY_OK) {
         return TUNUINO_IDENTITY_UNCONFIGURED;
     }
     if (capacity < TUNUINO_IDENTITY_BODY_SIZE + TUNUINO_FRAME_OVERHEAD) {

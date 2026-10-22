@@ -31,6 +31,9 @@ typedef enum {
     TUNUINO_IDENTITY_CAPACITY
 } tunuino_identity_status;
 
+/* Shared validation for transports and dispatchers; no inferred defaults. */
+tunuino_identity_status tunuino_identity_validate(const tunuino_identity *identity);
+
 /* identity must be a stable snapshot supplied by the board layer.
  * No board defaults, MCU pin assignments or capabilities are inferred here. */
 tunuino_identity_status tunuino_identity_reply(const tunuino_identity *identity,

@@ -12,6 +12,8 @@ O transporte entrega um corpo binário com 1 a 4096 bytes. O pacote contém comp
 
 O codec constitui apenas o enquadramento binário. Os comandos, códigos de resposta, páginas de calibração, assinatura de firmware e definições INI precisam de implementação e testes próprios antes de declarar compatibilidade TunerStudio.
 
+`tunuino_dispatch_reply` encaminha pacotes completos para os handlers de identificação, sensores e mapas. A configuração exige identidade válida e fornecedores para as capacidades anunciadas; capacidades ainda sem implementação são recusadas. Mapas VE e ignição são selecionados separadamente. Os estados C de erro não geram respostas transmissíveis. O contrato, a sincronização dos snapshots e o trabalho pendente no transporte estão em `firmware-dispatch.md`.
+
 ## Console
 
 Java 21 e JavaFX, destinada ao Windows. O processamento de ficheiros e o protocolo são independentes da interface gráfica. A interface abre datalogs CSV offline. O transporte USB e a gravação devem executar fora da thread JavaFX, com timeout, cancelamento e verificação da identidade de hardware.

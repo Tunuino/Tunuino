@@ -86,6 +86,11 @@ def main():
             if cursor != len(packets) or offset != len(file):
                 raise AssertionError("Incomplete map fixture")
         print(read_output[4])
+        dispatch_exe = work / ("dispatch-check.exe" if os.name == "nt" else "dispatch-check")
+        run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/src/live_data.c",
+                     "firmware/src/calibration.c", "firmware/src/map_read.c", "firmware/src/dispatch.c",
+                     "firmware/tests/test_dispatch.c", "-lm", "-o", str(dispatch_exe)])
+        print(run([str(dispatch_exe)]))
         library_path = work / ("frame.dll" if os.name == "nt" else "frame.so")
         shared_flags = ["-shared"] + ([] if os.name == "nt" else ["-fPIC"])
         run(flags + shared_flags + ["firmware/src/frame.c", "-o", str(library_path)])
