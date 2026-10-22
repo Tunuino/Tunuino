@@ -4,7 +4,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import shutil
 from zipfile import ZIP_DEFLATED, ZipFile
 
 
@@ -39,34 +38,29 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     if any(output.iterdir()):
         raise ValueError("Release destination must be empty")
-    bundle(root, output / "tunuino_bundle_proteus_v07_f427_usb_bench.zip")
-    bundle(root / "console", output / "tunuino_console_windows_x64.zip", "TunuinoConsole")
-    bundle(root / "firmware", output / "tunuino_firmware_proteus_v07_f427_usb_bench.zip", "firmware")
-    shutil.copy2(root / "kit-manifest.json", output / "kit-manifest.json")
-    shutil.copy2(root / "START-HERE.txt", output / "START-HERE.txt")
     checksums = []
-    for path in sorted(output.iterdir()):
+    for path in sorted(p for p in root.rglob("*") if p.is_file() and p != root / "SHA256SUMS.txt"):
         with path.open("rb") as source:
             digest = hashlib.file_digest(source, "sha256").hexdigest()
-        checksums.append(f"{digest}  {path.name}\n")
-    (output / "SHA256SUMS.txt").write_text("".join(checksums), encoding="utf-8")
+        checksums.append(f"{digest}  {path.relative_to(root).as_posix()}\n")
+    (root / "SHA256SUMS.txt").write_text("".join(checksums), encoding="utf-8")
+    bundle(root, output / "tunuino_bundle_proteus_v07_f427_usb_bench.zip")
     repo = os.environ["GITHUB_REPOSITORY"]
     notes = f"""## Tunuino — versão experimental de bancada
 
 Console Windows x64 e firmware **Proteus v0.7 / STM32F427**, produzidos a partir do mesmo commit.
 
-USB FS configurado para a Proteus F427 sem deteção externa de VBUS em PA9. A Console aceita o ID DFU `0x0419` com zero inicial. Estas correções passaram em testes automáticos; a enumeração USB nesta ECU continua a exigir confirmação física.
+USB FS configurado para a Proteus F427 sem deteção externa de VBUS em PA9. A Console mostra o build no título e distingue ID inválido de erro da ferramenta ST, registando o código de saída. A gravação/enumeração física nesta ECU continua a exigir confirmação.
 
 | Download | Conteúdo |
 |---|---|
 | `tunuino_bundle_proteus_v07_f427_usb_bench.zip` | Kit completo: Console, firmware e instruções |
-| `tunuino_console_windows_x64.zip` | Console portátil com Java incluído |
-| `tunuino_firmware_proteus_v07_f427_usb_bench.zip` | Firmware de bancada e manifesto de gravação |
-| `SHA256SUMS.txt` | Checksums dos ficheiros publicados |
+
+Um único ZIP inclui `console/`, `firmware/`, `kit-manifest.json`, `START-HERE.txt` e `SHA256SUMS.txt`. Java está incluído na Console portátil.
 
 **Firmware apenas para testar USB em bancada. Não controla um motor. A gravação começa em 0x08000000 e substitui o bootloader instalado. A validação física na ECU está pendente.**
 
-Extrair o ZIP completo antes de abrir `console/TunuinoConsole.exe` (kit) ou `TunuinoConsole/TunuinoConsole.exe` (Console separada). Manter `.bin.properties` junto do `.bin`.
+Extrair o ZIP completo antes de abrir `console/TunuinoConsole.exe`. Manter `.bin.properties` junto do `.bin`.
 
 O pacote prepara a configuração das ferramentas de gravação. Não inclui automaticamente STM32CubeProgrammer, BootCommander ou drivers de terceiros; consultar `console/tools/PROGRAMMERS.txt` no kit. A Console permite selecionar uma instalação existente.
 

@@ -170,9 +170,11 @@ jobs:
         cache-dependency-path: console/pom.xml
     - name: Compile and collect runtime dependencies
       run: mvn --batch-mode --no-transfer-progress --file console/pom.xml verify org.apache.maven.plugins:maven-dependency-plugin:3.8.1:copy-dependencies
-        -DincludeScope=runtime -DoutputDirectory=target/app/lib
+        -DincludeScope=runtime -DoutputDirectory=target/app/lib -Dtunuino.sourceCommit=${{ github.sha }}
     - name: Firmware validation and programmer failure checks on Windows
       run: python tools/check_maintenance.py
+    - name: Test the actual release JAR with simulated programmer output
+      run: python tools/check_maintenance.py --jar console/target/tunuino-console-0.1.0-SNAPSHOT.jar
     - name: Build portable Windows application with Java runtime
       shell: pwsh
       run: |
@@ -294,7 +296,7 @@ jobs:
         path: build/kit
     - name: Validate synchronized kit again
       run: python3 tools/ci_package_kit.py
-    - name: Prepare download bundles and SHA256 checksums
+    - name: Prepare single bundle with internal checksums
       run: python3 tools/ci_release.py
     - name: Upload assets to draft and publish release
       env:
@@ -317,3 +319,8 @@ jobs:
         gh release upload "$tag" build/release/* --clobber
         gh release edit "$tag" --draft=false --prerelease --latest=false
         gh release view "$tag" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"
+    - name: Keep only bundle attachments in previous nightly Releases
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+      run: python3 tools/ci_cleanup_releases.py

@@ -93,7 +93,7 @@ public final class TunuinoConsole extends Application {
         if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows")) {
             throw new IllegalStateException("Tunuino Console destina-se ao Windows");
         }
-        stage.setTitle("Tunuino Console");
+        stage.setTitle("Tunuino Console · " + io.tunuino.maintenance.BuildInfo.label());
         ConsoleBranding.applyIcon(stage);
         ComboBox<DeviceIdentity.Family> hardware = new ComboBox<>();
         hardware.getItems().addAll(DeviceIdentity.Family.values());

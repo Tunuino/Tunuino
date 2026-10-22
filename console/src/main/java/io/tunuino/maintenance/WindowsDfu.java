@@ -75,6 +75,19 @@ public final class WindowsDfu {
     public static void flash(Path tool, UsbPort selected, FirmwareImage image, Consumer<String> log) throws IOException {
         flash(tool, selected, image, log, CommandRunner::run);
     }
+    public static int parseDeviceId(String output) throws IOException {
+        // Terminal colour escapes and NUL padding are not part of the numeric ID.
+        String plain = output.replaceAll("\\x1B\\[[0-?]*[ -/]*[@-~]", "").replace("\u0000", "");
+        Matcher ids = Pattern.compile("(?im)^\\h*Device\\h+ID\\h*:\\h*0x([0-9a-f]{1,8})\\h*$").matcher(plain);
+        Integer found = null;
+        while (ids.find()) {
+            int value = Integer.parseUnsignedInt(ids.group(1), 16);
+            if (found != null && found != value) throw new IOException("A ferramenta ST devolveu IDs de dispositivo contraditórios. Nenhuma gravação iniciada.");
+            found = value;
+        }
+        if (found == null) throw new IOException("A saída ST não contém um Device ID hexadecimal válido. Nenhuma gravação iniciada.");
+        return found;
+    }
     public static void flash(Path tool, UsbPort selected, FirmwareImage image, Consumer<String> log, Executor executor) throws IOException {
         if (!image.mode().equals("dfu")) throw new IOException("Imagem incompatível com DFU");
         // Re-enumerate and bind by serial number: USB1 can change after unplug/replug.
@@ -83,9 +96,15 @@ public final class WindowsDfu {
         image.verifyUnchanged();
         CommandRunner.Result info = executor.run(List.of(tool.toString(), "-c", "port=" + live.port(),
             "sn=" + live.serial()), tool.getParent(), Duration.ofSeconds(20), log);
-        // CubeProgrammer versions print the same numeric ID as 0x419 or 0x0419.
-        if (info.exitCode() != 0 || !Pattern.compile("(?im)^\\h*Device\\h+ID\\h*:\\h*0x0*419\\h*$").matcher(info.output()).find())
-            throw new IOException("O dispositivo não confirmou o grupo STM32F42x/F43x esperado. Nenhuma gravação iniciada.");
+        log.accept("\nPré-verificação DFU: código de saída ST = " + info.exitCode() + "\n");
+        if (info.exitCode() != 0)
+            throw new IOException("O CubeProgrammer terminou a identificação com código " + info.exitCode()
+                + ". Nenhuma gravação iniciada. Consulta o registo da ferramenta.");
+        int deviceId = parseDeviceId(info.output());
+        log.accept("Device ID interpretado: 0x" + Integer.toHexString(deviceId) + "\n");
+        if (deviceId != 0x419)
+            throw new IOException("Device ID 0x" + Integer.toHexString(deviceId)
+                + " incompatível; esperado STM32F42x/F43x (0x419). Nenhuma gravação iniciada.");
         // No mass erase, unprotect, option-byte changes, or start-at-base command.
         try (FirmwareImage.Staged staged = image.stage()) {
             CommandRunner.Result write = executor.run(writeCommand(tool, live, staged.path(), image.address()),

@@ -40,12 +40,13 @@ public final class FirmwareProgrammingChecks {
     }
     private static CommandRunner.Result result(String output) { return new CommandRunner.Result(0, output); }
     public static void main(String[] args) throws Exception {
-        if (args.length > 0) {
+        if (args.length > 0 && !args[0].matches("[0-9a-f]{40}")) {
             if (args[0].equals("wait")) Thread.sleep(30000);
             if (args[0].equals("flood")) System.out.print("X".repeat(400000));
             else if (args[0].equals("echo")) System.out.println(args[1]);
             return;
         }
+        if (args.length > 0) check(BuildInfo.revision().equals(args[0]), "Release JAR must identify its actual source commit");
         Path root = Files.createTempDirectory("tunuino firmware checks ");
         try {
             check(WindowsDfu.parseDevices("").isEmpty(), "No device must remain empty");
@@ -71,7 +72,7 @@ public final class FirmwareProgrammingChecks {
             };
             WindowsDfu.flash(tool, usb, fw, ignored -> {}, good);
             check(writes.get() == 1, "Exactly one write expected");
-            for (String id : List.of("0x0419", "0X000419")) {
+            for (String id : List.of("0x0419", "0X000419", "\u001b[32m0x0419\u001b[0m", "0x0419\u0000")) {
                 AtomicInteger paddedWrites = new AtomicInteger();
                 WindowsDfu.flash(tool, usb, fw, ignored -> {}, (cmd, cwd, timeout, log) -> {
                     if (cmd.contains("-l")) return result("Device Index : USB1\r\nSerial number : ABC123\r\n");
@@ -87,6 +88,9 @@ public final class FirmwareProgrammingChecks {
                 });
                 check(paddedWrites.get() == 1, "Padded F427 device ID must allow one verified write: " + id);
             }
+            check(WindowsDfu.parseDeviceId("Device ID : 0x0419\nDevice ID : 0x419") == 0x419, "Equivalent repeated numeric IDs");
+            reject(() -> WindowsDfu.parseDeviceId("Device ID : 0x0419\nDevice ID : 0x450"));
+            reject(() -> WindowsDfu.parseDeviceId("Device ID : 0x0419xxxx"));
             for (String id : List.of("0x0450", "0x04190", "0x4190", "", "unreadable")) {
                 reject(() -> WindowsDfu.flash(tool, usb, fw, ignored -> {}, (cmd, cwd, timeout, log) -> {
                     if (cmd.contains("-l")) return result("Device Index : USB1\nSerial number : ABC123\n");
@@ -94,11 +98,16 @@ public final class FirmwareProgrammingChecks {
                     return result("Device ID : " + id);
                 }));
             }
-            reject(() -> WindowsDfu.flash(tool, usb, fw, ignored -> {}, (cmd, cwd, timeout, log) -> {
+            try {
+                WindowsDfu.flash(tool, usb, fw, ignored -> {}, (cmd, cwd, timeout, log) -> {
                 if (cmd.contains("-l")) return result("Device Index : USB1\nSerial number : ABC123\n");
                 check(!cmd.contains("-w"), "Failed connection must stop before writing even with matching ID");
                 return new CommandRunner.Result(1, "Device ID : 0x0419");
-            }));
+                });
+                throw new AssertionError("Nonzero ST status accepted");
+            } catch (IOException e) {
+                check(e.getMessage().contains("código 1"), "Connection failure must show exit status instead of blaming the MCU ID");
+            }
             reject(() -> WindowsDfu.flash(tool, usb, fw, ignored -> {}, (cmd, cwd, timeout, log) -> {
                 if (cmd.contains("-l")) return result("Device Index : USB1\nSerial number : ABC123\n");
                 check(!cmd.contains("-w"), "Wrong MCU must stop before writing");

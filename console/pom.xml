@@ -9,6 +9,7 @@
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <javafx.version>21.0.8</javafx.version>
+    <tunuino.sourceCommit>development</tunuino.sourceCommit>
   </properties>
   <dependencies>
     <dependency>
@@ -30,6 +31,9 @@
         <version>3.4.2</version>
         <configuration>
           <archive>
+            <manifestEntries>
+              <Implementation-Version>${tunuino.sourceCommit}</Implementation-Version>
+            </manifestEntries>
             <manifest>
               <mainClass>io.tunuino.console.Launcher</mainClass>
               <addClasspath>true</addClasspath>

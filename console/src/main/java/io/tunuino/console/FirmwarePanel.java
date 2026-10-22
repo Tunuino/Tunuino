@@ -209,6 +209,8 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
         if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) return;
         if (!serialFree.getAsBoolean()) { state.setText("Desliga a sessão COM antes de gravar"); return; }
         log.clear(); state.setText("Gravação em curso. Não desligues a alimentação nem feches a Console.");
+        append("Tunuino Console · " + BuildInfo.label() + "\nFerramenta: " + tool
+            + "\nFirmware: " + selected.file() + "\n");
         execute(() -> {
             if (openblt) OpenBltProgrammer.flash(tool, port, selected, this::append);
             else WindowsDfu.flash(tool, dfu, selected, this::append);
