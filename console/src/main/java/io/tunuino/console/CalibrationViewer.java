@@ -77,6 +77,7 @@ public final class CalibrationViewer {
             originalFilename = filename;
             document = new CalibrationDocument(map);
             stage.initOwner(owner);
+            ConsoleBranding.applyIcon(stage);
             table.setEditable(true);
             TableColumn<ObservableList<String>, String> load = column("MAP (kPa) / RPM", 0);
             load.setPrefWidth(150);

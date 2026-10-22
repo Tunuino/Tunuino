@@ -92,6 +92,7 @@ public final class TunuinoConsole extends Application {
             throw new IllegalStateException("Tunuino Console destina-se ao Windows");
         }
         stage.setTitle("Tunuino Console");
+        ConsoleBranding.applyIcon(stage);
         ComboBox<DeviceIdentity.Family> hardware = new ComboBox<>();
         hardware.getItems().addAll(DeviceIdentity.Family.values());
         hardware.setValue(DeviceIdentity.Family.PROTEUS);
