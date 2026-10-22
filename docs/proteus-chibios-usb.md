@@ -25,10 +25,11 @@ adapted from its STM32F429 Discovery demo, retaining their notices.
 - Product: `Proteus v0.7 ChibiOS USB bench`. Serial: 24 hexadecimal digits from
   the real STM32 UID. Tunuino identity firmware version 0.0.2.
 
-The startup sequence follows rusEFI's `usb_serial_start()` pattern:
+The startup sequence 
+`usb_serial_start()` pattern:
 `halInit`, `chSysInit`, `sduObjectInit`, `sduStart`, USB disconnect, 250 ms sleep,
 `usbStart`, USB connect. The protocol remains Tunuino's own identity-only bench
-protocol; adopting this startup does not add rusEFI engine functionality.
+protocol.
 
 ## Transport and callback context
 
