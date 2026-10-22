@@ -2,6 +2,7 @@
 package io.tunuino.console;
 
 import io.tunuino.transport.UsbSerialPorts;
+import io.tunuino.maintenance.WindowsDfu;
 import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
@@ -17,11 +18,15 @@ public final class Launcher {
                 try {
                     Stage stage = new Stage();
                     ConsoleBranding.applyIcon(stage);
-                    stage.setScene(new Scene(new Label("Tunuino runtime check"),320,100));
+                    // Construct the actual firmware controls as well as the graphics runtime.
+                    FirmwarePanel firmware = new FirmwarePanel(stage, () -> true, () -> null, () -> true);
+                    stage.setScene(new Scene(firmware, 1000, 360));
                     stage.show();
                     UsbSerialPorts.list();
+                    WindowsDfu.scan();
+                    firmware.close();
                     stage.close();
-                    System.out.println("JavaFX graphics, controls, logo and serial enumeration loaded");
+                    System.out.println("JavaFX firmware controls, logo, serial enumeration and Windows DFU query loaded");
                     System.exit(0);
                 } catch (Throwable error) {
                     error.printStackTrace();

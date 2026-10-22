@@ -28,7 +28,10 @@ def main():
         "Read https://github.com/Tunuino/Tunuino_documents/blob/main/proteus-v07-bringup.md\n"
         "Backup the installed firmware before flashing; image starts at 0x08000000.\n"
         "Disconnect engine actuators for the bench test. Physical USB validation is pending.\n"
-        "Extract the whole Console directory, then run console/TunuinoConsole.exe.\n")
+        "Extract the whole Console directory, then run console/TunuinoConsole.exe.\n"
+        "Select firmware/*.bin in the Console; keep its .bin.properties beside it.\n"
+        "DFU uses STM32_Programmer_CLI.exe from installed CubeProgrammer or an existing rusEFI bundle.\n"
+        "See console/tools/PROGRAMMERS.txt for offline tool and driver configuration.\n")
     print(f"Validated synchronized bench kit for {commit}")
 
 

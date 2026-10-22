@@ -47,6 +47,8 @@ public final class TunuinoConsole extends Application {
         thread.setDaemon(true);
         return thread;
     });
+    private FirmwarePanel firmwarePanel;
+    private javafx.animation.Timeline portRefresh;
     private Task<List<LogSample>> activeRead;
     private DeviceIdentity identifiedDevice;
     private boolean fileReading;
@@ -114,10 +116,12 @@ public final class TunuinoConsole extends Application {
         identify.setDisable(true);
         connect.setDisable(true);
         Runnable refreshConnection = () -> {
+            if (firmwarePanel != null) firmwarePanel.refreshControls();
             PacketSession current = connection.get();
             boolean connected = current != null && current.isOpen();
             connect.setText(connected ? "Desligar USB" : "Ligar USB");
-            connect.setDisable(serialBusy || captureActive || (!connected && ports.getValue() == null));
+            boolean programming = firmwarePanel != null && firmwarePanel.isBusy();
+            connect.setDisable(programming || serialBusy || captureActive || (!connected && ports.getValue() == null));
             scan.setDisable(serialBusy || connected || captureActive);
             ports.setDisable(serialBusy || connected || captureActive);
             hardware.setDisable(serialBusy || connected || captureActive);
@@ -141,6 +145,7 @@ public final class TunuinoConsole extends Application {
             refreshConnection.run();
         };
         ports.setOnAction(event -> refreshConnection.run());
+        hardware.setOnAction(event -> refreshConnection.run());
         scan.setOnAction(event -> {
             capture.setDisable(true);
             scan.setDisable(true);
@@ -156,6 +161,7 @@ public final class TunuinoConsole extends Application {
             }, usbFailure);
         });
         connect.setOnAction(event -> {
+            if (firmwarePanel != null && firmwarePanel.isBusy()) return;
             capture.setDisable(true);
             identifiedDevice = null;
             identityDetails.setText("Identificação da ECU pendente");
@@ -256,7 +262,24 @@ public final class TunuinoConsole extends Application {
         root.setTop(new VBox(new ToolBar(new Label("Tunuino"), hardware, open, openMap),
             new ToolBar(ports, scan, connect, identify, capture),
             new ToolBar(new Label("Mapa da ECU"), mapKind, readMap)));
-        root.setBottom(footer);
+        firmwarePanel = new FirmwarePanel(stage,
+            () -> connection.get() == null && !serialBusy && !captureActive,
+            () -> ports.getValue() == null ? null : ports.getValue().name(),
+            () -> hardware.getValue() == DeviceIdentity.Family.PROTEUS);
+        root.setBottom(new VBox(firmwarePanel, footer));
+        portRefresh = new javafx.animation.Timeline(new javafx.animation.KeyFrame(
+            javafx.util.Duration.seconds(3), event -> {
+                if (serialBusy || captureActive || connection.get() != null || firmwarePanel.isBusy()) return;
+                UsbSerialPorts.Port previous = ports.getValue();
+                serialTask(UsbSerialPorts::list, found -> {
+                    ports.getItems().setAll(found);
+                    ports.setValue(previous == null ? null : found.stream()
+                        .filter(p -> p.path().equals(previous.path())).findFirst().orElse(null));
+                    refreshConnection.run();
+                }, usbFailure);
+            }));
+        portRefresh.setCycleCount(javafx.animation.Animation.INDEFINITE);
+        portRefresh.play();
         readMap.setOnAction(event -> {
             PacketSession current = connection.get();
             DeviceIdentity device = identifiedDevice;
@@ -427,8 +450,13 @@ public final class TunuinoConsole extends Application {
             });
             fileWorker.submit(activeRead);
         });
-        stage.setScene(new Scene(root, 1060, 650));
+        stage.setScene(new Scene(root, 1160, 900));
         stage.setOnCloseRequest(event -> {
+            if (firmwarePanel.isBusy()) {
+                event.consume();
+                new Alert(Alert.AlertType.INFORMATION, "Espera que a operação de firmware termine antes de fechar.").show();
+                return;
+            }
             if (!CalibrationViewer.closeAll()) { event.consume(); }
         });
         stage.show();
@@ -442,6 +470,8 @@ public final class TunuinoConsole extends Application {
             return;
         }
         keepCapturing.set(false);
+        if (portRefresh != null) portRefresh.stop();
+        if (firmwarePanel != null) firmwarePanel.close();
         if (activeRead != null) {
             activeRead.cancel(true);
         }

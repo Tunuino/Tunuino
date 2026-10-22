@@ -115,6 +115,14 @@ def main():
                         "Backup and disconnected actuators required before first bench flash",
                         "Reset/replug USB after protocol fault or closing the serial session"],
     }
+    # Machine-readable flashing contract consumed by the Console, beside the .bin.
+    flashing_manifest = binary.with_name(binary.name + ".properties")
+    flashing_manifest.write_text(
+        "format=1\ntarget=proteus-v07-f427\nmode=dfu\naddress=0x08000000\n"
+        "replaces_bootloader=true\n"
+        "description=Proteus v0.7 STM32F427 - USB-only experimental bench\n"
+        f"sha256={hashlib.sha256(image).hexdigest()}\n", encoding="utf-8")
+    manifest["artifacts_sha256"][flashing_manifest.name] = hashlib.sha256(flashing_manifest.read_bytes()).hexdigest()
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print((output / "size.txt").read_text().strip())
     print(f"Linked bench image, {len(image)} flash bytes. Physical validation still required.")

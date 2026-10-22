@@ -142,6 +142,7 @@ jobs:
           build/proteus-v07-usb-bench/*.bin
           build/proteus-v07-usb-bench/*.hex
           build/proteus-v07-usb-bench/*.json
+          build/proteus-v07-usb-bench/*.properties
           build/proteus-v07-usb-bench/*.map
           build/proteus-v07-usb-bench/*.txt
           build/proteus-v07-usb-bench/third-party-licenses/
@@ -168,6 +169,8 @@ jobs:
     - name: Compile and collect runtime dependencies
       run: mvn --batch-mode --no-transfer-progress --file console/pom.xml verify org.apache.maven.plugins:maven-dependency-plugin:3.8.1:copy-dependencies
         -DincludeScope=runtime -DoutputDirectory=target/app/lib
+    - name: Firmware validation and programmer failure checks on Windows
+      run: python tools/check_maintenance.py
     - name: Build portable Windows application with Java runtime
       shell: pwsh
       run: |
@@ -188,6 +191,9 @@ jobs:
         Get-Content runtime-check.txt
         Get-Content runtime-check-errors.txt
         if ($process.ExitCode -ne 0) { throw "Packaged runtime check failed: $($process.ExitCode)" }
+    - name: Prepare offline programmer tool layout
+      shell: pwsh
+      run: python tools/package_programmer_tools.py --destination build/windows/TunuinoConsole
     - name: Record component provenance
       shell: pwsh
       run: |-

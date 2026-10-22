@@ -19,6 +19,7 @@ def run(args, timeout=None):
 
 
 def main():
+    print(run([sys.executable, "tools/check_maintenance.py"], timeout=60))
     run([sys.executable, "tools/check_kicad.py"], timeout=15)
     print("KiCad XML membership, ambiguity, provenance and file preservation checks passed")
     run([sys.executable, "tools/check_kicad_pcb.py"], timeout=15)
