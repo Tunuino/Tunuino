@@ -8,6 +8,7 @@ O projeto está no início do desenvolvimento. Ainda não produz firmware para g
 
 - Codificação e validação de pacotes com tamanho e CRC32, em C e Java.
 - Testes de integridade, limites e interoperabilidade entre as duas implementações.
+- Teste entre processos Java/C com clientes reais, ciclo do firmware, mapas completos, CSV e falhas injetadas.
 - Base da Console em Java 21 e JavaFX, com visualização de datalogs CSV offline.
 - Enumeração de portas série e abertura/fecho da ligação USB na Console, através de jSerialComm.
 - Sessão de pedidos/respostas com limite de tempo total, leituras e escritas parciais, cancelamento e invalidação após erro.
@@ -39,6 +40,8 @@ Requer Python 3, um compilador C11 e JDK 17 ou superior para os testes independe
 ```sh
 python3 tools/check_core.py
 ```
+
+O teste integrado inicia um peer C com dados sintéticos e comunica com os clientes Java por pipes binários. Não exige uma ECU nem valida USB físico. Os cenários e limites estão em [process-integration-test.md](docs/process-integration-test.md).
 
 ## Executar a Console no Windows
 

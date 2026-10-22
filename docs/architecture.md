@@ -48,6 +48,10 @@ O CSV é criado com exclusividade e recebe cada amostra válida. O gráfico mant
 
 `tunuino_map_snapshot_prepare` cria um ficheiro validado num snapshot com geração explícita. `tunuino_map_read_reply` serve metadados e blocos de até 256 bytes; uma mudança de geração impede continuar uma leitura antiga. O chamador serializa preparação/resposta e gere as gerações. `MapReadClient` valida a transferência completa dentro de um prazo total antes de expor um mapa imutável. A Console exige a capacidade de leitura e executa o pedido na thread USB; o resultado abre como cópia offline. O protocolo está em `map-read-protocol.md`. Ainda falta integrar estes handlers com mapas reais no STM32.
 
+## Integração no computador
+
+`FirmwareLinkChecks` inicia um peer C de teste e usa os clientes Java reais através de pipes. O peer executa `tunuino_link` e os handlers existentes com dados sintéticos. O teste cobre as duas famílias, leitura integral de mapas, datalog CSV e falhas de geração, CRC e desconexão. O adaptador e os dados do peer não são incluídos nos caminhos da Console de produção. O contrato e os limites estão em `process-integration-test.md`; não substitui o ensaio USB nas placas.
+
 ## Hardware
 
 Os projetos KiCad de Proteus e uaEFI são fontes de verdade para as ligações elétricas. O futuro gerador deve relacionar referência do conector, contacto, rede, circuito intermédio e pino MCU. Cada mapa precisa da revisão de hardware e do estado de validação. A seleção de uma família na interface não confirma compatibilidade de uma imagem de firmware.

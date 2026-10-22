@@ -13,8 +13,8 @@ import zlib
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(args):
-    return subprocess.run(args, cwd=ROOT, check=True, text=True, capture_output=True).stdout.strip()
+def run(args, timeout=None):
+    return subprocess.run(args, cwd=ROOT, check=True, text=True, capture_output=True, timeout=timeout).stdout.strip()
 
 
 def main():
@@ -108,6 +108,11 @@ def main():
                      "firmware/src/stream_rx.c", "firmware/src/stream_tx.c", "firmware/src/link.c",
                      "firmware/tests/test_link.c", "-lm", "-o", str(link_exe)])
         print(run([str(link_exe)]))
+        peer_exe = work / ("link-peer.exe" if os.name == "nt" else "link-peer")
+        run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/src/live_data.c",
+                     "firmware/src/calibration.c", "firmware/src/map_read.c", "firmware/src/dispatch.c",
+                     "firmware/src/stream_rx.c", "firmware/src/stream_tx.c", "firmware/src/link.c",
+                     "firmware/tests/link_peer.c", "-lm", "-o", str(peer_exe)])
         library_path = work / ("frame.dll" if os.name == "nt" else "frame.so")
         shared_flags = ["-shared"] + ([] if os.name == "nt" else ["-fPIC"])
         run(flags + shared_flags + ["firmware/src/frame.c", "-o", str(library_path)])
@@ -145,7 +150,8 @@ def main():
                    ROOT / "console/src/test/java/io/tunuino/IdentityChecks.java",
                    ROOT / "console/src/test/java/io/tunuino/LiveDataChecks.java",
                    ROOT / "console/src/test/java/io/tunuino/CalibrationChecks.java",
-                   ROOT / "console/src/test/java/io/tunuino/MapReadChecks.java"]
+                   ROOT / "console/src/test/java/io/tunuino/MapReadChecks.java",
+                   ROOT / "console/src/test/java/io/tunuino/FirmwareLinkChecks.java"]
         javac = ["javac"] if shutil.which("javac") else ["java", "--module", "jdk.compiler/com.sun.tools.javac.Main"]
         run(javac + ["-encoding", "UTF-8", "--release", "17", "-d", str(work)] + [str(p) for p in sources])
         print(run(["java", "-cp", str(work), "io.tunuino.CoreChecks", c_vector]))
@@ -156,6 +162,7 @@ def main():
         read_fixture = work / "map-read-vectors.txt"
         read_fixture.write_text("\n".join(read_output[:4]), encoding="ascii")
         print(run(["java", "-cp", str(work), "io.tunuino.MapReadChecks", str(read_fixture)]))
+        print(run(["java", "-cp", str(work), "io.tunuino.FirmwareLinkChecks", str(peer_exe)], timeout=30))
     print("Portable core verified. JavaFX UI and hardware builds require separate validation.")
 
 
