@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Select affected CI components; manual runs always produce a complete bench kit."""
+"""Select affected CI components; manual and scheduled runs always produce a complete bench kit."""
 import json
 import os
 from pathlib import Path
@@ -21,7 +21,7 @@ def main():
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     name = os.environ["GITHUB_EVENT_NAME"]
     try:
-        if name == "workflow_dispatch":
+        if name in ("workflow_dispatch", "schedule"):
             result = {key: True for key in ("core", "arm", "bench", "console")}
         else:
             if name == "pull_request":
