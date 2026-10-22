@@ -55,6 +55,8 @@ def main():
 
 Console Windows x64 e firmware **Proteus v0.7 / STM32F427**, produzidos a partir do mesmo commit.
 
+USB FS configurado para a Proteus F427 sem deteção externa de VBUS em PA9. A Console aceita o ID DFU `0x0419` com zero inicial. Estas correções passaram em testes automáticos; a enumeração USB nesta ECU continua a exigir confirmação física.
+
 | Download | Conteúdo |
 |---|---|
 | `tunuino_bundle_proteus_v07_f427_usb_bench.zip` | Kit completo: Console, firmware e instruções |

@@ -157,6 +157,11 @@ def main():
                      "firmware/src/live_mailbox.c", "firmware/tests/test_link.c", "-lm", "-o", str(link_exe)])
         print(run([str(link_exe)]))
         bench_object = work / "usb-bench-loop.o"
+        vbus_exe = work / ("usb-vbus-check.exe" if os.name == "nt" else "usb-vbus-check")
+        run(flags + ["-Ifirmware/tests/usb_port_stub", "-Ifirmware/boards/proteus_v07/usb_bench",
+            "firmware/boards/proteus_v07/usb_bench/usb_port.c", "firmware/tests/test_usb_vbus.c",
+            "-o", str(vbus_exe)])
+        print(run([str(vbus_exe)]))
         bench_include = ["-Ifirmware/tests/usb_bench_stub"]
         run(flags + bench_include + ["-Dmain=tunuino_usb_bench_main", "-c",
             "firmware/boards/proteus_v07/usb_bench/main.c", "-o", str(bench_object)])

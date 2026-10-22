@@ -64,6 +64,7 @@ void board_init(void) {
     (void)RCC->AHB2ENR;
     RCC->AHB2RSTR |= RCC_AHB2RSTR_OTGFSRST;
     RCC->AHB2RSTR &= ~RCC_AHB2RSTR_OTGFSRST;
+    board_usb_vbus_init();
     NVIC_SetPriority(OTG_FS_IRQn,2);
     if (SysTick_Config(SystemCoreClock / 1000u)) fatal(4);
     __enable_irq();
