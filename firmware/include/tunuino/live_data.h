@@ -4,6 +4,10 @@
 #include "tunuino/frame.h"
 
 #define TUNUINO_LIVE_BODY_SIZE 28u
+#define TUNUINO_LIVE_RPM_VALID 0x01u
+#define TUNUINO_LIVE_MAP_VALID 0x02u
+#define TUNUINO_LIVE_LAMBDA_VALID 0x04u
+#define TUNUINO_LIVE_COOLANT_VALID 0x08u
 #define TUNUINO_LIVE_ALL_VALID 0x0Fu
 
 typedef struct {

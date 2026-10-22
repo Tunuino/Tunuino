@@ -52,6 +52,11 @@ def main():
         run(flags + ["firmware/src/capture_queue.c", "firmware/src/crank.c", "firmware/src/position.c",
                      "firmware/src/capture_processor.c", "firmware/tests/test_capture_processor.c", "-lm", "-o", str(processor_exe)])
         print(run([str(processor_exe)], timeout=15))
+        telemetry_exe = work / ("telemetry-check.exe" if os.name == "nt" else "telemetry-check")
+        run(flags + ["firmware/src/frame.c", "firmware/src/live_data.c", "firmware/src/crank.c", "firmware/src/position.c",
+                     "firmware/src/capture_queue.c", "firmware/src/capture_processor.c", "firmware/src/telemetry.c",
+                     "firmware/tests/test_telemetry.c", "-lm", "-o", str(telemetry_exe)])
+        print(run([str(telemetry_exe)]))
         identity_exe = work / ("identity-check.exe" if os.name == "nt" else "identity-check")
         run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/tests/test_identity.c", "-o", str(identity_exe)])
         identity_output = run([str(identity_exe)]).splitlines()
@@ -135,6 +140,8 @@ def main():
         run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/src/live_data.c",
                      "firmware/src/calibration.c", "firmware/src/map_read.c", "firmware/src/dispatch.c",
                      "firmware/src/stream_rx.c", "firmware/src/stream_tx.c", "firmware/src/link.c",
+                     "firmware/src/crank.c", "firmware/src/position.c", "firmware/src/capture_queue.c",
+                     "firmware/src/capture_processor.c", "firmware/src/telemetry.c",
                      "firmware/tests/link_peer.c", "-lm", "-o", str(peer_exe)])
         library_path = work / ("frame.dll" if os.name == "nt" else "frame.so")
         shared_flags = ["-shared"] + ([] if os.name == "nt" else ["-fPIC"])
