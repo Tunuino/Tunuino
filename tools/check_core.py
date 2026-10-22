@@ -171,6 +171,15 @@ def main():
             str(bench_object), "-lm", "-o", str(bench_exe)])
         for mode in ("normal", "timeout", "corrupt", "close"):
             print(run([str(bench_exe), mode], timeout=10))
+        chibios_object = work / "chibios-bench-loop.o"
+        chibios_include = ["-Ifirmware/tests/chibios_bench_stub", "-Ifirmware/boards/proteus_v07/chibios_usb_bench"]
+        run(flags + chibios_include + ["-Dmain=tunuino_chibios_bench_main", "-c",
+            "firmware/boards/proteus_v07/chibios_usb_bench/main.c", "-o", str(chibios_object)])
+        chibios_exe = work / ("chibios-bench-check.exe" if os.name == "nt" else "chibios-bench-check")
+        run(flags + chibios_include + core_sources + ["firmware/tests/test_chibios_bench.c",
+            str(chibios_object), "-lm", "-o", str(chibios_exe)])
+        for mode in ("normal", "timeout", "corrupt", "disconnect", "reconfigure"):
+            print(run([str(chibios_exe), mode], timeout=10))
         peer_exe = work / ("link-peer.exe" if os.name == "nt" else "link-peer")
         run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/src/live_data.c",
                      "firmware/src/calibration.c", "firmware/src/map_read.c", "firmware/src/dispatch.c",

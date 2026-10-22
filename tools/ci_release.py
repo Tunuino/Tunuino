@@ -50,13 +50,13 @@ def main():
 
 Console Windows x64 e firmware **Proteus v0.7 / STM32F427**, produzidos a partir do mesmo commit.
 
-USB FS configurado para a Proteus F427 sem deteção externa de VBUS em PA9. A Console mostra o build no título e distingue ID inválido de erro da ferramenta ST, registando o código de saída. A gravação/enumeração física nesta ECU continua a exigir confirmação.
+Esta imagem usa o startup, kernel e USB CDC do repositório **Tunuino/ChibiOS**, fixado no commit `fd2e59c34878b1ef93ef5358f11fb5cc830027ff`. Segue o ciclo USB da rusEFI: inicialização ChibiOS, desconexão durante 250 ms e ligação do USB FS em PA11/PA12, sem deteção externa de VBUS. SYSCLK: 168 MHz; USB: 48 MHz. A Console mostra o build no título. A gravação/enumeração física nesta ECU continua a exigir confirmação.
 
 | Download | Conteúdo |
 |---|---|
 | `tunuino_bundle_proteus_v07_f427_usb_bench.zip` | Kit completo: Console, firmware e instruções |
 
-Um único ZIP inclui `console/`, `firmware/`, `kit-manifest.json`, `START-HERE.txt` e `SHA256SUMS.txt`. Java está incluído na Console portátil.
+Um único ZIP inclui `console/`, `firmware/`, `kit-manifest.json`, `START-HERE.txt` e `SHA256SUMS.txt`. Java está incluído na Console portátil. O firmware inclui `corresponding-source.tar.gz` e as licenças ChibiOS dentro do mesmo Bundle.
 
 **Firmware apenas para testar USB em bancada. Não controla um motor. A gravação começa em 0x08000000 e substitui o bootloader instalado. A validação física na ECU está pendente.**
 

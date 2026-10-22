@@ -33,14 +33,17 @@ def main():
                 "physical_ecu_validation": False}
     (root / "kit-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (root / "START-HERE.txt").write_text(
-        "Experimental Proteus v0.7 / F427 USB bench kit. Not an engine-control image.\n"
+        "Experimental Proteus v0.7 / F427 ChibiOS USB bench kit. Not an engine-control image.\n"
         "Read https://github.com/Tunuino/Tunuino_documents/blob/main/proteus-v07-bringup.md\n"
         "Backup the installed firmware before flashing; image starts at 0x08000000.\n"
         "Disconnect engine actuators for the bench test. Physical USB validation is pending.\n"
         "Extract the whole Console directory, then run console/TunuinoConsole.exe.\n"
         "Select firmware/*.bin in the Console; keep its .bin.properties beside it.\n"
         "DFU uses STM32_Programmer_CLI.exe from installed CubeProgrammer or an existing rusEFI bundle.\n"
-        "See console/tools/PROGRAMMERS.txt for offline tool and driver configuration.\n")
+        "See console/tools/PROGRAMMERS.txt for offline tool and driver configuration.\n"
+        "Firmware uses Tunuino/ChibiOS; source and notices are included in firmware/.\n"
+        "After verified flashing, restore normal BOOT0 and reset the ECU.\n"
+        "Expected USB application: Proteus v0.7 ChibiOS USB bench (CDC COM).\n")
     print(f"Validated synchronized bench kit for {commit}")
 
 

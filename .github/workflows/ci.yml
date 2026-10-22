@@ -95,23 +95,9 @@ jobs:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       if: needs.changes.outputs.bench == 'true'
       with:
-        repository: hathach/tinyusb
-        ref: 86ad6e56c1700e85f1c5678607a762cfe3aa2f47
-        path: .deps/tinyusb
-        persist-credentials: false
-    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      if: needs.changes.outputs.bench == 'true'
-      with:
-        repository: STMicroelectronics/cmsis-device-f4
-        ref: 9192c7b9df75a142f2027ab266601fe061fc00b3
-        path: .deps/cmsis_device
-        persist-credentials: false
-    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      if: needs.changes.outputs.bench == 'true'
-      with:
-        repository: ARM-software/CMSIS_6
-        ref: acf7392d0eee2ce58a98c8e8faa793e0f13f9307
-        path: .deps/cmsis_core
+        repository: Tunuino/ChibiOS
+        ref: fd2e59c34878b1ef93ef5358f11fb5cc830027ff
+        path: .deps/chibios
         persist-credentials: false
     - name: Cross-compile M4 and M7 with the same toolchain
       if: needs.changes.outputs.arm == 'true'
@@ -147,6 +133,7 @@ jobs:
           build/proteus-v07-usb-bench/*.properties
           build/proteus-v07-usb-bench/*.map
           build/proteus-v07-usb-bench/*.txt
+          build/proteus-v07-usb-bench/*.tar.gz
           build/proteus-v07-usb-bench/third-party-licenses/
         if-no-files-found: error
         retention-days: 30
