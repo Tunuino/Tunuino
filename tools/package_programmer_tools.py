@@ -42,11 +42,11 @@ def main():
     (root / 'PROGRAMMERS.txt').write_text(
         'Tunuino offline firmware programming for Windows\n\n'
         'DFU: Install STM32CubeProgrammer and its ST DFU driver, or select the complete\n'
-        'STM32_Programmer_CLI/bin/STM32_Programmer_CLI.exe from your existing rusEFI bundle.\n'
+        'STM32_Programmer_CLI/bin/STM32_Programmer_CLI.exe from an existing ST tool distribution.\n'
         'Keep all DLLs and Data_Base folders with the ST tool. The Console remembers the path.\n'
         'Official installer: https://www.st.com/en/development-tools/stm32cubeprog.html\n\n'
         'Drivers: Install Drivers in the Console accepts drivers/silent_st_drivers2.exe\n'
-        'from an existing rusEFI package. Windows may request administrator permission.\n\n'
+        'from an existing ST driver distribution. Windows may request administrator permission.\n\n'
         'OpenBLT: select the official BootCommander.exe with its libopenblt.dll and other\n'
         'dependencies. Only validated .srec + .srec.properties images are accepted.\n'
         'The current USB bench firmware is DFU-only and replaces the flash bootloader.\n'

@@ -121,7 +121,7 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
             String description;
             if (result.devices().isEmpty()) description = "DFU não encontrado. Em arranque normal a ECU aparece nas portas COM; para DFU usa BOOT0 e reset.";
             else if (result.devices().stream().anyMatch(d -> d.driverError() != 0)) description = "USB DFU detetado com erro de driver. Usa Instalar drivers. " + result.devices();
-            else if (tool == null) description = "USB DFU detetado. Seleciona STM32_Programmer_CLI.exe da instalação ST ou da pasta console do pacote rusEFI.";
+            else if (tool == null) description = "USB DFU detetado. Seleciona STM32_Programmer_CLI.exe da instalação STM32CubeProgrammer.";
             else if (!result.problem().isEmpty()) description = "USB DFU detetado. " + result.problem();
             else description = "DFU: " + result.ports().size() + " dispositivo(s) disponível(is) na ferramenta ST. Desliga a sessão COM antes de gravar.";
             if (!description.equals(lastDiscovery)) { state.setText(description); lastDiscovery = description; }
@@ -159,7 +159,7 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
     private void installDrivers() {
         Path installer = tools.find("silent_st_drivers2.exe");
         if (installer == null) {
-            File selected = chooseExe("Selecionar instalador ST da pasta drivers do pacote rusEFI", "silent_st_drivers2.exe");
+            File selected = chooseExe("Selecionar instalador dos drivers ST", "silent_st_drivers2.exe");
             if (selected == null) return;
             installer = selected.toPath().toAbsolutePath();
             try { tools.select("silent_st_drivers2.exe", installer); }

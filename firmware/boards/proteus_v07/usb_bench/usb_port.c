@@ -5,8 +5,8 @@
 void board_usb_vbus_init(void) {
     /* Proteus does not use PA9 as VBUS sense. The F427 uses GCCFG here,
      * unlike newer STM32 cores with GOTGCTL B-session-valid override bits.
-     * Match ST's USB_DevInit(vbus_sensing_enable = 0) for the F427 and
-     * rusEFI's BOARD_OTG_NOVBUSSENS. Call after peripheral reset, before
+     * Match ST's USB_DevInit(vbus_sensing_enable = 0) for the F427.
+     * Call after peripheral reset, before
      * TinyUSB initializes the PHY and connects its D+ pull-up.
      * No GPIO other than the USB data pins is needed or configured. */
     USB_OTG_FS->GCCFG = (USB_OTG_FS->GCCFG
