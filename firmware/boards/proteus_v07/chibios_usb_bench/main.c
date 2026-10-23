@@ -4,9 +4,11 @@
 #include "board.h"
 #include "usbcfg.h"
 #include "tunuino/link.h"
+#include "tunuino/bench_tunerstudio.h"
 
 static tunuino_link link;
-static tunuino_identity identity = {TUNUINO_PROTEUS,TUNUINO_STM32_F4,7,0,0,2,0,{0}};
+static tunuino_identity identity = {TUNUINO_PROTEUS,TUNUINO_STM32_F4,7,
+    TUNUINO_BENCH_MAJOR,TUNUINO_BENCH_MINOR,TUNUINO_BENCH_PATCH,0,{0}};
 static const tunuino_dispatch_context context = {&identity,NULL,NULL,NULL};
 
 static void stop_session(void) {
@@ -39,7 +41,7 @@ int main(void) {
   }
   chEvtRegisterMaskWithFlags(chnGetEventSource(&SDU1), &events, EVENT_MASK(0),
                            CHN_TRANSMISSION_END | CHN_DISCONNECTED);
-  /* Same detach/start/connect lifecycle as rusEFI usb_serial_start(). */
+  /* Detach before starting the controller so the host sees a fresh device. */
   usbDisconnectBus(&USBD1);
   chThdSleepMilliseconds(250);
   if (usbStart(&USBD1, &usbcfg) != MSG_OK) {

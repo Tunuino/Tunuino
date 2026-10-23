@@ -131,6 +131,7 @@ jobs:
           build/proteus-v07-usb-bench/*.hex
           build/proteus-v07-usb-bench/*.json
           build/proteus-v07-usb-bench/*.properties
+          build/proteus-v07-usb-bench/*.ini
           build/proteus-v07-usb-bench/*.map
           build/proteus-v07-usb-bench/*.txt
           build/proteus-v07-usb-bench/*.tar.gz

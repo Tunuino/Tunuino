@@ -8,6 +8,7 @@ import subprocess
 
 def scope(paths):
     all_components = any(p.startswith(".github/") or p.startswith("tools/ci_")
+                         or p.startswith("firmware/tunerstudio/")
                          or p == "LICENSE" for p in paths)
     core = all_components or any(p.startswith(("firmware/", "console/", "tools/", "hardware/", "samples/")) for p in paths)
     arm = all_components or any(p.startswith(("firmware/src/", "firmware/include/"))

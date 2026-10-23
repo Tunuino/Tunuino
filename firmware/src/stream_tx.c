@@ -41,6 +41,16 @@ tunuino_tx_status tunuino_tx_begin(tunuino_stream_tx *tx, const uint8_t *packet,
     if (tunuino_frame_decode(packet, length, &body, &body_length) != TUNUINO_FRAME_OK) {
         return TUNUINO_TX_FRAME;
     }
+    return tunuino_tx_begin_plain(tx,packet,length,now_ms);
+}
+tunuino_tx_status tunuino_tx_begin_plain(tunuino_stream_tx *tx, const uint8_t *packet,
+    size_t length, uint64_t now_ms) {
+    if (tx == NULL || packet == NULL || length == 0 || length > sizeof(tx->packet)) {
+        return TUNUINO_TX_ARGUMENT;
+    }
+    tunuino_tx_status status = tunuino_tx_poll(tx, now_ms);
+    if (status == TUNUINO_TX_PENDING) return TUNUINO_TX_BUSY;
+    if (status != TUNUINO_TX_IDLE && status != TUNUINO_TX_DONE) return status;
     memcpy(tx->packet, packet, length);
     tx->length = length;
     tx->completed = 0;

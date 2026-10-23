@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
+from ci_package_kit import validate_tunerstudio
 
 
 def bundle(source, output, prefix=""):
@@ -27,6 +28,7 @@ def main():
         raise ValueError("Release kit belongs to another commit or run")
     if manifest["physical_ecu_validation"] is not False:
         raise ValueError("This publisher is only for experimental bench builds")
+    validate_tunerstudio(root, manifest["firmware"])
     for required in ("console/TunuinoConsole.exe", "console/package-manifest.json",
                      "console/tools/tools-manifest.json", "firmware/manifest.json", "START-HERE.txt"):
         if not (root / required).is_file():
@@ -48,19 +50,21 @@ def main():
     repo = os.environ["GITHUB_REPOSITORY"]
     notes = f"""## Tunuino — versão experimental de bancada
 
-Console Windows x64 e firmware **Proteus v0.7 / STM32F427**, produzidos a partir do mesmo commit.
+Console Windows x64, firmware **Proteus v0.7 / STM32F427** e **INI TunerStudio**, produzidos a partir do mesmo commit.
 
-Esta imagem usa o startup, kernel e USB CDC do repositório **Tunuino/ChibiOS**, fixado no commit `fd2e59c34878b1ef93ef5358f11fb5cc830027ff`. Segue o ciclo USB da rusEFI: inicialização ChibiOS, desconexão durante 250 ms e ligação do USB FS em PA11/PA12, sem deteção externa de VBUS. SYSCLK: 168 MHz; USB: 48 MHz. A Console mostra o build no título. A gravação/enumeração física nesta ECU continua a exigir confirmação.
+Esta imagem usa o startup, kernel e USB CDC do repositório **Tunuino/ChibiOS**, fixado no commit `fd2e59c34878b1ef93ef5358f11fb5cc830027ff`: inicialização ChibiOS, desconexão durante 250 ms e ligação do USB FS em PA11/PA12, sem deteção externa de VBUS. SYSCLK: 168 MHz; USB: 48 MHz. A Console mostra o build no título. A nova comunicação TunerStudio ainda requer ensaio na ECU.
 
 | Download | Conteúdo |
 |---|---|
-| `tunuino_bundle_proteus_v07_f427_usb_bench.zip` | Kit completo: Console, firmware e instruções |
+| `tunuino_bundle_proteus_v07_f427_usb_bench.zip` | Kit completo: Console, firmware, INI TunerStudio e instruções |
 
 Um único ZIP inclui `console/`, `firmware/`, `kit-manifest.json`, `START-HERE.txt` e `SHA256SUMS.txt`. Java está incluído na Console portátil. O firmware inclui `corresponding-source.tar.gz` e as licenças ChibiOS dentro do mesmo Bundle.
 
 **Firmware apenas para testar USB em bancada. Não controla um motor. A gravação começa em 0x08000000 e substitui o bootloader instalado. A validação física na ECU está pendente.**
 
 Extrair o ZIP completo antes de abrir `console/TunuinoConsole.exe`. Manter `.bin.properties` junto do `.bin`.
+
+**TunerStudio:** gravar o firmware deste Bundle; encerrar a ligação COM da Console e criar um projeto no TunerStudio. Em **Other/Browse**, selecionar `firmware/tunuino_proteus_v07_f427_usb_bench.ini`, a COM da ECU e 115200 baud, com protocolo **Firmware Default**. O INI apresenta identificação, revisão, versão e UID. É apenas de leitura; sensores, mapas e afinação ainda não estão disponíveis. O firmware anterior 0.0.2 não implementa estes comandos.
 
 O pacote prepara a configuração das ferramentas de gravação. Não inclui automaticamente STM32CubeProgrammer, BootCommander ou drivers de terceiros; consultar `console/tools/PROGRAMMERS.txt` no kit. A Console permite selecionar uma instalação existente.
 

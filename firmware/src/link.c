@@ -65,6 +65,22 @@ tunuino_link_status tunuino_link_feed(tunuino_link *link, const uint8_t *bytes,
     if (consumed != NULL) { *consumed = 0; }
     if (link == NULL || consumed == NULL || (length != 0 && bytes == NULL)) { return TUNUINO_LINK_ARGUMENT; }
     if (tunuino_link_poll(link, now_ms) != TUNUINO_LINK_RECEIVING) { return link->state; }
+    /* Valid framed lengths start with 0..16; ASCII discovery is disjoint.
+     * Only recognize a probe at a fresh frame boundary, never inside a frame. */
+    if (length != 0 && link->rx.used == 0 && bytes[0] > (TUNUINO_MAX_BODY >> 8)) {
+        uint8_t plain[TUNUINO_DISPATCH_RESPONSE_MAX];
+        size_t count;
+        tunuino_dispatch_status status = tunuino_dispatch_plain_reply(&link->context,
+            bytes[0],plain,sizeof(plain),&count);
+        if (status == TUNUINO_DISPATCH_OK) {
+            *consumed = 1;
+            link->tx_status = tunuino_tx_begin_plain(&link->tx,plain,count,now_ms);
+            if (link->tx_status != TUNUINO_TX_PENDING) return fail(link,TUNUINO_LINK_TX_ERROR);
+            link->plain_response = true;
+            link->state = TUNUINO_LINK_RESPONDING;
+            return link->state;
+        }
+    }
     link->rx_status = tunuino_rx_feed(&link->rx, bytes, length, now_ms, consumed);
     if (link->rx_status == TUNUINO_RX_MORE) { return link->state; }
     if (link->rx_status != TUNUINO_RX_READY) { return fail(link, TUNUINO_LINK_RX_ERROR); }
@@ -108,8 +124,11 @@ tunuino_link_status tunuino_link_tx_advance(tunuino_link *link, size_t completed
     link->tx_status = tunuino_tx_advance(&link->tx, completed, now_ms);
     if (link->tx_status == TUNUINO_TX_PENDING) { return link->state; }
     if (link->tx_status != TUNUINO_TX_DONE) { return fail(link, TUNUINO_LINK_TX_ERROR); }
-    link->rx_status = tunuino_rx_release(&link->rx, now_ms);
-    if (link->rx_status != TUNUINO_RX_MORE) { return fail(link, TUNUINO_LINK_RX_ERROR); }
+    if (!link->plain_response) {
+        link->rx_status = tunuino_rx_release(&link->rx, now_ms);
+        if (link->rx_status != TUNUINO_RX_MORE) { return fail(link, TUNUINO_LINK_RX_ERROR); }
+    }
+    link->plain_response = false;
     link->state = TUNUINO_LINK_RECEIVING;
     return link->state;
 }

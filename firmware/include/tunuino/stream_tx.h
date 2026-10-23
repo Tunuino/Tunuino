@@ -21,6 +21,10 @@ tunuino_tx_status tunuino_tx_init(tunuino_stream_tx *tx, uint32_t timeout_ms, ui
 /* Copies one valid complete frame. Cannot replace a pending response. */
 tunuino_tx_status tunuino_tx_begin(tunuino_stream_tx *tx, const uint8_t *packet,
     size_t length, uint64_t now_ms);
+/* Legacy discovery responses have no envelope. Copies 1..packet-capacity bytes
+ * with the same timeout, ownership and physical-completion rules. */
+tunuino_tx_status tunuino_tx_begin_plain(tunuino_stream_tx *tx, const uint8_t *bytes,
+    size_t length, uint64_t now_ms);
 /* View stays valid until completed/abort/init; driver must finish/cancel any
  * asynchronous use before another begin/init. Do not acknowledge queued bytes. */
 tunuino_tx_status tunuino_tx_view(tunuino_stream_tx *tx, uint64_t now_ms,

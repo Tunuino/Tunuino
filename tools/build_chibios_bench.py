@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build and inspect the Proteus USB bench with the user's pinned ChibiOS."""
 import argparse
+import configparser
 import hashlib
 import json
 import os
@@ -124,7 +125,7 @@ def main():
     # source, configuration and build scripts in the same distributed bundle.
     source = output / "corresponding-source.tar.gz"
     with tarfile.open(source, "w:gz") as archive:
-        for path in (ROOT / "firmware/src", ROOT / "firmware/include", BOARD):
+        for path in (ROOT / "firmware/src", ROOT / "firmware/include", ROOT / "firmware/tunerstudio", BOARD):
             archive.add(path, arcname=str(path.relative_to(ROOT)))
         for name in ("LICENSE", "tools/build_proteus_usb_bench.py", "tools/build_chibios_bench.py", "tools/setup_arm_toolchain.sh"):
             archive.add(ROOT / name, arcname=name)
@@ -136,7 +137,14 @@ def main():
                         "replaces_bootloader=true\nsource_commit=" + commit + "\n"
                         "description=Proteus v0.7 STM32F427 - ChibiOS USB bench\n"
                         "sha256=" + hashlib.sha256(image).hexdigest() + "\n")
-    hashed = [elf, binary, elf.with_suffix(".hex"), flashing, source]
+    ini = output / "tunuino_proteus_v07_f427_usb_bench.ini"
+    shutil.copy2(ROOT / "firmware/tunerstudio" / ini.name, ini)
+    definition = configparser.ConfigParser(interpolation=None, strict=False)
+    definition.read_string("[General]\n" + ini.read_text(encoding="ascii"))
+    signature = json.loads(definition["TunerStudio"]["signature"])
+    if signature.encode("ascii") + b"\0" not in image:
+        raise SystemExit("TunerStudio INI signature is not in the linked firmware")
+    hashed = [elf, binary, elf.with_suffix(".hex"), flashing, source, ini]
     manifest = {"target": "Proteus v0.7 STM32F427 ChibiOS USB-only bench",
                 "status": "experimental_not_hardware_validated", "source_commit": commit,
                 "compiler": run(["arm-none-eabi-gcc", "--version"]).splitlines()[0],
@@ -146,7 +154,9 @@ def main():
                 "flash_address": "0x08000000", "flash_limit_bytes": 128 * 1024,
                 "ram_address": "0x20000000", "ram_limit_bytes": 64 * 1024,
                 "initial_stack": hex(stack), "reset_vector": hex(reset),
-                "capabilities": ["USB CDC", "real STM32 UID", "Tunuino identity protocol"],
+                "capabilities": ["USB CDC", "real STM32 UID", "Tunuino identity protocol", "TunerStudio read-only identity"],
+                "tunerstudio": {"ini_file": ini.name, "signature": signature,
+                                "output_bytes": 31, "read_only": True},
                 "engine_outputs": False, "physical_sensors": False, "maps": False,
                 "usb_vid": "0xcafe", "usb_pid": "0x4001", "usb_disconnect_ms": 250,
                 "usb_ids": "development_only_not_production_allocation",

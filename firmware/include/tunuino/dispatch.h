@@ -39,4 +39,10 @@ tunuino_dispatch_status tunuino_dispatch_validate(const tunuino_dispatch_context
 tunuino_dispatch_status tunuino_dispatch_reply(const tunuino_dispatch_context *context,
     const uint8_t *request_packet, size_t request_length,
     uint8_t *response_packet, size_t capacity, size_t *written);
+/* Optional legacy TunerStudio discovery, enabled only for the exact Proteus
+ * USB bench profile. Q/S return its signature, F its envelope version, V its
+ * version. Returns UNKNOWN_REQUEST for every other byte/profile. The caller
+ * may use this only at an empty frame boundary, never within framed input. */
+tunuino_dispatch_status tunuino_dispatch_plain_reply(const tunuino_dispatch_context *context,
+    uint8_t command, uint8_t *response, size_t capacity, size_t *written);
 #endif

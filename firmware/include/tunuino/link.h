@@ -5,6 +5,7 @@
 #include "tunuino/stream_rx.h"
 #include "tunuino/stream_tx.h"
 #include "tunuino/live_mailbox.h"
+#include <stdbool.h>
 typedef enum {
     TUNUINO_LINK_RECEIVING = 0, TUNUINO_LINK_RESPONDING,
     TUNUINO_LINK_ARGUMENT, TUNUINO_LINK_RX_ERROR,
@@ -25,6 +26,7 @@ typedef struct {
     tunuino_live_mailbox *live_source;
     tunuino_live_sample live_snapshot;
     uint32_t live_max_age_ms;
+    bool plain_response;
 } tunuino_link;
 /* Only on a fresh/clean transport, after canceling/draining old driver use. */
 tunuino_link_status tunuino_link_init(tunuino_link *link, const tunuino_dispatch_context *context,

@@ -19,6 +19,7 @@ def run(args, timeout=None):
 
 
 def main():
+    print(run([sys.executable, "tools/check_tunerstudio.py"], timeout=60))
     print(run([sys.executable, "tools/check_maintenance.py"], timeout=60))
     run([sys.executable, "tools/check_kicad.py"], timeout=15)
     print("KiCad XML membership, ambiguity, provenance and file preservation checks passed")
@@ -178,7 +179,7 @@ def main():
         chibios_exe = work / ("chibios-bench-check.exe" if os.name == "nt" else "chibios-bench-check")
         run(flags + chibios_include + core_sources + ["firmware/tests/test_chibios_bench.c",
             str(chibios_object), "-lm", "-o", str(chibios_exe)])
-        for mode in ("normal", "timeout", "corrupt", "disconnect", "reconfigure"):
+        for mode in ("normal", "tunerstudio", "timeout", "corrupt", "disconnect", "reconfigure"):
             print(run([str(chibios_exe), mode], timeout=10))
         peer_exe = work / ("link-peer.exe" if os.name == "nt" else "link-peer")
         run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/src/live_data.c",

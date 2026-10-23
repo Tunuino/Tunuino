@@ -21,7 +21,7 @@ static unsigned stage, writes, completions;
 static uint32_t now, queued_at;
 static bool rx_done, busy;
 static const char *mode;
-static uint8_t packet[64], queued[64], delivered[128];
+static uint8_t packet[64], queued[64], delivered[512];
 static size_t packet_size, queued_size, delivered_size;
 static eventflags_t flags;
 
@@ -64,11 +64,12 @@ void chThdSleepMilliseconds(uint32_t ms) {
   if (busy && strcmp(mode,"reconfigure")==0 && now-queued_at>=3) {
     busy=false;++tunuino_usb_generation;flags|=CHN_TRANSMISSION_END;
   }
-  if (busy && strcmp(mode,"normal")==0 && now-queued_at>=5) {
+  if (busy && (strcmp(mode,"normal")==0 || strcmp(mode,"tunerstudio")==0) && now-queued_at>=5) {
     memcpy(delivered+delivered_size,queued,queued_size);delivered_size+=queued_size;
     ++completions;busy=false;flags|=CHN_TRANSMISSION_END;
   }
-  if ((strcmp(mode,"normal")==0 && completions==2) || now>2000) longjmp(done,1);
+  if ((strcmp(mode,"normal")==0 && completions==2)
+      || (strcmp(mode,"tunerstudio")==0 && completions==7) || now>2000) longjmp(done,1);
 }
 size_t chnReadTimeout(SerialUSBDriver *sdu,uint8_t *bytes,size_t count,uint32_t timeout) {
   (void)sdu;(void)timeout;
@@ -91,6 +92,16 @@ int main(int argc,char **argv) {
   assert(tunuino_frame_encode(request,8,packet,sizeof(packet),&size)==TUNUINO_FRAME_OK);
   packet_size=size;
   if (strcmp(mode,"normal")==0) { memcpy(packet+size,packet,size);packet_size+=size; }
+  if (strcmp(mode,"tunerstudio")==0) {
+    packet[0]='F';packet[1]='Q';packet_size=2;
+    for (const char *commands="SVRA";*commands;++commands) {
+      assert(tunuino_frame_encode((const uint8_t *)commands,1,packet+packet_size,
+          sizeof(packet)-packet_size,&size)==TUNUINO_FRAME_OK);
+      packet_size+=size;
+    }
+    assert(tunuino_frame_encode(request,8,packet+packet_size,sizeof(packet)-packet_size,&size)==TUNUINO_FRAME_OK);
+    packet_size+=size;
+  }
   if (strcmp(mode,"corrupt")==0) packet[packet_size-1]^=1;
   if (setjmp(done)==0) (void)tunuino_chibios_bench_main();
   if (strcmp(mode,"normal")==0) {
@@ -101,6 +112,24 @@ int main(int argc,char **argv) {
       assert(tunuino_frame_decode(delivered+i,delivered_size/2,&body,&length)==TUNUINO_FRAME_OK);
       assert(length==TUNUINO_IDENTITY_BODY_SIZE && memcmp(body+1,"TUNUINO",7)==0);
     }
+  } else if (strcmp(mode,"tunerstudio")==0) {
+    assert(writes==7 && completions==7 && tunuino_bench_fault==0);
+    assert(memcmp(delivered,"001Tunuino",10)==0);
+    size_t offset=3;
+    while (offset<delivered_size && delivered[offset]) ++offset;
+    assert(offset<delivered_size); ++offset;
+    for (unsigned i=0;i<5;++i) {
+      assert(offset+2<=delivered_size);
+      size_t length=(((size_t)delivered[offset]<<8)|delivered[offset+1])+TUNUINO_FRAME_OVERHEAD;
+      assert(offset+length<=delivered_size);
+      const uint8_t *body;size_t body_size;
+      assert(tunuino_frame_decode(delivered+offset,length,&body,&body_size)==TUNUINO_FRAME_OK);
+      assert(body[0]==0);
+      if (i==2) assert(body_size==2 && body[1]==1);
+      if (i>=3) assert(body_size==32 && memcmp(body+1,"TUNUINO",7)==0);
+      offset+=length;
+    }
+    assert(offset==delivered_size);
   } else if (strcmp(mode,"corrupt")==0) assert(writes==0 && tunuino_bench_fault==20 && USBD1.state==0);
   else if (strcmp(mode,"timeout")==0) assert(writes==1 && completions==0 && tunuino_bench_fault==20 && USBD1.state==0);
   else if (strcmp(mode,"disconnect")==0 || strcmp(mode,"reconfigure")==0)
