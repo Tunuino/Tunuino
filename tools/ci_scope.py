@@ -17,7 +17,8 @@ def scope(paths):
     # Programmer fixes need a fresh matching firmware/Console kit for immediate release.
     flashing_changed = any(p.startswith("java_console/src/main/java/io/tunuino/maintenance/") for p in paths)
     bench = arm or flashing_changed or any(p.startswith("firmware/boards/") or p in ("tools/build_proteus_usb_bench.py", "tools/build_chibios_bench.py") for p in paths)
-    console = all_components or any(p.startswith("java_console/") and not p.startswith("java_console/src/test/") for p in paths)
+    packaging_changed = "misc/install/package_programmer_tools.py" in paths
+    console = all_components or packaging_changed or any(p.startswith("java_console/") and not p.startswith("java_console/src/test/") for p in paths)
     if bench or console:
         bench = console = True
     return {"core": core, "arm": arm, "bench": bench, "console": console}
