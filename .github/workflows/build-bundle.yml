@@ -1,0 +1,142 @@
+name: Tunuino Bundle
+run-name: Tunuino Bundle · ${{ github.event_name }} · ${{ github.ref_name }}
+'on':
+  push:
+    branches:
+    - master
+    paths:
+    - .github/**
+    - firmware/**
+    - console/**
+    - tools/**
+    - hardware/**
+    - samples/**
+    - LICENSE
+    - tunerstudio/**
+  pull_request:
+    branches:
+    - master
+    paths:
+    - .github/**
+    - firmware/**
+    - console/**
+    - tools/**
+    - hardware/**
+    - samples/**
+    - LICENSE
+    - tunerstudio/**
+  workflow_dispatch: null
+  schedule:
+  - cron: 20 2 * * *
+permissions:
+  contents: read
+concurrency:
+  group: tunuino-bundle-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  changes:
+    name: Select affected components
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    outputs:
+      core: ${{ steps.scope.outputs.core }}
+      arm: ${{ steps.scope.outputs.arm }}
+      bench: ${{ steps.scope.outputs.bench }}
+      console: ${{ steps.scope.outputs.console }}
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+    - id: scope
+      run: python3 tools/ci_scope.py
+  checks:
+    name: Core checks
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    uses: ./.github/workflows/check-core.yml
+  tunerstudio:
+    name: TunerStudio
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    uses: ./.github/workflows/validate-tunerstudio.yml
+  arm:
+    name: Firmware
+    needs: changes
+    if: needs.changes.outputs.arm == 'true' || needs.changes.outputs.bench == 'true'
+    uses: ./.github/workflows/build-firmware.yml
+    with:
+      arm: ${{ needs.changes.outputs.arm == 'true' }}
+      bench: ${{ needs.changes.outputs.bench == 'true' }}
+  console:
+    name: Windows Console
+    needs: changes
+    if: needs.changes.outputs.console == 'true'
+    uses: ./.github/workflows/build-console.yml
+  result:
+    name: CI result and synchronized bench kit
+    needs:
+    - changes
+    - checks
+    - arm
+    - console
+    - tunerstudio
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
+    - name: Report all component results
+      env:
+        RESULTS: ${{ toJSON(needs) }}
+      run: |-
+        python3 - <<'PY'
+        import json, os
+        results = json.loads(os.environ["RESULTS"])
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
+            out.write("## Tunuino CI\n\n| Component | Result |\n|---|---|\n")
+            for name, data in results.items():
+                out.write(f"| {name} | {data['result']} |\n")
+            out.write("\nSkipped components had no relevant source changes. Manual runs build the full kit.\n")
+        if any(data["result"] in ("failure", "cancelled") for data in results.values()):
+            raise SystemExit("CI failed or was cancelled; no synchronized kit will be published")
+        PY
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      if: needs.changes.outputs.bench == 'true' && needs.changes.outputs.console == 'true'
+      with:
+        name: firmware-proteus-f427-${{ github.sha }}
+        path: build/kit/firmware
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      if: needs.changes.outputs.bench == 'true' && needs.changes.outputs.console == 'true'
+      with:
+        name: console-windows-x64-${{ github.sha }}
+        path: build/kit/console
+    - name: Verify common source commit and package checksums
+      if: needs.changes.outputs.bench == 'true' && needs.changes.outputs.console == 'true'
+      run: python3 tools/ci_package_kit.py
+    - name: Preserve Tunuino-Proteus-v07-USB-Bench-Kit-${{ github.sha }}
+      if: needs.changes.outputs.bench == 'true' && needs.changes.outputs.console == 'true'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: Tunuino-Proteus-v07-USB-Bench-Kit-${{ github.sha }}
+        path: build/kit/
+        if-no-files-found: error
+        retention-days: 30
+  release:
+    name: Publish experimental GitHub Release
+    needs:
+    - changes
+    - checks
+    - arm
+    - console
+    - result
+    - tunerstudio
+    if: github.repository == 'Tunuino/Tunuino' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+      && needs.checks.result == 'success' && needs.arm.result == 'success' && needs.console.result == 'success'
+      && needs.result.result == 'success' && needs.changes.outputs.bench == 'true' && needs.changes.outputs.console
+      == 'true' && needs.tunerstudio.result == 'success'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-release.yml

@@ -8,7 +8,7 @@ import subprocess
 
 def scope(paths):
     all_components = any(p.startswith(".github/") or p.startswith("tools/ci_")
-                         or p.startswith("firmware/tunerstudio/")
+                         or p.startswith("tunerstudio/")
                          or p == "LICENSE" for p in paths)
     core = all_components or any(p.startswith(("firmware/", "console/", "tools/", "hardware/", "samples/")) for p in paths)
     arm = all_components or any(p.startswith(("firmware/src/", "firmware/include/"))
@@ -17,6 +17,8 @@ def scope(paths):
     flashing_changed = any(p.startswith("console/src/main/java/io/tunuino/maintenance/") for p in paths)
     bench = arm or flashing_changed or any(p.startswith("firmware/boards/") or p in ("tools/build_proteus_usb_bench.py", "tools/build_chibios_bench.py") for p in paths)
     console = all_components or any(p.startswith("console/") and not p.startswith("console/src/test/") for p in paths)
+    if bench or console:
+        bench = console = True
     return {"core": core, "arm": arm, "bench": bench, "console": console}
 
 

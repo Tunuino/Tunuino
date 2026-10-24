@@ -1,0 +1,29 @@
+name: Core checks
+'on':
+  workflow_call: {}
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  checks:
+    name: Core checks (${{ matrix.compiler }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:
+        - gcc
+        - clang
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '21'
+    - name: C, Java, KiCad and simulated USB tests
+      env:
+        CC: ${{ matrix.compiler }}
+      run: python3 tools/check_core.py

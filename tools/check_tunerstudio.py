@@ -28,7 +28,7 @@ def decode(packet):
 
 
 def main():
-    ini = ROOT / "firmware/tunerstudio" / INI_NAME
+    ini = ROOT / "tunerstudio" / INI_NAME
     parser = configparser.ConfigParser(interpolation=None, strict=False)
     parser.read_string("[General]\n" + ini.read_text(encoding="ascii"))
     signature = json.loads(parser["TunerStudio"]["signature"])
@@ -104,7 +104,7 @@ def main():
                 pass
             else:
                 raise AssertionError("Publication accepted " + action + " INI")
-    assert all(scope(["firmware/tunerstudio/" + INI_NAME]).values())
+    assert all(scope(["tunerstudio/" + INI_NAME]).values())
     print("TunerStudio bench: INI/signature, independent CRC/channel offsets, fragmented and plain discovery, "
           "native coexistence, write rejection, TX deadlines and missing/mixed INI publication gates passed. No physical ECU.")
 

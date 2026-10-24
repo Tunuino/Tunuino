@@ -1,0 +1,51 @@
+name: Publish Release
+'on':
+  workflow_call: {}
+permissions:
+  contents: read
+jobs:
+  release:
+    name: Publish experimental GitHub Release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: Tunuino-Proteus-v07-USB-Bench-Kit-${{ github.sha }}
+        path: build/kit
+    - name: Validate synchronized kit again
+      run: python3 tools/ci_package_kit.py
+    - name: Prepare single bundle with internal checksums
+      run: python3 tools/ci_release.py
+    - name: Upload assets to draft and publish release
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        tag="nightly-$(date -u +%F)-${GITHUB_RUN_ID}"
+        title="Tunuino Nightly $(date -u +%F) · build ${GITHUB_RUN_NUMBER} · USB Bench"
+        if gh release view "$tag" --json isDraft,targetCommitish > build/existing-release.json; then
+          python3 -c 'import json,os; r=json.load(open("build/existing-release.json")); assert r["targetCommitish"] == os.environ["GITHUB_SHA"], "Release points to another commit"'
+          if python3 -c 'import json,sys; sys.exit(0 if not json.load(open("build/existing-release.json"))["isDraft"] else 1)'; then
+            echo "Release already published for this run; keeping its assets."
+            exit 0
+          fi
+        else
+          gh release create "$tag" --target "$GITHUB_SHA" --title "$title" --notes-file build/release-notes.md --draft --prerelease
+        fi
+        gh release upload "$tag" build/release/* --clobber
+        gh release edit "$tag" --draft=false --prerelease --latest=false
+        gh release view "$tag" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"
+    - name: Keep only bundle attachments in previous nightly Releases
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+      run: python3 tools/ci_cleanup_releases.py
+    if: github.repository == 'Tunuino/Tunuino' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'

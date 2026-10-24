@@ -19,6 +19,7 @@ def run(args, timeout=None):
 
 
 def main():
+    print(run([sys.executable, "tools/check_android.py"], timeout=60))
     print(run([sys.executable, "tools/check_tunerstudio.py"], timeout=60))
     print(run([sys.executable, "tools/check_maintenance.py"], timeout=60))
     run([sys.executable, "tools/check_kicad.py"], timeout=15)

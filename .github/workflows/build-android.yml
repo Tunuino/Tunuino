@@ -1,0 +1,70 @@
+name: Android
+'on':
+  push:
+    branches:
+    - master
+    paths:
+    - android/**
+    - tools/check_android.py
+    - firmware/include/tunuino/identity.h
+    - firmware/src/identity.c
+    - .github/workflows/build-android.yml
+  pull_request:
+    branches:
+    - master
+    paths:
+    - android/**
+    - tools/check_android.py
+    - firmware/include/tunuino/identity.h
+    - firmware/src/identity.c
+    - .github/workflows/build-android.yml
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: tunuino-android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  android:
+    name: APK, unit tests and Android lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '17'
+    - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+    - name: Install pinned Android SDK
+      run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
+    - name: Cross-check Android protocol with C firmware
+      run: python3 tools/check_android.py
+    - name: Build test APK, unit tests and lint
+      working-directory: android
+      run: ./gradlew --no-daemon --console=plain assembleDebug testDebugUnitTest lintDebug
+    - name: Preserve test reports
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: android-reports-${{ github.sha }}
+        path: android/app/build/reports/
+        if-no-files-found: warn
+        retention-days: 14
+    - name: Record test APK and provenance
+      run: |-
+        python3 - <<'PYAPK'
+        import hashlib, json, os, pathlib, shutil
+        source=pathlib.Path('android/app/build/outputs/apk/debug/app-debug.apk')
+        output=pathlib.Path('build/android'); output.mkdir(parents=True)
+        shutil.copy2(source, output/'tunuino-android-debug.apk')
+        (output/'package-manifest.json').write_text(json.dumps({'source_commit':os.environ['GITHUB_SHA'], 'run_id':os.environ['GITHUB_RUN_ID'], 'apk_sha256':hashlib.sha256(source.read_bytes()).hexdigest(), 'signing':'debug_test_only', 'physical_ecu_validation':False}, indent=2)+'\n')
+        PYAPK
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: android-debug-${{ github.sha }}
+        path: build/android/
+        if-no-files-found: error
+        retention-days: 30

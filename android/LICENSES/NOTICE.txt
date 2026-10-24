@@ -1,0 +1,5 @@
+Gradle Wrapper scripts and gradle-wrapper.jar are from Gradle v8.11.1.
+Copyright the original Gradle authors; Apache License 2.0.
+https://github.com/gradle/gradle/tree/v8.11.1
+The original script notices and the JAR's META-INF/LICENSE are preserved.
+The Tunuino application source is covered by the repository LICENSE.
