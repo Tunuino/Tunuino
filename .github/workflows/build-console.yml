@@ -18,20 +18,20 @@ jobs:
         distribution: temurin
         java-version: '21'
         cache: maven
-        cache-dependency-path: console/pom.xml
+        cache-dependency-path: java_console/pom.xml
     - name: Compile and collect runtime dependencies
-      run: mvn --batch-mode --no-transfer-progress --file console/pom.xml verify org.apache.maven.plugins:maven-dependency-plugin:3.8.1:copy-dependencies
+      run: mvn --batch-mode --no-transfer-progress --file java_console/pom.xml verify org.apache.maven.plugins:maven-dependency-plugin:3.8.1:copy-dependencies
         -DincludeScope=runtime -DoutputDirectory=target/app/lib "-Dtunuino.sourceCommit=${{ github.sha }}"
     - name: Firmware validation and programmer failure checks on Windows
       run: python tools/check_maintenance.py
     - name: Test the actual release JAR with simulated programmer output
-      run: python tools/check_maintenance.py --jar console/target/tunuino-console-0.1.0-SNAPSHOT.jar
+      run: python tools/check_maintenance.py --jar java_console/target/tunuino-console-0.1.0-SNAPSHOT.jar
     - name: Build portable Windows application with Java runtime
       shell: pwsh
       run: |
-        Copy-Item console/target/tunuino-console-0.1.0-SNAPSHOT.jar console/target/app/tunuino-console.jar
-        Copy-Item LICENSE console/target/app/LICENSE.txt
-        jpackage --type app-image --name TunuinoConsole --app-version 0.1.0 --vendor Tunuino --input console/target/app --main-jar tunuino-console.jar --main-class io.tunuino.console.Launcher --add-modules java.base,java.desktop,java.logging,java.naming,java.xml,java.management,jdk.unsupported,jdk.crypto.ec --dest build/windows
+        Copy-Item java_console/target/tunuino-console-0.1.0-SNAPSHOT.jar java_console/target/app/tunuino-console.jar
+        Copy-Item LICENSE java_console/target/app/LICENSE.txt
+        jpackage --type app-image --name TunuinoConsole --app-version 0.1.0 --vendor Tunuino --input java_console/target/app --main-jar tunuino-console.jar --main-class io.tunuino.console.Launcher --add-modules java.base,java.desktop,java.logging,java.naming,java.xml,java.management,jdk.unsupported,jdk.crypto.ec --dest build/windows
         if ($LASTEXITCODE -ne 0) { throw 'jpackage failed' }
     - name: Verify packaged JavaFX and USB serial runtime
       shell: pwsh
@@ -48,7 +48,7 @@ jobs:
         if ($process.ExitCode -ne 0) { throw "Packaged runtime check failed: $($process.ExitCode)" }
     - name: Prepare offline programmer tool layout
       shell: pwsh
-      run: python tools/package_programmer_tools.py --destination build/windows/TunuinoConsole
+      run: python misc/install/package_programmer_tools.py --destination build/windows/TunuinoConsole
     - name: Record component provenance
       shell: pwsh
       run: |-

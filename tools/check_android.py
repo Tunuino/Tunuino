@@ -24,7 +24,7 @@ def main():
         exe = work / ("bench.exe" if os.name == "nt" else "bench")
         subprocess.run([os.environ.get("CC", "cc"), "-std=c11", "-Wall", "-Wextra", "-Werror", "-pedantic",
             "-I" + str(ROOT / "firmware/include"), *map(str, sorted((ROOT / "firmware/src").glob("*.c"))),
-            str(ROOT / "firmware/tests/test_tunerstudio.c"), "-lm", "-o", str(exe)], check=True)
+            str(ROOT / "unit_tests/test_tunerstudio.c"), "-lm", "-o", str(exe)], check=True)
         lines = subprocess.check_output([str(exe)], text=True, timeout=15).splitlines()
         vector = next(line.split()[1] for line in lines if line.startswith("native "))
         javac = ["javac"] if shutil.which("javac") else ["java", "--module", "jdk.compiler/com.sun.tools.javac.Main"]

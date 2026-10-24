@@ -7,24 +7,46 @@ run-name: Tunuino Bundle · ${{ github.event_name }} · ${{ github.ref_name }}
     paths:
     - .github/**
     - firmware/**
-    - console/**
+    - java_console/**
     - tools/**
     - hardware/**
     - samples/**
     - LICENSE
-    - tunerstudio/**
+    - unit_tests/**
+    - java_tools/**
+    - simulator/**
+    - bin/**
+    - misc/**
+    - gradle/**
+    - gradlew
+    - gradlew.bat
+    - build.gradle
+    - settings.gradle
+    - gradle.properties
+    - Makefile
   pull_request:
     branches:
     - master
     paths:
     - .github/**
     - firmware/**
-    - console/**
+    - java_console/**
     - tools/**
     - hardware/**
     - samples/**
     - LICENSE
-    - tunerstudio/**
+    - unit_tests/**
+    - java_tools/**
+    - simulator/**
+    - bin/**
+    - misc/**
+    - gradle/**
+    - gradlew
+    - gradlew.bat
+    - build.gradle
+    - settings.gradle
+    - gradle.properties
+    - Makefile
   workflow_dispatch: null
   schedule:
   - cron: 20 2 * * *
@@ -51,10 +73,10 @@ jobs:
     - id: scope
       run: python3 tools/ci_scope.py
   checks:
-    name: Core checks
+    name: Unit tests
     needs: changes
     if: needs.changes.outputs.core == 'true'
-    uses: ./.github/workflows/check-core.yml
+    uses: ./.github/workflows/build-unit-tests.yml
   tunerstudio:
     name: TunerStudio
     needs: changes
@@ -73,6 +95,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.console == 'true'
     uses: ./.github/workflows/build-console.yml
+  desktop:
+    name: Desktop tools and simulator
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    uses: ./.github/workflows/build-desktop.yml
   result:
     name: CI result and synchronized bench kit
     needs:
@@ -81,6 +108,7 @@ jobs:
     - arm
     - console
     - tunerstudio
+    - desktop
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -133,10 +161,11 @@ jobs:
     - console
     - result
     - tunerstudio
+    - desktop
     if: github.repository == 'Tunuino/Tunuino' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
       && needs.checks.result == 'success' && needs.arm.result == 'success' && needs.console.result == 'success'
       && needs.result.result == 'success' && needs.changes.outputs.bench == 'true' && needs.changes.outputs.console
-      == 'true' && needs.tunerstudio.result == 'success'
+      == 'true' && needs.tunerstudio.result == 'success' && needs.desktop.result == 'success'
     permissions:
       contents: write
     uses: ./.github/workflows/publish-release.yml

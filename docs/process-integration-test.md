@@ -1,6 +1,6 @@
 # Teste de integração Java/C por processos
 
-`tools/check_core.py` compila `firmware/tests/link_peer.c` e inicia-o a partir de `FirmwareLinkChecks`. Os clientes Java reais de identificação, dados em tempo real e leitura de mapas comunicam por pipes binários com o ciclo C real de receção, dispatcher e transmissão. As respostas deste teste são calculadas pelo código C em execução, não por um emulador Java do protocolo.
+`tools/check_core.py` compila `unit_tests/link_peer.c` e inicia-o a partir de `FirmwareLinkChecks`. Os clientes Java reais de identificação, dados em tempo real e leitura de mapas comunicam por pipes binários com o ciclo C real de receção, dispatcher e transmissão. As respostas deste teste são calculadas pelo código C em execução, não por um emulador Java do protocolo.
 
 É exclusivamente um teste no computador. O peer usa identidade, revisão, UID, sensores e mapas sintéticos; não são configurações reais de Proteus/uaEFI. Anuncia capacidades apenas dentro deste processo de teste. Não existe seleção de simulador nem utilização destes dados pela Console de produção.
 

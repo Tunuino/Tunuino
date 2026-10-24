@@ -1,4 +1,4 @@
-name: Core checks
+name: Unit tests
 'on':
   workflow_call: {}
   workflow_dispatch: {}
@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   checks:
-    name: Core checks (${{ matrix.compiler }})
+    name: Unit tests (${{ matrix.compiler }})
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     strategy:
@@ -26,4 +26,4 @@ jobs:
     - name: C, Java, KiCad and simulated USB tests
       env:
         CC: ${{ matrix.compiler }}
-      run: python3 tools/check_core.py
+      run: python3 unit_tests/run.py

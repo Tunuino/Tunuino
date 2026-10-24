@@ -1,0 +1,8 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {"label": "Tunuino: test", "type": "process", "command": "python3", "windows": {"command": "python"}, "args": ["unit_tests/run.py"], "group": {"kind": "test", "isDefault": true}, "problemMatcher": ["$gcc"]},
+    {"label": "Tunuino: build simulator", "type": "process", "command": "python3", "windows": {"command": "python"}, "args": ["tools/build_simulator.py", "--debug"], "group": {"kind": "build", "isDefault": true}, "problemMatcher": ["$gcc"]},
+    {"label": "Tunuino: generate INI", "type": "process", "command": "python3", "windows": {"command": "python"}, "args": ["firmware/tunerstudio/generate.py"], "problemMatcher": []}
+  ]
+}

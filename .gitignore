@@ -1,8 +1,10 @@
 /build/
 /.deps/
 /.toolchains/
-/console/target/
+/java_console/target/
 *.class
 __pycache__/
 .idea/
-.vscode/
+/.gradle/
+/java_console/build/
+/java_tools/build/

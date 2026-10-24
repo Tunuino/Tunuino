@@ -125,7 +125,7 @@ def main():
     # source, configuration and build scripts in the same distributed bundle.
     source = output / "corresponding-source.tar.gz"
     with tarfile.open(source, "w:gz") as archive:
-        for path in (ROOT / "firmware/src", ROOT / "firmware/include", ROOT / "tunerstudio", BOARD):
+        for path in (ROOT / "firmware/src", ROOT / "firmware/include", ROOT / "firmware/tunerstudio", BOARD):
             archive.add(path, arcname=str(path.relative_to(ROOT)))
         for name in ("LICENSE", "tools/build_proteus_usb_bench.py", "tools/build_chibios_bench.py", "tools/setup_arm_toolchain.sh"):
             archive.add(ROOT / name, arcname=name)
@@ -138,7 +138,7 @@ def main():
                         "description=Proteus v0.7 STM32F427 - ChibiOS USB bench\n"
                         "sha256=" + hashlib.sha256(image).hexdigest() + "\n")
     ini = output / "tunuino_proteus_v07_f427_usb_bench.ini"
-    shutil.copy2(ROOT / "tunerstudio" / ini.name, ini)
+    shutil.copy2(ROOT / "firmware/tunerstudio/generated" / ini.name, ini)
     definition = configparser.ConfigParser(interpolation=None, strict=False)
     definition.read_string("[General]\n" + ini.read_text(encoding="ascii"))
     signature = json.loads(definition["TunerStudio"]["signature"])

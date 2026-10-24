@@ -13,5 +13,7 @@ jobs:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
         persist-credentials: false
+    - name: Check generated INI and signature header
+      run: python3 misc/actions/verify_generated.py
     - name: Check INI against actual C wire responses
       run: python3 tools/check_tunerstudio.py

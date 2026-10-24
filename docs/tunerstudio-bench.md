@@ -1,6 +1,6 @@
 # TunerStudio USB bench profile, layout 1
 
-The definition is `tunerstudio/tunuino_proteus_v07_f427_usb_bench.ini`.
+The definition is `firmware/tunerstudio/generated/tunuino_proteus_v07_f427_usb_bench.ini`.
 The build copies it next to the BIN, records its SHA-256 and verifies that its
 signature is embedded in the linked image. Kit and release packaging reject a
 missing, modified or mismatched definition. INI changes select a complete CI kit.

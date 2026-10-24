@@ -1,0 +1,26 @@
+plugins { id 'base' }
+
+allprojects { repositories { mavenCentral() } }
+subprojects {
+    plugins.withType(JavaPlugin).configureEach {
+        java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+        tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+    }
+}
+def python = providers.environmentVariable('TUNUINO_PYTHON').getOrElse(
+    System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3')
+tasks.register('checkCore', Exec) {
+    group = 'verification'
+    description = 'C/Java integration tests, generated definitions and simulator checks.'
+    commandLine python, 'unit_tests/run.py'
+}
+tasks.register('generateIni', Exec) {
+    group = 'build'
+    commandLine python, 'firmware/tunerstudio/generate.py'
+}
+tasks.register('buildSimulator', Exec) {
+    group = 'build'
+    commandLine python, 'tools/build_simulator.py'
+}
+tasks.named('check') { dependsOn 'checkCore', ':java_tools:check', ':java_console:check' }
+tasks.named('assemble') { dependsOn ':java_tools:assemble', ':java_console:assemble', 'buildSimulator' }
