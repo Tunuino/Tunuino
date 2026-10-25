@@ -3,55 +3,7 @@ name: Tunuino Bundle
 # Release publication is gated on all checks and artifacts from this same run.
 run-name: Tunuino Bundle · ${{ github.event_name }} · ${{ github.ref_name }}
 'on':
-  push:
-    branches:
-    - master
-    paths:
-    - .github/**
-    - firmware/**
-    - java_console/**
-    - tools/**
-    - hardware/**
-    - samples/**
-    - LICENSE
-    - unit_tests/**
-    - java_tools/**
-    - simulator/**
-    - bin/**
-    - misc/**
-    - gradle/**
-    - gradlew
-    - gradlew.bat
-    - build.gradle
-    - settings.gradle
-    - gradle.properties
-    - Makefile
-  pull_request:
-    branches:
-    - master
-    paths:
-    - .github/**
-    - firmware/**
-    - java_console/**
-    - tools/**
-    - hardware/**
-    - samples/**
-    - LICENSE
-    - unit_tests/**
-    - java_tools/**
-    - simulator/**
-    - bin/**
-    - misc/**
-    - gradle/**
-    - gradlew
-    - gradlew.bat
-    - build.gradle
-    - settings.gradle
-    - gradle.properties
-    - Makefile
-  workflow_dispatch: null
-  schedule:
-  - cron: 20 2 * * *
+  workflow_dispatch: {}
 permissions:
   contents: read
 concurrency:
