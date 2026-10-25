@@ -145,6 +145,12 @@ int main(void){
     body=query((const uint8_t *)"A",1,&n);assert(n==101&&body[39]==15);vector("runtime_configured");
     /* Genuine input validity and committed maps are prerequisites. */
     body=query((const uint8_t *)"TUNUINO:E",9,&n);
+    fprintf(stderr,"Engine preview: len=%zu state=%u reasons=%02x VE=%u advance=%d rpm=%u bytes=",
+            n,(unsigned)body[2],(unsigned)body[3],
+            (unsigned)tunuino_device_u16(body+4),(int)(int16_t)tunuino_device_u16(body+6),
+            (unsigned)device.live.rpm_milli);
+    for(size_t i=0;i<n;++i)fprintf(stderr,"%02x",(unsigned)body[i]);
+    fputc('\n',stderr);
     assert(n==20&&body[0]==0&&body[1]==1&&body[2]==1&&body[3]==0
            &&tunuino_device_u16(body+4)==10000
            &&(int16_t)tunuino_device_u16(body+6)==-500
