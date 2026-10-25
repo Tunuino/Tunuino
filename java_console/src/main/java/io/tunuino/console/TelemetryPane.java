@@ -87,6 +87,7 @@ public final class TelemetryPane extends BorderPane {
         chart.setMinHeight(160);
         channel.setOnAction(event -> renderChart());
         VBox top = new VBox(10, source, cards, new ToolBar(new Label("Canal do gráfico"), channel));
+        top.getStyleClass().add("telemetry-top");
         setTop(top); setCenter(chart);
         cursor.setId("telemetry-cursor");
         cursor.setBlockIncrement(1);

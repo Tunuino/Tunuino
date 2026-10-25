@@ -96,8 +96,13 @@ public final class ConsoleUiChecks {
                 stage.setWidth(960); stage.setHeight(680);
                 later(() -> {
                     checkCompact(stage, "console-small");
-                    stage.setWidth(1340); stage.setHeight(880);
-                    later(() -> checkWorkspaces(stage, telemetry, samples));
+                    double frameHeight = stage.getHeight() - scene.getHeight();
+                    stage.setMinHeight(600); stage.setHeight(640 + frameHeight);
+                    later(() -> {
+                        checkCompact(stage, "console-short-content");
+                        stage.setWidth(1340); stage.setHeight(880);
+                        later(() -> checkWorkspaces(stage, telemetry, samples));
+                    });
                 });
             });
         }
@@ -109,7 +114,8 @@ public final class ConsoleUiChecks {
             for (String id : List.of("#telemetry-next", "#console-status", "#telemetry-value-coolant")) {
                 javafx.scene.Node node = scene.lookup(id);
                 var bounds = node.localToScene(node.getBoundsInLocal());
-                check(bounds.getMaxY() < scene.getHeight() && bounds.getMaxX() < scene.getWidth(), "Control stays within compact window: " + id);
+                check(bounds.getMaxY() < scene.getHeight() && bounds.getMaxX() < scene.getWidth(),
+                    "Control stays within compact window: " + id + " " + bounds + " in " + scene.getWidth() + "x" + scene.getHeight());
             }
             var rpm = scene.lookup("#telemetry-value-rpm"); var coolant = scene.lookup("#telemetry-value-coolant");
             check(Math.abs(rpm.localToScene(rpm.getBoundsInLocal()).getMinY()

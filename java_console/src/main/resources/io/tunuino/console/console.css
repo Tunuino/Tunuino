@@ -110,3 +110,10 @@
 .console-shell:compact .telemetry-card { -fx-padding: 10 12; }
 .console-shell:compact .telemetry-value { -fx-font-size: 28px; }
 .console-shell:compact .chart { -fx-min-height: 140; }
+.console-shell:short .actions.connection-controls { -fx-padding: 6 22; }
+.console-shell:short .page-header { -fx-padding: 9 24 8 24; }
+.console-shell:short .telemetry-card { -fx-padding: 8 12; }
+.console-shell:short .telemetry-value { -fx-font-size: 26px; }
+.console-shell:short .telemetry-top { -fx-spacing: 6; }
+.console-shell:short .status-bar { -fx-padding: 6 22; }
+.console-shell:short .chart { -fx-min-height: 120; }

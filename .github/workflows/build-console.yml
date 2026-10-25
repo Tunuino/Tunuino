@@ -57,11 +57,12 @@ jobs:
         & $runtimeJava '-Dprism.order=sw' -cp $classpath io.tunuino.console.ConsoleUiChecks --snapshots=build/interface-check
         if ($LASTEXITCODE -ne 0) { throw 'Console interface check failed' }
     - name: Preserve interface previews
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: console-interface-${{ github.sha }}
         path: build/interface-check/
-        if-no-files-found: error
+        if-no-files-found: warn
         retention-days: '30'
     - name: Record component provenance
       shell: pwsh

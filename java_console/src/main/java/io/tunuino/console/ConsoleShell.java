@@ -70,9 +70,11 @@ final class ConsoleShell extends BorderPane {
             if (scene == null) return;
             java.util.function.DoubleConsumer resize = height -> {
                 boolean compact = height < 800;
+                boolean shortWindow = height < 700;
                 pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("compact"), compact);
-                logo.setFitHeight(compact ? 40 : 58);
-                logo.setFitWidth(compact ? 142 : 172);
+                pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("short"), shortWindow);
+                logo.setFitHeight(shortWindow ? 32 : compact ? 40 : 58);
+                logo.setFitWidth(shortWindow ? 132 : compact ? 142 : 172);
             };
             scene.heightProperty().addListener((observable, oldHeight, height) -> resize.accept(height.doubleValue()));
             resize.accept(scene.getHeight());
