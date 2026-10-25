@@ -37,12 +37,13 @@ map reads, partial live data and this IO profile. The signature is
 `firmware/tunerstudio/generated/tunuino_proteus_v07_f427_io.ini`.
 The former 0.0.3 identity-only profile remains a separate regression fixture.
 
-TunerStudio 3.3.01 requires a framed, length-delimited `S` response whose
-signature bytes match the INI exactly (no trailing NUL), while plain `Q` probe
-responses remain NUL-terminated for discovery. `F` advertises serial protocol
-`002`; the local realtime blocking factor is 100 bytes to cover the complete
-100-byte runtime block. Table transfers retain a 64-byte blocking factor.
-The Java Console continues to use its independent `TUNUINO?` identity request.
+For the serial discovery command `F`, this profile advertises `001`,
+the CRC-wrapped TunerStudio protocol also used by the reference implementation.
+Both plain discovery replies and CRC-framed `S`/`V` replies include a trailing
+NUL; this is separate from the INI's unquoted signature value. The local
+realtime blocking factor is 100 bytes to cover the complete 100-byte runtime
+block. Table transfers retain a 64-byte blocking factor. The Java Console
+continues to use its independent `TUNUINO?` identity request.
 
 Commands use the existing length/CRC envelope. Multi-byte numbers are big endian.
 Response status is a separate first byte: 0 success, 0x83 command/bounds error,
