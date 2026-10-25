@@ -2,18 +2,8 @@ name: TunerStudio
 'on':
   push:
     branches: [master]
-    paths:
-    - .github/workflows/validate-tunerstudio.yml
-    - firmware/**
-    - tools/**
-    - misc/**
   pull_request:
     branches: [master]
-    paths:
-    - .github/workflows/validate-tunerstudio.yml
-    - firmware/**
-    - tools/**
-    - misc/**
   workflow_call: {}
   workflow_dispatch: {}
 permissions:
