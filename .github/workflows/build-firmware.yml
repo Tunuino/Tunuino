@@ -2,20 +2,8 @@ name: Firmware
 'on':
   push:
     branches: [master]
-    paths:
-    - .github/workflows/build-firmware.yml
-    - firmware/**
-    - tools/**
-    - hardware/**
-    - LICENSE
   pull_request:
     branches: [master]
-    paths:
-    - .github/workflows/build-firmware.yml
-    - firmware/**
-    - tools/**
-    - hardware/**
-    - LICENSE
   workflow_call:
     inputs:
       arm:
