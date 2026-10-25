@@ -2,20 +2,8 @@ name: Windows Console
 'on':
   push:
     branches: [master]
-    paths:
-    - .github/workflows/build-console.yml
-    - java_console/**
-    - misc/**
-    - tools/**
-    - LICENSE
   pull_request:
     branches: [master]
-    paths:
-    - .github/workflows/build-console.yml
-    - java_console/**
-    - misc/**
-    - tools/**
-    - LICENSE
   workflow_call: {}
   workflow_dispatch: {}
 permissions:
