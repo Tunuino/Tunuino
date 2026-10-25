@@ -30,7 +30,8 @@ def main():
     assert section.index('nPages = 3') < section.index('blockingFactor = 100')
     assert '[UiDialogs]' in text and '[UserDefined]' not in text
     ini=configparser.ConfigParser(interpolation=None,strict=False);ini.read_string('[General]\n'+text)
-    assert ini['TunerStudio'].getint('iniVersion')==3
+    assert ini['TunerStudio'].getint('iniVersion')==4
+    assert ini['OutputChannels']['ochGetCommand']=='"O%2o%2c"'
     assert ini['Constants'].getint('nPages')==3 and ini['Constants']['pageSize']=='256, 160, 160'
     assert ini['Constants'].getint('blockingFactor')>=ini['OutputChannels'].getint('ochBlockSize')
     assert ini['Constants']['endianness']=='big' and ini['OutputChannels'].getint('ochBlockSize')==100
@@ -52,6 +53,22 @@ def main():
         assert decode(vectors['ts_can_id'])==bytes(1)
         assert decode(vectors['ts_capabilities'])==bytes((2,0,100,0,64))
         runtime=decode(vectors['runtime_configured']);assert len(runtime)==100 and runtime[:7]==b'TUNUINO'
+        default_runtime=decode(vectors['runtime_default'])
+        assert decode(vectors['runtime_slice_default'])==default_runtime[38:50]
+        assert decode(vectors['runtime_last_byte'])==default_runtime[99:100]
+        assert decode(vectors['runtime_slice_configured'])==runtime[92:100]
+        idle=decode(vectors['engine_preview_disabled'])
+        assert len(idle)==19 and idle[0]==1 and idle[1]==0 and idle[2]&0x07==0x07
+        valid=decode(vectors['engine_preview_valid'])
+        assert len(valid)==19 and valid[0:3]==bytes((1,1,0))
+        assert int.from_bytes(valid[3:5],'big')==10000
+        assert int.from_bytes(valid[5:7],'big',signed=True)==-500
+        assert int.from_bytes(valid[7:11],'big')==1234500
+        assert int.from_bytes(valid[11:15],'big')==100000
+        nosync=decode(vectors['engine_preview_no_sync'])
+        assert nosync[1]==0 and nosync[2]&0x09==0x09
+        noadc=decode(vectors['engine_preview_adc_invalid'])
+        assert noadc[1]==0 and noadc[2]&0x12==0x12
         expected={'hardwareRevision':7,'firmwareMajor':0,'firmwareMinor':1,'firmwarePatch':0,'capabilities':15,
             'uptimeSeconds':1234,'uptimeMillis':567,'validMask':15,'ioStatus':13,'rpmValue':1234.5,
             'mapValue':100.0,'lambdaValue':1.0,'coolantValue':50.0,'adcReferenceMv':3300,'triggerTooth':12,'triggerErrors':3}

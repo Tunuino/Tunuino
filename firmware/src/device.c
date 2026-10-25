@@ -138,11 +138,72 @@ static void runtime(tunuino_device *d, const tunuino_identity *id, uint8_t out[1
     put16(out+92,tunuino_device_u16(d->active+100));put16(out+94,d->tooth);put32(out+96,d->trigger_errors);
 }
 
+/* Read-only fuel/spark TABLE PREVIEW, not a fuel or ignition controller.
+ * Uses the device's existing scratch map, sequentially; no extra 8-KiB
+ * tables on the limited F427 task stack, no GPIO and no scheduler. */
+static void engine_preview(tunuino_device *d, uint8_t out[TUNUINO_ENGINE_PREVIEW_SIZE]) {
+    memset(out,0,TUNUINO_ENGINE_PREVIEW_SIZE);
+    out[1]=1; /* Wire format v1. 0 means no trustworthy calculation. */
+    const tunuino_live_sample *sample=&d->live;
+    uint8_t reasons=0;
+    if(!(sample->valid_mask&TUNUINO_LIVE_RPM_VALID)||sample->rpm_milli==0)
+        reasons|=TUNUINO_ENGINE_NO_RPM;
+    if(!(sample->valid_mask&TUNUINO_LIVE_MAP_VALID)||sample->map_milli_kpa==0)
+        reasons|=TUNUINO_ENGINE_NO_MAP;
+    if(!d->active[2])reasons|=TUNUINO_ENGINE_TRIGGER_DISABLED;
+    if(!d->trigger_valid)reasons|=TUNUINO_ENGINE_NO_SYNC;
+    if(!d->adc_valid)reasons|=TUNUINO_ENGINE_BAD_ADC;
+    if(sample->rpm_milli>=(uint32_t)tunuino_device_u16(d->active+96)*1000u)
+        reasons|=TUNUINO_ENGINE_RPM_LIMIT;
+    if(sample->valid_mask&TUNUINO_LIVE_RPM_VALID)put32(out+8,sample->rpm_milli);
+    if(sample->valid_mask&TUNUINO_LIVE_MAP_VALID)put32(out+12,sample->map_milli_kpa);
+    put32(out+16,d->generation);
+    if(!reasons) {
+        double ve=0.0, advance=0.0;
+        tunuino_map_status v=TUNUINO_MAP_FORMAT, a=TUNUINO_MAP_FORMAT;
+        const double rpm=sample->rpm_milli/1000.0;
+        const double kpa=sample->map_milli_kpa/1000.0;
+        if(map_decode(&d->scratch,d->active+256,TUNUINO_MAP_VE))
+            v=tunuino_map_lookup(&d->scratch,rpm,kpa,&ve);
+        if(map_decode(&d->scratch,d->active+416,TUNUINO_MAP_IGNITION))
+            a=tunuino_map_lookup(&d->scratch,rpm,kpa,&advance);
+        if(v==TUNUINO_MAP_CLAMPED||a==TUNUINO_MAP_CLAMPED)
+            reasons|=TUNUINO_ENGINE_OUT_OF_TABLE;
+        else if(v!=TUNUINO_MAP_OK||a!=TUNUINO_MAP_OK||ve<=0.0
+                ||ve>300.0||advance< -90.0||advance>90.0)
+            reasons|=TUNUINO_ENGINE_UNCALIBRATED;
+        else {
+            const uint16_t ve_centi=(uint16_t)(ve*100.0+0.5);
+            const int32_t spark_centi=(int32_t)(advance*100.0+(advance>=0?0.5:-0.5));
+            put16(out+4,ve_centi);
+            put16(out+6,(uint16_t)(int16_t)spark_centi);
+            out[2]=1; /* Computation valid; actuators remain disabled. */
+        }
+    }
+    out[3]=reasons;
+}
+
 tunuino_dispatch_status tunuino_device_reply(tunuino_device *d,const tunuino_identity *id,
     const uint8_t *q,size_t length,uint8_t *response,size_t capacity,size_t *written) {
     uint8_t body[257]={0};size_t size=1;
     if(length==1 && q[0]=='D') {memcpy(d->staged,d->active,sizeof(d->staged));d->dirty=false;}
     else if(length==1 && q[0]=='A') {runtime(d,id,body+1);size=101;}
+    else if(length==5 && q[0]=='O') {
+        /* TunerStudio ranged output: big-endian U16 offset/count. Keep A for
+         * existing clients, but allow a future INI to request exact slices. */
+        unsigned offset=tunuino_device_u16(q+1),count=tunuino_device_u16(q+3);
+        if(!count||count>100||offset>=100||count>100-offset)body[0]=0x83;
+        else {
+            uint8_t channels[100];
+            runtime(d,id,channels);
+            memcpy(body+1,channels+offset,count);
+            size=1+count;
+        }
+    }
+    else if(length==9 && memcmp(q,"TUNUINO:E",9)==0) {
+        engine_preview(d,body);
+        size=TUNUINO_ENGINE_PREVIEW_SIZE;
+    }
     else if(length==1 && (q[0]=='S'||q[0]=='Q'||q[0]=='V'||q[0]=='F')) {
         const char *text=q[0]=='V'?TUNUINO_IO_VERSION:q[0]=='F'?TUNUINO_IO_TS_SERIAL_VERSION:TUNUINO_IO_SIGNATURE;
         /* TunerStudio 3.3.01 on the physical F427 reports Unsupported Controller

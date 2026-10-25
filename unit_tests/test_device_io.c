@@ -103,13 +103,36 @@ int main(void){
     assert(tunuino_dispatch_plain_reply(&context,'I',plain,sizeof(plain),&plain_len)==TUNUINO_DISPATCH_OK);
     assert(plain_len==1&&plain[0]==0);
     body=query((const uint8_t *)"A",1,&n);assert(n==101&&body[0]==0);vector("runtime_default");
+    /* Preview remains unavailable with factory placeholders and no sensors. */
+    body=query((const uint8_t *)"TUNUINO:E",9,&n);
+    assert(n==TUNUINO_ENGINE_PREVIEW_SIZE && body[0]==0 && body[1]==1
+           && body[2]==0 && (body[3]&TUNUINO_ENGINE_TRIGGER_DISABLED)
+           && (body[3]&TUNUINO_ENGINE_NO_RPM) && (body[3]&TUNUINO_ENGINE_NO_MAP));
+    vector("engine_preview_disabled");
+    /* Ranged output must reproduce slices of the original A response. */
+    const uint8_t slice[]={'O',0,38,0,12};
+    body=query(slice,sizeof(slice),&n);
+    assert(n==13 && body[0]==0 );
+    vector("runtime_slice_default");
+    const uint8_t zero_slice[]={'O',0,0,0,0};
+    body=query(zero_slice,sizeof(zero_slice),&n);assert(n==1&&body[0]==0x83);
+    const uint8_t overflow_slice[]={'O',0,99,0,2};
+    body=query(overflow_slice,sizeof(overflow_slice),&n);assert(n==1&&body[0]==0x83);
+    const uint8_t last_slice[]={'O',0,99,0,1};
+    body=query(last_slice,sizeof(last_slice),&n);assert(n==2&&body[0]==0);
+    vector("runtime_last_byte");
     uint8_t settings[576];memcpy(settings,device.active,576);
     settings[2]=1;settings[3]=60;settings[4]=2;settings[6]=1;settings[7]=2;settings[8]=1;
     put16(settings+10,1000);put16(settings+12,3000);put16(settings+14,0);put16(settings+16,20000);
     put16(settings+18,1000);put16(settings+20,3000);put16(settings+22,500);put16(settings+24,1500);
     settings[26]=3;put16(settings+32,1000);put16(settings+34,2000);put16(settings+36,3000);
     put16(settings+64,10000);put16(settings+66,5000);put16(settings+68,0);
-    put16(settings+256+32,10000);put16(settings+416+32,65036); /* -5 degrees */
+    /* Bench lookup fixtures: every VE cell 100%, every ignition cell -5 deg.
+     * These values test interpolation only and MUST NOT control an engine. */
+    for(unsigned i=0;i<64;++i) {
+        put16(settings+256+32+2*i,10000);
+        put16(settings+416+32+2*i,65036);
+    }
     assert(tunuino_device_validate(settings,sizeof(settings)));
     write_page(1,settings,256);write_page(2,settings+256,160);write_page(3,settings+416,160);
     assert(device.dirty&&device.active[6]==0);burn(0);assert(device.persisted&&!device.dirty&&device.active[6]==1);
@@ -120,12 +143,33 @@ int main(void){
     assert(device.live.valid_mask==15&&device.live.rpm_milli==1234500&&device.live.map_milli_kpa==100000
         &&device.live.lambda_million==1000000&&device.live.coolant_milli_c==50000);
     body=query((const uint8_t *)"A",1,&n);assert(n==101&&body[39]==15);vector("runtime_configured");
+    /* Genuine input validity and committed maps are prerequisites. */
+    body=query((const uint8_t *)"TUNUINO:E",9,&n);
+    assert(n==20&&body[0]==0&&body[1]==1&&body[2]==1&&body[3]==0
+           &&tunuino_device_u16(body+4)==10000
+           &&(int16_t)tunuino_device_u16(body+6)==-500
+           &&body[8]==0&&body[9]==18&&body[10]==214&&body[11]==100);
+    vector("engine_preview_valid");
+    /* Direct ranged read of the high offsets from the same 100-byte block. */
+    const uint8_t io_slice[]={'O',0,92,0,8};
+    body=query(io_slice,sizeof(io_slice),&n);
+    assert(n==9&&body[0]==0&&tunuino_device_u16(body+1)==3300
+           &&tunuino_device_u16(body+3)==12);
+    vector("runtime_slice_configured");
     body=query((const uint8_t *)"TUNUINO:P",9,&n);assert(n==28&&body[1]==2&&body[2]==15);vector("partial_all");
     tunuino_device_sample(&device,1234568,raw,true,0,false,0,3);
+    body=query((const uint8_t *)"TUNUINO:E",9,&n);
+    assert(n==20&&body[2]==0&&(body[3]&TUNUINO_ENGINE_NO_RPM)
+           &&(body[3]&TUNUINO_ENGINE_NO_SYNC)
+           &&tunuino_device_u16(body+4)==0&&tunuino_device_u16(body+6)==0);
+    vector("engine_preview_no_sync");
     body=query((const uint8_t *)"TUNUINO:P",9,&n);assert(body[2]==14);vector("partial_no_rpm");
     body=query((const uint8_t *)"TUNUINO:L",9,&n);assert(n==1&&body[0]==1); /* Legacy NOT_READY unchanged. */
     raw[0]=4095;tunuino_device_sample(&device,1234569,raw,true,0,false,0,3);assert(device.live.valid_mask==12);
     tunuino_device_sample(&device,1234570,NULL,true,0,false,0,3);assert(device.live.valid_mask==0&&!device.adc_valid);
+    body=query((const uint8_t *)"TUNUINO:E",9,&n);
+    assert(n==20&&body[2]==0&&(body[3]&TUNUINO_ENGINE_BAD_ADC)
+           &&(body[3]&TUNUINO_ENGINE_NO_MAP));vector("engine_preview_adc_invalid");
     memcpy(settings,device.active,576);settings[6]=12;write_page(1,settings,256);burn(0x84);assert(device.active[6]==1);
     /* Malformed writes/burns do not change active settings or terminate USB. */
     const uint8_t malformed[]={'w',0,1,0,255,0,2,0,0};body=query(malformed,sizeof(malformed),&n);assert(n==1&&body[0]==0x83);

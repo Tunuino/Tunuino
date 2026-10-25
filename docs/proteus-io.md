@@ -56,13 +56,25 @@ the session; envelope corruption or transport timeout resets/re-enumerates CDC.
 | Command payload | Result |
 |---|---|
 | `S`, `Q`, `V`, `F` | Signature, version or envelope revision |
-| `A` | Status followed by 100 runtime bytes |
+| `A` | Status followed by 100 runtime bytes (legacy clients) |
+| `O` + offset U16 + count U16 | Status plus the requested range of 1..100 runtime bytes |
+| `TUNUINO:E` | Read-only VE/ignition table preview v1, with explicit sensor and calibration validity; never actuates the engine |
 | `r` + page/offset/count, each U16 | Read staged bytes, count 1..256 |
 | `w` + page/offset/count U16 + bytes | Stage bytes without applying them |
 | `b` + page U16 | Validate, persist and activate all three staged pages |
 | `k` + page U16 | CRC32 of the staged page, U32 |
 | `D` | Discard all staged edits; restore active bytes |
 | `TUNUINO:P` | Partial live frame v2, independent validity per channel |
+
+The INI revision 4 uses ranged `O%2o%2c` runtime reads while retaining
+the old `A` request. Reads outside the 100-byte block receive status 0x83,
+without ending the serial session. The read-only native `TUNUINO:E` preview
+returns 20 bytes including status: version 1, validity, reason bits, signed
+ignition degrees x100, VE percent x100, measured RPM/MAP and the active
+configuration generation. No outputs are scheduled or enabled by this command.
+Missing RPM, MAP, synchronization, ADC, commissioning or table range forces a
+zeroed computed value; the caller must check validity before displaying
+numbers. Factory maps are zero placeholders, not an engine calibration.
 
 The legacy `TUNUINO:L` request still requires all four signals. Missing fields
 in partial frames are zero with validity bits clear. Consumers must use the

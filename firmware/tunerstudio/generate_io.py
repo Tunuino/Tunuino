@@ -16,7 +16,7 @@ def render():
         '; Physical input/calibration bench. No actuator commands or engine control.',
         '; Disabled/unavailable calibrated channels evaluate to NaN, not measurements.',
         'enable2ndByteCanID = false', '', '[TunerStudio]',
-        '    iniSpecVersion = 3.51', '    iniVersion = 3', f'    signature = {json.dumps(SIGNATURE)}',
+        '    iniSpecVersion = 3.51', '    iniVersion = 4', f'    signature = {json.dumps(SIGNATURE)}',
         '    queryCommand = "S"', '    versionInfo = "V"', '    defaultRuntimeRecordPerSec = 5', '',
         '[Constants]', '    messageEnvelopeFormat = msEnvelope_1.0', '    endianness = big',
         '    nPages = 3', '    pageSize = 256, 160, 160',
@@ -51,7 +51,7 @@ def render():
             f'    {prefix}Load = array, U16, 16, [8], "kPa", 0.01, 0, 0, 500, 2',
             f'    {prefix}Cells = array, S16, 32, [8x8], "{unit}", 0.01, 0, {minimum}, {maximum}, 2']
     lines += ['', '[ConstantExtensions]', '    readOnly = configLayout', '    readOnly = coolantCount', '',
-        '[OutputChannels]', '    ochGetCommand = "A"', '    ochBlockSize = 100']
+        '[OutputChannels]', '    ochGetCommand = "O%2o%2c"', '    ochBlockSize = 100']
     channels=[('protocolRevision','U08',7,'',1),('boardFamily','U08',8,'',1),('mcuSeries','U08',9,'',1),
         ('hardwareRevision','U16',10,'',1),('firmwareMajor','U08',12,'',1),('firmwareMinor','U08',13,'',1),
         ('firmwarePatch','U08',14,'',1),('capabilities','U32',15,'',1),

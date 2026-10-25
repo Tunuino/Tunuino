@@ -12,6 +12,18 @@
 #define TUNUINO_IO_TS_SERIAL_VERSION "001"
 #define TUNUINO_IO_CAPABILITIES UINT32_C(15)
 #define TUNUINO_IO_OUTPUT_SIZE 100u
+/* Native read-only TUNUINO:E response: status, format, valid, reasons,
+ * VE centi-percent, ignition centi-degrees (signed), RPM milli, MAP milli,
+ * configuration generation. Never permits physical actuation. */
+#define TUNUINO_ENGINE_PREVIEW_SIZE 20u
+#define TUNUINO_ENGINE_NO_RPM 0x01u
+#define TUNUINO_ENGINE_NO_MAP 0x02u
+#define TUNUINO_ENGINE_TRIGGER_DISABLED 0x04u
+#define TUNUINO_ENGINE_NO_SYNC 0x08u
+#define TUNUINO_ENGINE_BAD_ADC 0x10u
+#define TUNUINO_ENGINE_RPM_LIMIT 0x20u
+#define TUNUINO_ENGINE_OUT_OF_TABLE 0x40u
+#define TUNUINO_ENGINE_UNCALIBRATED 0x80u
 #define TUNUINO_IO_CONFIG_SIZE 256u
 #define TUNUINO_IO_MAP_SIZE 160u
 #define TUNUINO_IO_SETTINGS_SIZE 576u
