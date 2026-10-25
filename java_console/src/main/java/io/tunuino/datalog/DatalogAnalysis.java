@@ -14,9 +14,11 @@ public final class DatalogAnalysis {
         if (samples.isEmpty()) throw new IllegalArgumentException("O datalog não contém amostras");
         double minimum = Double.POSITIVE_INFINITY, maximum = Double.NEGATIVE_INFINITY;
         for (LogSample sample : samples) {
+            if (!channel.available(sample)) continue;
             double value = channel.value(sample);
             minimum = Math.min(minimum, value); maximum = Math.max(maximum, value);
         }
+        if (minimum == Double.POSITIVE_INFINITY) return new Range(Double.NaN, Double.NaN);
         return new Range(minimum, maximum);
     }
 
