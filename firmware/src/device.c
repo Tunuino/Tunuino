@@ -145,9 +145,14 @@ tunuino_dispatch_status tunuino_device_reply(tunuino_device *d,const tunuino_ide
     else if(length==1 && q[0]=='A') {runtime(d,id,body+1);size=101;}
     else if(length==1 && (q[0]=='S'||q[0]=='Q'||q[0]=='V'||q[0]=='F')) {
         const char *text=q[0]=='V'?TUNUINO_IO_VERSION:q[0]=='F'?TUNUINO_IO_TS_SERIAL_VERSION:TUNUINO_IO_SIGNATURE;
-        /* TunerStudio expects NUL-terminated signature and version replies
-         * inside the CRC envelope, including when the INI signature matches. */
-        size_t count=q[0]=='F'?3:strlen(text)+1;memcpy(body+1,text,count);size=1+count;
+        /* TunerStudio 3.3.01 on the physical F427 reports Unsupported Controller
+         * Firmware when CRC-framed S includes a trailing 0x00: it compares
+         * the full received string against the exact INI signature. Do not
+         * include NUL in framed S/Q; keep the V string terminator and the
+         * separate plain Q/S discovery behavior unchanged. */
+        size_t count=strlen(text);
+        if(q[0]=='V') ++count;
+        memcpy(body+1,text,count);size=1+count;
     } else if(length==1 && (q[0]=='C'||q[0]=='c')) {
         /* TunerStudio communication checks, with the envelope status first. */
         if (q[0]=='C') { body[1]=0xFF;size=2; }

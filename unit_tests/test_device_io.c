@@ -71,12 +71,12 @@ int main(void){
     tunuino_device_init(&device,save,clock_now,NULL);assert(tunuino_device_validate(device.active,576));
     assert(tunuino_dispatch_validate(&context)==TUNUINO_DISPATCH_OK);
     size_t n;const uint8_t *body=query((const uint8_t *)"S",1,&n);
-    assert(body[0]==0 && n==2+strlen(TUNUINO_IO_SIGNATURE));
+    assert(body[0]==0 && n==1+strlen(TUNUINO_IO_SIGNATURE));
     assert(memcmp(body+1,TUNUINO_IO_SIGNATURE,n-1)==0);vector("signature");
-    /* The CRC-framed signature includes the NUL terminator and must match
-     * the plain discovery signature before that terminator. */
+    /* Real TunerStudio 3.3.01 rejects CRC-framed signatures containing a
+     * trailing NUL even though its plain discovery accepts it. */
     body=query((const uint8_t *)"Q",1,&n);
-    assert(n==2+strlen(TUNUINO_IO_SIGNATURE));
+    assert(n==1+strlen(TUNUINO_IO_SIGNATURE));
     assert(memcmp(body+1,TUNUINO_IO_SIGNATURE,n-1)==0);vector("signature_q");
     body=query((const uint8_t *)"V",1,&n);
     assert(n==2+strlen(TUNUINO_IO_VERSION));
@@ -93,6 +93,11 @@ int main(void){
     uint8_t plain[8];size_t plain_len=0;
     assert(tunuino_dispatch_plain_reply(&context,'F',plain,sizeof(plain),&plain_len)==TUNUINO_DISPATCH_OK);
     assert(plain_len==3&&memcmp(plain,"001",3)==0);
+    uint8_t discovery[128];size_t discovery_len=0;
+    assert(tunuino_dispatch_plain_reply(&context,'Q',discovery,sizeof(discovery),&discovery_len)==TUNUINO_DISPATCH_OK);
+    assert(discovery_len==strlen(TUNUINO_IO_SIGNATURE)+1);
+    assert(memcmp(discovery,TUNUINO_IO_SIGNATURE,discovery_len)==0);
+    assert(discovery[discovery_len-1]==0);
     assert(tunuino_dispatch_plain_reply(&context,'C',plain,sizeof(plain),&plain_len)==TUNUINO_DISPATCH_OK);
     assert(plain_len==2&&plain[0]==0&&plain[1]==0xFF);
     assert(tunuino_dispatch_plain_reply(&context,'I',plain,sizeof(plain),&plain_len)==TUNUINO_DISPATCH_OK);

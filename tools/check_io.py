@@ -43,7 +43,7 @@ def main():
             *map(str,sources),str(ROOT/'unit_tests/test_device_io.c'),'-lm','-o',str(exe)],check=True,timeout=30)
         lines=subprocess.check_output([str(exe)],text=True,timeout=20).splitlines();assert lines[-1]=='OK'
         vectors={name:bytes.fromhex(value) for name,value in (line.split() for line in lines[:-1])}
-        assert decode(vectors['signature'])==json.loads(ini['TunerStudio']['signature']).encode()+b'\0'
+        assert decode(vectors['signature'])==json.loads(ini['TunerStudio']['signature']).encode()
         assert decode(vectors['signature_q'])==decode(vectors['signature'])
         assert decode(vectors['version'])==b'Tunuino 0.1.0 Proteus v0.7 IO bench\0'
         assert decode(vectors['ts_protocol'])==b'001'

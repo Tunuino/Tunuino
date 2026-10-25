@@ -139,6 +139,11 @@ int main(int argc,char **argv) {
       const uint8_t *body;size_t body_size;
       assert(tunuino_frame_decode(delivered+offset,length,&body,&body_size)==TUNUINO_FRAME_OK);
       assert(body[0]==0);
+      if (i==0) {
+        static const char signature[]="Tunuino Proteus v0.7 F427 IO v1";
+        assert(body_size==sizeof(signature) && memcmp(body+1,signature,sizeof(signature)-1)==0);
+      }
+      if (i==1) assert(body_size>1 && body[body_size-1]==0);
       if (i==2 || i==3) assert(body_size==101 && memcmp(body+1,"TUNUINO",7)==0);
       if (i==4) assert(body_size==32 && memcmp(body+1,"TUNUINO",7)==0);
       offset+=length;

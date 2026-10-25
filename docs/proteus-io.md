@@ -39,11 +39,14 @@ The former 0.0.3 identity-only profile remains a separate regression fixture.
 
 For the serial discovery command `F`, this profile advertises `001`,
 the CRC-wrapped TunerStudio protocol also used by the reference implementation.
-Both plain discovery replies and CRC-framed `S`/`V` replies include a trailing
-NUL; this is separate from the INI's unquoted signature value. The local
-realtime blocking factor is 100 bytes to cover the complete 100-byte runtime
-block. Table transfers retain a 64-byte blocking factor. The Java Console
-continues to use its independent `TUNUINO?` identity request.
+Plain `Q`/`S` discovery replies include a trailing NUL. Physical TunerStudio
+3.3.01 diagnostics showed that CRC-framed `S` with an additional NUL is rejected
+as unsupported firmware, even when the visible signature matches. The CRC-framed
+`S`/`Q` replies therefore contain the exact ASCII signature bytes declared in
+the INI (no trailing NUL); `V` keeps its NUL terminator. The realtime
+blocking factor is 100 bytes to cover the complete 100-byte runtime block.
+Table transfers retain a 64-byte blocking factor. The Java Console continues
+to use its independent `TUNUINO?` identity request.
 
 Commands use the existing length/CRC envelope. Multi-byte numbers are big endian.
 Response status is a separate first byte: 0 success, 0x83 command/bounds error,
