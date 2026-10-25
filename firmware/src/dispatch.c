@@ -19,11 +19,19 @@ tunuino_dispatch_status tunuino_dispatch_plain_reply(const tunuino_dispatch_cont
     tunuino_dispatch_status status = tunuino_dispatch_validate(c);
     if (status != TUNUINO_DISPATCH_OK) return status;
     if (c->device!=NULL) {
+        if (command == 'I' || command == 'C') {
+            size_t size = command == 'I' ? 1u : 2u;
+            if (capacity < size) return TUNUINO_DISPATCH_CAPACITY;
+            response[0] = 0; /* Local CAN ID 0 or successful test response. */
+            if (command == 'C') response[1] = 0xFF;
+            *written = size;
+            return TUNUINO_DISPATCH_OK;
+        }
         const char *text;
         switch(command) {
             case 'Q':case 'S':text=TUNUINO_IO_SIGNATURE;break;
             case 'V':text=TUNUINO_IO_VERSION;break;
-            case 'F':text="001";break;
+            case 'F':text=TUNUINO_IO_TS_SERIAL_VERSION;break;
             default:return TUNUINO_DISPATCH_UNKNOWN_REQUEST;
         }
         size_t count=command=='F'?3:strlen(text)+1;

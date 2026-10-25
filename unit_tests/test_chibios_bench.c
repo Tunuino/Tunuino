@@ -128,7 +128,7 @@ int main(int argc,char **argv) {
     }
   } else if (strcmp(mode,"tunerstudio")==0) {
     assert(writes==9 && completions==9 && tunuino_bench_fault==0);
-    assert(memcmp(delivered,"001Tunuino",10)==0);
+    assert(memcmp(delivered,"002Tunuino",10)==0);
     size_t offset=3;
     while (offset<delivered_size && delivered[offset]) ++offset;
     assert(offset<delivered_size); ++offset;

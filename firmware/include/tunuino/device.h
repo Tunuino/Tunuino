@@ -7,6 +7,8 @@
 
 #define TUNUINO_IO_SIGNATURE "Tunuino Proteus v0.7 F427 IO v1"
 #define TUNUINO_IO_VERSION "Tunuino 0.1.0 Proteus v0.7 IO bench"
+/* TunerStudio CRC-wrapped serial protocol revision, separate from firmware 0.1.0. */
+#define TUNUINO_IO_TS_SERIAL_VERSION "002"
 #define TUNUINO_IO_CAPABILITIES UINT32_C(15)
 #define TUNUINO_IO_OUTPUT_SIZE 100u
 #define TUNUINO_IO_CONFIG_SIZE 256u

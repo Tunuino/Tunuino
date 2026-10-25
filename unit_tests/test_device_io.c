@@ -71,6 +71,22 @@ int main(void){
     tunuino_device_init(&device,save,clock_now,NULL);assert(tunuino_device_validate(device.active,576));
     assert(tunuino_dispatch_validate(&context)==TUNUINO_DISPATCH_OK);
     size_t n;const uint8_t *body=query((const uint8_t *)"S",1,&n);assert(body[0]==0&&strcmp((const char *)body+1,TUNUINO_IO_SIGNATURE)==0);vector("signature");
+    /* Negotiation must advertise the CRC-wrapped protocol, not legacy 001. */
+    body=query((const uint8_t *)"F",1,&n);assert(n==4&&body[0]==0&&memcmp(body+1,"002",3)==0);vector("ts_protocol");
+    body=query((const uint8_t *)"C",1,&n);assert(n==2&&body[0]==0&&body[1]==0xFF);vector("ts_test");
+    body=query((const uint8_t *)"c",1,&n);assert(n==3&&body[0]==0&&body[1]==0&&body[2]==0);vector("ts_seconds");
+    body=query((const uint8_t *)"I",1,&n);assert(n==2&&body[0]==0&&body[1]==0);vector("ts_can_id");
+    const uint8_t capability_command[]={'f',0};
+    body=query(capability_command,sizeof(capability_command),&n);
+    assert(n==6&&body[0]==0&&body[1]==2&&body[2]==0&&body[3]==64&&body[4]==0&&body[5]==64);
+    vector("ts_capabilities");
+    uint8_t plain[8];size_t plain_len=0;
+    assert(tunuino_dispatch_plain_reply(&context,'F',plain,sizeof(plain),&plain_len)==TUNUINO_DISPATCH_OK);
+    assert(plain_len==3&&memcmp(plain,"002",3)==0);
+    assert(tunuino_dispatch_plain_reply(&context,'C',plain,sizeof(plain),&plain_len)==TUNUINO_DISPATCH_OK);
+    assert(plain_len==2&&plain[0]==0&&plain[1]==0xFF);
+    assert(tunuino_dispatch_plain_reply(&context,'I',plain,sizeof(plain),&plain_len)==TUNUINO_DISPATCH_OK);
+    assert(plain_len==1&&plain[0]==0);
     body=query((const uint8_t *)"A",1,&n);assert(n==101&&body[0]==0);vector("runtime_default");
     uint8_t settings[576];memcpy(settings,device.active,576);
     settings[2]=1;settings[3]=60;settings[4]=2;settings[6]=1;settings[7]=2;settings[8]=1;

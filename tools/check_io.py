@@ -43,6 +43,11 @@ def main():
         lines=subprocess.check_output([str(exe)],text=True,timeout=20).splitlines();assert lines[-1]=='OK'
         vectors={name:bytes.fromhex(value) for name,value in (line.split() for line in lines[:-1])}
         assert decode(vectors['signature'])==json.loads(ini['TunerStudio']['signature']).encode()+b'\0'
+        assert decode(vectors['ts_protocol'])==b'002'
+        assert decode(vectors['ts_test'])==b'\xff'
+        assert decode(vectors['ts_seconds'])==bytes(2)
+        assert decode(vectors['ts_can_id'])==bytes(1)
+        assert decode(vectors['ts_capabilities'])==bytes((2,0,64,0,64))
         runtime=decode(vectors['runtime_configured']);assert len(runtime)==100 and runtime[:7]==b'TUNUINO'
         expected={'hardwareRevision':7,'firmwareMajor':0,'firmwareMinor':1,'firmwarePatch':0,'capabilities':15,
             'uptimeSeconds':1234,'uptimeMillis':567,'validMask':15,'ioStatus':13,'rpmValue':1234.5,
