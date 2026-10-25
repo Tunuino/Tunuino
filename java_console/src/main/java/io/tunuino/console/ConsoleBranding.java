@@ -3,7 +3,10 @@ package io.tunuino.console;
 
 import java.util.Objects;
 import javafx.scene.image.Image;
+import javafx.scene.Scene;
 import javafx.stage.Stage;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 
 /** Shared identity for the Console and calibration windows. */
 final class ConsoleBranding {
@@ -18,5 +21,17 @@ final class ConsoleBranding {
             throw new IllegalStateException("Cannot load Tunuino logo", icon.getException());
         }
         stage.getIcons().setAll(icon);
+    }
+
+    static void applyTheme(Scene scene) {
+        String stylesheet = Objects.requireNonNull(ConsoleBranding.class.getResource("console.css"),
+            "Missing Console stylesheet").toExternalForm();
+        if (!scene.getStylesheets().contains(stylesheet)) scene.getStylesheets().add(stylesheet);
+    }
+
+    static Alert alert(Alert.AlertType type, String content, ButtonType... buttons) {
+        Alert alert = new Alert(type, content, buttons);
+        alert.getDialogPane().getStylesheets().add(ConsoleBranding.class.getResource("console.css").toExternalForm());
+        return alert;
     }
 }

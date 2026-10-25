@@ -20,6 +20,7 @@ public final class Launcher {
                     // Construct the actual firmware controls as well as the graphics runtime.
                     FirmwarePanel firmware = new FirmwarePanel(stage, () -> true, () -> null, () -> true);
                     stage.setScene(new Scene(firmware, 1000, 360));
+                    ConsoleBranding.applyTheme(stage.getScene());
                     stage.show();
                     UsbSerialPorts.list();
                     WindowsDfu.scan();
