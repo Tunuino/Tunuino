@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
         if (tunuino_map_snapshot_prepare(kind == 1 ? &ve : &ignition,&map,7) != TUNUINO_MAP_OK) { return 4; }
     }
     if (strcmp(mode,"not-ready") == 0) { live.valid_mask = 0; ve.generation = ignition.generation = 0; }
-    tunuino_dispatch_context context = {&identity,&live,&ve,&ignition};
+    tunuino_dispatch_context context = {&identity,&live,&ve,&ignition,NULL};
     /* Deterministic synthetic time; receiver/transmitter deadline tests are separate. */
     tunuino_link_status initial = use_captures
         ? tunuino_link_init_mailbox(&link,&context,&mailbox,10,1000,1000,capture_time / 1000u)

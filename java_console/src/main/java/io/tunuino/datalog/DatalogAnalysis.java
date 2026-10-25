@@ -14,10 +14,11 @@ public final class DatalogAnalysis {
         if (samples.isEmpty()) throw new IllegalArgumentException("O datalog não contém amostras");
         double minimum = Double.POSITIVE_INFINITY, maximum = Double.NEGATIVE_INFINITY;
         for (LogSample sample : samples) {
+            if(!channel.available(sample))continue;
             double value = channel.value(sample);
             minimum = Math.min(minimum, value); maximum = Math.max(maximum, value);
         }
-        return new Range(minimum, maximum);
+        return minimum==Double.POSITIVE_INFINITY?new Range(Double.NaN,Double.NaN):new Range(minimum, maximum);
     }
 
     /** Ordered bucket extrema keep short peaks that a fixed stride would hide. */
@@ -27,18 +28,21 @@ public final class DatalogAnalysis {
         if (samples.size() <= limit) return List.copyOf(samples);
         List<LogSample> reduced = new ArrayList<>(limit);
         reduced.add(samples.get(0));
-        int buckets = (limit - 2) / 2;
+        boolean gaps=samples.stream().anyMatch(sample -> !channel.available(sample));
+        int buckets = Math.max(1,(limit - 2) / (gaps?3:2));
         int interior = samples.size() - 2;
         for (int bucket = 0; bucket < buckets; ++bucket) {
             int from = 1 + (int) ((long) bucket * interior / buckets);
             int to = 1 + (int) ((long) (bucket + 1) * interior / buckets);
-            int low = from, high = from;
-            for (int i = from + 1; i < to; ++i) {
-                if (channel.value(samples.get(i)) < channel.value(samples.get(low))) low = i;
-                if (channel.value(samples.get(i)) > channel.value(samples.get(high))) high = i;
+            int low = -1, high = -1, missing = -1;
+            for (int i = from; i < to; ++i) {
+                if(!channel.available(samples.get(i))){if(missing<0)missing=i;continue;}
+                if (low<0 || channel.value(samples.get(i)) < channel.value(samples.get(low))) low = i;
+                if (high<0 || channel.value(samples.get(i)) > channel.value(samples.get(high))) high = i;
             }
-            reduced.add(samples.get(Math.min(low, high)));
-            if (low != high) reduced.add(samples.get(Math.max(low, high)));
+            var positions=new java.util.TreeSet<Integer>();
+            if(low>=0)positions.add(low);if(high>=0)positions.add(high);if(missing>=0)positions.add(missing);
+            for(int i:positions)if(reduced.size()<limit-1)reduced.add(samples.get(i));
         }
         reduced.add(samples.get(samples.size() - 1));
         return List.copyOf(reduced);

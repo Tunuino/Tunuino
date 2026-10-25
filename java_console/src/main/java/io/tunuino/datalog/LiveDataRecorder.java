@@ -29,7 +29,7 @@ public final class LiveDataRecorder {
             throw new IllegalArgumentException("Intervalo deve estar entre 10 ms e 5 s");
         }
         long count = 0;
-        try (CsvLogWriter writer = new CsvLogWriter(destination)) {
+        try (CsvLogWriter writer = new CsvLogWriter(destination,(identity.capabilities()&LiveDataClient.PARTIAL_CAPABILITY)!=0)) {
             while (running.getAsBoolean()) {
                 var result = LiveDataClient.read(session, identity, Duration.ofMillis(500));
                 if (result.isPresent()) {

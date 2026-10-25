@@ -16,6 +16,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def run(args, timeout=None):
+    if "firmware/src/dispatch.c" in args:
+        args = list(args)
+        for source in ("firmware/src/device.c", "firmware/src/config_journal.c", "firmware/src/analog.c", "firmware/src/calibration.c"):
+            if source not in args: args.append(source)
     result = subprocess.run(args, cwd=ROOT, text=True, capture_output=True, timeout=timeout)
     if result.returncode:
         raise RuntimeError('Check failed:\n' + (result.stdout + result.stderr)[-12000:])
@@ -180,6 +184,12 @@ def main():
             str(bench_object), "-lm", "-o", str(bench_exe)])
         for mode in ("normal", "timeout", "corrupt", "close"):
             print(run([str(bench_exe), mode], timeout=10))
+        io_exe = work / ("io-check.exe" if os.name == "nt" else "io-check")
+        run(flags + core_sources + ["unit_tests/test_device_io.c", "-lm", "-o", str(io_exe)])
+        assert run([str(io_exe)], timeout=20).splitlines()[-1] == "OK"
+        print("IO configuration, calibration, partial telemetry, maps and 153 flash interruption cases passed. Host model.")
+        io_peer = work / ("io-peer.exe" if os.name == "nt" else "io-peer")
+        run(flags + core_sources + ["unit_tests/device_peer.c", "-lm", "-o", str(io_peer)])
         chibios_object = work / "chibios-bench-loop.o"
         chibios_include = ["-Iunit_tests/chibios_bench_stub", "-Ifirmware/boards/proteus_v07/chibios_usb_bench"]
         run(flags + chibios_include + ["-Dmain=tunuino_chibios_bench_main", "-c",
@@ -187,7 +197,7 @@ def main():
         chibios_exe = work / ("chibios-bench-check.exe" if os.name == "nt" else "chibios-bench-check")
         run(flags + chibios_include + core_sources + ["unit_tests/test_chibios_bench.c",
             str(chibios_object), "-lm", "-o", str(chibios_exe)])
-        for mode in ("normal", "tunerstudio", "timeout", "corrupt", "disconnect", "reconfigure"):
+        for mode in ("normal", "tunerstudio", "timeout", "corrupt", "disconnect", "reconfigure", "recover"):
             print(run([str(chibios_exe), mode], timeout=10))
         peer_exe = work / ("link-peer.exe" if os.name == "nt" else "link-peer")
         run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/src/live_data.c",
@@ -226,7 +236,7 @@ def main():
                    java_root / "transport/PacketSession.java",
                    java_root / "protocol/DeviceIdentity.java", java_root / "protocol/IdentityClient.java",
                    java_root / "protocol/MapReadClient.java",
-                   java_root / "protocol/LiveDataClient.java", java_root / "datalog/CsvLogWriter.java",
+                   java_root / "protocol/LiveDataClient.java", java_root / "protocol/IoClient.java", java_root / "protocol/MapWriteClient.java", java_root / "datalog/CsvLogWriter.java",
                    java_root / "datalog/LiveDataRecorder.java",
                    java_root / "datalog/LiveDataMonitor.java", java_root / "datalog/LogChannel.java",
                    java_root / "datalog/DatalogAnalysis.java",
@@ -239,7 +249,8 @@ def main():
                    ROOT / "java_console/src/test/java/io/tunuino/CalibrationChecks.java",
                    ROOT / "java_console/src/test/java/io/tunuino/MapReadChecks.java",
                    ROOT / "java_console/src/test/java/io/tunuino/FirmwareLinkChecks.java",
-                   ROOT / "java_console/src/test/java/io/tunuino/TelemetryChecks.java"]
+                   ROOT / "java_console/src/test/java/io/tunuino/TelemetryChecks.java",
+                   ROOT / "java_console/src/test/java/io/tunuino/IoChecks.java"]
         sources.append(java_root / "transport/ProcessSerialChannel.java")
         sources.extend(sorted((ROOT / "java_tools/src/main/java").rglob("*.java")))
         sources.extend(sorted((ROOT / "java_tools/src/test/java").rglob("*.java")))
@@ -254,6 +265,7 @@ def main():
         read_fixture.write_text("\n".join(read_output[:4]), encoding="ascii")
         print(run(["java", "-cp", str(work), "io.tunuino.MapReadChecks", str(read_fixture)]))
         print(run(["java", "-cp", str(work), "io.tunuino.FirmwareLinkChecks", str(peer_exe)], timeout=30))
+        print(run(["java", "-cp", str(work), "io.tunuino.IoChecks", str(io_peer)], timeout=30))
         simulator = build_simulator(work / "simulator")
         print(run(["java", "-cp", str(work), "io.tunuino.TelemetryChecks", str(simulator)], timeout=30))
         print(run(["java", "-cp", str(work), "io.tunuino.tools.ToolChecks", str(simulator)], timeout=45))

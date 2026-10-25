@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Tunuino. */
 #include "tunuino/link.h"
+#include "tunuino/device.h"
 #include <string.h>
 _Static_assert(TUNUINO_DISPATCH_RESPONSE_MAX >= TUNUINO_IDENTITY_BODY_SIZE + TUNUINO_FRAME_OVERHEAD,
     "Response buffer must fit identity");
@@ -101,6 +102,8 @@ tunuino_link_status tunuino_link_feed(tunuino_link *link, const uint8_t *bytes,
     link->dispatch_status = tunuino_dispatch_reply(&link->context, packet, packet_length,
         response, sizeof(response), &written);
     if (link->dispatch_status != TUNUINO_DISPATCH_OK) { return fail(link, TUNUINO_LINK_DISPATCH_ERROR); }
+    if(link->context.device!=NULL && link->context.device->clock!=NULL)
+        now_ms=link->context.device->clock(link->context.device->user);
     link->tx_status = tunuino_tx_begin(&link->tx, response, written, now_ms);
     if (link->tx_status != TUNUINO_TX_PENDING) { return fail(link, TUNUINO_LINK_TX_ERROR); }
     link->state = TUNUINO_LINK_RESPONDING;

@@ -2,6 +2,7 @@
 #include "ch.h"
 #include "hal.h"
 #include "board.h"
+#include "board_io.h"
 
 _Static_assert(STM32_SYSCLK == 168000000, "Unexpected Proteus system clock");
 _Static_assert(STM32_PLL48CLK == 48000000, "USB requires 48 MHz");
@@ -26,11 +27,5 @@ void board_uid(uint8_t uid[12]) {
 }
 
 uint64_t board_millis(void) {
-  static uint32_t previous;
-  static uint64_t epoch;
-  uint32_t now = (uint32_t)chVTGetSystemTimeX();
-  _Static_assert(CH_CFG_ST_FREQUENCY == 1000, "Bench clock is milliseconds");
-  if (now < previous) epoch += UINT64_C(1) << 32;
-  previous = now;
-  return epoch | now;
+  return board_io_time_us()/1000;
 }

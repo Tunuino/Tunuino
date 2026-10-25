@@ -18,9 +18,10 @@ public enum LogChannel {
         this.label = label; this.unit = unit; this.decimals = decimals; this.value = value;
     }
     public String unit() { return unit; }
-    public double value(LogSample sample) { return value.applyAsDouble(sample); }
+    public boolean available(LogSample sample) { return (sample.validMask() & (1 << ordinal())) != 0; }
+    public double value(LogSample sample) { return available(sample) ? value.applyAsDouble(sample) : Double.NaN; }
     public String format(LogSample sample) {
-        return String.format(Locale.ROOT, "%." + decimals + "f", value(sample));
+        return available(sample) ? String.format(Locale.ROOT, "%." + decimals + "f", value(sample)) : "—";
     }
     @Override public String toString() { return label; }
 }

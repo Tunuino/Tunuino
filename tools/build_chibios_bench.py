@@ -79,7 +79,7 @@ def main():
         fields = line.split()
         if len(fields) == 3:
             symbols[fields[2]] = int(fields[0], 16)
-    vectors = {"Reset_Handler": 1, "SysTick_Handler": 15, "Vector14C": 16 + 67}
+    vectors = {"Reset_Handler": 1, "SysTick_Handler": 15, "Vector14C": 16 + 67, "Vector88": 16 + 18, "Vector9C": 16 + 23, "Vector130": 16 + 60}
     for name, index in vectors.items():
         value = struct.unpack_from("<I", image, index * 4)[0]
         if (value & ~1) != (symbols[name] & ~1) or not value & 1:
@@ -135,9 +135,9 @@ def main():
     flashing = binary.with_name(binary.name + ".properties")
     flashing.write_text("format=1\ntarget=proteus-v07-f427\nmode=dfu\naddress=0x08000000\n"
                         "replaces_bootloader=true\nsource_commit=" + commit + "\n"
-                        "description=Proteus v0.7 STM32F427 - ChibiOS USB bench\n"
+                        "description=Proteus v0.7 STM32F427 - Tunuino 0.1.0 IO bench\n"
                         "sha256=" + hashlib.sha256(image).hexdigest() + "\n")
-    ini = output / "tunuino_proteus_v07_f427_usb_bench.ini"
+    ini = output / "tunuino_proteus_v07_f427_io.ini"
     shutil.copy2(ROOT / "firmware/tunerstudio/generated" / ini.name, ini)
     definition = configparser.ConfigParser(interpolation=None, strict=False)
     definition.read_string("[General]\n" + ini.read_text(encoding="ascii"))
@@ -145,7 +145,7 @@ def main():
     if signature.encode("ascii") + b"\0" not in image:
         raise SystemExit("TunerStudio INI signature is not in the linked firmware")
     hashed = [elf, binary, elf.with_suffix(".hex"), flashing, source, ini]
-    manifest = {"target": "Proteus v0.7 STM32F427 ChibiOS USB-only bench",
+    manifest = {"target": "Proteus v0.7 STM32F427 IO bench",
                 "status": "experimental_not_hardware_validated", "source_commit": commit,
                 "compiler": run(["arm-none-eabi-gcc", "--version"]).splitlines()[0],
                 "dependencies": lock, "usb_backend": "ChibiOS HAL USB/SerialUSB",
@@ -154,10 +154,14 @@ def main():
                 "flash_address": "0x08000000", "flash_limit_bytes": 128 * 1024,
                 "ram_address": "0x20000000", "ram_limit_bytes": 64 * 1024,
                 "initial_stack": hex(stack), "reset_vector": hex(reset),
-                "capabilities": ["USB CDC", "real STM32 UID", "Tunuino identity protocol", "TunerStudio read-only identity"],
+                "capabilities": ["USB CDC", "real STM32 UID", "Tunuino identity protocol", "TunerStudio calibrated sensors", "16 physical ADC inputs", "missing-tooth crank input", "map read/write", "persistent calibration"],
                 "tunerstudio": {"ini_file": ini.name, "signature": signature,
-                                "output_bytes": 31, "read_only": True},
-                "engine_outputs": False, "physical_sensors": False, "maps": False,
+                                "output_bytes": 100, "read_only": False},
+                "engine_outputs": False, "physical_sensors": True, "maps": True,
+                "firmware_version": "0.1.0", "protocol_capabilities": 15,
+                "physical_sensors_validated": False,
+                "configuration_flash": {"banks": ["0x08020000", "0x08040000"],
+                    "sector_bytes": 131072, "record_bytes": 608, "schema": 1},
                 "usb_vid": "0xcafe", "usb_pid": "0x4001", "usb_disconnect_ms": 250,
                 "usb_ids": "development_only_not_production_allocation",
                 "artifacts_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in hashed},

@@ -77,6 +77,8 @@ def main():
         else:
             path.parent.mkdir(parents=True, exist_ok=True); path.write_text(content, encoding='ascii')
     if stale: raise SystemExit('Stale definitions; run generate.py: ' + ', '.join(stale))
+    from generate_io import generate
+    generate(args.check)
     print('TunerStudio generated definitions verified.' if args.check else 'Generated INI and matching firmware signature header.')
 
 

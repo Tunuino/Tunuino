@@ -60,11 +60,11 @@ Esta imagem usa o startup, kernel e USB CDC do repositório **Tunuino/ChibiOS**,
 
 Um único ZIP inclui `console/`, `firmware/`, `kit-manifest.json`, `START-HERE.txt` e `SHA256SUMS.txt`. Java está incluído na Console portátil. O firmware inclui `corresponding-source.tar.gz` e as licenças ChibiOS dentro do mesmo Bundle.
 
-**Firmware apenas para testar USB em bancada. Não controla um motor. A gravação começa em 0x08000000 e substitui o bootloader instalado. A validação física na ECU está pendente.**
+**Firmware 0.1.0 para testar entradas, sensores calibrados e mapas em bancada. Não controla um motor. A gravação começa em 0x08000000 e substitui o bootloader instalado. A validação física na ECU está pendente.**
 
 Extrair o ZIP completo antes de abrir `console/TunuinoConsole.exe`. Manter `.bin.properties` junto do `.bin`.
 
-**TunerStudio:** gravar o firmware deste Bundle; encerrar a ligação COM da Console e criar um projeto no TunerStudio. Em **Other/Browse**, selecionar `firmware/tunuino_proteus_v07_f427_usb_bench.ini`, a COM da ECU e 115200 baud, com protocolo **Firmware Default**. O INI apresenta identificação, revisão, versão e UID. É apenas de leitura; sensores, mapas e afinação ainda não estão disponíveis. O firmware anterior 0.0.2 não implementa estes comandos.
+**TunerStudio:** gravar o firmware deste Bundle; encerrar a ligação COM da Console e criar um projeto no TunerStudio. Em **Other/Browse**, selecionar `firmware/tunuino_proteus_v07_f427_io.ini`, a COM da ECU e 115200 baud, com protocolo **Firmware Default**. O INI apresenta as 16 entradas ADC, sensores calibrados, configuração de roda fónica e mapas VE/ignição 8×8. As entradas calibradas e a captura ficam desativadas até serem configuradas. Configurar as curvas reais do sensor/controlador e usar Burn; as definições são guardadas com CRC em dois setores reservados da flash. Os mapas começam a zero e não comandam atuadores. Usar uma aplicação de cada vez na mesma COM. Na Console, Ver dados em tempo real mostra sensores válidos e Entradas ADC mostra as leituras brutas; os mapas podem ser guardados e verificados na ECU. A validação física deste novo perfil continua pendente.
 
 O pacote prepara a configuração das ferramentas de gravação. Não inclui automaticamente STM32CubeProgrammer, BootCommander ou drivers de terceiros; consultar `console/tools/PROGRAMMERS.txt` no kit. A Console permite selecionar uma instalação existente.
 

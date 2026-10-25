@@ -6,7 +6,7 @@
 
 static tunuino_link link;
 static tunuino_identity identity = {TUNUINO_PROTEUS,TUNUINO_STM32_F4,7,0,0,1,0,{0}};
-static const tunuino_dispatch_context context = {&identity,NULL,NULL,NULL};
+static const tunuino_dispatch_context context = {&identity,NULL,NULL,NULL,NULL};
 static bool allow_session, active, completed;
 static uint32_t pending;
 static uint8_t receive[64];
