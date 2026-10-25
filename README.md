@@ -6,4 +6,4 @@ A Tunuino é um projeto de firmware para centralinas Proteus e uaEFI, acompanhad
 
 # Tunuino Console
 
-https://github.com/Tunuino/Tunuino_documents/blob/main/images/console/painel.png
+![painel.png](https://github.com/Tunuino/Tunuino_documents/blob/main/images/console/painel.png)
