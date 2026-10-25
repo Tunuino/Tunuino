@@ -19,8 +19,17 @@ public enum LogChannel {
     }
     public String unit() { return unit; }
     public double value(LogSample sample) { return value.applyAsDouble(sample); }
+    public boolean available(LogSample sample) {
+        int bit = switch (this) {
+            case RPM -> 1;
+            case MAP -> 2;
+            case LAMBDA -> 4;
+            case COOLANT -> 8;
+        };
+        return (sample.validMask() & bit) != 0;
+    }
     public String format(LogSample sample) {
-        return String.format(Locale.ROOT, "%." + decimals + "f", value(sample));
+        return available(sample) ? String.format(Locale.ROOT, "%." + decimals + "f", value(sample)) : "—";
     }
     @Override public String toString() { return label; }
 }
