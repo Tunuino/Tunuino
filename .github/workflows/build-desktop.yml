@@ -1,5 +1,33 @@
 name: Desktop tools and simulator
 'on':
+  push:
+    branches: [master]
+    paths:
+    - .github/workflows/build-desktop.yml
+    - java_console/**
+    - java_tools/**
+    - simulator/**
+    - gradle/**
+    - build.gradle
+    - settings.gradle
+    - gradle.properties
+    - gradlew
+    - tools/**
+    - misc/**
+  pull_request:
+    branches: [master]
+    paths:
+    - .github/workflows/build-desktop.yml
+    - java_console/**
+    - java_tools/**
+    - simulator/**
+    - gradle/**
+    - build.gradle
+    - settings.gradle
+    - gradle.properties
+    - gradlew
+    - tools/**
+    - misc/**
   workflow_call: {}
   workflow_dispatch: {}
 permissions:
