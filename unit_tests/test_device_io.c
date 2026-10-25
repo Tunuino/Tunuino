@@ -70,7 +70,17 @@ int main(void){
     memset(flash,255,sizeof(flash));uint8_t loaded[576];(void)tunuino_journal_init(&journal,&io,loaded);
     tunuino_device_init(&device,save,clock_now,NULL);assert(tunuino_device_validate(device.active,576));
     assert(tunuino_dispatch_validate(&context)==TUNUINO_DISPATCH_OK);
-    size_t n;const uint8_t *body=query((const uint8_t *)"S",1,&n);assert(body[0]==0&&strcmp((const char *)body+1,TUNUINO_IO_SIGNATURE)==0);vector("signature");
+    size_t n;const uint8_t *body=query((const uint8_t *)"S",1,&n);
+    assert(body[0]==0 && n==1+strlen(TUNUINO_IO_SIGNATURE));
+    assert(memcmp(body+1,TUNUINO_IO_SIGNATURE,n-1)==0);vector("signature");
+    /* The TunerStudio signature must not contain a trailing NUL: the exact
+     * INI signature is compared to the complete length-delimited reply. */
+    body=query((const uint8_t *)"Q",1,&n);
+    assert(n==1+strlen(TUNUINO_IO_SIGNATURE));
+    assert(memcmp(body+1,TUNUINO_IO_SIGNATURE,n-1)==0);vector("signature_q");
+    body=query((const uint8_t *)"V",1,&n);
+    assert(n==1+strlen(TUNUINO_IO_VERSION));
+    assert(memcmp(body+1,TUNUINO_IO_VERSION,n-1)==0);vector("version");
     /* Negotiation must advertise the CRC-wrapped protocol, not legacy 001. */
     body=query((const uint8_t *)"F",1,&n);assert(n==4&&body[0]==0&&memcmp(body+1,"002",3)==0);vector("ts_protocol");
     body=query((const uint8_t *)"C",1,&n);assert(n==2&&body[0]==0&&body[1]==0xFF);vector("ts_test");
@@ -78,7 +88,7 @@ int main(void){
     body=query((const uint8_t *)"I",1,&n);assert(n==2&&body[0]==0&&body[1]==0);vector("ts_can_id");
     const uint8_t capability_command[]={'f',0};
     body=query(capability_command,sizeof(capability_command),&n);
-    assert(n==6&&body[0]==0&&body[1]==2&&body[2]==0&&body[3]==64&&body[4]==0&&body[5]==64);
+    assert(n==6&&body[0]==0&&body[1]==2&&body[2]==0&&body[3]==100&&body[4]==0&&body[5]==64);
     vector("ts_capabilities");
     uint8_t plain[8];size_t plain_len=0;
     assert(tunuino_dispatch_plain_reply(&context,'F',plain,sizeof(plain),&plain_len)==TUNUINO_DISPATCH_OK);

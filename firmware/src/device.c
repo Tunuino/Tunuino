@@ -145,7 +145,9 @@ tunuino_dispatch_status tunuino_device_reply(tunuino_device *d,const tunuino_ide
     else if(length==1 && q[0]=='A') {runtime(d,id,body+1);size=101;}
     else if(length==1 && (q[0]=='S'||q[0]=='Q'||q[0]=='V'||q[0]=='F')) {
         const char *text=q[0]=='V'?TUNUINO_IO_VERSION:q[0]=='F'?TUNUINO_IO_TS_SERIAL_VERSION:TUNUINO_IO_SIGNATURE;
-        size_t count=q[0]=='F'?3:strlen(text)+1;memcpy(body+1,text,count);size=1+count;
+        /* Framed TunerStudio strings are length-delimited. Including the C NUL
+         * terminator makes the ECU signature differ from the exact INI value. */
+        size_t count=q[0]=='F'?3:strlen(text);memcpy(body+1,text,count);size=1+count;
     } else if(length==1 && (q[0]=='C'||q[0]=='c')) {
         /* TunerStudio communication checks, with the envelope status first. */
         if (q[0]=='C') { body[1]=0xFF;size=2; }
@@ -153,7 +155,7 @@ tunuino_dispatch_status tunuino_device_reply(tunuino_device *d,const tunuino_ide
     } else if(length==1 && q[0]=='I') {
         body[1]=0;size=2; /* The local ECU has CAN ID zero. */
     } else if(length==2 && q[0]=='f' && q[1]==0) {
-        body[1]=2;put16(body+2,64);put16(body+4,64);size=6;
+        body[1]=2;put16(body+2,100);put16(body+4,64);size=6;
     } else if(length>=3 && (q[0]=='r'||q[0]=='w'||q[0]=='b'||q[0]=='k')) {
         unsigned page=tunuino_device_u16(q+1);
         if(page<1||page>3)body[0]=0x83;

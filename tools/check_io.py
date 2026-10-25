@@ -27,11 +27,12 @@ def main():
     text=content.decode('ascii')
     section=text.split('\n[Constants]\n',1)[1].split('\n[',1)[0]
     assert 'baudRate =' not in section
-    assert section.index('nPages = 3') < section.index('blockingFactor = 64')
+    assert section.index('nPages = 3') < section.index('blockingFactor = 100')
     assert '[UiDialogs]' in text and '[UserDefined]' not in text
     ini=configparser.ConfigParser(interpolation=None,strict=False);ini.read_string('[General]\n'+text)
-    assert ini['TunerStudio'].getint('iniVersion')==2
+    assert ini['TunerStudio'].getint('iniVersion')==3
     assert ini['Constants'].getint('nPages')==3 and ini['Constants']['pageSize']=='256, 160, 160'
+    assert ini['Constants'].getint('blockingFactor')>=ini['OutputChannels'].getint('ochBlockSize')
     assert ini['Constants']['endianness']=='big' and ini['OutputChannels'].getint('ochBlockSize')==100
     for field,prefix in [('pageReadCommand','r'),('pageChunkWrite','w'),('burnCommand','b'),('crc32CheckCommand','k')]:
         assert ini['Constants'][field].count('"'+prefix)==3
@@ -42,12 +43,14 @@ def main():
             *map(str,sources),str(ROOT/'unit_tests/test_device_io.c'),'-lm','-o',str(exe)],check=True,timeout=30)
         lines=subprocess.check_output([str(exe)],text=True,timeout=20).splitlines();assert lines[-1]=='OK'
         vectors={name:bytes.fromhex(value) for name,value in (line.split() for line in lines[:-1])}
-        assert decode(vectors['signature'])==json.loads(ini['TunerStudio']['signature']).encode()+b'\0'
+        assert decode(vectors['signature'])==json.loads(ini['TunerStudio']['signature']).encode()
+        assert decode(vectors['signature_q'])==decode(vectors['signature'])
+        assert decode(vectors['version'])==b'Tunuino 0.1.0 Proteus v0.7 IO bench'
         assert decode(vectors['ts_protocol'])==b'002'
         assert decode(vectors['ts_test'])==b'\xff'
         assert decode(vectors['ts_seconds'])==bytes(2)
         assert decode(vectors['ts_can_id'])==bytes(1)
-        assert decode(vectors['ts_capabilities'])==bytes((2,0,64,0,64))
+        assert decode(vectors['ts_capabilities'])==bytes((2,0,100,0,64))
         runtime=decode(vectors['runtime_configured']);assert len(runtime)==100 and runtime[:7]==b'TUNUINO'
         expected={'hardwareRevision':7,'firmwareMajor':0,'firmwareMinor':1,'firmwarePatch':0,'capabilities':15,
             'uptimeSeconds':1234,'uptimeMillis':567,'validMask':15,'ioStatus':13,'rpmValue':1234.5,
