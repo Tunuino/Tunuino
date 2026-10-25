@@ -1,4 +1,6 @@
 name: Tunuino Bundle
+# Integration pipeline: reusable component workflows appear as nested jobs here.
+# Release publication is gated on all checks and artifacts from this same run.
 run-name: Tunuino Bundle · ${{ github.event_name }} · ${{ github.ref_name }}
 'on':
   push:
@@ -101,7 +103,7 @@ jobs:
     if: needs.changes.outputs.core == 'true'
     uses: ./.github/workflows/build-desktop.yml
   result:
-    name: CI result and synchronized bench kit
+    name: Validate and assemble Bundle
     needs:
     - changes
     - unit_tests
@@ -153,7 +155,7 @@ jobs:
         if-no-files-found: error
         retention-days: 30
   release:
-    name: Publish experimental GitHub Release
+    name: Publish Bundle ZIP
     needs:
     - changes
     - unit_tests
