@@ -34,6 +34,18 @@ public final class IoChecks {
             IoClient.Inputs initial=IoClient.read(session,identity,Duration.ofSeconds(2));
             check(initial.sample().validMask()==0&&(initial.status()&1)!=0&&initial.raw()[0]==2000,"Raw ADC without invented calibrated data");
             int[] isolated=initial.raw();isolated[0]=0;check(initial.raw()[0]==2000,"Immutable ADC snapshot");
+            byte[] rawRange=IoClient.readRange(session,identity,60,32,Duration.ofSeconds(2));
+            for(int j=0;j<16;++j)check(Short.toUnsignedInt(ByteBuffer.wrap(rawRange).getShort(j*2))==2000,
+                "Ranged IO read preserves physical ADC values");
+            try { IoClient.readRange(session,identity,99,2,Duration.ofSeconds(2));
+                throw new AssertionError("Out-of-range IO query accepted");
+            } catch(IllegalArgumentException expected) {
+                check(session.isOpen(),"Invalid local query must not close USB session");
+            }
+            EnginePreviewClient.Preview disabled=EnginePreviewClient.read(session,identity,Duration.ofSeconds(2));
+            check(!disabled.valid() && (disabled.reasons()&EnginePreviewClient.TRIGGER_DISABLED)!=0
+                && (disabled.reasons()&EnginePreviewClient.NO_RPM)!=0
+                && disabled.explanation().contains("RPM"),"Factory map preview is explicitly unavailable");
             byte[] settings=new byte[256];
             for(int offset=0;offset<256;offset+=64){byte[] q=ByteBuffer.allocate(7).put((byte)'r').putShort((short)1).putShort((short)offset).putShort((short)64).array();
                 byte[] response=exchange(session,q);check(response.length==65&&response[0]==0,"Configuration chunk read");System.arraycopy(response,1,settings,offset,64);}
@@ -52,9 +64,36 @@ public final class IoChecks {
             CalibrationMap ignition=MapReadClient.read(session,identity,CalibrationMap.Kind.IGNITION,Duration.ofSeconds(3)).withCell(7,7,"-12.34");
             MapWriteClient.write(session,identity,ignition,Duration.ofSeconds(10));
             check(Arrays.equals(ignition.encode(),MapReadClient.read(session,identity,ignition.kind(),Duration.ofSeconds(3)).encode()),"Signed ignition map write/readback");
+            EnginePreviewClient.Preview uncalibrated=EnginePreviewClient.read(session,identity,Duration.ofSeconds(2));
+            check(!uncalibrated.valid() && (uncalibrated.reasons()&EnginePreviewClient.UNCALIBRATED)!=0,
+                "Sparse test maps cannot advertise valid engine calculations");
+            // Synthetic constant maps exercise the complete C -> USB -> Java path.
+            // These test values must NEVER be used as an engine tune.
+            CalibrationMap fullVe=MapReadClient.read(session,identity,CalibrationMap.Kind.VE,Duration.ofSeconds(3));
+            CalibrationMap fullIgn=MapReadClient.read(session,identity,CalibrationMap.Kind.IGNITION,Duration.ofSeconds(3));
+            for(int row=0;row<8;++row)for(int col=0;col<8;++col) {
+                fullVe=fullVe.withCell(row,col,"100.00");
+                fullIgn=fullIgn.withCell(row,col,"-5.00");
+            }
+            MapWriteClient.write(session,identity,fullVe,Duration.ofSeconds(10));
+            MapWriteClient.write(session,identity,fullIgn,Duration.ofSeconds(10));
+            EnginePreviewClient.Preview computed=EnginePreviewClient.read(session,identity,Duration.ofSeconds(2));
+            check(computed.valid() && computed.reasons()==0 && computed.vePercent()==100
+                && computed.advanceDegrees()==-5 && computed.rpm()==1000
+                && computed.mapKpa()==100 && computed.generation()>0,
+                "Real C firmware returns valid VE and ignition preview to Java");
+            byte[] malformedPreview=exchange(session,"TUNUINO:E".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            malformedPreview[2]=0;
+            try { EnginePreviewClient.decode(malformedPreview);
+                throw new AssertionError("Contradictory engine preview accepted");
+            } catch(IOException expected) { check(session.isOpen(),"Local decode error must not disrupt USB"); }
             try{MapWriteClient.encode(map.withCell(0,0,"77.251"));throw new AssertionError("Rounded map write");}
             catch(IllegalArgumentException expected){check(session.isOpen(),"Precision rejected before write");}
             settings[2]=0;configuration(session,settings);
+            EnginePreviewClient.Preview stopped=EnginePreviewClient.read(session,identity,Duration.ofSeconds(2));
+            check(!stopped.valid()&&(stopped.reasons()&EnginePreviewClient.TRIGGER_DISABLED)!=0
+                &&stopped.vePercent()==0&&stopped.advanceDegrees()==0,
+                "Disabling trigger invalidates engine preview without changing maps");
             LogSample partial=LiveDataClient.read(session,identity,Duration.ofSeconds(2)).orElseThrow();
             check(partial.validMask()==14&&partial.rpm()==0&&!LogChannel.RPM.available(partial)&&LogChannel.RPM.format(partial).equals("—"),"Partial data is unavailable, not zero RPM");
             Path csv=directory.resolve("simulated-partial.csv");LiveDataMonitor monitor=new LiveDataMonitor(session,identity,Duration.ofMillis(10));

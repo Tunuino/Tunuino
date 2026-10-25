@@ -6,6 +6,7 @@ import io.tunuino.datalog.LogSample;
 import io.tunuino.transport.PacketSession;
 import io.tunuino.transport.UsbSerialPorts;
 import io.tunuino.protocol.DeviceIdentity;
+import io.tunuino.protocol.EnginePreviewClient;
 import io.tunuino.protocol.IdentityClient;
 import io.tunuino.protocol.LiveDataClient;
 import io.tunuino.protocol.MapReadClient;
@@ -111,6 +112,12 @@ public final class TunuinoConsole extends Application {
         mapKind.getItems().addAll(CalibrationMap.Kind.values());
         mapKind.setValue(CalibrationMap.Kind.VE);
         Button readMap = new Button("Ler mapa da ECU");
+        Button previewMaps = new Button("Pré-visualizar VE e ignição");
+        previewMaps.setId("engine-preview");
+        Label previewResult = new Label("Sem pré-visualização; saídas do motor desativadas.");
+        previewResult.setId("engine-preview-result");
+        previewResult.setWrapText(true);
+        previewResult.getStyleClass().add("muted");
         Label status = new Label("Offline · nenhuma ECU identificada");
         Label identityDetails = new Label("Identificação da ECU pendente");
         ComboBox<UsbSerialPorts.Port> ports = new ComboBox<>();
@@ -150,6 +157,8 @@ public final class TunuinoConsole extends Application {
             boolean mapAvailable = identifiedDevice != null
                 && (identifiedDevice.capabilities() & MapReadClient.CAPABILITY) != 0;
             readMap.setDisable(serialBusy || monitoringActive || fileReading || !connected || !mapAvailable);
+            previewMaps.setDisable(preview || programming || serialBusy || monitoringActive
+                || fileReading || !connected || !EnginePreviewClient.supports(identifiedDevice));
             mapKind.setDisable(serialBusy || monitoringActive || fileReading);
             open.setDisable(monitoringActive || fileReading);
             openMap.setDisable(monitoringActive || fileReading);
@@ -158,6 +167,7 @@ public final class TunuinoConsole extends Application {
         Consumer<Throwable> usbFailure = error -> {
             identifiedDevice = null;
             identityDetails.setText("Identificação da ECU pendente");
+            previewResult.setText("Sem pré-visualização; ligação USB indisponível.");
             status.setText("Falha USB: " + error.getMessage());
             refreshConnection.run();
         };
@@ -182,6 +192,7 @@ public final class TunuinoConsole extends Application {
             capture.setDisable(true);
             identifiedDevice = null;
             identityDetails.setText("Identificação da ECU pendente");
+            previewResult.setText("Sem pré-visualização; identifica novamente a ECU.");
             identify.setDisable(true);
             connect.setDisable(true);
             scan.setDisable(true);
@@ -253,6 +264,7 @@ public final class TunuinoConsole extends Application {
                 }
             }, identity -> {
                 identifiedDevice = identity;
+                previewResult.setText("Pré-visualização por consultar; saídas do motor desativadas.");
                 identityDetails.setText(identity.family() + " · " + identity.mcuSeries()
                     + " · revisão " + identity.hardwareRevision()
                     + " · firmware " + identity.firmwareVersion() + " · UID " + identity.uid());
@@ -288,6 +300,41 @@ public final class TunuinoConsole extends Application {
             }));
         portRefresh.setCycleCount(javafx.animation.Animation.INDEFINITE);
         if (!preview) portRefresh.play();
+        previewMaps.setOnAction(event -> {
+            PacketSession current = connection.get();
+            DeviceIdentity device = identifiedDevice;
+            if (serialBusy || monitoringActive || fileReading || current == null
+                    || !current.isOpen() || !EnginePreviewClient.supports(device)) {
+                refreshConnection.run();
+                return;
+            }
+            previewResult.setText("A consultar cálculo da ECU…");
+            status.setText("A consultar mapas VE e ignição sem comandar saídas…");
+            serialTask(() -> EnginePreviewClient.read(current, device, Duration.ofSeconds(3)),
+                result -> {
+                    if (result.valid()) {
+                        previewResult.setText(String.format(Locale.ROOT,
+                            "VE %.2f %% · ignição %.2f ° · RPM %.1f · MAP %.1f kPa · revisão %d."
+                            + " Pré-visualização apenas, sem atuação.",
+                            result.vePercent(), result.advanceDegrees(), result.rpm(),
+                            result.mapKpa(), result.generation()));
+                    } else {
+                        previewResult.setText("Cálculo indisponível: " + result.explanation()
+                            + ". Nenhuma saída de motor foi acionada.");
+                    }
+                    status.setText(result.valid() ? "Pré-visualização da ECU recebida"
+                        : "Cálculo bloqueado por condições de validade");
+                    refreshConnection.run();
+                }, error -> {
+                    previewResult.setText("Não foi possível consultar a ECU: " + error.getMessage());
+                    if (!current.isOpen()) {
+                        connection.compareAndSet(current, null);
+                        identifiedDevice = null;
+                    }
+                    status.setText("Falha de leitura: " + error.getMessage());
+                    refreshConnection.run();
+                });
+        });
         readMap.setOnAction(event -> {
             PacketSession current = connection.get();
             DeviceIdentity device = identifiedDevice;
@@ -492,7 +539,10 @@ public final class TunuinoConsole extends Application {
         VBox maps = new VBox(16,
             ConsoleShell.card("FICHEIRO LOCAL", "Abre um mapa VE ou de ignição para consultar a tabela, editar valores e guardar uma cópia .tnmap.", openMap),
             ConsoleShell.card("MAPA DA CENTRALINA", "Lê uma cópia do mapa quando esta função está disponível no firmware.",
-                ConsoleShell.actions(mapKind, readMap)));
+                ConsoleShell.actions(mapKind, readMap)),
+            ConsoleShell.card("PRÉ-VISUALIZAÇÃO DE CÁLCULO", "Consulta os valores interpolados pelo firmware."
+                + " Os resultados exigem sensores válidos e mapas calibrados; esta função não ativa injetores nem bobinas.",
+                previewMaps, previewResult));
         maps.setPadding(new Insets(0, 24, 24, 24));
         shell.addPage("Mapas", "Mapas de calibração", "Tabelas VE e ignição, eixos e interpolação.",
             "M1 2H21V20H1ZM3 4V8H7V4ZM9 4V8H13V4ZM15 4V8H19V4ZM3 10V14H7V10ZM9 10V14H13V10ZM15 10V14H19V10ZM3 16V18H7V16ZM9 16V18H13V16ZM15 16V18H19V16Z", ConsoleShell.scroll(maps));

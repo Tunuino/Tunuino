@@ -36,6 +36,30 @@ public final class IoClient {
             return new Inputs(sample,status,reference,Integer.toUnsignedLong(b.getInt(56)),Short.toUnsignedInt(b.getShort(94)),Integer.toUnsignedLong(b.getInt(96)),raw);
         } catch(IllegalArgumentException error){throw new IOException(error.getMessage(),error);}
     }
+    /** Read a contiguous runtime slice using the same O%2o%2c command as the INI. */
+    public static byte[] readRange(PacketSession session, DeviceIdentity identity,
+            int offset, int count, Duration timeout) throws IOException {
+        if (identity == null || identity.capabilities() != 15
+                || identity.family() != DeviceIdentity.Family.PROTEUS
+                || identity.mcuSeries() != DeviceIdentity.McuSeries.STM32_F4
+                || identity.hardwareRevision() != 7 || !identity.firmwareVersion().equals("0.1.0"))
+            throw new IllegalStateException("O firmware não suporta leituras IO por blocos");
+        if (offset < 0 || offset >= 100 || count < 1 || count > 100 - offset)
+            throw new IllegalArgumentException("Intervalo de canais IO inválido");
+        ByteBuffer query = ByteBuffer.allocate(5).put((byte) 'O')
+            .putShort((short)offset).putShort((short)count);
+        try {
+            byte[] body = session.exchange(query.array(), timeout);
+            if (body == null || body.length != count + 1 || body[0] != 0)
+                throw new IOException("Resposta de leitura IO por blocos inválida");
+            return Arrays.copyOfRange(body, 1, body.length);
+        } catch (IOException error) {
+            try { session.close(); }
+            catch (IOException closing) { error.addSuppressed(closing); }
+            throw error;
+        }
+    }
+
     public static Inputs read(PacketSession session,DeviceIdentity identity,Duration timeout) throws IOException {
         if((identity.capabilities()&CAPABILITY)==0)throw new IllegalStateException("O firmware não anuncia entradas IO");
         try{return decode(session.exchange(new byte[]{'A'},timeout),identity);}

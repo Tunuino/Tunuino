@@ -71,6 +71,11 @@ public final class ConsoleUiChecks {
             snapshot(scene, "console-offline");
             check(scene.getStylesheets().size() == 1, "Shared theme loaded");
             check(((Button) scene.lookup("#monitor-live")).isDisabled(), "No invented sensor capability");
+            ((ToggleButton)scene.lookup("#navigate-1")).fire();
+            check(((Button)scene.lookup("#engine-preview")).isDisabled(), "Offline preview cannot contact ECU");
+            check(((Label)scene.lookup("#engine-preview-result")).getText().contains("Sem pré-visualização"),
+                "Preview never fabricates engine values");
+            ((ToggleButton)scene.lookup("#navigate-0")).fire();
             TelemetryPane telemetry = (TelemetryPane) scene.lookup(".telemetry-pane");
             check(((Label) scene.lookup("#telemetry-value-rpm")).getText().equals("—"), "Offline values are absent");
             List<LogSample> samples = new ArrayList<>();

@@ -76,6 +76,15 @@ Missing RPM, MAP, synchronization, ADC, commissioning or table range forces a
 zeroed computed value; the caller must check validity before displaying
 numbers. Factory maps are zero placeholders, not an engine calibration.
 
+The Windows Console now has a Maps-panel read-only preview button. Its Java
+client validates the 20-byte `TUNUINO:E` response, decodes signed spark
+advance, makes all nonzero validity reasons visible and never interprets a
+blocked computation as a usable engine value. It also implements ranged
+`O` runtime reads, with strict range and response checks. The operations
+run on the existing exclusive serial worker and are disabled while datalog
+monitoring or map transactions are in progress. The preview is not an engine
+tune, is not logged as a commanded output and does not drive hardware.
+
 The legacy `TUNUINO:L` request still requires all four signals. Missing fields
 in partial frames are zero with validity bits clear. Consumers must use the
 mask rather than interpreting those zero bytes as measurements. Console CSVs
