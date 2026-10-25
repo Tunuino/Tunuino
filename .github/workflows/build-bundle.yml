@@ -72,6 +72,11 @@ jobs:
         fetch-depth: 0
     - id: scope
       run: python3 tools/ci_scope.py
+  unit_tests:
+    name: Unit tests
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    uses: ./.github/workflows/build-unit-tests.yml
   tunerstudio:
     name: TunerStudio
     needs: changes
@@ -99,6 +104,7 @@ jobs:
     name: CI result and synchronized bench kit
     needs:
     - changes
+    - unit_tests
     - arm
     - console
     - tunerstudio
@@ -150,13 +156,14 @@ jobs:
     name: Publish experimental GitHub Release
     needs:
     - changes
+    - unit_tests
     - arm
     - console
     - result
     - tunerstudio
     - desktop
     if: github.repository == 'Tunuino/Tunuino' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-      && needs.arm.result == 'success' && needs.console.result == 'success'
+      && needs.unit_tests.result == 'success' && needs.arm.result == 'success' && needs.console.result == 'success'
       && needs.result.result == 'success' && needs.changes.outputs.bench == 'true' && needs.changes.outputs.console
       == 'true' && needs.tunerstudio.result == 'success' && needs.desktop.result == 'success'
     permissions:
