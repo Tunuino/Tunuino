@@ -44,23 +44,23 @@ jobs:
       timeout-minutes: 6
       run: bash tools/setup_arm_toolchain.sh
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      if: inputs.bench != false
+      if: github.event_name != 'workflow_dispatch' || inputs.bench != false
       with:
         repository: Tunuino/ChibiOS
         ref: fd2e59c34878b1ef93ef5358f11fb5cc830027ff
         path: .deps/chibios
         persist-credentials: false
     - name: Cross-compile M4 and M7 with the same toolchain
-      if: inputs.arm != false
+      if: github.event_name != 'workflow_dispatch' || inputs.arm != false
       run: |-
         python3 tools/build_arm_core.py --cpu cortex-m4 --output build/arm/cortex-m4
         python3 tools/build_arm_core.py --cpu cortex-m7 --output build/arm/cortex-m7
         cp LICENSE build/arm/LICENSE.txt
     - name: Build and inspect Proteus F427 USB image
-      if: inputs.bench != false
+      if: github.event_name != 'workflow_dispatch' || inputs.bench != false
       run: python3 tools/build_proteus_usb_bench.py --output build/proteus-v07-usb-bench
     - name: Preserve arm-core-NOT-FLASHABLE-${{ github.sha }}
-      if: inputs.arm != false
+      if: github.event_name != 'workflow_dispatch' || inputs.arm != false
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: arm-core-NOT-FLASHABLE-${{ github.sha }}
@@ -72,7 +72,7 @@ jobs:
         if-no-files-found: error
         retention-days: 30
     - name: Preserve firmware-proteus-f427-${{ github.sha }}
-      if: inputs.bench != false
+      if: github.event_name != 'workflow_dispatch' || inputs.bench != false
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: firmware-proteus-f427-${{ github.sha }}
