@@ -28,7 +28,7 @@ def main():
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     name = os.environ["GITHUB_EVENT_NAME"]
     try:
-        if name in ("workflow_dispatch", "schedule"):
+        if name in ("workflow_dispatch", "schedule") or (name == "push" and os.environ.get("GITHUB_REF") == "refs/heads/master"):
             result = {key: True for key in ("core", "arm", "bench", "console")}
         else:
             if name == "pull_request":
