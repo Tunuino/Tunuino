@@ -1,125 +1,42 @@
 name: Tunuino Bundle
-# Integration pipeline: reusable component workflows appear as nested jobs here.
-# Release publication is gated on all checks and artifacts from this same run.
-run-name: Tunuino Bundle · ${{ github.event_name }} · ${{ github.ref_name }}
+run-name: Tunuino Bundle · ${{ github.event_name }} · ${{ github.event.workflow_run.head_sha || github.sha }}
 'on':
+  workflow_run:
+    workflows: [Windows Console]
+    types: [completed]
+    branches: [master]
   workflow_dispatch: {}
 permissions:
   contents: read
+  actions: read
 concurrency:
-  group: tunuino-bundle-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: tunuino-bundle-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: false
 jobs:
-  changes:
-    name: Select affected components
+  bundle:
+    name: Assemble validated component artifacts
+    if: github.repository == 'Tunuino/Tunuino' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == 'Tunuino/Tunuino'))
     runs-on: ubuntu-24.04
-    timeout-minutes: 3
-    outputs:
-      core: ${{ steps.scope.outputs.core }}
-      arm: ${{ steps.scope.outputs.arm }}
-      bench: ${{ steps.scope.outputs.bench }}
-      console: ${{ steps.scope.outputs.console }}
+    timeout-minutes: 25
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
+        ref: ${{ github.event.workflow_run.head_sha || github.sha }}
         persist-credentials: false
-        fetch-depth: 0
-    - id: scope
-      run: python3 tools/ci_scope.py
-  unit_tests:
-    name: Unit tests
-    needs: changes
-    if: needs.changes.outputs.core == 'true'
-    uses: ./.github/workflows/build-unit-tests.yml
-  tunerstudio:
-    name: TunerStudio
-    needs: changes
-    if: needs.changes.outputs.core == 'true'
-    uses: ./.github/workflows/validate-tunerstudio.yml
-  arm:
-    name: Firmware
-    needs: changes
-    if: needs.changes.outputs.arm == 'true' || needs.changes.outputs.bench == 'true'
-    uses: ./.github/workflows/build-firmware.yml
-    with:
-      arm: ${{ needs.changes.outputs.arm == 'true' }}
-      bench: ${{ needs.changes.outputs.bench == 'true' }}
-  console:
-    name: Windows Console
-    needs: changes
-    if: needs.changes.outputs.console == 'true'
-    uses: ./.github/workflows/build-console.yml
-  desktop:
-    name: Desktop tools and simulator
-    needs: changes
-    if: needs.changes.outputs.core == 'true'
-    uses: ./.github/workflows/build-desktop.yml
-  result:
-    name: Validate and assemble Bundle
-    needs:
-    - changes
-    - unit_tests
-    - arm
-    - console
-    - tunerstudio
-    - desktop
-    if: always()
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      with:
-        persist-credentials: false
-    - name: Report component build results
+    - name: Collect matching successful component runs and artifacts
       env:
-        RESULTS: ${{ toJSON(needs) }}
-      run: |-
-        python3 - <<'PY'
-        import json, os
-        results = json.loads(os.environ["RESULTS"])
-        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
-            out.write("## Tunuino CI\n\n| Component | Result |\n|---|---|\n")
-            for name, data in results.items():
-                out.write(f"| {name} | {data['result']} |\n")
-            out.write("\nSkipped components had no relevant source changes. Manual runs build the full kit.\n")
-        if any(data["result"] in ("failure", "cancelled") for data in results.values()):
-            raise SystemExit("CI failed or was cancelled; no synchronized kit will be published")
-        PY
-    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-      if: needs.changes.outputs.bench == 'true' && needs.changes.outputs.console == 'true'
-      with:
-        name: firmware-proteus-f427-${{ github.sha }}
-        path: build/kit/firmware
-    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-      if: needs.changes.outputs.bench == 'true' && needs.changes.outputs.console == 'true'
-      with:
-        name: console-windows-x64-${{ github.sha }}
-        path: build/kit/console
-    - name: Verify common source commit and package checksums
-      if: needs.changes.outputs.bench == 'true' && needs.changes.outputs.console == 'true'
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      run: python3 tools/ci_collect_components.py
+    - name: Verify common commit and package checksums
+      env:
+        GITHUB_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       run: python3 tools/ci_package_kit.py
-    - name: Preserve Tunuino-Proteus-v07-USB-Bench-Kit-${{ github.sha }}
-      if: needs.changes.outputs.bench == 'true' && needs.changes.outputs.console == 'true'
+    - name: Preserve validated Bundle
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
-        name: Tunuino-Proteus-v07-USB-Bench-Kit-${{ github.sha }}
+        name: Tunuino-Proteus-v07-USB-Bench-Kit-${{ github.event.workflow_run.head_sha || github.sha }}
         path: build/kit/
         if-no-files-found: error
         retention-days: 30
-  release:
-    name: Publish Bundle ZIP
-    needs:
-    - changes
-    - unit_tests
-    - arm
-    - console
-    - result
-    - tunerstudio
-    - desktop
-    if: github.repository == 'Tunuino/Tunuino' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-      && needs.unit_tests.result == 'success' && needs.arm.result == 'success' && needs.console.result == 'success'
-      && needs.result.result == 'success' && needs.changes.outputs.bench == 'true' && needs.changes.outputs.console
-      == 'true' && needs.tunerstudio.result == 'success' && needs.desktop.result == 'success'
-    permissions:
-      contents: write
-    uses: ./.github/workflows/publish-release.yml
