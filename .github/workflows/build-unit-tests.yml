@@ -2,28 +2,8 @@ name: Unit tests
 'on':
   push:
     branches: [master]
-    paths:
-    - .github/workflows/build-unit-tests.yml
-    - tools/**
-    - unit_tests/**
-    - firmware/**
-    - java_console/**
-    - java_tools/**
-    - simulator/**
-    - hardware/**
-    - misc/**
   pull_request:
     branches: [master]
-    paths:
-    - .github/workflows/build-unit-tests.yml
-    - tools/**
-    - unit_tests/**
-    - firmware/**
-    - java_console/**
-    - java_tools/**
-    - simulator/**
-    - hardware/**
-    - misc/**
   workflow_call: {}
   workflow_dispatch: {}
 permissions:
