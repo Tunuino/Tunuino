@@ -31,7 +31,7 @@ jobs:
       run: |
         Copy-Item java_console/target/tunuino-console-0.1.0-SNAPSHOT.jar java_console/target/app/tunuino-console.jar
         Copy-Item LICENSE java_console/target/app/LICENSE.txt
-        jpackage --type app-image --name TunuinoConsole --app-version 0.1.0 --vendor Tunuino --input java_console/target/app --main-jar tunuino-console.jar --main-class io.tunuino.console.Launcher --add-modules java.base,java.desktop,java.logging,java.naming,java.xml,java.management,jdk.unsupported,jdk.crypto.ec --dest build/windows
+        jpackage --type app-image --name TunuinoConsole --app-version 0.1.0 --vendor Tunuino --input java_console/target/app --main-jar tunuino-console.jar --main-class io.tunuino.console.Launcher --add-modules java.base,java.desktop,java.logging,java.naming,java.xml,java.management,jdk.unsupported,jdk.crypto.ec --jlink-options "--strip-debug --no-man-pages --no-header-files" --dest build/windows
         if ($LASTEXITCODE -ne 0) { throw 'jpackage failed' }
     - name: Verify packaged JavaFX and USB serial runtime
       shell: pwsh
@@ -53,7 +53,8 @@ jobs:
       shell: pwsh
       run: |
         $classpath = 'build/windows/TunuinoConsole/app/tunuino-console.jar;build/windows/TunuinoConsole/app/lib/*;java_console/target/test-classes'
-        & 'build/windows/TunuinoConsole/runtime/bin/java.exe' '-Dprism.order=sw' -cp $classpath io.tunuino.console.ConsoleUiChecks --snapshots=build/interface-check
+        $runtimeJava = (Resolve-Path 'build/windows/TunuinoConsole/runtime/bin/java.exe').Path
+        & $runtimeJava '-Dprism.order=sw' -cp $classpath io.tunuino.console.ConsoleUiChecks --snapshots=build/interface-check
         if ($LASTEXITCODE -ne 0) { throw 'Console interface check failed' }
     - name: Preserve interface previews
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
