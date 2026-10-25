@@ -27,6 +27,7 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.TilePane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -62,6 +63,12 @@ public final class ConfigurationPane extends VBox {
         getChildren().add(ConsoleShell.card("CONFIGURAÇÃO DA CENTRALINA",
             "Lê os valores antes de editar. Guardar valida, persiste e confirma a leitura; os mapas são preservados.",
             ConsoleShell.actions(read,apply,reset,openFile,saveFile),feedback,validation,discard));
+        TilePane forms=new TilePane(16,16);forms.setId("config-form-grid");forms.setPrefColumns(2);
+        forms.setPrefTileWidth(420);
+        forms.widthProperty().addListener((p,old,width)->{
+            double available=width.doubleValue();
+            if(available>0)forms.setPrefTileWidth(Math.floor(available>=800?(available-16)/2:available));
+        });
         for(String group:List.of("Aquisição","MAP","Lambda","Temperatura")) {
             GridPane grid=new GridPane();grid.setHgap(16);grid.setVgap(10);int row=0;
             if(group.equals("Aquisição"))grid.add(trigger,0,row++,2,1);
@@ -76,8 +83,10 @@ public final class ConfigurationPane extends VBox {
             String subtitle=group.equals("Aquisição")?"Configuração de aquisição; não ativa injetores, bobinas ou outras saídas."
                 :group.equals("Temperatura")?"Três pontos ADC/temperatura. Usa a curva medida do teu sensor."
                 :"Dois pontos ADC/valor físico. Usa ponto decimal e a calibração real do sensor.";
-            getChildren().add(ConsoleShell.card(group.toUpperCase(Locale.ROOT),subtitle,grid));
+            VBox card=ConsoleShell.card(group.toUpperCase(Locale.ROOT),subtitle,grid);
+            card.prefWidthProperty().bind(forms.prefTileWidthProperty());forms.getChildren().add(card);
         }
+        getChildren().add(forms);
         TableColumn<AdcRow,String> name=new TableColumn<>("Entrada"),raw=new TableColumn<>("ADC"),volts=new TableColumn<>("Pino MCU (V)");
         name.setCellValueFactory(v->new SimpleStringProperty(v.getValue().channel()));
         raw.setCellValueFactory(v->new SimpleStringProperty(v.getValue().raw()));

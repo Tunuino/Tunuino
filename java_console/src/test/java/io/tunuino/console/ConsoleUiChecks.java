@@ -160,7 +160,12 @@ public final class ConsoleUiChecks {
             configEditor.showInputs(new io.tunuino.protocol.IoClient.Inputs(new LogSample(200,0,0,0,0,0),0,3300,1,0,0,new int[16]));
             check(table.getItems().stream().allMatch(row->row.raw().equals("—")),"Unavailable ADC is not displayed as zero");
             ((Label)scene.lookup("#config-feedback")).setText("Dados sintéticos de teste da interface · sem ECU física");
-            snapshot(scene,"console-calibration");configEditor.availability(null,false,false);
+            snapshot(scene,"console-calibration");
+            var forms=(javafx.scene.layout.TilePane)scene.lookup("#config-form-grid");
+            var firstCard=forms.getChildren().get(0);var secondCard=forms.getChildren().get(1);
+            check(Math.abs(firstCard.localToScene(firstCard.getBoundsInLocal()).getMinY()
+                -secondCard.localToScene(secondCard.getBoundsInLocal()).getMinY())<1,"Calibration cards share a row on a wide desktop");
+            configEditor.availability(null,false,false);
             check(reference.getText().equals("3290")&&((Button)scene.lookup("#config-apply")).isDisabled(),"Disconnect preserves local edits while blocking ECU writes");
             reference.setText("3300");check(configEditor.canClose(),"Unchanged configuration closes without prompting");
             ((ToggleButton) scene.lookup("#navigate-3")).fire(); snapshot(scene, "console-firmware");
