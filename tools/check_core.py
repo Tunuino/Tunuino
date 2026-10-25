@@ -249,6 +249,7 @@ def main():
                    ROOT / "java_console/src/test/java/io/tunuino/CalibrationChecks.java",
                    ROOT / "java_console/src/test/java/io/tunuino/MapReadChecks.java",
                    ROOT / "java_console/src/test/java/io/tunuino/FirmwareLinkChecks.java",
+                   ROOT / "java_console/src/test/java/io/tunuino/IoChecks.java",
                    ROOT / "java_console/src/test/java/io/tunuino/TelemetryChecks.java"]
         sources.append(java_root / "transport/ProcessSerialChannel.java")
         sources.extend(sorted((ROOT / "java_tools/src/main/java").rglob("*.java")))
