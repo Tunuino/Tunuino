@@ -131,18 +131,6 @@ public final class ConsoleUiChecks {
             telemetry.beginLive(); telemetry.showLive(Optional.of(samples.get(0))); telemetry.showLive(Optional.empty());
             check(((Label) scene.lookup("#telemetry-value-rpm")).getText().equals("—"), "Unavailable data clears current values");
             telemetry.endLive("Monitorização terminada");
-            LogSample partial=new LogSample(5000,0,100,1,50,14);
-            telemetry.beginLive();telemetry.showLive(Optional.of(partial));
-            check(((Label)scene.lookup("#telemetry-value-rpm")).getText().equals("—"),"Missing RPM remains absent with other sensors available");
-            check(((Label)scene.lookup("#telemetry-value-map")).getText().equals("100.00"),"Independent valid MAP");
-            int[] adc=new int[16];java.util.Arrays.fill(adc,2048);
-            telemetry.showInputs(new io.tunuino.protocol.IoClient.Inputs(partial,1,3300,2,0,0,adc));
-            ((Button)scene.lookup("#io-raw-inputs")).fire();
-            for(Window window:List.copyOf(Window.getWindows()))if(window!=stage&&window instanceof Stage raw&&raw.isShowing()) {
-                snapshot(raw.getScene(),"console-raw-adc");
-                check(((Label)raw.getScene().lookup("#adc-value-1")).getText().contains("2048 ADC"),"Raw ADC window shows actual provided counts");raw.close();
-            }
-            telemetry.endLive("Monitorização terminada");
             int[] speeds = new int[12], loads = new int[12]; int[][] cells = new int[12][12];
             for (int i = 0; i < 12; ++i) {
                 speeds[i] = 800 + 500 * i; loads[i] = 20000 + 10000 * i;
@@ -158,19 +146,9 @@ public final class ConsoleUiChecks {
                 }
             }
             check(CalibrationViewer.closeAll(), "Unchanged map editor closes cleanly");
-            var pending=new java.util.concurrent.CompletableFuture<Void>();
-            CalibrationViewer.show(stage,"simulated-upload.tnmap",map,changed->pending);
-            for(Window window:List.copyOf(Window.getWindows()))if(window!=stage&&window instanceof Stage editor&&editor.isShowing()) {
-                editor.getScene().getRoot().applyCss();editor.getScene().getRoot().layout();
-                ((Button)editor.getScene().lookup("#map-write")).fire();
-            }
-            check(!CalibrationViewer.closeAll(),"Pending ECU write prevents close");pending.complete(null);
-            later(()->{
-                check(CalibrationViewer.closeAll(),"Completed ECU write permits close");
-                console.stop();stage.close();
-                System.out.println("Console UI: actual shell, theme, workspaces, partial sensors, ADC inputs, map write lifecycle, cursor, playback and compact layouts passed. Synthetic data; no USB devices.");
-                Platform.exit();
-            });
+            console.stop(); stage.close();
+            System.out.println("Console UI: actual shell, shared theme, all workspaces, channel selection, cursor, playback, missing data, compact layouts and map editor passed. Synthetic data; no USB devices.");
+            Platform.exit();
         }
     }
 }

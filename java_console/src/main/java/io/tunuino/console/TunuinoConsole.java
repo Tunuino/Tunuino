@@ -383,7 +383,6 @@ public final class TunuinoConsole extends Application {
                         if (stopping.get() || !monitoringActive || monitorGeneration != generation) return;
                         Optional<LogSample> value = latest.getAndSet(null);
                         if (value != null) telemetry.showLive(value);
-                        telemetry.showInputs(reading.inputs());
                         LiveDataMonitor.Recording recording = reading.recording();
                         summary.setText(recording == null ? "Monitorização ativa · CSV desligado"
                             : "CSV: " + recording.path().getFileName() + " · " + recording.samples() + " amostras gravadas");

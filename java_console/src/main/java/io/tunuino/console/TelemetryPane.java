@@ -4,7 +4,6 @@ package io.tunuino.console;
 import io.tunuino.datalog.DatalogAnalysis;
 import io.tunuino.datalog.LogChannel;
 import io.tunuino.datalog.LogSample;
-import io.tunuino.protocol.IoClient;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -50,11 +49,6 @@ public final class TelemetryPane extends BorderPane {
     private boolean live;
     private double playbackTime;
     private long playbackTick;
-    private final Button rawInputs = new Button("Entradas ADC");
-    private final Label[] rawValues = new Label[16];
-    private IoClient.Inputs currentInputs;
-    private javafx.stage.Stage inputWindow;
-    private final Label inputState = new Label("Sem dados atuais");
 
     public TelemetryPane() {
         getStyleClass().add("telemetry-pane");
@@ -92,8 +86,7 @@ public final class TelemetryPane extends BorderPane {
         chart.setTitle("Dados e datalogs");
         chart.setMinHeight(160);
         channel.setOnAction(event -> renderChart());
-        rawInputs.setId("io-raw-inputs");rawInputs.setDisable(true);rawInputs.setOnAction(event -> openInputs());
-        VBox top = new VBox(10, source, cards, new ToolBar(new Label("Canal do gráfico"), channel, rawInputs));
+        VBox top = new VBox(10, source, cards, new ToolBar(new Label("Canal do gráfico"), channel));
         top.getStyleClass().add("telemetry-top");
         setTop(top); setCenter(chart);
         cursor.setId("telemetry-cursor");
@@ -129,7 +122,7 @@ public final class TelemetryPane extends BorderPane {
         source.setText("Datalog local · " + filename + " · " + samples.size() + " amostras");
         for (LogChannel item : LogChannel.values()) {
             DatalogAnalysis.Range range = DatalogAnalysis.range(offline, item);
-            ranges.get(item).setText(Double.isNaN(range.minimum())?"Sem dados válidos":String.format(Locale.ROOT, "Mín. %.3f · máx. %.3f", range.minimum(), range.maximum()));
+            ranges.get(item).setText(String.format(Locale.ROOT, "Mín. %.3f · máx. %.3f", range.minimum(), range.maximum()));
         }
         cursor.setMax(Math.max(1, offline.size() - 1)); cursor.setValue(0);
         renderChart(); inspect(); refreshNavigation();
@@ -151,8 +144,8 @@ public final class TelemetryPane extends BorderPane {
         if (sample.isPresent()) {
             LogSample value = sample.get();
             showValues(value);
-            for (LogChannel item : LogChannel.values()) ranges.get(item).setText(item.available(value)?"Última amostra válida":"Sem dados atuais");
-            source.setText("Monitorização USB · "+Integer.bitCount(value.validMask())+"/4 sinais válidos");
+            for (Label range : ranges.values()) range.setText("Última amostra válida");
+            source.setText("Monitorização USB · dados recebidos");
             position.setText(String.format(Locale.ROOT, "Relógio ECU: %.3f s", value.timeMs() / 1000.0));
         } else {
             unavailable(); source.setText("Monitorização USB · sem dados válidos");
@@ -162,37 +155,7 @@ public final class TelemetryPane extends BorderPane {
 
     public void endLive(String reason) {
         live = false; stopPlayback(); unavailable();
-        currentInputs=null;rawInputs.setDisable(true);refreshInputs();
         source.setText(reason); refreshNavigation();
-    }
-
-    public void showInputs(IoClient.Inputs value) {
-        currentInputs=value;rawInputs.setDisable(value==null);refreshInputs();
-    }
-
-    private void refreshInputs() {
-        IoClient.Inputs value=currentInputs;
-        inputState.setText(value==null?"Sem dados atuais":"Configuração "+value.generation()+" · erros de captura "+value.errors()
-            +((value.status()&2)!=0?" · alterações por aplicar":"")+((value.status()&4)!=0?" · guardada na ECU":""));
-        int[] raw=value==null?null:value.raw();
-        for(int i=0;i<16;++i)if(rawValues[i]!=null){
-            String name=i<11?"AV"+(i+1):i==11?"12 V dividido (MCU)":"AT"+(i-11);
-            rawValues[i].setText(name+"\n"+(value==null||(value.status()&1)==0?"—":String.format(Locale.ROOT,"%d ADC · %.3f V",raw[i],raw[i]*value.referenceMv()/4095000.0)));
-        }
-    }
-
-    private void openInputs() {
-        if(inputWindow!=null&&inputWindow.isShowing()){inputWindow.toFront();return;}
-        inputWindow=new javafx.stage.Stage();inputWindow.initOwner(getScene().getWindow());
-        inputWindow.setTitle("Tunuino · entradas analógicas da ECU");ConsoleBranding.applyIcon(inputWindow);
-        FlowPane fields=new FlowPane(12,12);
-        for(int i=0;i<16;++i){rawValues[i]=new Label();rawValues[i].setId("adc-value-"+(i+1));rawValues[i].setMinWidth(180);rawValues[i].setPadding(new Insets(8));fields.getChildren().add(rawValues[i]);}
-        Label note=new Label("Tensão nos pinos ADC do MCU. A escala dos divisores externos depende do circuito da entrada.");note.setWrapText(true);
-        VBox content=new VBox(12,note,fields,inputState);content.setPadding(new Insets(16));
-        content.getStyleClass().add("workspace");
-        BorderPane root=new BorderPane(ConsoleShell.scroll(content));root.getStyleClass().add("workspace");
-        inputWindow.setScene(new javafx.scene.Scene(root,680,470));
-        ConsoleBranding.applyTheme(inputWindow.getScene());refreshInputs();inputWindow.show();
     }
 
     private void unavailable() {
@@ -232,20 +195,17 @@ public final class TelemetryPane extends BorderPane {
         vertical.setLabel(selected + " (" + selected.unit() + ")");
         List<XYChart.Series<Number, Number>> series = new ArrayList<>();
         if (!offline.isEmpty()) {
-            XYChart.Series<Number, Number> trace = null;
+            XYChart.Series<Number, Number> trace = new XYChart.Series<>();
             long origin = offline.get(0).timeMs();
             for (LogSample sample : DatalogAnalysis.chartSamples(offline, selected, 2000)) {
-                if(!selected.available(sample)){trace=null;continue;}
-                if(trace==null){trace=new XYChart.Series<>();series.add(trace);}
                 trace.getData().add(new XYChart.Data<>((sample.timeMs() - origin) / 1000.0, selected.value(sample)));
             }
-            chart.setTitle("Datalog local · " + selected);
+            series.add(trace); chart.setTitle("Datalog local · " + selected);
         } else {
             XYChart.Series<Number, Number> trace = null;
             long origin = liveSamples.stream().flatMap(Optional::stream).findFirst().map(LogSample::timeMs).orElse(0L);
             for (Optional<LogSample> entry : liveSamples) {
                 if (entry.isEmpty()) { trace = null; continue; }
-                if(!selected.available(entry.get())){trace=null;continue;}
                 if (trace == null) { trace = new XYChart.Series<>(); series.add(trace); }
                 LogSample sample = entry.get();
                 trace.getData().add(new XYChart.Data<>((sample.timeMs() - origin) / 1000.0, selected.value(sample)));

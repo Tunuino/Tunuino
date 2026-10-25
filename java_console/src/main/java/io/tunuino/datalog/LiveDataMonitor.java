@@ -3,7 +3,6 @@ package io.tunuino.datalog;
 
 import io.tunuino.protocol.DeviceIdentity;
 import io.tunuino.protocol.LiveDataClient;
-import io.tunuino.protocol.IoClient;
 import io.tunuino.transport.PacketSession;
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -25,8 +24,6 @@ public final class LiveDataMonitor {
     private final Duration interval;
     private final ConcurrentLinkedQueue<Request> requests = new ConcurrentLinkedQueue<>();
     private volatile Recording recording;
-    private volatile IoClient.Inputs inputs;
-    public IoClient.Inputs inputs() { return inputs; }
     private CsvLogWriter writer;
     private boolean started;
     private boolean finished;
@@ -77,7 +74,7 @@ public final class LiveDataMonitor {
                     result = finishRecording();
                 } else {
                     if (writer != null) throw new IOException("Já existe um datalog em gravação");
-                    writer = new CsvLogWriter(request.destination(),(identity.capabilities()&LiveDataClient.PARTIAL_CAPABILITY)!=0);
+                    writer = new CsvLogWriter(request.destination());
                     result = new Recording(request.destination(), 0);
                     recording = result;
                 }
@@ -103,10 +100,7 @@ public final class LiveDataMonitor {
         try {
             while (running.getAsBoolean()) {
                 processRequests();
-                Optional<LogSample> result;
-                if((identity.capabilities()&IoClient.CAPABILITY)!=0) {
-                    inputs=IoClient.read(session,identity,Duration.ofMillis(500));result=Optional.of(inputs.sample());
-                } else result=LiveDataClient.read(session,identity,Duration.ofMillis(500));
+                Optional<LogSample> result = LiveDataClient.read(session, identity, Duration.ofMillis(500));
                 if (result.isPresent()) {
                     LogSample sample = result.get();
                     if (sample.timeMs() < previousTime) {
