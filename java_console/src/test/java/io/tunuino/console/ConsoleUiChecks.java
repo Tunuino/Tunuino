@@ -72,6 +72,9 @@ public final class ConsoleUiChecks {
             check(scene.getStylesheets().size() == 1, "Shared theme loaded");
             check(((Button) scene.lookup("#monitor-live")).isDisabled(), "No invented sensor capability");
             ((ToggleButton)scene.lookup("#navigate-1")).fire();
+            // The Maps workspace lives in a ScrollPane; let JavaFX attach and
+            // skin its content before querying controls inside that page.
+            scene.getRoot().applyCss(); scene.getRoot().layout();
             check(((Button)scene.lookup("#engine-preview")).isDisabled(), "Offline preview cannot contact ECU");
             check(((Label)scene.lookup("#engine-preview-result")).getText().contains("Sem pré-visualização"),
                 "Preview never fabricates engine values");
