@@ -74,7 +74,7 @@ public final class LiveDataMonitor {
                     result = finishRecording();
                 } else {
                     if (writer != null) throw new IOException("Já existe um datalog em gravação");
-                    writer = new CsvLogWriter(request.destination());
+                    writer = new CsvLogWriter(request.destination(), identity.family() == DeviceIdentity.Family.PROTEUS);
                     result = new Recording(request.destination(), 0);
                     recording = result;
                 }
