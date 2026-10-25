@@ -299,7 +299,19 @@ public final class TunuinoConsole extends Application {
             }
             status.setText("A ler mapa da ECU…");
             serialTask(() -> MapReadClient.read(current, device, kind, Duration.ofSeconds(5)), map -> {
-                CalibrationViewer.show(stage, device.family() + " · " + kind + " · cópia lida da ECU", map);
+                String title=device.family() + " · " + kind + " · cópia lida da ECU";
+                if((device.capabilities()&8)!=0)CalibrationViewer.show(stage,title,map,updated -> {
+                    var completion=new java.util.concurrent.CompletableFuture<Void>();
+                    if(serialBusy||monitoringActive||connection.get()!=current||!current.isOpen()){
+                        completion.completeExceptionally(new IllegalStateException("Para a monitorização e mantém a mesma ECU ligada para guardar o mapa"));return completion;
+                    }
+                    status.setText("A guardar e verificar o mapa na ECU…");
+                    serialTask(()->{io.tunuino.protocol.MapWriteClient.write(current,device,updated,Duration.ofSeconds(15));return true;},
+                        ignored->{status.setText("Mapa guardado e verificado na ECU");refreshConnection.run();completion.complete(null);},
+                        error->{if(!current.isOpen()){connection.compareAndSet(current,null);identifiedDevice=null;}
+                            status.setText("Falha ao guardar mapa: "+error.getMessage());refreshConnection.run();completion.completeExceptionally(error);});
+                    return completion;
+                });else CalibrationViewer.show(stage,title,map);
                 status.setText("Mapa validado · podes consultar, editar e guardar uma cópia offline");
                 refreshConnection.run();
             }, error -> {

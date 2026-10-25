@@ -12,6 +12,7 @@ import java.util.concurrent.CancellationException;
 
 public final class CsvLogReader {
     public static final String HEADER = "time_ms,rpm,map_kpa,lambda,coolant_c";
+    public static final String PARTIAL_HEADER = HEADER + ",valid_mask";
     public static final int MAX_SAMPLES = 500_000;
     private static final int MAX_LINE = 4096;
 
@@ -24,7 +25,8 @@ public final class CsvLogReader {
             if (header != null && header.startsWith("\uFEFF")) {
                 header = header.substring(1);
             }
-            if (!HEADER.equals(header)) {
+            boolean partial=PARTIAL_HEADER.equals(header);
+            if (!HEADER.equals(header) && !partial) {
                 throw new IOException("Cabeçalho esperado: " + HEADER);
             }
             long previousTime = -1;
@@ -43,12 +45,16 @@ public final class CsvLogReader {
                 }
                 String[] fields = line.split(",", -1);
                 try {
-                    if (fields.length != 5) {
+                    if (fields.length != (partial?6:5)) {
                         throw new IllegalArgumentException("São necessárias cinco colunas");
                     }
-                    LogSample sample = new LogSample(Long.parseLong(fields[0].trim()),
-                        Double.parseDouble(fields[1].trim()), Double.parseDouble(fields[2].trim()),
-                        Double.parseDouble(fields[3].trim()), Double.parseDouble(fields[4].trim()));
+                    int mask=partial?Integer.parseInt(fields[5].trim()):15;
+                    double[] values=new double[4];
+                    for(int i=0;i<4;++i) {
+                        if((mask&(1<<i))!=0)values[i]=Double.parseDouble(fields[i+1].trim());
+                        else if(!fields[i+1].isBlank())throw new IllegalArgumentException("Campo indisponível deve estar vazio");
+                    }
+                    LogSample sample = new LogSample(Long.parseLong(fields[0].trim()),values[0],values[1],values[2],values[3],mask);
                     if (sample.timeMs() < previousTime) {
                         throw new IllegalArgumentException("Tempo fora de ordem");
                     }

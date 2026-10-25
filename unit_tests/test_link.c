@@ -8,7 +8,7 @@ static tunuino_identity identity = {TUNUINO_PROTEUS,TUNUINO_STM32_F4,1,0,1,0,3,{
 static tunuino_live_sample live = {1234,950000,100000,1000000,-12345,15};
 static tunuino_map map;
 static tunuino_map_snapshot ve, ignition;
-static tunuino_dispatch_context context = {&identity,&live,&ve,&ignition};
+static tunuino_dispatch_context context = {&identity,&live,&ve,&ignition,NULL};
 static uint8_t request[64], wire[TUNUINO_MAX_BODY + TUNUINO_FRAME_OVERHEAD], file[TUNUINO_MAP_FILE_MAX];
 static size_t request_length;
 static void init(uint32_t rx_ms, uint32_t tx_ms, uint64_t now) {

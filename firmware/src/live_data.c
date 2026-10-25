@@ -8,6 +8,20 @@ static void put_value(uint8_t *target, uint64_t value, unsigned bytes) {
     }
 }
 
+tunuino_live_status tunuino_live_partial_reply(const tunuino_live_sample *s,
+    uint8_t *response,size_t capacity,size_t *written) {
+    if(written!=NULL)*written=0;
+    if(s==NULL||response==NULL||written==NULL)return TUNUINO_LIVE_ARGUMENT;
+    if((s->valid_mask & ~TUNUINO_LIVE_ALL_VALID)!=0 || s->time_ms>>63)return TUNUINO_LIVE_BAD_SAMPLE;
+    uint8_t body[28]={0,2,0,0};body[2]=s->valid_mask;
+    put_value(body+4,s->time_ms,8);
+    if(s->valid_mask&TUNUINO_LIVE_RPM_VALID)put_value(body+12,s->rpm_milli,4);
+    if(s->valid_mask&TUNUINO_LIVE_MAP_VALID)put_value(body+16,s->map_milli_kpa,4);
+    if(s->valid_mask&TUNUINO_LIVE_LAMBDA_VALID)put_value(body+20,s->lambda_million,4);
+    if(s->valid_mask&TUNUINO_LIVE_COOLANT_VALID)put_value(body+24,(uint32_t)s->coolant_milli_c,4);
+    return tunuino_frame_encode(body,sizeof(body),response,capacity,written)==TUNUINO_FRAME_OK?TUNUINO_LIVE_OK:TUNUINO_LIVE_CAPACITY;
+}
+
 tunuino_live_status tunuino_live_reply(const tunuino_live_sample *sample,
     const uint8_t *request_packet, size_t request_length,
     uint8_t *response_packet, size_t capacity, size_t *written) {

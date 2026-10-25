@@ -17,6 +17,7 @@ extern USBDriver USBD1;
 void halInit(void);
 void sduObjectInit(SerialUSBDriver *sdu);
 int sduStart(SerialUSBDriver *sdu, const SerialUSBConfig *config);
+void sduStop(SerialUSBDriver *sdu);
 int usbStart(USBDriver *usb, const USBConfig *config);
 void usbStop(USBDriver *usb);
 void usbDisconnectBus(USBDriver *usb);

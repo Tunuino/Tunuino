@@ -10,7 +10,7 @@ static tunuino_identity identity = {
 static tunuino_live_sample live = {1234, 950000, 100000, 1000000, -12345, 15};
 static tunuino_map map;
 static tunuino_map_snapshot ve, ignition;
-static tunuino_dispatch_context context = {&identity, &live, &ve, &ignition};
+static tunuino_dispatch_context context = {&identity, &live, &ve, &ignition,NULL};
 static uint8_t request[64], response[300], expected[300];
 static size_t request_length, written;
 static void query(const uint8_t *body, size_t length) {

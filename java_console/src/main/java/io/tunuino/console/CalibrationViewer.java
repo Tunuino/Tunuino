@@ -43,7 +43,11 @@ public final class CalibrationViewer {
     private CalibrationViewer() {}
 
     public static void show(Window owner, String filename, CalibrationMap map) {
-        new Editor(owner, filename, map).show();
+        new Editor(owner, filename, map, null).show();
+    }
+    public static void show(Window owner,String filename,CalibrationMap map,
+            java.util.function.Function<CalibrationMap,java.util.concurrent.CompletableFuture<Void>> upload) {
+        new Editor(owner,filename,map,upload).show();
     }
 
     /** Called on the JavaFX thread before closing the main Console window. */
@@ -77,7 +81,8 @@ public final class CalibrationViewer {
         private boolean saving;
         private boolean allowClose;
 
-        Editor(Window owner, String filename, CalibrationMap map) {
+        Editor(Window owner, String filename, CalibrationMap map,
+                java.util.function.Function<CalibrationMap,java.util.concurrent.CompletableFuture<Void>> upload) {
             originalFilename = filename;
             document = new CalibrationDocument(map);
             stage.initOwner(owner);
@@ -148,6 +153,21 @@ public final class CalibrationViewer {
                 title,
                 new HBox(8, undo, redo, save, colors, state),
                 new HBox(8, new Label("RPM"), rpm, new Label("MAP (kPa)"), kpa, evaluate), result);
+            if(upload!=null){
+                Button send=new Button("Guardar e verificar na ECU");send.setId("map-write");send.getStyleClass().add("primary");
+                send.disableProperty().bind(table.disabledProperty());
+                send.setOnAction(event -> {
+                    if(saving||table.getEditingCell()!=null){result.setText("Confirma ou cancela a célula em edição antes de enviar.");return;}
+                    saving=true;refreshControls();
+                    java.util.concurrent.CompletableFuture<Void> operation;
+                    try{operation=upload.apply(document.snapshot());}
+                    catch(RuntimeException error){operation=java.util.concurrent.CompletableFuture.failedFuture(error);}
+                    operation.whenComplete((ignored,error)->javafx.application.Platform.runLater(()->{
+                        saving=false;result.setText(error==null?"Mapa guardado na ECU e verificado por leitura completa.":"Falha ao guardar na ECU: "+error.getMessage());refreshControls();
+                    }));
+                });
+                header.getChildren().add(send);
+            }
             header.setPadding(new Insets(12));
             BorderPane root = new BorderPane(table);
             root.setTop(header);

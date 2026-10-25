@@ -12,6 +12,7 @@ import java.util.Optional;
 public final class LiveDataClient {
     public static final long CAPABILITY = 1;
     private LiveDataClient() {}
+    public static final long PARTIAL_CAPABILITY = 4;
 
     public static byte[] request() {
         return "TUNUINO:L".getBytes(StandardCharsets.US_ASCII);
@@ -43,6 +44,15 @@ public final class LiveDataClient {
             throw new IllegalStateException("O firmware não anuncia dados em tempo real");
         }
         try {
+            if((identity.capabilities()&PARTIAL_CAPABILITY)!=0) {
+                byte[] body=session.exchange("TUNUINO:P".getBytes(StandardCharsets.US_ASCII),timeout);
+                if(body==null||body.length!=28||body[0]!=0||body[1]!=2||(body[2]&255)>15||body[3]!=0)
+                    throw new IOException("Resposta parcial de sensores inválida");
+                ByteBuffer b=ByteBuffer.wrap(body);
+                try { return Optional.of(new LogSample(b.getLong(4),Integer.toUnsignedLong(b.getInt(12))/1000.0,
+                    Integer.toUnsignedLong(b.getInt(16))/1000.0,Integer.toUnsignedLong(b.getInt(20))/1_000_000.0,b.getInt(24)/1000.0,body[2]&255)); }
+                catch(IllegalArgumentException e){throw new IOException(e.getMessage(),e);}
+            }
             return decode(session.exchange(request(), timeout));
         } catch (IOException e) {
             try { session.close(); } catch (IOException closeFailure) { e.addSuppressed(closeFailure); }

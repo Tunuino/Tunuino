@@ -29,4 +29,6 @@ typedef enum {
 tunuino_live_status tunuino_live_reply(const tunuino_live_sample *sample,
     const uint8_t *request_packet, size_t request_length,
     uint8_t *response_packet, size_t capacity, size_t *written);
+tunuino_live_status tunuino_live_partial_reply(const tunuino_live_sample *sample,
+    uint8_t *response_packet, size_t capacity, size_t *written);
 #endif
