@@ -134,7 +134,36 @@ public final class ConsoleUiChecks {
             Scene scene = stage.getScene();
             ((ToggleButton) scene.lookup("#navigate-1")).fire(); snapshot(scene, "console-maps");
             check(scene.lookup("#open-map") != null, "Maps workspace is reachable");
-            ((ToggleButton) scene.lookup("#navigate-2")).fire(); snapshot(scene, "console-firmware");
+            ((ToggleButton) scene.lookup("#navigate-2")).fire();
+            scene.getRoot().applyCss();scene.getRoot().layout();
+            check(((Button)scene.lookup("#config-read")).isDisabled(),"Offline configuration cannot read USB");
+            check(((Button)scene.lookup("#config-apply")).isDisabled(),"Offline configuration cannot write USB");
+            ConfigurationPane editor=(ConfigurationPane)scene.lookup("#config-read").getParent().getParent().getParent();
+            byte[] fixture=new byte[256];java.nio.ByteBuffer cfg=java.nio.ByteBuffer.wrap(fixture);
+            cfg.putShort(0,(short)1);fixture[3]=36;fixture[4]=1;fixture[26]=3;
+            cfg.putShort(12,(short)4095);cfg.putShort(20,(short)4095);cfg.putShort(34,(short)2048);cfg.putShort(36,(short)4095);
+            cfg.putShort(96,(short)12000);cfg.putShort(100,(short)3300);
+            var id=new io.tunuino.protocol.DeviceIdentity(io.tunuino.protocol.DeviceIdentity.Family.PROTEUS,
+                io.tunuino.protocol.DeviceIdentity.McuSeries.STM32_F4,7,0,1,0,15,"0102030405060708090a0b0c");
+            editor.availability(id,true,false);
+            editor.loaded(new io.tunuino.protocol.ConfigurationClient.Snapshot(new io.tunuino.calibration.IoConfiguration(fixture),
+                new io.tunuino.protocol.ConfigurationClient.Validation(false,false,0,1,0)));
+            var reference=(javafx.scene.control.TextField)scene.lookup("#config-field-REFERENCE");
+            reference.setText("3290");check(!((Button)scene.lookup("#config-apply")).isDisabled(),"Valid local calibration enables explicit commit");
+            reference.setText("bad");check(((Button)scene.lookup("#config-apply")).isDisabled(),"Invalid calibration blocks commit");
+            reference.setText("3290");editor.availability(id,true,true);
+            check(((Button)scene.lookup("#config-apply")).isDisabled(),"Busy serial worker blocks calibration");
+            editor.availability(id,true,false);int[] rawAdc=new int[16];java.util.Arrays.fill(rawAdc,2000);
+            editor.showInputs(new io.tunuino.protocol.IoClient.Inputs(new LogSample(100,0,0,0,0,0),1,3300,1,0,0,rawAdc));
+            @SuppressWarnings("unchecked") var table=(javafx.scene.control.TableView<ConfigurationPane.AdcRow>)scene.lookup("#config-adc-table");
+            check(table.getItems().size()==16&&table.getItems().get(0).volts().equals("1.612"),"All ADC channels and actual MCU scaling displayed");
+            editor.showInputs(new io.tunuino.protocol.IoClient.Inputs(new LogSample(200,0,0,0,0,0),0,3300,1,0,0,new int[16]));
+            check(table.getItems().stream().allMatch(row->row.raw().equals("—")),"Unavailable ADC is not displayed as zero");
+            ((Label)scene.lookup("#config-feedback")).setText("Dados sintéticos de teste da interface · sem ECU física");
+            snapshot(scene,"console-calibration");editor.availability(null,false,false);
+            check(reference.getText().equals("3290")&&((Button)scene.lookup("#config-apply")).isDisabled(),"Disconnect preserves local edits while blocking ECU writes");
+            reference.setText("3300");check(editor.canClose(),"Unchanged configuration closes without prompting");
+            ((ToggleButton) scene.lookup("#navigate-3")).fire(); snapshot(scene, "console-firmware");
             ((ToggleButton) scene.lookup("#navigate-0")).fire();
             telemetry.beginLive(); telemetry.showLive(Optional.of(samples.get(0))); telemetry.showLive(Optional.empty());
             check(((Label) scene.lookup("#telemetry-value-rpm")).getText().equals("—"), "Unavailable data clears current values");

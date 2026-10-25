@@ -20,40 +20,50 @@ static bool map_decode(tunuino_map *map, const uint8_t *bytes, tunuino_map_kind 
     return tunuino_map_validate(map)==TUNUINO_MAP_OK;
 }
 
-bool tunuino_device_validate(const uint8_t *p, size_t length) {
-    if (p==NULL || length!=TUNUINO_IO_SETTINGS_SIZE || tunuino_device_u16(p)!=1
-        || p[2]>1 || p[3]<4 || p[3]>120 || p[4]<1 || p[4]>=p[3]/2
-        || p[5]!=0 || p[6]>11 || p[7]>11 || p[8]>4 || p[9]!=0
-        || tunuino_device_u16(p+10)>=tunuino_device_u16(p+12) || tunuino_device_u16(p+12)>4095
-        || (p[6] && tunuino_device_u16(p+14)>=tunuino_device_u16(p+16)) || tunuino_device_u16(p+16)>50000
-        || tunuino_device_u16(p+18)>=tunuino_device_u16(p+20) || tunuino_device_u16(p+20)>4095
-        || (p[7] && (tunuino_device_u16(p+22)==0 || tunuino_device_u16(p+22)>=tunuino_device_u16(p+24)))
-        || tunuino_device_u16(p+24)>5000 || p[26]!=3
-        || tunuino_device_u16(p+96)<1000 || tunuino_device_u16(p+96)>20000
-        || tunuino_device_u16(p+100)<2800 || tunuino_device_u16(p+100)>3600) return false;
-    for (unsigned i=27;i<32;++i) if(p[i]!=0) return false;
-    for (unsigned i=98;i<100;++i) if(p[i]!=0) return false;
-    for (unsigned i=102;i<256;++i) if(p[i]!=0) return false;
-    for (unsigned i=0;i<16;++i) {
+uint32_t tunuino_device_validation_errors(const uint8_t *p, size_t length) {
+    if (p==NULL || length!=TUNUINO_IO_SETTINGS_SIZE) return TUNUINO_CONFIG_SCHEMA;
+    uint32_t errors=0;
+    if(tunuino_device_u16(p)!=1 || p[5]!=0 || p[9]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
+    for(unsigned i=27;i<32;++i) if(p[i]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
+    for(unsigned i=98;i<100;++i) if(p[i]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
+    for(unsigned i=102;i<256;++i) if(p[i]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
+    if(p[2]>1 || p[3]<4 || p[3]>120 || p[4]<1 || p[4]>=p[3]/2
+        || tunuino_device_u16(p+96)<1000 || tunuino_device_u16(p+96)>20000) errors|=TUNUINO_CONFIG_TRIGGER;
+    if(p[6]>11 || tunuino_device_u16(p+10)>=tunuino_device_u16(p+12)
+        || tunuino_device_u16(p+12)>4095 || (p[6] && tunuino_device_u16(p+14)>=tunuino_device_u16(p+16))
+        || tunuino_device_u16(p+14)>50000 || tunuino_device_u16(p+16)>50000) errors|=TUNUINO_CONFIG_MAP;
+    if(p[7]>11 || tunuino_device_u16(p+18)>=tunuino_device_u16(p+20)
+        || tunuino_device_u16(p+20)>4095 || (p[7] && (tunuino_device_u16(p+22)==0
+        || tunuino_device_u16(p+22)>=tunuino_device_u16(p+24)))
+        || tunuino_device_u16(p+22)>5000 || tunuino_device_u16(p+24)>5000) errors|=TUNUINO_CONFIG_LAMBDA;
+    if(p[8]>4 || p[26]!=3) errors|=TUNUINO_CONFIG_COOLANT;
+    for(unsigned i=0;i<16;++i) {
         unsigned raw=tunuino_device_u16(p+32+2*i);int32_t value=signed16(p+64+2*i);
-        if (i<p[26]) { if(raw>4095 || value < -4000 || value>15000 || (i && raw<=tunuino_device_u16(p+30+2*i))) return false; }
-        else if(raw!=0 || value!=0) return false;
+        if(i<3) {
+            if(raw>4095 || value< -4000 || value>15000 || (i && raw<=tunuino_device_u16(p+30+2*i)))
+                errors|=TUNUINO_CONFIG_COOLANT;
+        } else if(raw!=0 || value!=0) errors|=TUNUINO_CONFIG_COOLANT;
     }
-    if(p[8] && signed16(p+64)==signed16(p+66) && signed16(p+66)==signed16(p+68))return false;
-    /* Validate axes and ranges without placing two maximum-size maps on a stack. */
-    for (unsigned page=2;page<=3;++page) {
+    if(p[8] && signed16(p+64)==signed16(p+66) && signed16(p+66)==signed16(p+68)) errors|=TUNUINO_CONFIG_COOLANT;
+    if(tunuino_device_u16(p+100)<2800 || tunuino_device_u16(p+100)>3600) errors|=TUNUINO_CONFIG_ADC;
+    for(unsigned page=2;page<=3;++page) {
         const uint8_t *m=p+page_offset(page);
-        for (unsigned i=0;i<8;++i) {
-            if (tunuino_device_u16(m+2*i)>20000 || tunuino_device_u16(m+16+2*i)>50000
+        uint32_t issue=page==2?TUNUINO_CONFIG_VE:TUNUINO_CONFIG_IGNITION;
+        for(unsigned i=0;i<8;++i) {
+            if(tunuino_device_u16(m+2*i)>20000 || tunuino_device_u16(m+16+2*i)>50000
                 || (i && (tunuino_device_u16(m+2*i)<=tunuino_device_u16(m+2*i-2)
-                    || tunuino_device_u16(m+16+2*i)<=tunuino_device_u16(m+14+2*i)))) return false;
+                    || tunuino_device_u16(m+16+2*i)<=tunuino_device_u16(m+14+2*i)))) errors|=issue;
         }
-        for (unsigned i=0;i<64;++i) {
+        for(unsigned i=0;i<64;++i) {
             int32_t value=signed16(m+32+2*i);
-            if ((page==2 && (value<0 || value>30000)) || (page==3 && (value < -9000 || value>9000))) return false;
+            if((page==2 && (value<0 || value>30000)) || (page==3 && (value< -9000 || value>9000))) errors|=issue;
         }
     }
-    return true;
+    return errors;
+}
+
+bool tunuino_device_validate(const uint8_t *p, size_t length) {
+    return tunuino_device_validation_errors(p,length)==0;
 }
 
 static bool publish(tunuino_device *d) {
@@ -199,6 +209,12 @@ tunuino_dispatch_status tunuino_device_reply(tunuino_device *d,const tunuino_ide
             memcpy(body+1,channels+offset,count);
             size=1+count;
         }
+    }
+    else if(length==9 && memcmp(q,"TUNUINO:V",9)==0) {
+        /* Read-only staged validation v1; no flash, activation or outputs. */
+        body[1]=1;body[2]=d->dirty?1:0;body[3]=d->persisted?1:0;
+        put32(body+4,tunuino_device_validation_errors(d->staged,sizeof(d->staged)));
+        put32(body+8,d->generation);put32(body+12,tunuino_crc32(d->staged,256));size=16;
     }
     else if(length==9 && memcmp(q,"TUNUINO:E",9)==0) {
         engine_preview(d,body);

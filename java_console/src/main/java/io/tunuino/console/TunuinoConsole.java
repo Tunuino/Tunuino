@@ -56,7 +56,9 @@ public final class TunuinoConsole extends Application {
     private boolean recordingPending;
     private LiveDataMonitor liveMonitor;
     private TelemetryPane telemetry;
+    private ConfigurationPane configurationPane;
     private boolean serialBusy;
+    private boolean configurationBusy;
     private Runnable refreshControls = () -> {};
     private long monitorGeneration;
     private final AtomicBoolean keepMonitoring = new AtomicBoolean();
@@ -139,6 +141,8 @@ public final class TunuinoConsole extends Application {
             PacketSession current = connection.get();
             boolean connected = current != null && current.isOpen();
             if (shell != null) shell.connectionState(identifiedDevice, connected);
+            if(configurationPane!=null)configurationPane.availability(identifiedDevice,connected,
+                serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()));
             connect.setText(connected ? "Desligar USB" : "Ligar USB");
             boolean programming = firmwarePanel != null && firmwarePanel.isBusy();
             connect.setDisable(programming || serialBusy || monitoringActive || (!connected && ports.getValue() == null));
@@ -546,6 +550,23 @@ public final class TunuinoConsole extends Application {
         maps.setPadding(new Insets(0, 24, 24, 24));
         shell.addPage("Mapas", "Mapas de calibração", "Tabelas VE e ignição, eixos e interpolação.",
             "M1 2H21V20H1ZM3 4V8H7V4ZM9 4V8H13V4ZM15 4V8H19V4ZM3 10V14H7V10ZM9 10V14H13V10ZM15 10V14H19V10ZM3 16V18H7V16ZM9 16V18H13V16ZM15 16V18H19V16Z", ConsoleShell.scroll(maps));
+        configurationPane=new ConfigurationPane(stage,new ConfigurationPane.Access() {
+            @Override public <T> void run(ConfigurationPane.Operation<T> operation,Consumer<T> success,Consumer<Throwable> failure) {
+                PacketSession current=connection.get();DeviceIdentity device=identifiedDevice;
+                if(serialBusy||monitoringActive||fileReading||firmwarePanel.isBusy()||current==null||!current.isOpen()
+                        ||!EnginePreviewClient.supports(device)) {
+                    failure.accept(new IllegalStateException("Para a monitorização e identifica a ECU antes de configurar"));return;
+                }
+                configurationBusy=true;
+                serialTask(()->operation.run(current,device),result->{configurationBusy=false;success.accept(result);refreshConnection.run();},error->{
+                    configurationBusy=false;
+                    if(!current.isOpen()){connection.compareAndSet(current,null);identifiedDevice=null;}
+                    failure.accept(error);status.setText("Configuração: "+error.getMessage());refreshConnection.run();
+                });
+            }
+        });
+        shell.addPage("Entradas", "Entradas e calibração", "Sensores, captura e diagnóstico da configuração.",
+            "M2 3H20V7H2ZM2 10H20V14H2ZM2 17H20V21H2Z", ConsoleShell.scroll(configurationPane));
         shell.addPage("Firmware e USB", "Firmware e ligação USB", "Seleciona a imagem, verifica o dispositivo e acompanha a gravação.",
             "M5 4H17V18H5ZM7 6V16H15V6ZM1 6H4V8H1ZM1 11H4V13H1ZM18 6H21V8H18ZM18 11H21V13H18ZM7 0H9V3H7ZM13 0H15V3H13ZM7 19H9V22H7ZM13 19H15V22H13Z", ConsoleShell.scroll(firmwarePanel));
         javafx.geometry.Rectangle2D screen = javafx.stage.Screen.getPrimary().getVisualBounds();
@@ -558,11 +579,17 @@ public final class TunuinoConsole extends Application {
         stage.setMinWidth(Math.min(960, screen.getWidth() - 40));
         stage.setMinHeight(Math.min(680, screen.getHeight() - 60));
         stage.setOnCloseRequest(event -> {
+            if(configurationBusy){
+                event.consume();
+                ConsoleBranding.alert(Alert.AlertType.INFORMATION,"Espera que a operação de configuração termine antes de fechar.").show();
+                return;
+            }
             if (firmwarePanel.isBusy()) {
                 event.consume();
                 ConsoleBranding.alert(Alert.AlertType.INFORMATION, "Espera que a operação de firmware termine antes de fechar.").show();
                 return;
             }
+            if(configurationPane!=null&&!configurationPane.canClose()){event.consume();return;}
             if (!CalibrationViewer.closeAll()) { event.consume(); }
         });
         stage.show();

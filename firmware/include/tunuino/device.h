@@ -24,6 +24,14 @@
 #define TUNUINO_ENGINE_RPM_LIMIT 0x20u
 #define TUNUINO_ENGINE_OUT_OF_TABLE 0x40u
 #define TUNUINO_ENGINE_UNCALIBRATED 0x80u
+#define TUNUINO_CONFIG_SCHEMA UINT32_C(1)
+#define TUNUINO_CONFIG_TRIGGER UINT32_C(2)
+#define TUNUINO_CONFIG_MAP UINT32_C(4)
+#define TUNUINO_CONFIG_LAMBDA UINT32_C(8)
+#define TUNUINO_CONFIG_COOLANT UINT32_C(16)
+#define TUNUINO_CONFIG_ADC UINT32_C(32)
+#define TUNUINO_CONFIG_VE UINT32_C(64)
+#define TUNUINO_CONFIG_IGNITION UINT32_C(128)
 #define TUNUINO_IO_CONFIG_SIZE 256u
 #define TUNUINO_IO_MAP_SIZE 160u
 #define TUNUINO_IO_SETTINGS_SIZE 576u
@@ -48,6 +56,8 @@ void tunuino_device_init(tunuino_device *device, tunuino_device_save save,
     tunuino_device_clock clock, void *user);
 bool tunuino_device_restore(tunuino_device *device, const uint8_t *bytes, size_t length);
 bool tunuino_device_validate(const uint8_t *bytes, size_t length);
+/* Reports every invalid configuration group; reads only, never alters state. */
+uint32_t tunuino_device_validation_errors(const uint8_t *bytes, size_t length);
 void tunuino_device_sample(tunuino_device *device, uint64_t time_ms,
     const uint16_t raw[TUNUINO_IO_CHANNELS], bool adc_valid,
     uint32_t rpm_milli, bool rpm_valid, uint16_t tooth, uint32_t errors);

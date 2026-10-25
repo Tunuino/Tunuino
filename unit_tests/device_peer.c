@@ -9,9 +9,12 @@
 #endif
 static tunuino_device device;
 static uint64_t now;
-static bool save(void *u,const uint8_t *p,size_t size){(void)u;now+=2000;return tunuino_device_validate(p,size);}
+static bool fail_save;
+static bool save(void *u,const uint8_t *p,size_t size){(void)u;now+=2000;return !fail_save&&tunuino_device_validate(p,size);}
 static uint64_t clock_now(void *u){(void)u;return now;}
-int main(void){
+int main(int argc,char **argv){
+    if(argc>2||(argc==2&&strcmp(argv[1],"--save-fails")!=0))return 8;
+    fail_save=argc==2;
 #ifdef _WIN32
     _setmode(_fileno(stdin),_O_BINARY);_setmode(_fileno(stdout),_O_BINARY);
 #endif

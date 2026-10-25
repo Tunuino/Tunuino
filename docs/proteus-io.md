@@ -59,6 +59,7 @@ the session; envelope corruption or transport timeout resets/re-enumerates CDC.
 | `A` | Status followed by 100 runtime bytes (legacy clients) |
 | `O` + offset U16 + count U16 | Status plus the requested range of 1..100 runtime bytes |
 | `TUNUINO:E` | Read-only VE/ignition table preview v1, with explicit sensor and calibration validity; never actuates the engine |
+| `TUNUINO:V` | Read-only staged validation v1: invalid setting groups, pending/persisted state, active generation and page-1 CRC |
 | `r` + page/offset/count, each U16 | Read staged bytes, count 1..256 |
 | `w` + page/offset/count U16 + bytes | Stage bytes without applying them |
 | `b` + page U16 | Validate, persist and activate all three staged pages |
@@ -114,6 +115,13 @@ curves, a three-point coolant curve, maximum RPM and ADC reference voltage.
 Raw breakpoints must increase. Reserved bytes must be zero. Sensors and trigger
 start disabled. Default physical calibration values are zero placeholders;
 selecting an uncalibrated sensor is rejected at Burn.
+
+The Console Inputs workspace now reads/edits page 1, validates the staged data
+with the firmware, persists and checks a full readback. It preserves both maps,
+rejects pre-existing pending edits and detects stale configuration snapshots.
+It also displays the 16 raw ADC channels, their MCU-pin voltages and capture
+state, with no fabricated values when a signal is unavailable. File backups
+and exact decimal calibration are documented in [console-configuration.md](console-configuration.md).
 
 Each map has eight U16 RPM bins at offset 0, eight U16 kPa ×100 bins at 16 and
 64 S16 cells at 32, row-major (load row, RPM column). VE uses percent ×100,
