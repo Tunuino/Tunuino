@@ -13,7 +13,7 @@ ROOT = HERE.parents[1]
 def render(schema, template, fragments):
     if not re.fullmatch(r'tunuino_[a-z0-9_]+\.ini', schema['ini_file']):
         raise ValueError('Invalid generated INI filename')
-    if (schema['output_bytes'] != 31 or schema['ini_revision'] != 1
+    if (schema['output_bytes'] != 31 or schema['ini_revision'] != 2
             or len(schema['firmware_version']) != 3
             or any(type(v) is not int or not 0 <= v <= 255 for v in schema['firmware_version'])
             or not schema['signature'].isascii() or not 1 <= len(schema['signature']) <= 96

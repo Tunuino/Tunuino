@@ -24,7 +24,13 @@ def decode(packet):
 
 def main():
     content=(ROOT/'firmware/tunerstudio/generated'/NAME).read_bytes()
-    ini=configparser.ConfigParser(interpolation=None,strict=False);ini.read_string('[General]\n'+content.decode('ascii'))
+    text=content.decode('ascii')
+    section=text.split('\n[Constants]\n',1)[1].split('\n[',1)[0]
+    assert 'baudRate =' not in section
+    assert section.index('nPages = 3') < section.index('blockingFactor = 64')
+    assert '[UiDialogs]' in text and '[UserDefined]' not in text
+    ini=configparser.ConfigParser(interpolation=None,strict=False);ini.read_string('[General]\n'+text)
+    assert ini['TunerStudio'].getint('iniVersion')==2
     assert ini['Constants'].getint('nPages')==3 and ini['Constants']['pageSize']=='256, 160, 160'
     assert ini['Constants']['endianness']=='big' and ini['OutputChannels'].getint('ochBlockSize')==100
     for field,prefix in [('pageReadCommand','r'),('pageChunkWrite','w'),('burnCommand','b'),('crc32CheckCommand','k')]:

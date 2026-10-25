@@ -30,13 +30,18 @@ def decode(packet):
 def main():
     ini = ROOT / "firmware/tunerstudio/generated" / INI_NAME
     parser = configparser.ConfigParser(interpolation=None, strict=False)
-    parser.read_string("[General]\n" + ini.read_text(encoding="ascii"))
+    raw = ini.read_text(encoding="ascii")
+    section = raw.split("\n[Constants]\n", 1)[1].split("\n[", 1)[0]
+    assert "baudRate =" not in section
+    assert section.index("nPages = 1") < section.index("blockingFactor = 64")
+    assert "[UiDialogs]" in raw and "[UserDefined]" not in raw
+    parser.read_string("[General]\n" + raw)
+    assert parser["TunerStudio"].getint("iniVersion") == 2
     signature = json.loads(parser["TunerStudio"]["signature"])
     constants = parser["Constants"]
     assert constants["messageEnvelopeFormat"] == "msEnvelope_1.0"
     assert constants["endianness"] == "big" and constants.getint("nPages") == 1
     assert constants.getint("pageSize") == 1
-    assert constants.getint("baudRate") == 115200
     assert parser["ConstantExtensions"]["readOnly"] == "layoutRevision"
     for command in ("burnCommand", "pageValueWrite", "pageChunkWrite"):
         assert json.loads(constants[command]) == ""
