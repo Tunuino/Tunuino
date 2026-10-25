@@ -11,18 +11,21 @@ import re
 def validate_tunerstudio(root, firmware):
     descriptor = firmware["tunerstudio"]
     name = descriptor["ini_file"]
-    if name != "tunuino_proteus_v07_f427_usb_bench.ini" or descriptor["read_only"] is not True:
-        raise ValueError("Unexpected TunerStudio bench definition")
+    profiles={"tunuino_proteus_v07_f427_usb_bench.ini":("bench_tunerstudio.h","TUNUINO_TS_SIGNATURE",31,True),
+              "tunuino_proteus_v07_f427_io.ini":("device.h","TUNUINO_IO_SIGNATURE",100,False)}
+    if name not in profiles:raise ValueError("Unexpected TunerStudio definition")
+    header_name,macro,output_bytes,read_only=profiles[name]
+    if descriptor["read_only"] is not read_only:raise ValueError("Wrong TunerStudio access mode")
     path = root / "firmware" / name
     if hashlib.sha256(path.read_bytes()).hexdigest() != firmware["artifacts_sha256"][name]:
         raise ValueError("TunerStudio INI checksum mismatch")
     definition = configparser.ConfigParser(interpolation=None, strict=False)
     definition.read_string("[General]\n" + path.read_text(encoding="ascii"))
-    header = (Path(__file__).resolve().parents[1] / "firmware/include/tunuino/bench_tunerstudio.h").read_text()
-    signature = re.search(r'^#define TUNUINO_TS_SIGNATURE "([^"]+)"$', header, re.M).group(1)
+    header = (Path(__file__).resolve().parents[1] / "firmware/include/tunuino" / header_name).read_text()
+    signature = re.search(rf'^#define {macro} "([^"]+)"$', header, re.M).group(1)
     if (json.loads(definition["TunerStudio"]["signature"]) != signature
-            or descriptor["signature"] != signature or descriptor["output_bytes"] != 31
-            or definition["OutputChannels"].getint("ochBlockSize") != 31):
+            or descriptor["signature"] != signature or descriptor["output_bytes"] != output_bytes
+            or definition["OutputChannels"].getint("ochBlockSize") != output_bytes):
         raise ValueError("TunerStudio definition does not match this firmware layout")
     return descriptor
 
@@ -68,9 +71,12 @@ def main():
         "After verified flashing, restore normal BOOT0 and reset the ECU.\n"
         "Expected USB application: Proteus v0.7 ChibiOS USB bench (CDC COM).\n"
         "TunerStudio: close the Console COM connection, create a project, choose Other/Browse,\n"
-        "then select firmware/tunuino_proteus_v07_f427_usb_bench.ini and the ECU COM at 115200.\n"
+        "then select firmware/tunuino_proteus_v07_f427_io.ini and the ECU COM at 115200.\n"
         "Use Firmware Default protocol. This INI requires the firmware in this same Bundle.\n"
-        "TunerStudio is read-only: identity/revision/version/UID, without engine sensors or maps.\n")
+        "Tunuino 0.1.0 IO: configure inputs and measured calibration, then Burn. Inputs disabled until selected.\n"
+        "Raw ADC, calibrated signals, 8x8 VE/ignition maps and persistent settings; no engine outputs.\n"
+        "AV readings are MCU ADC voltages, not uncorrected external sensor voltages.\n"
+        "Flash sectors 5/6 at 0x08020000/0x08040000 store calibration; firmware image stays below 0x08020000.\n")
     print(f"Validated synchronized bench kit for {commit}")
 
 

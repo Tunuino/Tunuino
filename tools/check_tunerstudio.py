@@ -104,6 +104,8 @@ def main():
                 pass
             else:
                 raise AssertionError("Publication accepted " + action + " INI")
+    import sys
+    subprocess.run([sys.executable, str(ROOT / "tools/check_io.py")], check=True, timeout=45)
     assert all(scope(["firmware/tunerstudio/generated/" + INI_NAME]).values())
     print("TunerStudio bench: INI/signature, independent CRC/channel offsets, fragmented and plain discovery, "
           "native coexistence, write rejection, TX deadlines and missing/mixed INI publication gates passed. No physical ECU.")

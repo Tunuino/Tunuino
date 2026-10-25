@@ -8,7 +8,7 @@
 static tunuino_identity identity = {TUNUINO_PROTEUS,TUNUINO_STM32_F4,7,
     TUNUINO_BENCH_MAJOR,TUNUINO_BENCH_MINOR,TUNUINO_BENCH_PATCH,0,
     {1,2,3,4,5,6,7,8,9,10,11,12}};
-static const tunuino_dispatch_context context = {&identity,NULL,NULL,NULL};
+static const tunuino_dispatch_context context = {&identity,NULL,NULL,NULL,NULL};
 static tunuino_link link;
 static uint8_t output[300];
 static size_t output_size;

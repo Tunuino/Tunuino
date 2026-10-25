@@ -1,5 +1,12 @@
 # Integração do hardware
 
+O perfil experimental F427 0.1.0 usa as entradas descritas em
+[`review/proteus-v07-inputs.json`](review/proteus-v07-inputs.json), conferidas
+contra o PCB fixado abaixo e a tabela LQFP144 do STM32F427. A variante F427 foi
+selecionada pelo utilizador para a sua unidade. Este registo não resolve a
+ambiguidade PN do esquema nem valida os conectores ou medições físicas.
+[Aquisição e limites do firmware](../docs/proteus-io.md).
+
 A ferramenta original Tunuino `tools/import_kicad_netlist.py` extrai a pertença dos contactos selecionados às redes de uma netlist XML KiCad D/E. Os dados de cada relatório provêm da fonte identificada no próprio ficheiro. O relatório não é uma definição de pinos para firmware.
 
 ## Fontes consultadas

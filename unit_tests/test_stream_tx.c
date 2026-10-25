@@ -116,7 +116,7 @@ int main(void) {
     tunuino_tx_abort(NULL);
     /* Full portable path: fragmented request -> dispatcher -> partial response. */
     tunuino_identity identity = {TUNUINO_PROTEUS, TUNUINO_STM32_H7, 2, 0, 1, 0, 0, {1,2,3,4,5,6,7,8,9,10,11,12}};
-    tunuino_dispatch_context context = {&identity, NULL, NULL, NULL};
+    tunuino_dispatch_context context = {&identity, NULL, NULL, NULL,NULL};
     assert(tunuino_frame_encode((const uint8_t *)"TUNUINO?", 8, packet, sizeof(packet), &length) == TUNUINO_FRAME_OK);
     assert(tunuino_rx_init(&rx, 100, 0) == TUNUINO_RX_MORE);
     size_t consumed;

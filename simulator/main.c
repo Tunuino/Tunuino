@@ -58,7 +58,7 @@ int main(int argc, char **argv) {
         fputs("Invalid simulator configuration/map\n",stderr); return 4;
     }
     fprintf(stderr,"Tunuino SIMULATOR: synthetic identity, captures, sensors and maps; no ECU connection.\n");
-    tunuino_dispatch_context context = {&model.identity,&model.live,&model.ve,&model.ignition};
+    tunuino_dispatch_context context = {&model.identity,&model.live,&model.ve,&model.ignition,NULL};
     if (tunuino_link_init(&link,&context,1000,1000,model.now_us / 1000u) != TUNUINO_LINK_RECEIVING) return 5;
     int byte;
     while ((byte = getchar()) != EOF) {

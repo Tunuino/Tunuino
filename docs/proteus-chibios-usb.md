@@ -1,4 +1,8 @@
-# Proteus v0.7 F427 ChibiOS USB bench implementation
+# Proteus v0.7 F427 ChibiOS USB implementation
+
+The current image is the [0.1.0 input/calibration profile](proteus-io.md),
+with ADC, missing-tooth inputs and persistent maps. No engine outputs are
+initialized. The former identity-only behavior remains in regression fixtures.
 
 The default `tools/build_proteus_usb_bench.py` entry point builds
 `firmware/boards/proteus_v07/chibios_usb_bench` through
@@ -16,20 +20,21 @@ adapted from its STM32F429 Discovery demo, retaining their notices.
 - HSE 8 MHz, PLL M=8/N=336/P=2/Q=7: SYSCLK 168 MHz and USB 48 MHz.
 - `STM32F427xx`, USBD1/OTG FS, PA11 and PA12 AF10.
 - `BOARD_OTG_NOVBUSSENS` enables the internal PHY without PA9 VBUS sensing.
-- No actuator GPIO, physical sensor, capture or engine-control initialization.
+- Input acquisition and configuration as specified in `proteus-io.md`;
+  no actuator GPIO or engine-control initialization.
 - Flash starts at 0x08000000, replacing any installed flash bootloader.
   ROM DFU remains separate. BOOT0 must be returned to normal before reset.
 - The linker restricts allocated flash to 128 KiB and SRAM to a 64 KiB subset.
 - USB device CDC class 0x02; communications/data interfaces; interrupt IN EP1,
   bulk OUT/IN EP2. VID/PID CAFE:4001 are development identifiers.
 - Product: `Proteus v0.7 ChibiOS USB bench`. Serial: 24 hexadecimal digits from
-  the real STM32 UID. Tunuino identity firmware version 0.0.2.
+  the real STM32 UID. Tunuino identity firmware version 0.1.0.
 
 The startup sequence 
 `usb_serial_start()` pattern:
 `halInit`, `chSysInit`, `sduObjectInit`, `sduStart`, USB disconnect, 250 ms sleep,
-`usbStart`, USB connect. The protocol remains Tunuino's own identity-only bench
-protocol.
+`usbStart`, USB connect, capture resynchronization. Both the native Console
+protocol and the matching TunerStudio IO profile use the same dispatcher.
 
 ## Transport and callback context
 
@@ -42,7 +47,8 @@ USB callbacks use the ChibiOS ISR lock functions for I-class driver hooks.
 A generation counter changes on configure/reset/unconfigure/suspend. If a
 session has received protocol data, such a change stops the USB controller
 before aborting the link. CRC errors and protocol deadlines do the same.
-Reset is required after a terminal transport fault. The CDC driver does not
+The controller and CDC queues restart after a 250 ms detach; the client must
+reopen its session. Acquisition is resynchronized. The CDC driver does not
 use DTR changes to define a protocol session.
 
 ## Build and distribution
