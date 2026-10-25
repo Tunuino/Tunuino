@@ -40,10 +40,17 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
     private Path stTool;
     private Path bltTool;
     private String lastDiscovery = "";
+    private final boolean discoveryEnabled;
 
     FirmwarePanel(Stage stage, BooleanSupplier serialFree, Supplier<String> comPort, BooleanSupplier proteusSelected) {
+        this(stage, serialFree, comPort, proteusSelected, true);
+    }
+
+    FirmwarePanel(Stage stage, BooleanSupplier serialFree, Supplier<String> comPort,
+            BooleanSupplier proteusSelected, boolean discoveryEnabled) {
         this.stage = stage; this.serialFree = serialFree; this.comPort = comPort; this.proteusSelected = proteusSelected;
-        setPadding(new Insets(8)); setSpacing(6);
+        this.discoveryEnabled = discoveryEnabled;
+        setPadding(new Insets(0, 24, 24, 24)); setSpacing(14);
         stTool = tools.find("STM32_Programmer_CLI.exe");
         bltTool = tools.find("BootCommander.exe");
         Button selectImage = button("Selecionar firmware", this::chooseImage);
@@ -52,16 +59,26 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
         Button drivers = button("Instalar drivers…", this::installDrivers);
         Button refresh = button("Pesquisar DFU", this::scan);
         flashDfu.setOnAction(e -> flash(false)); flashBlt.setOnAction(e -> flash(true));
-        log.setEditable(false); log.setPrefRowCount(5); log.setWrapText(true);
+        log.setEditable(false); log.setPrefRowCount(6); log.setWrapText(true); log.setMinHeight(120);
+        log.setPromptText("O registo da ferramenta de gravação aparece aqui.");
         VBox.setVgrow(log, javafx.scene.layout.Priority.ALWAYS);
         state.setWrapText(true); imageInfo.setWrapText(true);
-        getChildren().addAll(new ToolBar(selectImage, chooseSt, chooseBlt, drivers),
-            new ToolBar(usbPorts, refresh, flashDfu, flashBlt), state, imageInfo, log);
+        selectImage.getStyleClass().add("primary"); flashDfu.getStyleClass().add("primary");
+        TitledPane advanced = new TitledPane("Ferramentas e drivers", ConsoleShell.actions(chooseSt, chooseBlt, drivers));
+        advanced.setExpanded(false);
+        VBox imageCard = new VBox(12, ConsoleShell.caption("01  IMAGEM DE FIRMWARE"), imageInfo, selectImage);
+        imageCard.getStyleClass().add("panel");
+        VBox deviceCard = new VBox(12, ConsoleShell.caption("02  DISPOSITIVO USB"),
+            ConsoleShell.actions(usbPorts, refresh), state, ConsoleShell.actions(flashDfu, flashBlt));
+        deviceCard.getStyleClass().add("panel");
+        getChildren().addAll(imageCard, deviceCard, advanced, ConsoleShell.caption("REGISTO DA OPERAÇÃO"), log);
         usbPorts.setPromptText("Dispositivo USB DFU"); usbPorts.setPrefWidth(320);
         usbPorts.setOnAction(e -> refreshControls());
         javafx.animation.Timeline timer = new javafx.animation.Timeline(
             new javafx.animation.KeyFrame(javafx.util.Duration.seconds(3), e -> scan()));
-        timer.setCycleCount(javafx.animation.Animation.INDEFINITE); timer.play();
+        timer.setCycleCount(javafx.animation.Animation.INDEFINITE);
+        if (discoveryEnabled) timer.play();
+        else state.setText("Pré-visualização da interface · pesquisa de dispositivos desativada");
         discoveryTimer = timer;
         refreshControls(); scan();
     }
@@ -70,11 +87,11 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
         Button button = new Button(title); button.setOnAction(e -> action.run()); setupButtons.add(button); return button;
     }
     void refreshControls() {
-        boolean available = !busy && serialFree.getAsBoolean() && proteusSelected.getAsBoolean();
+        boolean available = discoveryEnabled && !busy && serialFree.getAsBoolean() && proteusSelected.getAsBoolean();
         flashDfu.setDisable(!available || image == null || !image.mode().equals("dfu") || stTool == null || usbPorts.getValue() == null);
         flashBlt.setDisable(!available || image == null || !image.mode().equals("openblt") || bltTool == null || comPort.get() == null);
         usbPorts.setDisable(busy);
-        setupButtons.forEach(button -> button.setDisable(busy));
+        setupButtons.forEach(button -> button.setDisable(busy || !discoveryEnabled));
     }
     private void append(String text) {
         // Keep process output bounded even if a tool floods stdout while the UI is busy.
@@ -105,7 +122,7 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
     }
     private record Discovery(List<WindowsDfu.Device> devices, List<WindowsDfu.UsbPort> ports, String problem) {}
     private void scan() {
-        if (busy || closed) return;
+        if (busy || closed || !discoveryEnabled) return;
         Path tool = stTool;
         execute(() -> {
             List<WindowsDfu.Device> devices = WindowsDfu.scan();
@@ -165,7 +182,7 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
             try { tools.select("silent_st_drivers2.exe", installer); }
             catch (IOException e) { state.setText(e.getMessage()); return; }
         }
-        Alert prompt = new Alert(Alert.AlertType.CONFIRMATION,
+        Alert prompt = ConsoleBranding.alert(Alert.AlertType.CONFIRMATION,
             "Instalar os drivers ST deste ficheiro?\n" + installer + "\nO Windows pode pedir autorização de administrador.", ButtonType.OK, ButtonType.CANCEL);
         prompt.initOwner(stage);
         if (prompt.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) return;
@@ -204,7 +221,7 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
             ? "Esta imagem experimental SUBSTITUI o bootloader na flash. Guarda primeiro a instalação atual. Não controla o motor.\n"
             : "A ECU tem de estar no bootloader OpenBLT. Não existe ainda mudança automática de modo.\n";
         warning += "Faz o ensaio na bancada, com bobinas, injetores e restantes atuadores desligados.";
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION, warning, ButtonType.OK, ButtonType.CANCEL);
+        Alert confirm = ConsoleBranding.alert(Alert.AlertType.CONFIRMATION, warning, ButtonType.OK, ButtonType.CANCEL);
         confirm.initOwner(stage); confirm.setHeaderText("Gravar firmware por " + (openblt ? "OpenBLT" : "DFU"));
         if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) return;
         if (!serialFree.getAsBoolean()) { state.setText("Desliga a sessão COM antes de gravar"); return; }

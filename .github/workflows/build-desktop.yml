@@ -18,7 +18,7 @@ jobs:
         java-version: '21'
     - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
     - name: Build Java modules, tool distributions and test the actual simulator
-      run: ./gradlew --no-daemon --console=plain :java_console:assemble :java_tools:installDist :java_tools:check
+      run: xvfb-run -a ./gradlew --no-daemon --console=plain :java_console:assemble :java_console:verifyInterface :java_tools:installDist :java_tools:check
     - name: Verify deterministic definitions and simulator wire behavior
       run: |-
         python3 misc/actions/verify_generated.py
@@ -29,5 +29,6 @@ jobs:
         path: |-
           java_tools/build/install/java_tools/
           build/simulator/
+          java_console/build/interface-check/
         if-no-files-found: error
         retention-days: 30

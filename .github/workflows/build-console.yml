@@ -49,6 +49,19 @@ jobs:
     - name: Prepare offline programmer tool layout
       shell: pwsh
       run: python misc/install/package_programmer_tools.py --destination build/windows/TunuinoConsole
+    - name: Verify actual interface with the packaged Java runtime
+      shell: pwsh
+      run: |
+        $classpath = 'build/windows/TunuinoConsole/app/tunuino-console.jar;build/windows/TunuinoConsole/app/lib/*;java_console/target/test-classes'
+        & 'build/windows/TunuinoConsole/runtime/bin/java.exe' '-Dprism.order=sw' -cp $classpath io.tunuino.console.ConsoleUiChecks --snapshots=build/interface-check
+        if ($LASTEXITCODE -ne 0) { throw 'Console interface check failed' }
+    - name: Preserve interface previews
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: console-interface-${{ github.sha }}
+        path: build/interface-check/
+        if-no-files-found: error
+        retention-days: '30'
     - name: Record component provenance
       shell: pwsh
       run: |-

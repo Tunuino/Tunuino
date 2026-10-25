@@ -1,0 +1,112 @@
+/* Copyright (c) 2026 Tunuino. */
+.root {
+    -fx-font-family: "Segoe UI", "DejaVu Sans", sans-serif;
+    -fx-font-size: 12px;
+    -fx-base: #141d2a;
+    -fx-background: #0c121c;
+    -fx-control-inner-background: #111b29;
+    -fx-control-inner-background-alt: #152131;
+    -fx-text-base-color: #e7edf6;
+    -fx-text-background-color: #e7edf6;
+    -fx-accent: #00aff0;
+    -fx-focus-color: #00aff0;
+    -fx-faint-focus-color: #00aff024;
+    -fx-selection-bar: #174564;
+    -fx-selection-bar-non-focused: #183247;
+}
+.console-shell, .workspace { -fx-background-color: #0c121c; }
+.label { -fx-text-fill: #e7edf6; }
+.muted, .page-description { -fx-text-fill: #90a0b6; }
+.eyebrow { -fx-font-size: 10px; -fx-font-weight: bold; -fx-text-fill: #8a9bb1; }
+.masthead { -fx-padding: 12 22 12 18; -fx-background-color: #0c121c; }
+.brand-logo { -fx-background-color: #000000; -fx-background-radius: 6; -fx-padding: 5 9; }
+.app-header { -fx-border-color: transparent transparent #223044 transparent; -fx-border-width: 1; }
+.connection-controls { -fx-padding: 10 22; -fx-background-color: #111a27; -fx-alignment: center-left; }
+.connection-badge { -fx-padding: 8 12; -fx-background-radius: 20; -fx-font-size: 10px; -fx-font-weight: bold; }
+.connection-badge.offline { -fx-background-color: #202b3b; -fx-text-fill: #99a9bd; }
+.connection-badge.online { -fx-background-color: #12382f; -fx-text-fill: #58d5ac; }
+.sidebar { -fx-padding: 24 12 18 12; -fx-background-color: #101824; -fx-border-color: transparent #223044 transparent transparent; }
+.sidebar-caption { -fx-padding: 0 10 14 10; -fx-font-size: 9px; -fx-font-weight: bold; -fx-text-fill: #6e8099; }
+.navigation-button { -fx-alignment: center-left; -fx-graphic-text-gap: 12; -fx-padding: 12 10; -fx-background-color: transparent; -fx-border-color: transparent; -fx-text-fill: #8e9eb4; -fx-font-size: 12px; -fx-background-radius: 6; }
+.navigation-icon { -fx-fill: #8597af; }
+.navigation-button:hover { -fx-background-color: #172638; -fx-text-fill: #eaf5ff; }
+.navigation-button:selected { -fx-background-color: #10374e; -fx-text-fill: #46c8ff; -fx-font-weight: bold; }
+.navigation-button:selected .navigation-icon { -fx-fill: #36c1ff; }
+.sidebar-footer { -fx-padding: 12 10 5 10; -fx-text-fill: #687d97; -fx-font-size: 10px; -fx-line-spacing: 5; }
+.build-label { -fx-padding: 0 10; -fx-text-fill: #52657e; -fx-font-size: 9px; }
+.page-header { -fx-padding: 22 24 14 24; }
+.page-heading { -fx-font-size: 25px; -fx-font-weight: bold; -fx-text-fill: #f0f5fc; }
+.page-description { -fx-font-size: 12px; }
+.actions { -fx-padding: 0 0 12 0; -fx-alignment: center-left; }
+.actions.data-actions { -fx-padding: 0 24 12 24; }
+.actions.connection-controls { -fx-padding: 10 22; }
+.panel { -fx-background-color: #121e2d; -fx-background-radius: 8; -fx-border-color: #243449; -fx-border-radius: 8; -fx-padding: 18; }
+.workspace-scroll, .workspace-scroll > .viewport { -fx-background-color: transparent; -fx-background-insets: 0; }
+.status-bar { -fx-background-color: #101824; -fx-padding: 9 22; -fx-border-color: #223044 transparent transparent transparent; }
+.status-message { -fx-text-fill: #a9c0d9; -fx-font-size: 11px; }
+.identity-message { -fx-text-fill: #667e98; -fx-font-size: 10px; }
+.button, .combo-box, .toggle-button { -fx-cursor: hand; }
+.button { -fx-background-color: #1c2c40; -fx-background-radius: 5; -fx-border-radius: 5; -fx-border-color: #30445e; -fx-padding: 8 13; -fx-text-fill: #dbe8f7; }
+.button:hover { -fx-background-color: #253a53; -fx-border-color: #456886; }
+.button:pressed { -fx-background-color: #152538; }
+.button.primary { -fx-background-color: #00a9e8; -fx-text-fill: #041722; -fx-border-color: #00a9e8; -fx-font-weight: bold; }
+.button.primary:hover { -fx-background-color: #37c3fa; -fx-border-color: #37c3fa; }
+.button:disabled, .combo-box:disabled { -fx-opacity: 0.42; }
+.combo-box { -fx-background-color: #172638; -fx-background-radius: 5; -fx-border-color: #30445e; -fx-border-radius: 5; -fx-padding: 3 5; }
+.combo-box .list-cell { -fx-text-fill: #d8e7f7; -fx-background-color: transparent; }
+.combo-box-popup .list-view { -fx-background-color: #172638; -fx-border-color: #30445e; }
+.combo-box-popup .list-cell { -fx-background-color: #172638; -fx-padding: 9 12; }
+.combo-box-popup .list-cell:hover, .combo-box-popup .list-cell:filled:selected { -fx-background-color: #164466; }
+.text-field, .text-area { -fx-background-color: #0b141f; -fx-text-fill: #d6e5f6; -fx-border-color: #2b4059; -fx-border-radius: 5; -fx-background-radius: 5; }
+.text-area .content { -fx-background-color: #0b141f; -fx-background-radius: 5; }
+.text-area { -fx-font-family: "Cascadia Mono", "DejaVu Sans Mono", monospace; -fx-font-size: 11px; }
+.tool-bar { -fx-background-color: transparent; -fx-padding: 6 0; -fx-spacing: 10; }
+.separator .line { -fx-border-color: #27394e; }
+.titled-pane > .title { -fx-background-color: #162335; -fx-padding: 10 12; }
+.titled-pane > .content { -fx-background-color: #111b29; -fx-border-color: #26394f; -fx-padding: 12; }
+.telemetry-pane { -fx-padding: 0 24 16 24; }
+.telemetry-source { -fx-text-fill: #7d97b2; -fx-font-size: 11px; }
+.telemetry-card { -fx-background-color: #121e2d; -fx-background-radius: 8; -fx-border-color: #26394e; -fx-border-radius: 8; -fx-padding: 13 16; }
+.telemetry-card-title { -fx-text-fill: #9cb0c7; -fx-font-size: 11px; }
+.telemetry-value { -fx-font-size: 32px; -fx-font-weight: bold; -fx-text-fill: #f0f6ff; }
+.telemetry-card.rpm .telemetry-value { -fx-text-fill: #32c3ff; }
+.telemetry-card.map .telemetry-value { -fx-text-fill: #56d2b1; }
+.telemetry-card.lambda .telemetry-value { -fx-text-fill: #b6a1ff; }
+.telemetry-card.coolant .telemetry-value { -fx-text-fill: #f3ba68; }
+.telemetry-range { -fx-font-size: 9px; -fx-text-fill: #6f88a4; }
+.chart { -fx-padding: 12 4 0 0; -fx-background-color: #101a28; -fx-background-radius: 8; -fx-border-color: #23364d; -fx-border-radius: 8; }
+.chart-title { -fx-font-size: 12px; -fx-text-fill: #b5c7dc; }
+.chart-plot-background { -fx-background-color: #101a28; }
+.chart-vertical-grid-lines, .chart-horizontal-grid-lines { -fx-stroke: #213246; -fx-stroke-dash-array: 2 4; }
+.chart-vertical-zero-line, .chart-horizontal-zero-line { -fx-stroke: #31475f; }
+.axis { -fx-tick-label-fill: #728da8; -fx-font-size: 10px; }
+.axis-label { -fx-text-fill: #829cb7; -fx-font-size: 10px; }
+.axis-tick-mark, .axis-minor-tick-mark { -fx-stroke: #31475f; }
+.chart-series-line { -fx-stroke: #22bdf9; -fx-stroke-width: 2; }
+.chart.channel-map .chart-series-line { -fx-stroke: #56d2b1; }
+.chart.channel-lambda .chart-series-line { -fx-stroke: #b6a1ff; }
+.chart.channel-coolant .chart-series-line { -fx-stroke: #f3ba68; }
+.chart-line-symbol { -fx-background-color: #22bdf9; }
+.slider .track { -fx-background-color: #293d54; -fx-pref-height: 4; }
+.slider .thumb { -fx-background-color: #2ac3fb; -fx-background-radius: 8; -fx-padding: 6; }
+.datalog-position { -fx-text-fill: #829cb7; -fx-font-size: 10px; }
+.scroll-bar { -fx-background-color: #111b29; }
+.scroll-bar .thumb { -fx-background-color: #304760; -fx-background-radius: 5; }
+.table-view { -fx-background-color: #101a28; -fx-border-color: #273c53; }
+.table-view .column-header-background, .table-view .column-header, .table-view .filler { -fx-background-color: #1a2b3e; }
+.table-view .column-header .label { -fx-text-fill: #93cae9; -fx-padding: 6 3; }
+.table-row-cell { -fx-background-color: #111d2c; -fx-border-color: transparent transparent #1c2e42 transparent; }
+.table-row-cell:odd { -fx-background-color: #152234; }
+.table-row-cell:selected { -fx-background-color: #164667; }
+.table-row-cell:empty { -fx-background-color: #101a28; -fx-border-color: transparent; }
+.table-row-cell:empty .table-cell { -fx-border-color: transparent; }
+.table-cell { -fx-text-fill: #cfdfef; -fx-border-color: transparent #25394e transparent transparent; -fx-padding: 8 6; }
+.dialog-pane { -fx-background-color: #111c2b; }
+.dialog-pane .header-panel { -fx-background-color: #192b3f; }
+.map-heading { -fx-text-fill: #4bc7fa; -fx-font-size: 19px; -fx-font-weight: bold; }
+.console-shell:compact .masthead { -fx-padding: 6 18; }
+.console-shell:compact .page-header { -fx-padding: 13 24 10 24; }
+.console-shell:compact .page-heading { -fx-font-size: 22px; }
+.console-shell:compact .telemetry-card { -fx-padding: 10 12; }
+.console-shell:compact .telemetry-value { -fx-font-size: 28px; }
+.console-shell:compact .chart { -fx-min-height: 140; }

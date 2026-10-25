@@ -18,6 +18,7 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
@@ -69,6 +70,9 @@ public final class CalibrationViewer {
         private final Button undo = new Button("Desfazer");
         private final Button redo = new Button("Refazer");
         private final Button save = new Button("Guardar cópia");
+        private final CheckBox colors = new CheckBox("Cores por valor");
+        private double colorMinimum;
+        private double colorMaximum;
         private final ExecutorService writer = Executors.newSingleThreadExecutor(r -> new Thread(r, "tunuino-map-save"));
         private boolean saving;
         private boolean allowClose;
@@ -78,6 +82,8 @@ public final class CalibrationViewer {
             document = new CalibrationDocument(map);
             stage.initOwner(owner);
             ConsoleBranding.applyIcon(stage);
+            colors.setSelected(true); colors.setId("map-colors");
+            colors.setOnAction(event -> table.refresh());
             table.setEditable(true);
             TableColumn<ObservableList<String>, String> load = column("MAP (kPa) / RPM", 0);
             load.setPrefWidth(150);
@@ -86,7 +92,26 @@ public final class CalibrationViewer {
             for (int i = 0; i < map.columns(); ++i) {
                 int columnIndex = i;
                 TableColumn<ObservableList<String>, String> value = column(Integer.toString(map.rpmAt(i)), i + 1);
-                value.setCellFactory(TextFieldTableCell.forTableColumn());
+                value.setCellFactory(ignored -> new TextFieldTableCell<>(new javafx.util.converter.DefaultStringConverter()) {
+                    @Override public void updateItem(String item, boolean empty) {
+                        super.updateItem(item, empty); shade();
+                    }
+                    @Override public void updateSelected(boolean selected) {
+                        super.updateSelected(selected); shade();
+                    }
+                    private void shade() {
+                        if (isEmpty() || getItem() == null || isSelected() || !colors.isSelected()) { setStyle(""); return; }
+                        double value;
+                        try { value = Double.parseDouble(getItem()); }
+                        catch (NumberFormatException invalidEdit) { setStyle(""); return; }
+                        if (!Double.isFinite(value)) { setStyle(""); return; }
+                        double ratio = colorMaximum == colorMinimum ? 0.5
+                            : (value - colorMinimum) / (colorMaximum - colorMinimum);
+                        ratio = Math.max(0, Math.min(1, ratio));
+                        setStyle(String.format(Locale.ROOT, "-fx-background-color: rgb(16,%d,%d);",
+                            (int) (42 + 64 * ratio), (int) (65 + 82 * ratio)));
+                    }
+                });
                 value.setOnEditCommit(event -> {
                     try {
                         document.editCell(event.getTablePosition().getRow(), columnIndex, event.getNewValue());
@@ -102,6 +127,7 @@ public final class CalibrationViewer {
             undo.setOnAction(event -> { document.undo(); result.setText("Alteração desfeita."); refreshRows(); });
             redo.setOnAction(event -> { document.redo(); result.setText("Alteração refeita."); refreshRows(); });
             save.setOnAction(event -> chooseSave(() -> {}));
+            save.getStyleClass().add("primary");
             TextField rpm = new TextField(Integer.toString(map.rpmAt(0)));
             TextField kpa = new TextField(Double.toString(map.loadKpaAt(0)));
             rpm.setPrefColumnCount(8); kpa.setPrefColumnCount(8);
@@ -116,14 +142,17 @@ public final class CalibrationViewer {
                 }
             });
             result.setWrapText(true);
+            Label title = new Label(map.kind() + " · " + map.columns() + " × " + map.rows() + " · edição offline");
+            title.getStyleClass().add("map-heading");
             VBox header = new VBox(10,
-                new Label(map.kind() + " · " + map.columns() + " × " + map.rows() + " · edição offline"),
-                new HBox(8, undo, redo, save, state),
+                title,
+                new HBox(8, undo, redo, save, colors, state),
                 new HBox(8, new Label("RPM"), rpm, new Label("MAP (kPa)"), kpa, evaluate), result);
             header.setPadding(new Insets(12));
             BorderPane root = new BorderPane(table);
             root.setTop(header);
             stage.setScene(new Scene(root, 1080, 680));
+            ConsoleBranding.applyTheme(stage.getScene());
             stage.setOnCloseRequest(event -> {
                 if (allowClose) { return; }
                 if (saving || table.getEditingCell() != null) {
@@ -137,7 +166,7 @@ public final class CalibrationViewer {
                 ButtonType keep = new ButtonType("Guardar cópia", ButtonBar.ButtonData.YES);
                 ButtonType discard = new ButtonType("Descartar", ButtonBar.ButtonData.NO);
                 ButtonType cancel = new ButtonType("Cancelar", ButtonBar.ButtonData.CANCEL_CLOSE);
-                Alert prompt = new Alert(Alert.AlertType.CONFIRMATION,
+                Alert prompt = ConsoleBranding.alert(Alert.AlertType.CONFIRMATION,
                     "O mapa tem alterações por guardar.", keep, discard, cancel);
                 prompt.initOwner(stage);
                 prompt.setHeaderText("Guardar alterações antes de fechar?");
@@ -156,6 +185,11 @@ public final class CalibrationViewer {
 
         private void refreshRows() {
             CalibrationMap map = document.snapshot();
+            colorMinimum = Double.POSITIVE_INFINITY; colorMaximum = Double.NEGATIVE_INFINITY;
+            for (int row = 0; row < map.rows(); ++row) for (int column = 0; column < map.columns(); ++column) {
+                colorMinimum = Math.min(colorMinimum, map.cell(row, column));
+                colorMaximum = Math.max(colorMaximum, map.cell(row, column));
+            }
             table.getItems().clear();
             for (int j = 0; j < map.rows(); ++j) {
                 ObservableList<String> row = FXCollections.observableArrayList();

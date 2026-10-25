@@ -9,7 +9,8 @@ import io.tunuino.protocol.DeviceIdentity;
 import io.tunuino.protocol.IdentityClient;
 import io.tunuino.protocol.LiveDataClient;
 import io.tunuino.protocol.MapReadClient;
-import io.tunuino.datalog.LiveDataRecorder;
+import io.tunuino.datalog.LiveDataMonitor;
+import java.util.Optional;
 import io.tunuino.calibration.CalibrationMap;
 import java.io.File;
 import java.time.Duration;
@@ -28,9 +29,6 @@ import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
-import javafx.scene.chart.LineChart;
-import javafx.scene.chart.NumberAxis;
-import javafx.scene.chart.XYChart;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
@@ -48,15 +46,19 @@ public final class TunuinoConsole extends Application {
         return thread;
     });
     private FirmwarePanel firmwarePanel;
+    private ConsoleShell shell;
     private javafx.animation.Timeline portRefresh;
     private Task<List<LogSample>> activeRead;
     private DeviceIdentity identifiedDevice;
     private boolean fileReading;
-    private boolean captureActive;
+    private boolean monitoringActive;
+    private boolean recordingPending;
+    private LiveDataMonitor liveMonitor;
+    private TelemetryPane telemetry;
     private boolean serialBusy;
     private Runnable refreshControls = () -> {};
-    private long captureGeneration;
-    private final AtomicBoolean keepCapturing = new AtomicBoolean();
+    private long monitorGeneration;
+    private final AtomicBoolean keepMonitoring = new AtomicBoolean();
     private final AtomicBoolean stopping = new AtomicBoolean();
     private final AtomicReference<PacketSession> connection = new AtomicReference<>();
     private final ExecutorService serialWorker = Executors.newSingleThreadExecutor(r -> {
@@ -90,7 +92,12 @@ public final class TunuinoConsole extends Application {
 
     @Override
     public void start(Stage stage) {
-        if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows")) {
+        start(stage, false);
+    }
+
+    /** Used by the interface check without enumerating or opening physical devices. */
+    void start(Stage stage, boolean preview) {
+        if (!preview && !System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows")) {
             throw new IllegalStateException("Tunuino Console destina-se ao Windows");
         }
         stage.setTitle("Tunuino Console · " + io.tunuino.maintenance.BuildInfo.label());
@@ -112,30 +119,40 @@ public final class TunuinoConsole extends Application {
         Button scan = new Button("Atualizar portas");
         Button connect = new Button("Ligar USB");
         Button identify = new Button("Identificar ECU");
+        Button monitor = new Button("Ver dados em tempo real");
         Button capture = new Button("Gravar datalog");
+        connect.getStyleClass().add("primary"); monitor.getStyleClass().add("primary");
+        open.setId("open-datalog"); openMap.setId("open-map");
+        monitor.setId("monitor-live"); capture.setId("record-csv");
+        connect.setId("connect-usb");
         identify.setDisable(true);
         connect.setDisable(true);
         Runnable refreshConnection = () -> {
             if (firmwarePanel != null) firmwarePanel.refreshControls();
             PacketSession current = connection.get();
             boolean connected = current != null && current.isOpen();
+            if (shell != null) shell.connectionState(identifiedDevice, connected);
             connect.setText(connected ? "Desligar USB" : "Ligar USB");
             boolean programming = firmwarePanel != null && firmwarePanel.isBusy();
-            connect.setDisable(programming || serialBusy || captureActive || (!connected && ports.getValue() == null));
-            scan.setDisable(serialBusy || connected || captureActive);
-            ports.setDisable(serialBusy || connected || captureActive);
-            hardware.setDisable(serialBusy || connected || captureActive);
-            identify.setDisable(serialBusy || !connected || captureActive);
-            capture.setText(captureActive ? "Parar gravação" : "Gravar datalog");
+            connect.setDisable(programming || serialBusy || monitoringActive || (!connected && ports.getValue() == null));
+            scan.setDisable(preview || programming || serialBusy || connected || monitoringActive);
+            ports.setDisable(programming || serialBusy || connected || monitoringActive);
+            hardware.setDisable(preview || serialBusy || connected || monitoringActive);
+            identify.setDisable(serialBusy || !connected || monitoringActive);
+            LiveDataMonitor.Recording recording = liveMonitor == null ? null : liveMonitor.recording();
+            capture.setText(recording != null ? "Parar gravação CSV" : "Gravar datalog CSV");
+            monitor.setText(monitoringActive ? "Parar monitorização" : "Ver dados em tempo real");
             boolean liveAvailable = identifiedDevice != null
                 && (identifiedDevice.capabilities() & LiveDataClient.CAPABILITY) != 0;
-            capture.setDisable(!captureActive && (serialBusy || !connected || !liveAvailable || fileReading));
+            monitor.setDisable(programming || (monitoringActive ? !keepMonitoring.get()
+                : serialBusy || !connected || !liveAvailable || fileReading));
+            capture.setDisable(!monitoringActive || !keepMonitoring.get() || recordingPending);
             boolean mapAvailable = identifiedDevice != null
                 && (identifiedDevice.capabilities() & MapReadClient.CAPABILITY) != 0;
-            readMap.setDisable(serialBusy || captureActive || fileReading || !connected || !mapAvailable);
-            mapKind.setDisable(serialBusy || captureActive || fileReading);
-            open.setDisable(captureActive || fileReading);
-            openMap.setDisable(captureActive || fileReading);
+            readMap.setDisable(serialBusy || monitoringActive || fileReading || !connected || !mapAvailable);
+            mapKind.setDisable(serialBusy || monitoringActive || fileReading);
+            open.setDisable(monitoringActive || fileReading);
+            openMap.setDisable(monitoringActive || fileReading);
         };
         refreshControls = refreshConnection;
         Consumer<Throwable> usbFailure = error -> {
@@ -208,6 +225,7 @@ public final class TunuinoConsole extends Application {
                 }, opened -> {
                     status.setText("Porta " + selected.name() + " aberta · ECU ainda por identificar");
                     refreshConnection.run();
+                    if (opened) identify.fire();
                 }, usbFailure);
             } else {
                 refreshConnection.run();
@@ -244,32 +262,22 @@ public final class TunuinoConsole extends Application {
                 refreshConnection.run();
             }, usbFailure);
         });
-        NumberAxis time = new NumberAxis();
-        time.setLabel("Tempo (s)");
-        time.setForceZeroInRange(false);
-        NumberAxis rpm = new NumberAxis();
-        rpm.setLabel("RPM");
-        LineChart<Number, Number> chart = new LineChart<>(time, rpm);
-        chart.setAnimated(false);
-        chart.setCreateSymbols(false);
-        chart.setLegendVisible(false);
-        chart.setTitle("Datalog offline");
+        telemetry = new TelemetryPane();
         Label summary = new Label("Escolhe um datalog local para analisar.");
         identityDetails.setWrapText(true);
-        VBox footer = new VBox(8, summary, identityDetails, status);
-        footer.setPadding(new Insets(12));
-        BorderPane root = new BorderPane(chart);
-        root.setTop(new VBox(new ToolBar(new Label("Tunuino"), hardware, open, openMap),
-            new ToolBar(ports, scan, connect, identify, capture),
-            new ToolBar(new Label("Mapa da ECU"), mapKind, readMap)));
+        summary.getStyleClass().add("muted");
+        summary.setWrapText(true); summary.setPadding(new Insets(4, 24, 12, 24));
+        BorderPane root = new BorderPane(telemetry);
+        javafx.scene.layout.FlowPane dataActions = ConsoleShell.actions(monitor, capture, open);
+        dataActions.getStyleClass().add("data-actions"); root.setTop(dataActions);
+        root.setBottom(summary);
         firmwarePanel = new FirmwarePanel(stage,
-            () -> connection.get() == null && !serialBusy && !captureActive,
+            () -> connection.get() == null && !serialBusy && !monitoringActive,
             () -> ports.getValue() == null ? null : ports.getValue().name(),
-            () -> hardware.getValue() == DeviceIdentity.Family.PROTEUS);
-        root.setBottom(footer);
+            () -> hardware.getValue() == DeviceIdentity.Family.PROTEUS, !preview);
         portRefresh = new javafx.animation.Timeline(new javafx.animation.KeyFrame(
             javafx.util.Duration.seconds(3), event -> {
-                if (serialBusy || captureActive || connection.get() != null || firmwarePanel.isBusy()) return;
+                if (serialBusy || monitoringActive || connection.get() != null || firmwarePanel.isBusy()) return;
                 UsbSerialPorts.Port previous = ports.getValue();
                 serialTask(UsbSerialPorts::list, found -> {
                     ports.getItems().setAll(found);
@@ -279,12 +287,12 @@ public final class TunuinoConsole extends Application {
                 }, usbFailure);
             }));
         portRefresh.setCycleCount(javafx.animation.Animation.INDEFINITE);
-        portRefresh.play();
+        if (!preview) portRefresh.play();
         readMap.setOnAction(event -> {
             PacketSession current = connection.get();
             DeviceIdentity device = identifiedDevice;
             CalibrationMap.Kind kind = mapKind.getValue();
-            if (serialBusy || captureActive || fileReading || current == null || !current.isOpen()
+            if (serialBusy || monitoringActive || fileReading || current == null || !current.isOpen()
                     || device == null || kind == null || (device.capabilities() & MapReadClient.CAPABILITY) == 0) {
                 refreshConnection.run();
                 return;
@@ -322,7 +330,7 @@ public final class TunuinoConsole extends Application {
             task.setOnFailed(done -> {
                 fileReading = false;
                 if (!stopping.get()) {
-                    Alert alert = new Alert(Alert.AlertType.ERROR, task.getException().getMessage());
+                    Alert alert = ConsoleBranding.alert(Alert.AlertType.ERROR, task.getException().getMessage());
                     alert.initOwner(stage);
                     alert.setHeaderText("Mapa inválido");
                     alert.showAndWait();
@@ -331,74 +339,99 @@ public final class TunuinoConsole extends Application {
             });
             fileWorker.submit(task);
         });
-        capture.setOnAction(event -> {
-            if (captureActive) {
-                keepCapturing.set(false);
-                capture.setDisable(true);
-                status.setText("A terminar a gravação…");
+        monitor.setOnAction(event -> {
+            if (monitoringActive) {
+                keepMonitoring.set(false);
+                status.setText("A terminar a monitorização e a fechar o datalog…");
+                refreshConnection.run();
                 return;
             }
             PacketSession current = connection.get();
             DeviceIdentity device = identifiedDevice;
-            if (current == null || !current.isOpen() || device == null
+            if (serialBusy || current == null || !current.isOpen() || device == null
                     || (device.capabilities() & LiveDataClient.CAPABILITY) == 0 || fileReading) {
                 refreshConnection.run();
                 return;
             }
-            FileChooser chooser = new FileChooser();
-            chooser.setTitle("Guardar novo datalog");
-            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Datalog CSV", "*.csv"));
-            chooser.setInitialFileName("tunuino-" + LocalDateTime.now()
-                .format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".csv");
-            File destination = chooser.showSaveDialog(stage);
-            if (destination == null) { return; }
-            captureActive = true;
-            keepCapturing.set(true);
-            long generation = ++captureGeneration;
-            refreshConnection.run();
-            status.setText("A gravar datalog · à espera de amostras válidas");
-            XYChart.Series<Number, Number> series = new XYChart.Series<>();
-            AtomicReference<LogSample> latest = new AtomicReference<>();
+            monitoringActive = true;
+            keepMonitoring.set(true);
+            long generation = ++monitorGeneration;
+            LiveDataMonitor reading = new LiveDataMonitor(current, device, Duration.ofMillis(100));
+            liveMonitor = reading;
+            telemetry.beginLive();
+            summary.setText("Monitorização ativa · CSV desligado");
+            status.setText("A receber dados da ECU…");
+            AtomicReference<Optional<LogSample>> latest = new AtomicReference<>();
             AtomicBoolean renderPending = new AtomicBoolean();
-            Consumer<LogSample> renderSample = sample -> {
+            Consumer<Optional<LogSample>> renderSample = sample -> {
                 latest.set(sample);
                 if (!stopping.get() && renderPending.compareAndSet(false, true)) {
                     Platform.runLater(() -> {
                         renderPending.set(false);
-                        if (stopping.get() || !captureActive || captureGeneration != generation) { return; }
-                        LogSample value = latest.getAndSet(null);
-                        if (value == null) { return; }
-                        if (!chart.getData().contains(series)) {
-                            chart.getData().clear();
-                            chart.getData().add(series);
-                            chart.setTitle("Datalog em tempo real");
-                        }
-                        series.getData().add(new XYChart.Data<>(value.timeMs() / 1000.0, value.rpm()));
-                        if (series.getData().size() > 600) { series.getData().remove(0); }
-                        summary.setText(String.format(Locale.ROOT,
-                            "RPM %.1f · MAP %.2f kPa · lambda %.3f · líquido %.1f °C",
-                            value.rpm(), value.mapKpa(), value.lambda(), value.coolantC()));
+                        if (stopping.get() || !monitoringActive || monitorGeneration != generation) return;
+                        Optional<LogSample> value = latest.getAndSet(null);
+                        if (value != null) telemetry.showLive(value);
+                        LiveDataMonitor.Recording recording = reading.recording();
+                        summary.setText(recording == null ? "Monitorização ativa · CSV desligado"
+                            : "CSV: " + recording.path().getFileName() + " · " + recording.samples() + " amostras gravadas");
+                        refreshConnection.run();
                     });
                 }
             };
-            serialTask(() -> LiveDataRecorder.record(current, device, destination.toPath(),
-                Duration.ofMillis(100), keepCapturing::get, renderSample), count -> {
-                    captureActive = false;
-                    keepCapturing.set(false);
-                    summary.setText(count + " amostras gravadas em " + destination.getName());
-                    status.setText("Gravação terminada");
-                    refreshConnection.run();
-                }, error -> {
-                    captureActive = false;
-                    keepCapturing.set(false);
-                    if (!current.isOpen()) {
-                        connection.compareAndSet(current, null);
-                        identifiedDevice = null;
-                        identityDetails.setText("Identificação da ECU pendente");
-                    }
-                    status.setText("Gravação interrompida: " + error.getMessage());
-                    refreshConnection.run();
-                });
+            serialTask(() -> reading.run(keepMonitoring::get, renderSample, error -> Platform.runLater(() -> {
+                if (stopping.get() || liveMonitor != reading) return;
+                status.setText("Gravação interrompida: " + error.getMessage());
+                refreshConnection.run();
+            })), count -> {
+                monitoringActive = false;
+                keepMonitoring.set(false);
+                liveMonitor = null;
+                telemetry.endLive("Monitorização terminada · histórico do gráfico mantido");
+                summary.setText(count + " amostras válidas recebidas · ficheiros CSV encerrados");
+                status.setText("ECU ligada · monitorização parada");
+                refreshConnection.run();
+            }, error -> {
+                monitoringActive = false;
+                keepMonitoring.set(false);
+                liveMonitor = null;
+                if (!current.isOpen()) {
+                    connection.compareAndSet(current, null);
+                    identifiedDevice = null;
+                    identityDetails.setText("Identificação da ECU pendente");
+                }
+                telemetry.endLive("Monitorização interrompida · " + error.getMessage());
+                status.setText("Falha de monitorização: " + error.getMessage());
+                refreshConnection.run();
+            });
+        });
+        capture.setOnAction(event -> {
+            LiveDataMonitor reading = liveMonitor;
+            if (!monitoringActive || reading == null || !keepMonitoring.get() || recordingPending) return;
+            java.util.concurrent.CompletableFuture<LiveDataMonitor.Recording> request;
+            boolean ending = reading.recording() != null;
+            if (ending) {
+                request = reading.stopRecording();
+            } else {
+                FileChooser chooser = new FileChooser();
+                chooser.setTitle("Guardar novo datalog");
+                chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Datalog CSV", "*.csv"));
+                chooser.setInitialFileName("tunuino-" + LocalDateTime.now()
+                    .format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".csv");
+                File destination = chooser.showSaveDialog(stage);
+                if (destination == null) return;
+                request = reading.startRecording(destination.toPath());
+            }
+            recordingPending = true;
+            refreshConnection.run();
+            request.whenComplete((recording, error) -> Platform.runLater(() -> {
+                recordingPending = false;
+                if (stopping.get()) return;
+                if (error != null) status.setText("Falha no datalog: " + error.getMessage());
+                else if (ending) status.setText(recording == null ? "CSV desligado"
+                    : "Datalog guardado: " + recording.samples() + " amostras em " + recording.path().getFileName());
+                else status.setText("A gravar CSV · monitorização continua ativa");
+                refreshConnection.run();
+            }));
         });
         open.setOnAction(event -> {
             FileChooser chooser = new FileChooser();
@@ -418,30 +451,18 @@ public final class TunuinoConsole extends Application {
                 }
             };
             activeRead.setOnSucceeded(done -> {
+                if (stopping.get()) return;
                 List<LogSample> samples = activeRead.getValue();
-                XYChart.Series<Number, Number> series = new XYChart.Series<>();
-                int stride = Math.max(1, (samples.size() + 1999) / 2000);
-                for (int i = 0; i < samples.size(); i += stride) {
-                    LogSample s = samples.get(i);
-                    series.getData().add(new XYChart.Data<>(s.timeMs() / 1000.0, s.rpm()));
-                }
-                if ((samples.size() - 1) % stride != 0) {
-                    LogSample s = samples.get(samples.size() - 1);
-                    series.getData().add(new XYChart.Data<>(s.timeMs() / 1000.0, s.rpm()));
-                }
-                chart.getData().clear();
-                chart.getData().add(series);
-                chart.setTitle("Datalog offline");
-                double maxRpm = samples.stream().mapToDouble(LogSample::rpm).max().orElse(0);
-                summary.setText(String.format(Locale.ROOT,
-                    "%s · %d amostras · RPM máximo %.0f · gráfico reduzido a %d pontos",
-                    selected.getName(), samples.size(), maxRpm, series.getData().size()));
+                telemetry.showOffline(selected.getName(), samples);
+                summary.setText(selected.getName() + " · " + samples.size()
+                    + " amostras · seleciona o canal ou percorre o datalog");
                 fileReading = false;
                 refreshConnection.run();
             });
             activeRead.setOnFailed(done -> {
+                if (stopping.get()) return;
                 summary.setText("Não foi possível abrir o datalog. O gráfico anterior foi mantido.");
-                Alert alert = new Alert(Alert.AlertType.ERROR, activeRead.getException().getMessage());
+                Alert alert = ConsoleBranding.alert(Alert.AlertType.ERROR, activeRead.getException().getMessage());
                 alert.initOwner(stage);
                 alert.setHeaderText("Datalog inválido");
                 alert.showAndWait();
@@ -450,24 +471,41 @@ public final class TunuinoConsole extends Application {
             });
             fileWorker.submit(activeRead);
         });
-        javafx.scene.control.TabPane sections = new javafx.scene.control.TabPane(
-            new javafx.scene.control.Tab("Dados e mapas", root),
-            new javafx.scene.control.Tab("Firmware e USB", firmwarePanel));
-        sections.setTabClosingPolicy(javafx.scene.control.TabPane.TabClosingPolicy.UNAVAILABLE);
+        javafx.scene.layout.FlowPane connectionControls = ConsoleShell.actions(
+            new Label("PORTA USB"), ports, scan, connect, identify);
+        connectionControls.getStyleClass().add("connection-controls");
+        shell = new ConsoleShell(hardware, connectionControls, status, identityDetails);
+        shell.addPage("Painel", "Dados da centralina", "Sensores, gráficos e datalogs num só espaço.",
+            "M1 1H9V9H1ZM13 1H21V9H13ZM1 13H9V21H1ZM13 13H21V21H13Z", root);
+        VBox maps = new VBox(16,
+            ConsoleShell.card("FICHEIRO LOCAL", "Abre um mapa VE ou de ignição para consultar a tabela, editar valores e guardar uma cópia .tnmap.", openMap),
+            ConsoleShell.card("MAPA DA CENTRALINA", "Lê uma cópia do mapa quando esta função está disponível no firmware.",
+                ConsoleShell.actions(mapKind, readMap)));
+        maps.setPadding(new Insets(0, 24, 24, 24));
+        shell.addPage("Mapas", "Mapas de calibração", "Tabelas VE e ignição, eixos e interpolação.",
+            "M1 2H21V20H1ZM3 4V8H7V4ZM9 4V8H13V4ZM15 4V8H19V4ZM3 10V14H7V10ZM9 10V14H13V10ZM15 10V14H19V10ZM3 16V18H7V16ZM9 16V18H13V16ZM15 16V18H19V16Z", ConsoleShell.scroll(maps));
+        shell.addPage("Firmware e USB", "Firmware e ligação USB", "Seleciona a imagem, verifica o dispositivo e acompanha a gravação.",
+            "M5 4H17V18H5ZM7 6V16H15V6ZM1 6H4V8H1ZM1 11H4V13H1ZM18 6H21V8H18ZM18 11H21V13H18ZM7 0H9V3H7ZM13 0H15V3H13ZM7 19H9V22H7ZM13 19H15V22H13Z", ConsoleShell.scroll(firmwarePanel));
         javafx.geometry.Rectangle2D screen = javafx.stage.Screen.getPrimary().getVisualBounds();
-        stage.setScene(new Scene(sections, Math.min(1160, screen.getWidth() - 60),
-            Math.min(720, screen.getHeight() - 80)));
+        stage.setScene(new Scene(shell, Math.min(1340, screen.getWidth() - 40),
+            Math.min(880, screen.getHeight() - 60)));
+        ConsoleBranding.applyTheme(stage.getScene());
+        stage.getScene().heightProperty().addListener((property, before, height) ->
+            root.setBottom(height.doubleValue() < 800 ? null : summary));
+        if (stage.getScene().getHeight() < 800) root.setBottom(null);
+        stage.setMinWidth(Math.min(960, screen.getWidth() - 40));
+        stage.setMinHeight(Math.min(680, screen.getHeight() - 60));
         stage.setOnCloseRequest(event -> {
             if (firmwarePanel.isBusy()) {
                 event.consume();
-                new Alert(Alert.AlertType.INFORMATION, "Espera que a operação de firmware termine antes de fechar.").show();
+                ConsoleBranding.alert(Alert.AlertType.INFORMATION, "Espera que a operação de firmware termine antes de fechar.").show();
                 return;
             }
             if (!CalibrationViewer.closeAll()) { event.consume(); }
         });
         stage.show();
         refreshConnection.run();
-        scan.fire();
+        if (!preview) scan.fire();
     }
 
     @Override
@@ -475,8 +513,9 @@ public final class TunuinoConsole extends Application {
         if (!stopping.compareAndSet(false, true)) {
             return;
         }
-        keepCapturing.set(false);
+        keepMonitoring.set(false);
         if (portRefresh != null) portRefresh.stop();
+        if (telemetry != null) telemetry.stopPlayback();
         if (firmwarePanel != null) firmwarePanel.close();
         if (activeRead != null) {
             activeRead.cancel(true);

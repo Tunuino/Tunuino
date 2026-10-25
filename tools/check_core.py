@@ -228,6 +228,8 @@ def main():
                    java_root / "protocol/MapReadClient.java",
                    java_root / "protocol/LiveDataClient.java", java_root / "datalog/CsvLogWriter.java",
                    java_root / "datalog/LiveDataRecorder.java",
+                   java_root / "datalog/LiveDataMonitor.java", java_root / "datalog/LogChannel.java",
+                   java_root / "datalog/DatalogAnalysis.java",
                    java_root / "calibration/CalibrationMap.java",
                    java_root / "calibration/CalibrationDocument.java",
                    ROOT / "java_console/src/test/java/io/tunuino/CoreChecks.java",
@@ -236,7 +238,8 @@ def main():
                    ROOT / "java_console/src/test/java/io/tunuino/LiveDataChecks.java",
                    ROOT / "java_console/src/test/java/io/tunuino/CalibrationChecks.java",
                    ROOT / "java_console/src/test/java/io/tunuino/MapReadChecks.java",
-                   ROOT / "java_console/src/test/java/io/tunuino/FirmwareLinkChecks.java"]
+                   ROOT / "java_console/src/test/java/io/tunuino/FirmwareLinkChecks.java",
+                   ROOT / "java_console/src/test/java/io/tunuino/TelemetryChecks.java"]
         sources.append(java_root / "transport/ProcessSerialChannel.java")
         sources.extend(sorted((ROOT / "java_tools/src/main/java").rglob("*.java")))
         sources.extend(sorted((ROOT / "java_tools/src/test/java").rglob("*.java")))
@@ -252,6 +255,7 @@ def main():
         print(run(["java", "-cp", str(work), "io.tunuino.MapReadChecks", str(read_fixture)]))
         print(run(["java", "-cp", str(work), "io.tunuino.FirmwareLinkChecks", str(peer_exe)], timeout=30))
         simulator = build_simulator(work / "simulator")
+        print(run(["java", "-cp", str(work), "io.tunuino.TelemetryChecks", str(simulator)], timeout=30))
         print(run(["java", "-cp", str(work), "io.tunuino.tools.ToolChecks", str(simulator)], timeout=45))
     print("Portable core verified. JavaFX UI and hardware builds require separate validation.")
 

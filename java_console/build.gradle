@@ -13,3 +13,12 @@ tasks.named('jar') {
     manifest { attributes 'Implementation-Version': providers.environmentVariable('GITHUB_SHA').getOrElse('development') }
 }
 tasks.named('check') { dependsOn ':checkCore' }
+tasks.register('verifyInterface', JavaExec) {
+    group = 'verification'
+    description = 'Exercise the actual Console layout without physical USB devices.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'io.tunuino.console.ConsoleUiChecks'
+    jvmArgs '-Dprism.order=sw'
+    args "--snapshots=${layout.buildDirectory.dir('interface-check').get().asFile.absolutePath}"
+}
