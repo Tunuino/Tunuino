@@ -140,3 +140,11 @@
 .dashboard-tab:selected { -fx-background-color: #075cbb; -fx-border-color: #1685ff; -fx-text-fill: white; -fx-font-weight: bold; }
 .dashboard-output-status { -fx-text-fill: #8cabc4; -fx-font-family: "Consolas", monospace; -fx-line-spacing: 9; -fx-font-size: 11px; }
 .dashboard-event { -fx-text-fill: #7ca6c8; -fx-font-size: 10px; -fx-padding: 2 0; }
+
+.sidebar-scroll, .sidebar-scroll > .viewport { -fx-background-color: #101824; -fx-background-insets: 0; -fx-border-color: transparent; }
+.sidebar-scroll .scroll-bar { -fx-background-color: transparent; -fx-pref-width: 5px; }
+.sidebar-scroll .scroll-bar .thumb { -fx-background-color: #24425f; }
+.console-shell:short .sidebar { -fx-padding: 10 8 7 8; -fx-spacing: 2; }
+.console-shell:short .sidebar-caption { -fx-padding: 0 10 6 10; }
+.console-shell:short .sidebar-footer, .console-shell:short .build-label { -fx-padding: 2 8; -fx-font-size: 9px; }
+.console-shell:short .navigation-button { -fx-padding: 8 9; }
