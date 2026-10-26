@@ -84,6 +84,8 @@ Esta imagem usa o startup, kernel e USB CDC do repositório **Tunuino/ChibiOS**,
 
 O ZIP portátil mantém `console/`, `firmware/`, `kit-manifest.json`, `START-HERE.txt` e `SHA256SUMS.txt`. Só será retirado dos novos lançamentos após confirmação de que os testes passaram. Os dois formatos contêm os componentes do mesmo commit. O firmware inclui `corresponding-source.tar.gz` e as licenças ChibiOS.
 
+**Menus reorganizados:** Configuração → Motor e saídas / Sensores e entradas; Diagnóstico → Testes de atuadores / Estado da ECU. Modelos locais de cilindros e ordem de ignição, rodas 36-1, 60-2, 24-1 e 12-1, curvas lineares ADC e listas de valores. Testes separados de injetores, ignição e relés; os relés atribuídos usam pulsos de 100–800 ms. Nenhuma escolha de modelo ou saída envia comandos automaticamente. Os modelos estruturais exigem a calibração real do motor.
+
 **Protocolo IO 0.2.0 com comando experimental de saídas: injeção/ignição sequenciais 720°, bomba, relé e ventoinha configuráveis. Arranca desarmado; o perfil do motor é volátil e exige confirmação explícita na Console. Ainda não foi validado num motor ou ECU física. A gravação começa em 0x08000000 e substitui o bootloader instalado.**
 
 Extrair o ZIP completo antes de abrir `console/TunuinoConsole.exe`. Manter `.bin.properties` junto do `.bin`.

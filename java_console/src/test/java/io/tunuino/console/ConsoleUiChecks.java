@@ -70,6 +70,7 @@ public final class ConsoleUiChecks {
             Scene scene = stage.getScene();
             snapshot(scene, "console-offline");
             check(scene.getStylesheets().size() == 1, "Shared theme loaded");
+            check(scene.getRoot().lookupAll(".navigation-group").size()==5,"Navigation groups configuration, tuning, diagnostics, monitoring and system");
             check(((Button) scene.lookup("#dashboard-read-ve")).isDisabled(), "Offline dashboard blocks map read");
             check(((Button) scene.lookup("#dashboard-edit-map")).isDisabled(), "Offline dashboard blocks ECU map editing");
             DashboardPane cockpit=(DashboardPane)scene.lookup("#dashboard");
@@ -242,23 +243,50 @@ public final class ConsoleUiChecks {
             scene.getRoot().applyCss();scene.getRoot().layout();
             check(((Button)scene.lookup("#config-read")).isDisabled(),"Offline configuration cannot read USB");
             check(((Button)scene.lookup("#config-apply")).isDisabled(),"Offline configuration cannot write USB");
-            for(String control:List.of("#engine-arm","#engine-test-pulse","#engine-configure","#engine-outputs-read"))
+            check(scene.lookup("#engine-control-pane")==null,"Sensors do not contain motor arming or actuator tests");
+            ConfigurationPane configEditor=(ConfigurationPane)scene.lookup("#sensor-configuration-pane");
+            check(configEditor.candidate().errors().isEmpty(),"Offline draft is available without inventing sensor channels");
+            @SuppressWarnings("unchecked") var wheelPreset=(ComboBox<String>)scene.lookup("#config-preset-Aquisição");
+            wheelPreset.setValue("60-2");((Button)scene.lookup("#config-preset-apply-Aquisição")).fire();
+            check(configEditor.candidate().value(io.tunuino.calibration.IoConfiguration.Field.WHEEL).equals("60")
+                &&!configEditor.candidate().triggerEnabled(),"Wheel preset edits local values without enabling capture");
+            snapshot(scene,"console-sensor-presets");
+            ((ToggleButton)scene.lookup("#navigate-10")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
+            for(String control:List.of("#engine-arm","#engine-configure","#engine-outputs-read"))
                 check(((Button)scene.lookup(control)).isDisabled(),"Offline actuator operation is blocked: "+control);
+            check(scene.lookup("#output-test-pane")==null,"Motor configuration does not contain actuator-test controls");
             EngineControlPane enginePane=(EngineControlPane)scene.lookup("#engine-control-pane");
             try{enginePane.profile();throw new AssertionError("An unconfigured motor must not have an invented profile");}
             catch(IllegalArgumentException expected){}
+            ((Button)scene.lookup("#engine-preset-apply")).fire();
             @SuppressWarnings("unchecked") ComboBox<Integer> engineCylinders=(ComboBox<Integer>)scene.lookup("#engine-cylinders");
+            check(engineCylinders.getValue()==4,"Four-cylinder structural template applied offline");
+            snapshot(scene,"console-engine-presets");
+            var engineTabs=(javafx.scene.control.TabPane)scene.lookup("#engine-configuration-tabs");
+            engineTabs.getSelectionModel().select(1);scene.getRoot().applyCss();scene.getRoot().layout();
+            check(((javafx.scene.control.TextField)scene.lookup("#engine-cylinder-1-2")).getText().equals("540"),"1-3-4-2 gives cylinder 2 the correct 720-degree phase");
+            snapshot(scene,"console-cylinder-assignments");
             engineCylinders.setValue(1);
             String[][] engineFields={{"fuel","3000"},{"dwell","2000"},{"dead","500"},{"maximum","15000"},
                 {"injectionEnd","0"},{"toothZero","0"},{"camFirst","1"},{"camLast","2"},{"camPhase","0"}};
-            for(String[] field:engineFields)((javafx.scene.control.TextField)scene.lookup("#engine-field-"+field[0])).setText(field[1]);
+            for(String[] field:engineFields)enginePane.setting(field[0],field[1]);
             for(int column=0;column<3;++column)((javafx.scene.control.TextField)scene.lookup("#engine-cylinder-0-"+column)).setText(column==2?"180":"1");
             byte[] engineBytes=enginePane.profile();
             check(engineBytes.length==128&&java.nio.ByteBuffer.wrap(engineBytes).getInt(34)==18000,"Explicit cylinder/PMS form produces exact wire units");
-            ((javafx.scene.control.TextField)scene.lookup("#engine-field-dwell")).setText("5001");
+            enginePane.setting("dwell","5001");
             try{enginePane.profile();throw new AssertionError("Unsafe dwell must not leave the editor");}catch(IllegalArgumentException expected){}
-            ((javafx.scene.control.TextField)scene.lookup("#engine-field-dwell")).setText("2000");
-            ConfigurationPane configEditor=(ConfigurationPane)scene.lookup("#config-read").getParent().getParent().getParent();
+            enginePane.setting("dwell","2000");
+            ((ToggleButton)scene.lookup("#navigate-11")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
+            var outputTabs=(javafx.scene.control.TabPane)scene.lookup("#output-test-tabs");
+            check(outputTabs.getTabs().size()==3,"Separate injector, ignition and relay test tabs");
+            String[] testButtons={"#test-injector-start","#test-ignition-start","#test-aux-start"};
+            for(int tab=0;tab<3;tab++){
+                outputTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();
+                check(((Button)scene.lookup(testButtons[tab])).isDisabled(),"Offline test cannot drive an actuator");
+                snapshot(scene,"console-output-test-"+tab);
+            }
+            check(scene.lookup("#config-read")==null,"Actuator-test workspace is independent of sensor calibration");
+            ((ToggleButton)scene.lookup("#navigate-6")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
             byte[] fixture=new byte[256];java.nio.ByteBuffer cfg=java.nio.ByteBuffer.wrap(fixture);
             cfg.putShort(0,(short)2);fixture[3]=36;fixture[4]=1;fixture[26]=3;
             cfg.putShort(12,(short)4095);cfg.putShort(20,(short)4095);cfg.putShort(34,(short)2048);cfg.putShort(36,(short)4095);
@@ -275,16 +303,15 @@ public final class ConsoleUiChecks {
             check(((Button)scene.lookup("#config-apply")).isDisabled(),"Busy serial worker blocks calibration");
             configEditor.availability(id,true,false);int[] rawAdc=new int[16];java.util.Arrays.fill(rawAdc,2000);
             configEditor.showInputs(new io.tunuino.protocol.IoClient.Inputs(new LogSample(100,0,0,0,0,0),1,3300,1,0,0,rawAdc));
+            var inputTabs=(javafx.scene.control.TabPane)scene.lookup("#config-form-tabs");
+            inputTabs.getSelectionModel().selectLast();scene.getRoot().applyCss();scene.getRoot().layout();
             @SuppressWarnings("unchecked") var table=(javafx.scene.control.TableView<ConfigurationPane.AdcRow>)scene.lookup("#config-adc-table");
             check(table.getItems().size()==16&&table.getItems().get(0).volts().equals("1.612"),"All ADC channels and actual MCU scaling displayed");
             configEditor.showInputs(new io.tunuino.protocol.IoClient.Inputs(new LogSample(200,0,0,0,0,0),0,3300,1,0,0,new int[16]));
             check(table.getItems().stream().allMatch(row->row.raw().equals("—")),"Unavailable ADC is not displayed as zero");
             ((Label)scene.lookup("#config-feedback")).setText("Dados sintéticos de teste da interface · sem ECU física");
             snapshot(scene,"console-calibration");
-            var forms=(javafx.scene.layout.TilePane)scene.lookup("#config-form-grid");
-            var firstCard=forms.getChildren().get(0);var secondCard=forms.getChildren().get(1);
-            check(Math.abs(firstCard.localToScene(firstCard.getBoundsInLocal()).getMinY()
-                -secondCard.localToScene(secondCard.getBoundsInLocal()).getMinY())<1,"Calibration cards share a row on a wide desktop");
+            check(inputTabs.getTabs().size()==5,"Inputs are divided into trigger, MAP, lambda, temperature and ADC pages");
             configEditor.availability(null,false,false);
             check(reference.getText().equals("3290")&&((Button)scene.lookup("#config-apply")).isDisabled(),"Disconnect preserves local edits while blocking ECU writes");
             reference.setText("3300");check(configEditor.canClose(),"Unchanged configuration closes without prompting");

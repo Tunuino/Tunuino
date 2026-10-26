@@ -74,7 +74,7 @@ def main():
         "then select firmware/tunuino_proteus_v07_f427_io.ini and the ECU COM at 115200.\n"
         "Use Firmware Default protocol. This INI requires the firmware in this same Bundle.\n"
         "Tunuino 0.2.0 IO: native 16x16 only; back up previous calibration before flashing.\n"
-        "Raw ADC, 16x16 maps and configurable sequential outputs via Console Inputs / Outputs.\n"
+        "Console: Sensors and inputs; Engine and outputs; separate Actuator tests for injectors, ignition and assigned relays.\n"
         "Engine profile is volatile; verify pin mapping, TDC, dwell and injector calibration on a test bench.\n"
         "A running experimental profile requires Console output-state polling; a 2-second host timeout cuts all outputs.\n"
         "AV readings are MCU ADC voltages, not uncorrected external sensor voltages.\n"

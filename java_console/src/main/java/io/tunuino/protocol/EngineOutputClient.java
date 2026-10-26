@@ -65,4 +65,10 @@ public final class EngineOutputClient {
         accepted(exchange(s,ByteBuffer.allocate(8).put((byte)4).put((byte)channel).putShort((short)microseconds)
             .put("TEST".getBytes(StandardCharsets.US_ASCII)).array()));return read(s);
     }
+    public static State auxiliaryTest(PacketSession s,int channel,int milliseconds)throws IOException {
+        if(channel<0||channel>=16||milliseconds<1||milliseconds>800)
+            throw new IllegalArgumentException("Teste auxiliar limitado a LS 1–16 e 1–800 ms");
+        accepted(exchange(s,ByteBuffer.allocate(8).put((byte)5).put((byte)channel).putShort((short)milliseconds)
+            .put("AUX!".getBytes(StandardCharsets.US_ASCII)).array()));return read(s);
+    }
 }

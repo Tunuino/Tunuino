@@ -49,6 +49,13 @@ public final class IoConfiguration {
         this.bytes=bytes.clone();
     }
     public byte[] bytes(){return bytes.clone();}
+    public static IoConfiguration localDefaults(){
+        byte[] p=new byte[256];ByteBuffer b=ByteBuffer.wrap(p);
+        b.putShort(0,(short)2);p[3]=36;p[4]=1;p[26]=3;
+        b.putShort(12,(short)4095).putShort(20,(short)4095).putShort(34,(short)2048).putShort(36,(short)4095)
+            .putShort(96,(short)12000).putShort(100,(short)3300);
+        return new IoConfiguration(p);
+    }
     public boolean triggerEnabled(){return bytes[2]==1;}
     public int mapChannel(){return bytes[6]&255;}
     public int lambdaChannel(){return bytes[7]&255;}

@@ -158,3 +158,15 @@
 .navigation-button:selected { -fx-background-color: #075db7; -fx-text-fill: #f3fbff; }
 .navigation-button:selected .navigation-icon { -fx-fill: #e5f7ff; }
 .brand-logo { -fx-background-color: #091827; -fx-background-radius: 7; -fx-padding: 4 7; }
+.navigation-group > .title { -fx-background-color: transparent; -fx-padding: 9 5 5 5; }
+.navigation-group > .title > .text { -fx-fill: #8ba4bf; -fx-font-size: 11px; -fx-font-weight: bold; }
+.navigation-group > .content { -fx-background-color: transparent; -fx-border-color: transparent; -fx-padding: 0; }
+.navigation-group .navigation-button { -fx-padding: 8 8; -fx-font-size: 11px; }
+.button.danger { -fx-background-color: #5b222f; -fx-border-color: #a64459; -fx-text-fill: #fff0f2; -fx-font-weight: bold; }
+.tab-pane > .tab-header-area > .tab-header-background { -fx-background-color: #101a28; }
+.tab-pane .tab { -fx-background-color: #172638; -fx-padding: 9 12; }
+.tab-pane .tab:selected { -fx-background-color: #164466; }
+.tab-pane .tab .tab-label { -fx-text-fill: #c6d7eb; }
+.tab-pane > .tab-content-area { -fx-padding: 14 0 0 0; }
+.navigation-group .navigation-button { -fx-padding: 5 6; -fx-graphic-text-gap: 9; }
+.navigation-group > .title { -fx-padding: 6 5 4 5; }

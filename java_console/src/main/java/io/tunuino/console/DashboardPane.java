@@ -192,7 +192,7 @@ final class DashboardPane extends VBox {
         HBox.setHgrow(tablePanel,Priority.ALWAYS);
 
         records.getStyleClass().add("dashboard-small-title");
-        Label note=new Label("Perfil e armação explícita em Inputs / Outputs.");
+        Label note=new Label("Perfil e armação explícita em Motor e saídas.");
         note.setWrapText(true);note.getStyleClass().add("dashboard-subtext");
         outputs.setId("dashboard-engine-status");
         outputs.getStyleClass().add("dashboard-output-status");

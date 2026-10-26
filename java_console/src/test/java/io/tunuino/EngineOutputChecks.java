@@ -14,12 +14,22 @@ public final class EngineOutputChecks {
             check(EngineOutputClient.stop(session).mode()==0,"Explicit stop cancels pending hardware pulse");
             byte[] p=new byte[128];ByteBuffer b=ByteBuffer.wrap(p);p[0]=p[1]=1;
             b.putShort(2,(short)3000).putShort(4,(short)2000).putShort(6,(short)500).putShort(8,(short)15000)
-                .putShort(12,(short)9500).putShort(14,(short)9000).putInt(34,18000);p[25]=1;p[26]=2;
+                .putShort(12,(short)9500).putShort(14,(short)9000).putInt(34,18000);p[22]=16;p[25]=1;p[26]=2;
             var configured=EngineOutputClient.configure(session,p);check(configured.configured()&&configured.cylinders()==1&&!configured.armed(),"Profile configures without energizing anything");
+            var aux=EngineOutputClient.auxiliaryTest(session,15,500);
+            check(aux.mode()==4&&aux.pending()==(1L<<15),"Assigned relay test reaches actual board scheduler");
+            EngineOutputClient.stop(session);
+            try{EngineOutputClient.auxiliaryTest(session,0,500);throw new AssertionError("Injector accepted a relay pulse");}
+            catch(java.io.IOException expected){}
+            try{EngineOutputClient.auxiliaryTest(session,16,100);throw new AssertionError("IGN accepted relay timing");}
+            catch(IllegalArgumentException expected){}
+            try{EngineOutputClient.auxiliaryTest(session,15,801);throw new AssertionError("Relay duration cap bypassed");}
+            catch(IllegalArgumentException expected){}
             try{EngineOutputClient.arm(session,configured.generation()+1);throw new AssertionError("Stale generation armed");}
             catch(java.io.IOException expected){check(session.isOpen(),"Refusal preserves serial session");}
             var armed=EngineOutputClient.arm(session,configured.generation());check(armed.mode()==1&&armed.active()==0,"No crank/cam sync means no injector or coil energization");
             try{EngineOutputClient.pulse(session,0,1000);throw new AssertionError("Bench pulse bypassed engine arming");}catch(java.io.IOException expected){}
+            try{EngineOutputClient.auxiliaryTest(session,15,100);throw new AssertionError("Relay test bypassed engine arming");}catch(java.io.IOException expected){}
             check(EngineOutputClient.stop(session).active()==0,"Stop acknowledgement reflects actual inactive GPIO");
             p[33]=12;try{EngineOutputClient.configure(session,p);throw new AssertionError("Invalid coil accepted");}catch(java.io.IOException expected){}
             try{EngineOutputClient.pulse(session,16,5001);throw new AssertionError("Dwell cap bypassed");}catch(IllegalArgumentException expected){}

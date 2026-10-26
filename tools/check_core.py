@@ -285,6 +285,7 @@ def main():
         sources.extend([java_root / "calibration/IoConfiguration.java", java_root / "protocol/ConfigurationClient.java",
             ROOT / "java_console/src/test/java/io/tunuino/ConfigurationChecks.java"])
         sources.append(java_root / "transport/ProcessSerialChannel.java")
+        sources.extend([java_root/"calibration/EnginePreset.java",ROOT/"java_console/src/test/java/io/tunuino/EnginePresetChecks.java"])
         sources.extend([java_root/"protocol/EngineOutputClient.java",ROOT/"java_console/src/test/java/io/tunuino/EngineOutputChecks.java"])
         sources.extend(sorted((ROOT / "java_tools/src/main/java").rglob("*.java")))
         sources.extend(sorted((ROOT / "java_tools/src/test/java").rglob("*.java")))
@@ -302,6 +303,7 @@ def main():
         print(run(["java", "-cp", str(work), "io.tunuino.IoChecks", str(io_peer)], timeout=30))
         print(run(["java", "-cp", str(work), "io.tunuino.ConfigurationChecks", str(io_peer)], timeout=30))
         print(run(["java","-cp",str(work),"io.tunuino.EngineOutputChecks",str(output_peer)],timeout=30))
+        print(run(["java","-cp",str(work),"io.tunuino.EnginePresetChecks"]))
         simulator = build_simulator(work / "simulator")
         print(run(["java", "-cp", str(work), "io.tunuino.TelemetryChecks", str(simulator)], timeout=30))
         print(run(["java", "-cp", str(work), "io.tunuino.tools.ToolChecks", str(simulator)], timeout=45))

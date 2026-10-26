@@ -66,6 +66,18 @@ static bool command(void *user,const uint8_t *q,size_t length,uint8_t *out,size_
             timer_schedule();
         }
         chSysUnlock();
+    }else if(length==8&&q[0]==5&&memcmp(q+4,"AUX!",4)==0&&timer_ready
+        &&!d->trigger_valid&&!(d->live.valid_mask&TUNUINO_LIVE_RPM_VALID)){
+        chSysLock();
+        unsigned selected=(unsigned)q[1]+1u;
+        bool assigned=engine.configured&&!d->dirty&&engine.generation==d->generation
+            &&(selected==engine.profile.pump||selected==engine.profile.fan||selected==engine.profile.relay);
+        if(assigned){
+            okay=tunuino_outputs_aux_test(&engine.outputs,q[1],TIM2->CNT,(uint32_t)tunuino_device_u16(q+2)*1000u);
+            if(okay)engine.mode=4;
+            timer_schedule();
+        }
+        chSysUnlock();
     }
     if(okay&&capacity){out[0]=0;*written=1;return true;}
     return false;
@@ -92,7 +104,8 @@ void board_outputs_update(tunuino_device *d,const tunuino_position_reading *posi
         tunuino_engine_control_stop(&engine,TUNUINO_OUTPUT_CALIBRATION);engine.configured=0;
     }
     if(engine.mode==4){
-        tunuino_outputs_poll(&engine.outputs,now);
+        if(d->trigger_valid||(d->live.valid_mask&TUNUINO_LIVE_RPM_VALID))tunuino_engine_control_stop(&engine,TUNUINO_OUTPUT_SYNC);
+        else tunuino_outputs_poll(&engine.outputs,now);
         if(!tunuino_outputs_pending(&engine.outputs))tunuino_engine_control_stop(&engine,0);
     }else if(engine.outputs.armed){
         if((uint32_t)(now-last_host_seen)>2000000u)tunuino_engine_control_stop(&engine,TUNUINO_OUTPUT_WATCHDOG);

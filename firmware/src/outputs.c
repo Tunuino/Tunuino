@@ -38,6 +38,12 @@ bool tunuino_outputs_level(tunuino_outputs *o,unsigned ch,bool high){
     if(!o->armed||ch>=16||o->pulse[ch].state)return false;
     level(o,ch,high);return true;
 }
+bool tunuino_outputs_aux_test(tunuino_outputs *o,unsigned ch,uint32_t now,uint32_t duration){
+    if(o->armed||ch>=16||duration<1000||duration>800000)return false;
+    tunuino_outputs_arm(o,now,900000);
+    o->pulse[ch]=(tunuino_output_pulse){now+1000,now+1000+duration,1};
+    return true;
+}
 void tunuino_outputs_poll(tunuino_outputs *o,uint32_t now){
     if(!o->armed)return;
     if(due(now,o->lease)){tunuino_outputs_stop(o,TUNUINO_OUTPUT_WATCHDOG);return;}

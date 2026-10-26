@@ -35,6 +35,13 @@ int main(void){
     clock_us=20;tunuino_outputs_poll(&o,20);assert(mask==1);
     clock_us=520;tunuino_outputs_poll(&o,520);assert(!mask);
     tunuino_outputs_stop(&o,0);
+    assert(!tunuino_outputs_aux_test(&o,16,0,500000));
+    assert(!tunuino_outputs_aux_test(&o,15,0,800001));
+    assert(tunuino_outputs_aux_test(&o,15,UINT32_MAX-500,800000));
+    assert(!tunuino_outputs_aux_test(&o,14,0,1000)); /* No overlapping tests. */
+    clock_us=499;tunuino_outputs_poll(&o,clock_us);assert(mask==(UINT32_C(1)<<15));
+    clock_us=800499;tunuino_outputs_poll(&o,clock_us);assert(!mask&&last_width[15]==800000);
+    tunuino_outputs_stop(&o,0);
     uint8_t p[128],bad[128];profile(p);tunuino_engine_profile cfg;
     assert(tunuino_engine_profile_decode(p,60,2,&cfg));
     memcpy(bad,p,128);bad[1]=2;assert(!tunuino_engine_profile_decode(bad,60,2,&cfg));

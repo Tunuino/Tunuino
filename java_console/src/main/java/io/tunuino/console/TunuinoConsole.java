@@ -748,11 +748,11 @@ public final class TunuinoConsole extends Application {
         shell.addPage("Tuning", "Tuning e calibração", "Edição de mapas e pré-visualização matemática.",
             "M1 2H21V20H1ZM3 4V8H7V4ZM9 4V8H13V4ZM15 4V8H19V4ZM3 10V14H7V10ZM9 10V14H13V10ZM15 10V14H19V10ZM3 16V18H7V16ZM9 16V18H13V16ZM15 16V18H19V16Z", ConsoleShell.scroll(maps));
         shell.addPage("Fuel Tables", "Tabela de combustível · VE 16×16",
-            "Mapa volumétrico real de 256 células. O comando físico exige perfil do motor e armação explícita em Inputs / Outputs.",
+            "Mapa volumétrico real de 256 células. O comando físico exige perfil e armação explícita em Configuração do motor.",
             "M2 2H22V22H2ZM5 5H10V10H5ZM12 5H19V10H12ZM5 12H10V19H5ZM12 12H19V19H12Z",
             ConsoleShell.scroll(fuelTables));
         shell.addPage("Ignition Tables", "Tabela de ignição · 16×16",
-            "Mapa real de avanço em graus. Configura PMS, canais e dwell em Inputs / Outputs antes de armar.",
+            "Mapa real de avanço em graus. Configura PMS, canais e dwell em Configuração do motor antes de armar.",
             "M12 2L6 13H11L8 22L18 10H13Z",ConsoleShell.scroll(ignitionTables));
         Button autotuneUnavailable=new Button("Autotune indisponível neste firmware");
         autotuneUnavailable.setId("autotune-start");autotuneUnavailable.setDisable(true);
@@ -786,10 +786,9 @@ public final class TunuinoConsole extends Application {
             for(DashboardPane page:new DashboardPane[]{dashboard,fuelTables,ignitionTables})page.showOutputs(value);
             refreshControls.run();
         });
-        configurationPane.getChildren().add(engineControlPane);
         shell.addPage("Data Log", "Datalogs e monitorização", "Gravação CSV e reprodução dos sinais disponíveis.",
             "M3 3H21V21H3ZM6 7H18V9H6ZM6 12H18V14H6ZM6 17H15V19H6Z", root);
-        shell.addPage("Inputs / Outputs", "Entradas e calibração", "Sensores, captura e diagnóstico da configuração.",
+        shell.addPage("Inputs / Outputs", "Sensores e entradas", "Roda fónica, sensores e leitura das entradas ADC.",
             "M2 3H20V7H2ZM2 10H20V14H2ZM2 17H20V21H2Z", ConsoleShell.scroll(configurationPane));
 
         shell.addPage("Diagnostics", "Diagnósticos", "Validação e análise de sinais verdadeiros.",
@@ -800,7 +799,7 @@ public final class TunuinoConsole extends Application {
                     +"através de dois pedidos binários só de leitura. A consulta exige USB exclusivo.",
                     readDiagnostics, diagnosticOutput),
                 ConsoleShell.card("VALIDAÇÃO DE CALIBRAÇÃO",
-                    "Verifica as leituras e os parâmetros na área Inputs / Outputs. "
+                    "Verifica as leituras e os parâmetros na área Sensores e entradas. "
                     +"Em Tuning estão disponíveis os cálculos VE/ignição e os motivos de bloqueio.",
                     new Label("Lê a ECU e confirma os sinais antes de qualquer afinação.")))));
         shell.addPage("Firmware", "Firmware e ligação USB", "Seleciona a imagem, verifica o dispositivo e acompanha a gravação.",
@@ -812,6 +811,19 @@ public final class TunuinoConsole extends Application {
                     new Label(io.tunuino.maintenance.BuildInfo.label())),
                 ConsoleShell.card("FORMATO ATUAL", "Firmware IO 0.2.0 e mapas VE/ignição nativos 16×16.",
                     new Label("Dados dos instrumentos apenas quando recebidos da ECU.")))));
+        shell.addPage("Engine", "Configuração do motor", "Modelos de cilindros e ordem de ignição, injeção, dwell, sincronização e saídas auxiliares.",
+            "M3 4H19V18H3ZM0 8H3V14H0ZM19 8H22V14H19Z",ConsoleShell.scroll(engineControlPane));
+        shell.addPage("Output Tests", "Testes de atuadores", "Testes separados de injetores, ignição, bomba, ventoinha e relé principal.",
+            "M12 2L6 13H11L8 22L18 10H13Z",ConsoleShell.scroll(engineControlPane.tests()));
+        shell.label("Dashboard","Painel");shell.label("Data Log","Datalogs");shell.label("Tuning","Mapas e cálculos");
+        shell.label("Fuel Tables","Combustível · VE");shell.label("Ignition Tables","Ignição · avanço");
+        shell.label("Inputs / Outputs","Sensores e entradas");shell.label("Diagnostics","Estado da ECU");
+        shell.label("Engine","Motor e saídas");shell.label("Output Tests","Testes de atuadores");shell.label("Settings","Sobre a Console");
+        shell.group("Monitorização","Dashboard","Data Log");
+        shell.group("Configuração","Engine","Inputs / Outputs");
+        shell.group("Afinação","Fuel Tables","Ignition Tables","Tuning","Autotune");
+        shell.group("Diagnóstico","Output Tests","Diagnostics");
+        shell.group("Sistema","Firmware","Settings");
         javafx.geometry.Rectangle2D screen = javafx.stage.Screen.getPrimary().getVisualBounds();
         stage.setScene(new Scene(shell, Math.min(1340, screen.getWidth() - 40),
             Math.min(880, screen.getHeight() - 60)));
@@ -823,7 +835,7 @@ public final class TunuinoConsole extends Application {
         stage.setMinHeight(Math.min(680, screen.getHeight() - 60));
         stage.setOnCloseRequest(event -> {
             if(engineArmed){event.consume();ConsoleBranding.alert(Alert.AlertType.INFORMATION,
-                "Pára as saídas em Inputs / Outputs antes de fechar a Console.").show();return;}
+                "Pára as saídas em Motor e saídas ou Testes de atuadores antes de fechar a Console.").show();return;}
             if(configurationBusy){
                 event.consume();
                 ConsoleBranding.alert(Alert.AlertType.INFORMATION,"Espera que a operação de configuração termine antes de fechar.").show();

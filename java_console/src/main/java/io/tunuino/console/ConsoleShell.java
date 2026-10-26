@@ -37,6 +37,16 @@ final class ConsoleShell extends BorderPane {
     private final VBox navItems = new VBox(5);
     private final ToggleGroup section = new ToggleGroup();
 
+    void group(String title, String... keys) {
+        VBox entries=new VBox(3);
+        for(String key:keys){ToggleButton item=navigation.get(key);if(item==null)throw new IllegalArgumentException(key);
+            navItems.getChildren().remove(item);entries.getChildren().add(item);}
+        javafx.scene.control.TitledPane group=new javafx.scene.control.TitledPane(title,entries);
+        group.setExpanded(true);group.getStyleClass().add("navigation-group");navItems.getChildren().add(group);
+    }
+
+    void label(String key,String text){navigation.get(key).setText(text);}
+
     ConsoleShell(Node hardware, Node connectionControls, Label status, Label identity) {
         getStyleClass().add("console-shell");
         ImageView logo = new ImageView(new Image(ConsoleShell.class.getResource("tunuino.png").toExternalForm()));
@@ -54,7 +64,7 @@ final class ConsoleShell extends BorderPane {
         VBox header = new VBox(masthead, connectionControls); header.getStyleClass().add("app-header");
         setTop(header);
         sidebar.getStyleClass().add("sidebar");
-        sidebar.setPrefWidth(195); sidebar.setMinWidth(195); sidebar.setMinHeight(0);
+        sidebar.setPrefWidth(245); sidebar.setMinWidth(245); sidebar.setMinHeight(0);
         Label menu = new Label("ÁREA DE TRABALHO"); menu.getStyleClass().add("sidebar-caption");
         ScrollPane navigationScroll=new ScrollPane(navItems);
         navigationScroll.setFitToWidth(true);

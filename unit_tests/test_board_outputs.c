@@ -46,6 +46,21 @@ int main(void){
     p16(p+2,3000);p16(p+4,2000);p16(p+6,500);p16(p+8,15000);p16(p+12,9500);p16(p+14,9000);
     p[24]=16;p[25]=1;p[26]=2;p16(p+36,18000); // cylinder PMS 18000 centidegrees, big-endian U32
     assert(request(&d,config,129)[0]==0&&phase_calls==1);
+    /* Relay test is available only for explicitly assigned auxiliaries, never injector/IGN channels. */
+    uint8_t aux[]={5,15,1,244,'A','U','X','!'}; /* LS16, 500 ms */
+    assert(request(&d,aux,8)[0]==0);irq();assert(GPIOE->value==(1u<<2));
+    uint32_t relay_start=TIM2->CNT;irq();assert(TIM2->CNT-relay_start==500000);off();
+    board_outputs_update(&d,&position,0,TIM2->CNT);assert(board_outputs_idle());
+    aux[1]=0;assert(request(&d,aux,8)[0]==0x84);off(); /* LS1 is an injector */
+    aux[1]=16;assert(request(&d,aux,8)[0]==0x84);off(); /* IGN never accepts relay timings */
+    aux[1]=15;aux[2]=3;aux[3]=33;assert(request(&d,aux,8)[0]==0x84);off(); /* 801 ms */
+    aux[2]=1;aux[3]=244;d.trigger_valid=true;assert(request(&d,aux,8)[0]==0x84);d.trigger_valid=false;
+    d.dirty=true;assert(request(&d,aux,8)[0]==0x84);d.dirty=false;
+    ++d.generation;assert(request(&d,aux,8)[0]==0x84);--d.generation;
+    assert(request(&d,aux,8)[0]==0);irq();d.trigger_valid=true;
+    board_outputs_update(&d,&position,0,TIM2->CNT);off();assert(board_outputs_idle());d.trigger_valid=false;
+    assert(request(&d,stop,1)[0]==0);
+    assert(request(&d,aux,8)[0]==0);irq();assert(request(&d,stop,1)[0]==0);off();
     uint8_t arm[]={2,'A','R','M','!',0,0,0,1};assert(request(&d,arm,9)[0]==0x84);
     d.persisted=true;d.active[2]=1;
     assert(request(&d,arm,9)[0]==0);board_outputs_update(&d,&position,0,TIM2->CNT);assert(GPIOB->value==0&&GPIOC->value==0);

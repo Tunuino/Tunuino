@@ -24,6 +24,8 @@ void tunuino_outputs_stop(tunuino_outputs *o,uint8_t fault);
 void tunuino_outputs_arm(tunuino_outputs *o,uint32_t now,uint32_t lease_us);
 bool tunuino_outputs_keepalive(tunuino_outputs *o,uint32_t now,uint32_t lease_us);
 bool tunuino_outputs_pulse(tunuino_outputs *o,unsigned channel,uint32_t now,uint32_t start,uint32_t duration);
+/* Dedicated disarmed relay test; callers must validate the assigned auxiliary channel. */
+bool tunuino_outputs_aux_test(tunuino_outputs *o,unsigned channel,uint32_t now,uint32_t duration_us);
 bool tunuino_outputs_level(tunuino_outputs *o,unsigned channel,bool high);
 void tunuino_outputs_poll(tunuino_outputs *o,uint32_t now);
 uint32_t tunuino_outputs_next(const tunuino_outputs *o,uint32_t now);

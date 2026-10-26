@@ -25,6 +25,8 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.TilePane;
@@ -44,31 +46,27 @@ public final class ConfigurationPane extends VBox {
     private final ComboBox<String> map=channels(false),lambda=channels(false),coolant=channels(true);
     private final Button read=new Button("Ler configuração"),apply=new Button("Guardar na ECU"),
         discard=new Button("Descartar pendentes da ECU"),reset=new Button("Repor edição"),
-        saveFile=new Button("Guardar ficheiro"),openFile=new Button("Abrir ficheiro"),readInputs=new Button("Ler entradas ADC");
+        newLocal=new Button("Nova configuração local"),saveFile=new Button("Guardar ficheiro"),openFile=new Button("Abrir ficheiro"),readInputs=new Button("Ler entradas ADC");
     private final Label feedback=new Label("Liga e identifica a ECU para ler a configuração."),
         validation=new Label("Sem validação recebida do firmware."),inputState=new Label("Sem leitura das entradas.");
     private final TableView<AdcRow> adc=new TableView<>();
     private ConfigurationClient.Snapshot snapshot;
+    private IoConfiguration base=IoConfiguration.localDefaults(),baseline=base;
     private DeviceIdentity device;
     private DeviceIdentity loadedDevice;
     private boolean supported,busy,loading;
 
     public ConfigurationPane(Stage owner,Access access) {
-        this.owner=owner;this.access=access;setSpacing(16);setPadding(new Insets(0,24,24,24));
+        this.owner=owner;this.access=access;setId("sensor-configuration-pane");setSpacing(16);setPadding(new Insets(0,24,24,24));
         read.setId("config-read");apply.setId("config-apply");discard.setId("config-discard");
         feedback.setId("config-feedback");validation.setId("config-validation");readInputs.setId("config-read-adc");
         trigger.setId("config-trigger");map.setId("config-map-channel");lambda.setId("config-lambda-channel");coolant.setId("config-coolant-channel");
         apply.getStyleClass().add("primary");read.getStyleClass().add("primary");
         for(Label label:List.of(feedback,validation,inputState))label.setWrapText(true);
         getChildren().add(ConsoleShell.card("CONFIGURAÇÃO DA CENTRALINA",
-            "Lê os valores antes de editar. Guardar valida, persiste e confirma a leitura; os mapas são preservados.",
-            ConsoleShell.actions(read,apply,reset,openFile,saveFile),feedback,validation,discard));
-        TilePane forms=new TilePane(16,16);forms.setId("config-form-grid");forms.setPrefColumns(2);
-        forms.setPrefTileWidth(420);
-        forms.widthProperty().addListener((p,old,width)->{
-            double available=width.doubleValue();
-            if(available>0)forms.setPrefTileWidth(Math.floor(available>=800?(available-16)/2:available));
-        });
+            "Prepara a configuração offline ou lê a ECU. Guardar na ECU exige uma leitura desta centralina e confirma a persistência; os mapas são preservados.",
+            ConsoleShell.actions(read,apply,newLocal,reset,openFile,saveFile),feedback,validation,discard));
+        TabPane forms=new TabPane();forms.setId("config-form-tabs");forms.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         for(String group:List.of("Aquisição","MAP","Lambda","Temperatura")) {
             GridPane grid=new GridPane();grid.setHgap(16);grid.setVgap(10);int row=0;
             if(group.equals("Aquisição"))grid.add(trigger,0,row++,2,1);
@@ -84,7 +82,8 @@ public final class ConfigurationPane extends VBox {
                 :group.equals("Temperatura")?"Três pontos ADC/temperatura. Usa a curva medida do teu sensor."
                 :"Dois pontos ADC/valor físico. Usa ponto decimal e a calibração real do sensor.";
             VBox card=ConsoleShell.card(group.toUpperCase(Locale.ROOT),subtitle,grid);
-            card.prefWidthProperty().bind(forms.prefTileWidthProperty());forms.getChildren().add(card);
+            if(!group.equals("Temperatura"))card.getChildren().add(2,preset(group));
+            forms.getTabs().add(new Tab(group.equals("Aquisição")?"Roda fónica":group,card));
         }
         getChildren().add(forms);
         TableColumn<AdcRow,String> name=new TableColumn<>("Entrada"),raw=new TableColumn<>("ADC"),volts=new TableColumn<>("Pino MCU (V)");
@@ -93,21 +92,49 @@ public final class ConfigurationPane extends VBox {
         volts.setCellValueFactory(v->new SimpleStringProperty(v.getValue().volts()));
         adc.getColumns().setAll(List.of(name,raw,volts));adc.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         adc.setPrefHeight(360);adc.setId("config-adc-table");
-        getChildren().add(ConsoleShell.card("ENTRADAS E ESTADO", "A tensão mostrada é no pino MCU; os divisores externos não são inferidos.",readInputs,inputState,adc));
+        forms.getTabs().add(new Tab("Entradas ADC",ConsoleShell.card("ENTRADAS E ESTADO", "A tensão mostrada é no pino MCU; os divisores externos não são inferidos.",readInputs,inputState,adc)));
         trigger.selectedProperty().addListener((p,a,b)->refresh());
         for(ComboBox<String> selector:List.of(map,lambda,coolant))selector.setOnAction(e->{if(!loading)refresh();});
         read.setOnAction(e->{
             if(hasLocalChanges()&&!confirm("Repor edição local?","A leitura substituirá a edição local pelos valores da ECU."))return;
             access.run((s,id)->ConfigurationClient.read(s,id,Duration.ofSeconds(5)),this::loaded,this::failed);
         });
-        apply.setOnAction(e->apply());reset.setOnAction(e->{if(snapshot!=null){display(snapshot.configuration());feedback.setText("Edição local reposta; a ECU não foi alterada.");refresh();}});
+        newLocal.setId("config-new-local");newLocal.setOnAction(e->{
+            if(hasLocalChanges()&&!confirm("Nova configuração local?","A edição atual será substituída; os dados da ECU não são alterados."))return;
+            snapshot=null;loadedDevice=null;base=IoConfiguration.localDefaults();baseline=base;display(base);validation.setText("Edição local · sem validação de ECU associada.");
+            feedback.setText("Nova configuração local. As entradas estão desativadas; lê a ECU antes de aplicar valores ao dispositivo.");refresh();
+        });
+        apply.setOnAction(e->apply());reset.setOnAction(e->{if(baseline!=null){base=baseline;display(base);feedback.setText("Edição local reposta; a ECU não foi alterada.");refresh();}});
         discard.setOnAction(e->{
             if(confirm("Descartar os valores pendentes na ECU?","As alterações pendentes de configuração e mapas serão substituídas pelos valores ativos."))
                 access.run((s,id)->ConfigurationClient.discard(s,id,Duration.ofSeconds(5)),this::loaded,this::failed);
         });
         readInputs.setOnAction(e->access.run((s,id)->IoClient.read(s,id,Duration.ofSeconds(2)),this::showInputs,this::failed));
         saveFile.setOnAction(e->file(false));openFile.setOnAction(e->file(true));
-        refresh();
+        display(base);feedback.setText("Configuração local disponível. Escolhe a roda fónica e as calibrações; os sensores começam desativados.");refresh();
+    }
+    private javafx.scene.Node preset(String group){
+        ComboBox<String> choices=new ComboBox<>();choices.setId("config-preset-"+group);choices.setPrefWidth(310);
+        choices.getItems().add("Personalizado");
+        if(group.equals("Aquisição"))choices.getItems().addAll("36-1","60-2","24-1","12-1");
+        if(group.equals("MAP"))choices.getItems().addAll("Linear ADC 0–4095 → 0–100 kPa","Linear ADC 0–4095 → 0–250 kPa","Linear ADC 0–4095 → 0–400 kPa");
+        if(group.equals("Lambda"))choices.getItems().addAll("Linear ADC 0–4095 → λ 0.5–1.5","Linear ADC 0–4095 → λ 0.7–1.3");
+        choices.getSelectionModel().selectFirst();
+        Button use=new Button("Aplicar à edição");use.setId("config-preset-apply-"+group);
+        use.setOnAction(e->{int selected=choices.getSelectionModel().getSelectedIndex();if(selected<=0)return;
+            if(group.equals("Aquisição")){
+                String[] wheel=choices.getValue().split("-");fields.get(IoConfiguration.Field.WHEEL).setText(wheel[0]);fields.get(IoConfiguration.Field.MISSING).setText(wheel[1]);
+            }else if(group.equals("MAP")){
+                fields.get(IoConfiguration.Field.MAP_RAW_LOW).setText("0");fields.get(IoConfiguration.Field.MAP_RAW_HIGH).setText("4095");
+                fields.get(IoConfiguration.Field.MAP_LOW).setText("0");fields.get(IoConfiguration.Field.MAP_HIGH).setText(selected==1?"100":selected==2?"250":"400");
+            }else {
+                fields.get(IoConfiguration.Field.LAMBDA_RAW_LOW).setText("0");fields.get(IoConfiguration.Field.LAMBDA_RAW_HIGH).setText("4095");
+                fields.get(IoConfiguration.Field.LAMBDA_LOW).setText(selected==1?"0.5":"0.7");fields.get(IoConfiguration.Field.LAMBDA_HIGH).setText(selected==1?"1.5":"1.3");
+            }
+            feedback.setText(group.equals("Aquisição")?"Roda aplicada à edição; a captura não é ativada automaticamente.":"Curva linear aplicada à edição. Confirma os pontos ADC reais do sensor/controlador e seleciona o canal antes de guardar.");refresh();
+        });
+        choices.disableProperty().bind(newLocal.disableProperty());use.disableProperty().bind(newLocal.disableProperty());
+        return ConsoleShell.actions(choices,use);
     }
     private static ComboBox<String> channels(boolean temperature) {
         ComboBox<String> choice=new ComboBox<>();choice.getItems().add("Desativado");
@@ -123,7 +150,7 @@ public final class ConfigurationPane extends VBox {
         device=connected?identity:null;supported=connected&&EnginePreviewClient.supports(identity);this.busy=busy;refresh();
     }
     void loaded(ConfigurationClient.Snapshot value) {
-        snapshot=value;loadedDevice=device;display(value.configuration());
+        snapshot=value;loadedDevice=device;base=value.configuration();baseline=base;display(base);
         feedback.setText(value.validation().dirty()?"Existem valores pendentes na ECU. Não serão substituídos automaticamente."
             :"Configuração lida · revisão "+value.validation().generation()+" · "+(value.validation().persisted()?"persistida na flash":"ainda não persistida"));
         validation.setText(value.validation().explanation());refresh();
@@ -137,23 +164,23 @@ public final class ConfigurationPane extends VBox {
         }finally{loading=false;}
     }
     IoConfiguration candidate() {
-        if(snapshot==null)throw new IllegalStateException("Lê primeiro a configuração da ECU");
+
         EnumMap<IoConfiguration.Field,String> values=new EnumMap<>(IoConfiguration.Field.class);
         fields.forEach((field,editor)->values.put(field,editor.getText()));
-        return snapshot.configuration().edited(values,trigger.isSelected(),map.getSelectionModel().getSelectedIndex(),
+        return base.edited(values,trigger.isSelected(),map.getSelectionModel().getSelectedIndex(),
             lambda.getSelectionModel().getSelectedIndex(),coolant.getSelectionModel().getSelectedIndex());
     }
     private void refresh() {
         if(loading)return;
-        boolean editable=!busy&&snapshot!=null;
-        boolean sameDevice=supported&&Objects.equals(device,loadedDevice);
+        boolean editable=!busy;
+        boolean sameDevice=supported&&snapshot!=null&&Objects.equals(device,loadedDevice);
         boolean valid=false,changed=false;
-        if(snapshot!=null)try{IoConfiguration value=candidate();valid=true;changed=!Arrays.equals(value.bytes(),snapshot.configuration().bytes());}
+        try{IoConfiguration value=candidate();valid=true;changed=snapshot!=null&&!Arrays.equals(value.bytes(),snapshot.configuration().bytes());}
         catch(IllegalArgumentException error){if(editable)feedback.setText(error.getMessage());}
         read.setDisable(!supported||busy);readInputs.setDisable(!supported||busy);
         apply.setDisable(!editable||!sameDevice||!valid||!changed||snapshot.validation().dirty());
         discard.setDisable(!editable||!sameDevice||!snapshot.validation().dirty());
-        reset.setDisable(!editable);saveFile.setDisable(!editable||!valid);openFile.setDisable(!editable);
+        newLocal.setDisable(!editable);reset.setDisable(!editable);saveFile.setDisable(!editable||!valid);openFile.setDisable(!editable);
         trigger.setDisable(!editable);for(ComboBox<String> choice:List.of(map,lambda,coolant))choice.setDisable(!editable);
         fields.values().forEach(field->field.setDisable(!editable));
     }
@@ -181,14 +208,13 @@ public final class ConfigurationPane extends VBox {
         chooser.setTitle(opening?"Abrir configuração":"Guardar nova configuração");if(!opening)chooser.setInitialFileName("tunuino-proteus-io.tncfg");
         File selected=opening?chooser.showOpenDialog(owner):chooser.showSaveDialog(owner);if(selected==null)return false;
         try {
-            if(opening){display(IoConfiguration.read(selected.toPath()));feedback.setText("Ficheiro carregado para edição local; guardar na ECU continua a exigir confirmação.");}
+            if(opening){base=IoConfiguration.read(selected.toPath());display(base);feedback.setText("Ficheiro carregado para edição local; guardar na ECU continua a exigir confirmação.");}
             else{candidate().writeNew(selected.toPath());feedback.setText("Configuração guardada em "+selected.getName());}
             refresh();return true;
         }catch(Exception error){failed(error);return false;}
     }
     private boolean hasLocalChanges() {
-        if(snapshot==null)return false;
-        try{return !Arrays.equals(candidate().bytes(),snapshot.configuration().bytes());}
+        try{return !Arrays.equals(candidate().bytes(),baseline.bytes());}
         catch(IllegalArgumentException error){return true;}
     }
     public boolean canClose() {
