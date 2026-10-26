@@ -147,7 +147,7 @@ public final class ConsoleUiChecks {
             cfg.putShort(12,(short)4095);cfg.putShort(20,(short)4095);cfg.putShort(34,(short)2048);cfg.putShort(36,(short)4095);
             cfg.putShort(96,(short)12000);cfg.putShort(100,(short)3300);
             var id=new io.tunuino.protocol.DeviceIdentity(io.tunuino.protocol.DeviceIdentity.Family.PROTEUS,
-                io.tunuino.protocol.DeviceIdentity.McuSeries.STM32_F4,7,0,1,0,15,"0102030405060708090a0b0c");
+                io.tunuino.protocol.DeviceIdentity.McuSeries.STM32_F4,7,0,2,0,15,"0102030405060708090a0b0c");
             configEditor.availability(id,true,false);
             configEditor.loaded(new io.tunuino.protocol.ConfigurationClient.Snapshot(new io.tunuino.calibration.IoConfiguration(fixture),
                 new io.tunuino.protocol.ConfigurationClient.Validation(false,false,0,1,0)));
