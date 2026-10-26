@@ -97,7 +97,24 @@ public final class ConsoleUiChecks {
                 &&((Button)scene.lookup("#dashboard-read-ve")).isDisabled(),
                 "Offline map read remains disabled even with offline UI fixture");
             snapshot(scene,"console-dashboard-16x16");
+            stage.setWidth(1510);stage.setHeight(1010);
+            snapshot(scene,"console-dashboard-wide");
+            stage.setWidth(980);stage.setHeight(720);
             cockpit.clearMaps();
+            ((ToggleButton)scene.lookup("#navigate-2")).fire();
+            scene.getRoot().applyCss();scene.getRoot().layout();
+            check(((DashboardPane)scene.lookup("#dashboard-map-workspace"))!=null,
+                "Fuel Tables opens the native 16x16 ECU map display");
+            check(((Button)scene.lookup("#dashboard-read-ve")).isDisabled(),
+                "Fuel Tables cannot read an offline ECU");
+            ((ToggleButton)scene.lookup("#navigate-3")).fire();
+            scene.getRoot().applyCss();scene.getRoot().layout();
+            check(((DashboardPane)scene.lookup("#dashboard-map-workspace"))!=null,
+                "Ignition Tables opens the native 16x16 ECU map display");
+            ((ToggleButton)scene.lookup("#navigate-4")).fire();
+            scene.getRoot().applyCss();scene.getRoot().layout();
+            check(((Button)scene.lookup("#autotune-start")).isDisabled(),
+                "Unavailable Autotune must never actuate a bench ECU");
             ((ToggleButton)scene.lookup("#navigate-5")).fire();
             scene.getRoot().applyCss();scene.getRoot().layout();
             TelemetryPane telemetry = (TelemetryPane) scene.lookup(".telemetry-pane");
