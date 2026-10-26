@@ -18,6 +18,9 @@ jobs:
     if: github.repository == 'Tunuino/Tunuino' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == 'Tunuino/Tunuino'))
     runs-on: windows-2022
     timeout-minutes: 35
+    env:
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      KIT_RUN_ID: ${{ github.run_id }}
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
@@ -34,12 +37,8 @@ jobs:
         SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       run: python tools/ci_collect_components.py
     - name: Verify common commit and package checksums
-      env:
-        GITHUB_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       run: python tools/ci_package_kit.py
     - name: Build Windows installer and verify install, upgrade and uninstall
-      env:
-        GITHUB_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       run: python tools/ci_build_installer.py
     - name: Preserve Windows installer
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

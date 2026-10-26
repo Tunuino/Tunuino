@@ -9,6 +9,7 @@ New-Item -ItemType Directory -Force $work | Out-Null
 $install = Join-Path $work 'Application with spaces'
 $data = Join-Path $env:LOCALAPPDATA 'TunuinoConsole'
 $msiEngine = New-Object -ComObject WindowsInstaller.Installer
+$sourceCommit = if ($env:SOURCE_SHA) { $env:SOURCE_SHA } else { $env:GITHUB_SHA }
 $seeds = @{}
 foreach ($name in @('maps/installer-check.tnmap', 'configurations/installer-check.tncfg', 'logs/installer-check.csv', 'programmers.properties')) {
     $file = Join-Path $data $name
@@ -48,7 +49,7 @@ function Registrations {
 }
 function Assert-Payload {
     $manifest = Get-Content (Join-Path $install 'installation-manifest.json') -Raw | ConvertFrom-Json
-    if ($manifest.source_commit -ne $env:GITHUB_SHA) { throw 'Installed source commit mismatch' }
+    if ($manifest.source_commit -ne $sourceCommit) { throw 'Installed source commit mismatch' }
     foreach ($entry in $manifest.files_sha256.PSObject.Properties) {
         $file = Join-Path $install $entry.Name
         if (-not (Test-Path $file) -or (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant() -ne $entry.Value) {

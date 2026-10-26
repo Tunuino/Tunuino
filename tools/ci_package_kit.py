@@ -32,7 +32,7 @@ def validate_tunerstudio(root, firmware):
 
 def main():
     root = Path("build/kit")
-    commit = os.environ["GITHUB_SHA"]
+    commit = os.environ.get("SOURCE_SHA", os.environ["GITHUB_SHA"])
     firmware = json.loads((root / "firmware/manifest.json").read_text())
     console = json.loads((root / "console/package-manifest.json").read_text())
     if firmware["source_commit"] != commit or console["source_commit"] != commit:
@@ -53,7 +53,7 @@ def main():
             path = base / name
             if not path.resolve().is_relative_to(base.resolve()) or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
                 raise SystemExit("Programmer tool checksum mismatch")
-    manifest = {"source_commit": commit, "run_id": os.environ["GITHUB_RUN_ID"],
+    manifest = {"source_commit": commit, "run_id": os.environ.get("KIT_RUN_ID", os.environ["GITHUB_RUN_ID"]),
                 "firmware": firmware, "console": console, "programmers": programmers,
                 "tunerstudio": tunerstudio,
                 "physical_ecu_validation": False}

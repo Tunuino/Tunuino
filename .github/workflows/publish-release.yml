@@ -12,6 +12,9 @@ jobs:
     name: Publish Windows installer and temporary test Bundle
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+      KIT_RUN_ID: ${{ github.event.workflow_run.id }}
     if: github.repository == 'Tunuino/Tunuino' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' && github.event.workflow_run.head_repository.full_name == 'Tunuino/Tunuino'
     permissions:
       contents: write
@@ -34,33 +37,26 @@ jobs:
         github-token: ${{ github.token }}
         path: build/installer
     - name: Validate synchronized kit again
-      env:
-        GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
-        GITHUB_RUN_ID: ${{ github.event.workflow_run.id }}
       run: python3 tools/ci_package_kit.py
     - name: Prepare installer and temporary test ZIP with internal checksums
-      env:
-        GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
-        GITHUB_RUN_ID: ${{ github.event.workflow_run.id }}
       run: python3 tools/ci_release.py
     - name: Upload assets to draft and publish release
       env:
         GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}
-        GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
       shell: bash
       run: |
         set -euo pipefail
         tag="nightly-$(date -u +%F)-${GITHUB_RUN_ID}"
         title="Tunuino Nightly $(date -u +%F) · build ${GITHUB_RUN_NUMBER} · USB Bench"
         if gh release view "$tag" --json isDraft,targetCommitish > build/existing-release.json; then
-          python3 -c 'import json,os; r=json.load(open("build/existing-release.json")); assert r["targetCommitish"] == os.environ["GITHUB_SHA"], "Release points to another commit"'
+          python3 -c 'import json,os; r=json.load(open("build/existing-release.json")); assert r["targetCommitish"] == os.environ["SOURCE_SHA"], "Release points to another commit"'
           if python3 -c 'import json,sys; sys.exit(0 if not json.load(open("build/existing-release.json"))["isDraft"] else 1)'; then
             echo "Release already published for this run; keeping its assets."
             exit 0
           fi
         else
-          gh release create "$tag" --target "$GITHUB_SHA" --title "$title" --notes-file build/release-notes.md --draft --prerelease
+          gh release create "$tag" --target "$SOURCE_SHA" --title "$title" --notes-file build/release-notes.md --draft --prerelease
         fi
         gh release upload "$tag" build/release/* --clobber
         gh release edit "$tag" --draft=false --prerelease --latest=false

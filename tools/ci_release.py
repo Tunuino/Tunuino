@@ -39,8 +39,8 @@ def bundle(source, output, prefix=""):
 def main():
     root = Path("build/kit")
     manifest = json.loads((root / "kit-manifest.json").read_text())
-    commit = os.environ["GITHUB_SHA"]
-    run_id = os.environ["GITHUB_RUN_ID"]
+    commit = os.environ.get("SOURCE_SHA", os.environ["GITHUB_SHA"])
+    run_id = os.environ.get("KIT_RUN_ID", os.environ["GITHUB_RUN_ID"])
     if manifest["source_commit"] != commit or str(manifest["run_id"]) != run_id:
         raise ValueError("Release kit belongs to another commit or run")
     if manifest["physical_ecu_validation"] is not False:

@@ -81,7 +81,7 @@ def main():
             os.environ["PATH"] = str(Path(wix) / "bin") + os.pathsep + os.environ["PATH"]
     if not shutil.which("candle.exe") or not shutil.which("light.exe"):
         raise SystemExit("WiX 3 candle.exe/light.exe are required by jpackage")
-    commit = os.environ["GITHUB_SHA"]
+    commit = os.environ.get("SOURCE_SHA", os.environ["GITHUB_SHA"])
     number = int(os.environ["GITHUB_RUN_NUMBER"])
     if number < 1:
         raise ValueError("Expected a positive workflow run number")
