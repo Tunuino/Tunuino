@@ -70,7 +70,11 @@ public final class ConsoleUiChecks {
             Scene scene = stage.getScene();
             snapshot(scene, "console-offline");
             check(scene.getStylesheets().size() == 1, "Shared theme loaded");
-            check(((Button) scene.lookup("#monitor-live")).isDisabled(), "No invented sensor capability");
+            check(((Button) scene.lookup("#dashboard-read-ve")).isDisabled(), "Offline dashboard blocks map read");
+            DashboardPane cockpit=(DashboardPane)scene.lookup("#dashboard");
+            check(cockpit!=null,"ECU cockpit is the first page");
+            check(scene.lookup("#dashboard-table-host")==null||scene.lookup("#dashboard")!=null,
+                "Dashboard is real rather than a screenshot");
             ((ToggleButton)scene.lookup("#navigate-1")).fire();
             // The Maps workspace lives in a ScrollPane; let JavaFX attach and
             // skin its content before querying controls inside that page.
@@ -82,6 +86,19 @@ public final class ConsoleUiChecks {
             check(((Label)scene.lookup("#engine-preview-result")).getText().contains("Sem pré-visualização"),
                 "Preview never fabricates engine values");
             ((ToggleButton)scene.lookup("#navigate-0")).fire();
+            // Synthetic data only inside automated UI tests; production has none.
+            int[] erpm=new int[16],loads=new int[16];int[][] values=new int[16][16];
+            for(int y=0;y<16;++y) {
+                erpm[y]=500+y*500;loads[y]=20000+y*10000;
+                for(int x=0;x<16;++x)values[y][x]=50000+y*500+x*300;
+            }
+            cockpit.showMap(new CalibrationMap(CalibrationMap.Kind.VE,erpm,loads,values));
+            check(scene.lookup("#dashboard")!=null
+                &&((Button)scene.lookup("#dashboard-read-ve")).isDisabled(),
+                "Offline map read remains disabled even with offline UI fixture");
+            snapshot(scene,"console-dashboard-16x16");
+            cockpit.clearMaps();
+            ((ToggleButton)scene.lookup("#navigate-4")).fire();
             TelemetryPane telemetry = (TelemetryPane) scene.lookup(".telemetry-pane");
             check(((Label) scene.lookup("#telemetry-value-rpm")).getText().equals("—"), "Offline values are absent");
             List<LogSample> samples = new ArrayList<>();
@@ -172,7 +189,7 @@ public final class ConsoleUiChecks {
             check(reference.getText().equals("3290")&&((Button)scene.lookup("#config-apply")).isDisabled(),"Disconnect preserves local edits while blocking ECU writes");
             reference.setText("3300");check(configEditor.canClose(),"Unchanged configuration closes without prompting");
             ((ToggleButton) scene.lookup("#navigate-3")).fire(); snapshot(scene, "console-firmware");
-            ((ToggleButton) scene.lookup("#navigate-0")).fire();
+            ((ToggleButton) scene.lookup("#navigate-4")).fire();
             telemetry.beginLive(); telemetry.showLive(Optional.of(samples.get(0))); telemetry.showLive(Optional.empty());
             check(((Label) scene.lookup("#telemetry-value-rpm")).getText().equals("—"), "Unavailable data clears current values");
             telemetry.endLive("Monitorização terminada");
