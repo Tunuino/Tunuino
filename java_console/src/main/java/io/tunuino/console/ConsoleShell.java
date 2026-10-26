@@ -60,7 +60,11 @@ final class ConsoleShell extends BorderPane {
         heading.getStyleClass().add("page-heading"); description.getStyleClass().add("page-description");
         description.setWrapText(true);
         VBox pageHeader = new VBox(5, heading, description); pageHeader.getStyleClass().add("page-header");
-        workspace.setTop(pageHeader); workspace.getStyleClass().add("workspace"); setCenter(workspace);
+        workspace.setTop(pageHeader); workspace.getStyleClass().add("workspace");
+        // Scrollable workspaces must shrink below their content's preferred size
+        // when the window is resized, rather than pushing the status bar offscreen.
+        workspace.setMinHeight(0); workspace.setMinWidth(0);
+        setCenter(workspace);
         status.getStyleClass().add("status-message"); identity.getStyleClass().add("identity-message");
         status.setWrapText(true); identity.setWrapText(true);
         VBox footer = new VBox(3, status, identity); footer.getStyleClass().add("status-bar");
@@ -121,6 +125,7 @@ final class ConsoleShell extends BorderPane {
 
     static ScrollPane scroll(Node content) {
         ScrollPane scroll = new ScrollPane(content); scroll.setFitToWidth(true);
+        scroll.setMinHeight(0);scroll.setMinWidth(0);
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER); scroll.getStyleClass().add("workspace-scroll");
         return scroll;
     }
