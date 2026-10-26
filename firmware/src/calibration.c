@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Tunuino. */
 #include "tunuino/calibration.h"
 #include <math.h>
+#include <stdbool.h>
 #include <string.h>
 
 static const uint8_t magic[] = {'T','U','N','U','I','N','O','M'};

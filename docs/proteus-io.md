@@ -168,6 +168,11 @@ current F427 firmware: doing so would require a coordinated configuration
 version and safe migration of existing flash records. The Console's ECU write
 path rejects any size other than 8x8.
 
+In the Console map editor, **Converter 8×8 para 16×16** opens the newly
+refined map in another window with the ECU-upload button omitted. The
+source map remains unchanged, and the 16×16 map can be saved explicitly
+as a local `.tnmap` for later firmware versions.
+
 ## Flash journal and USB recovery
 
 The application remains limited to 128 KiB starting at 0x08000000. F427 sectors

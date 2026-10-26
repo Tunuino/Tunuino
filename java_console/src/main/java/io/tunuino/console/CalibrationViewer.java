@@ -74,6 +74,7 @@ public final class CalibrationViewer {
         private final Button undo = new Button("Desfazer");
         private final Button redo = new Button("Refazer");
         private final Button save = new Button("Guardar cópia");
+        private final Button refine = new Button("Converter 8×8 para 16×16");
         private final CheckBox colors = new CheckBox("Cores por valor");
         private double colorMinimum;
         private double colorMaximum;
@@ -132,6 +133,26 @@ public final class CalibrationViewer {
             undo.setOnAction(event -> { document.undo(); result.setText("Alteração desfeita."); refreshRows(); });
             redo.setOnAction(event -> { document.redo(); result.setText("Alteração refeita."); refreshRows(); });
             save.setOnAction(event -> chooseSave(() -> {}));
+            refine.setId("map-refine-16");
+            refine.setDisable(map.rows()!=8 || map.columns()!=8);
+            refine.setOnAction(event -> {
+                if (saving || table.getEditingCell()!=null) {
+                    result.setText("Confirma ou cancela a célula em edição antes de converter.");
+                    return;
+                }
+                try {
+                    CalibrationMap converted=document.snapshot().refineTo16();
+                    // Deliberately omit the ECU writer: the current device
+                    // still stores 8x8 pages and cannot accept these bytes.
+                    Editor local=new Editor(stage, originalFilename+"-16x16.tnmap",converted,null);
+                    local.result.setText("Nova tabela 16×16 apenas local. Guarda uma cópia .tnmap."
+                        + " O firmware atual da ECU utiliza 8×8.");
+                    local.show();
+                    result.setText("Mapa 16×16 aberto numa nova janela; mapa original preservado.");
+                } catch(IllegalArgumentException error) {
+                    result.setText("Não foi possível converter: "+error.getMessage());
+                }
+            });
             save.getStyleClass().add("primary");
             TextField rpm = new TextField(Integer.toString(map.rpmAt(0)));
             TextField kpa = new TextField(Double.toString(map.loadKpaAt(0)));
@@ -151,7 +172,7 @@ public final class CalibrationViewer {
             title.getStyleClass().add("map-heading");
             VBox header = new VBox(10,
                 title,
-                new HBox(8, undo, redo, save, colors, state),
+                new HBox(8, undo, redo, save, refine, colors, state),
                 new HBox(8, new Label("RPM"), rpm, new Label("MAP (kPa)"), kpa, evaluate), result);
             if(upload!=null){
                 Button send=new Button("Guardar e verificar na ECU");send.setId("map-write");send.getStyleClass().add("primary");
@@ -227,6 +248,7 @@ public final class CalibrationViewer {
             undo.setDisable(saving || editing || !document.canUndo());
             redo.setDisable(saving || editing || !document.canRedo());
             save.setDisable(saving || editing);
+            refine.setDisable(saving || editing || document.snapshot().rows()!=8 || document.snapshot().columns()!=8);
             table.setDisable(saving);
             state.setText(saving ? "A guardar…" : document.isModified() ? "Alterações por guardar" : "Sem alterações pendentes");
             String filename = document.savedPath() == null ? originalFilename : document.savedPath().getFileName().toString();

@@ -188,9 +188,37 @@ public final class ConsoleUiChecks {
                     snapshot(editor.getScene(), "console-map-editor");
                     var colors = (javafx.scene.control.CheckBox) editor.getScene().lookup("#map-colors");
                     check(colors.isSelected(), "Value shading enabled"); colors.fire(); check(!colors.isSelected(), "Value shading can be disabled");
+                    check(((Button)editor.getScene().lookup("#map-refine-16")).isDisabled(),
+                        "Already 12x12 offline fixture must not offer 8x8 refinement");
                 }
             }
             check(CalibrationViewer.closeAll(), "Unchanged map editor closes cleanly");
+            int[] r8=new int[8],k8=new int[8];int[][] c8=new int[8][8];
+            for(int i=0;i<8;++i){r8[i]=600+i*700;k8[i]=20000+i*15000;
+                for(int j=0;j<8;++j)c8[i][j]=45000+i*1000+j*500;}
+            CalibrationViewer.show(stage,"offline-8x8.tnmap",new CalibrationMap(CalibrationMap.Kind.VE,r8,k8,c8));
+            Stage legacyEditor=null;
+            for(Window w:List.copyOf(Window.getWindows()))
+                if(w!=stage&&w instanceof Stage editor&&editor.isShowing()&&
+                    editor.getScene().lookup("#map-refine-16")!=null)legacyEditor=editor;
+            check(legacyEditor!=null, "8x8 editor opens for offline refinement");
+            Button refineButton=(Button)legacyEditor.getScene().lookup("#map-refine-16");
+            check(!refineButton.isDisabled(),"8x8 conversion button available");
+            refineButton.fire();
+            boolean expanded=false;
+            for(Window w:List.copyOf(Window.getWindows())) {
+                if(w!=stage&&w instanceof Stage editor&&editor.isShowing()
+                        &&editor.getTitle().contains("16x16")) {
+                    var grid=(javafx.scene.control.TableView<?>)editor.getScene().lookup(".table-view");
+                    check(grid!=null&&grid.getColumns().size()==17,
+                        "Converted map editor contains one axis and 16 RPM columns");
+                    check(editor.getScene().lookup("#map-write")==null,
+                        "Converted 16x16 copy must not offer ECU upload");
+                    expanded=true;
+                }
+            }
+            check(expanded,"8x8 to 16x16 conversion opens a new offline editor");
+            check(CalibrationViewer.closeAll(),"Offline converted map editor closes cleanly");
             console.stop(); stage.close();
             System.out.println("Console UI: actual shell, shared theme, all workspaces, channel selection, cursor, playback, missing data, compact layouts and map editor passed. Synthetic data; no USB devices.");
             Platform.exit();

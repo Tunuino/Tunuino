@@ -122,7 +122,7 @@ def main():
                      "unit_tests/test_map_refine.c", "-lm", "-o", str(refined_exe)])
         refined_output = run([str(refined_exe)]).splitlines()
         refined_file = work / "refined-16x16-vectors.txt"
-        refined_file.write_text(refined_output[0] + "\\n", encoding="ascii")
+        refined_file.write_text(refined_output[0] + "\n", encoding="ascii")
         print(refined_output[-1])
         map_exe = work / ("map-check.exe" if os.name == "nt" else "map-check")
         run(flags + ["firmware/src/frame.c", "firmware/src/calibration.c", "unit_tests/test_calibration.c", "-lm", "-o", str(map_exe)])
