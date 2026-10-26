@@ -52,6 +52,7 @@ public final class TunuinoConsole extends Application {
         return thread;
     });
     private FirmwarePanel firmwarePanel;
+    private Label status;
     private ConsoleShell shell;
     private javafx.animation.Timeline portRefresh;
     private Task<List<LogSample>> activeRead;
@@ -87,6 +88,39 @@ public final class TunuinoConsole extends Application {
             if(page!=null)page.showMap(map);
         fuelTables.selectKind(CalibrationMap.Kind.VE);
         ignitionTables.selectKind(CalibrationMap.Kind.IGNITION);
+    }
+
+    private void openEcuMapEditor(Stage owner,CalibrationMap map,int row,int column,
+            PacketSession session,DeviceIdentity device) {
+        String title=device.family()+" · "+map.kind()+" · cópia lida da ECU";
+        java.util.function.Function<CalibrationMap,java.util.concurrent.CompletableFuture<Void>> upload=null;
+        if(device.capabilities()==15&&device.firmwareVersion().equals("0.2.0"))upload=updated->{
+            var completion=new java.util.concurrent.CompletableFuture<Void>();
+            if(stopping.get()||serialBusy||monitoringActive||fileReading||configurationBusy
+                    ||firmwarePanel.isBusy()||connection.get()!=session||!session.isOpen()
+                    ||identifiedDevice!=device) {
+                completion.completeExceptionally(new IllegalStateException(
+                    "Para as outras operações e mantém a mesma sessão e identificação da ECU para guardar o mapa"));
+                return completion;
+            }
+            status.setText("A guardar e verificar o mapa na ECU…");
+            serialTask(()->{
+                io.tunuino.protocol.MapWriteClient.write(session,device,updated,Duration.ofSeconds(15));
+                return true;
+            },ignored->{
+                updateMapViews(updated);
+                dashboard.event("Mapa "+updated.kind()+" guardado e verificado por leitura completa.");
+                status.setText("Mapa guardado e verificado na ECU");
+                refreshControls.run();completion.complete(null);
+            },error->{
+                if(!session.isOpen()){connection.compareAndSet(session,null);identifiedDevice=null;}
+                for(DashboardPane page:new DashboardPane[]{dashboard,fuelTables,ignitionTables})page.clearMaps();
+                status.setText("Falha ao guardar mapa: "+error.getMessage());
+                refreshControls.run();completion.completeExceptionally(error);
+            });
+            return completion;
+        };
+        CalibrationViewer.show(owner,title,map,row,column,upload);
     }
 
     private <T> void serialTask(Callable<T> operation, Consumer<T> success, Consumer<Throwable> failure) {
@@ -145,7 +179,7 @@ public final class TunuinoConsole extends Application {
         modelResult.setId("engine-timing-result");
         modelResult.setWrapText(true);
         modelResult.getStyleClass().add("muted");
-        Label status = new Label("Offline · nenhuma ECU identificada");
+        status = new Label("Offline · nenhuma ECU identificada");
         Button readDiagnostics = new Button("Ler diagnóstico da ECU");
         readDiagnostics.setId("diagnostics-read");
         readDiagnostics.getStyleClass().add("primary");
@@ -435,20 +469,7 @@ public final class TunuinoConsole extends Application {
             status.setText("A ler mapa da ECU…");
             serialTask(() -> MapReadClient.read(current, device, kind, Duration.ofSeconds(5)), map -> {
                 updateMapViews(map);
-                String title=device.family() + " · " + kind + " · cópia lida da ECU";
-                if((device.capabilities()&8)!=0)CalibrationViewer.show(stage,title,map,updated -> {
-                    var completion=new java.util.concurrent.CompletableFuture<Void>();
-                    if(serialBusy||monitoringActive||connection.get()!=current||!current.isOpen()){
-                        completion.completeExceptionally(new IllegalStateException("Para a monitorização e mantém a mesma ECU ligada para guardar o mapa"));return completion;
-                    }
-                    status.setText("A guardar e verificar o mapa na ECU…");
-                    serialTask(()->{io.tunuino.protocol.MapWriteClient.write(current,device,updated,Duration.ofSeconds(15));return true;},
-                        ignored->{updateMapViews(updated);status.setText("Mapa guardado e verificado na ECU");
-                            refreshConnection.run();completion.complete(null);},
-                        error->{if(!current.isOpen()){connection.compareAndSet(current,null);identifiedDevice=null;}
-                            status.setText("Falha ao guardar mapa: "+error.getMessage());refreshConnection.run();completion.completeExceptionally(error);});
-                    return completion;
-                });else CalibrationViewer.show(stage,title,map);
+                openEcuMapEditor(stage,map,0,0,current,device);
                 status.setText("Mapa validado · podes consultar, editar e guardar uma cópia offline");
                 refreshConnection.run();
             }, error -> {
@@ -647,6 +668,18 @@ public final class TunuinoConsole extends Application {
         dashboard.setReadAction(readMapForDashboard);
         fuelTables.setReadAction(readMapForDashboard);
         ignitionTables.setReadAction(readMapForDashboard);
+        Consumer<DashboardPane.MapSelection> editMapForDashboard=selection->{
+            PacketSession current=connection.get();DeviceIdentity device=identifiedDevice;
+            if(serialBusy||monitoringActive||fileReading||firmwarePanel.isBusy()
+                    ||current==null||!current.isOpen()||device==null) {
+                status.setText("Para editar uma tabela da ECU, mantém a ligação identificada e pára as outras operações.");
+                refreshConnection.run();return;
+            }
+            openEcuMapEditor(stage,selection.map(),selection.row(),selection.column(),current,device);
+        };
+        dashboard.setEditAction(editMapForDashboard);
+        fuelTables.setEditAction(editMapForDashboard);
+        ignitionTables.setEditAction(editMapForDashboard);
         readDiagnostics.setOnAction(event->{
             PacketSession current=connection.get();
             DeviceIdentity device=identifiedDevice;

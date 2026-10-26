@@ -57,6 +57,7 @@ final class DashboardPane extends VBox {
     private final ToggleButton sparkTab=new ToggleButton("Ignição 16×16");
     private final Button readVe=new Button("Ler VE da ECU");
     private final Button readSpark=new Button("Ler ignição da ECU");
+    private final Button editMap=new Button("Editar tabela");
     private final CheckBox show3d=new CheckBox("Vista 3D");
     private final CheckBox liveHighlight=new CheckBox("Realçar célula ativa");
     private final Label cellDetails=new Label("Seleciona uma célula do mapa para consultar o valor.");
@@ -64,6 +65,9 @@ final class DashboardPane extends VBox {
     private final FlowPane gaugeRow=new FlowPane(10,8);
     private final FlowPane smallRow=new FlowPane(9,9);
     private Consumer<CalibrationMap.Kind> onRead=kind->{};
+    record MapSelection(CalibrationMap map,int row,int column) {}
+    private Consumer<MapSelection> onEdit=selection->{};
+    private DeviceIdentity mapOwner;
     private CalibrationMap.Kind selected=CalibrationMap.Kind.VE;
     private boolean online;
     private LogSample latestSample;
@@ -101,6 +105,11 @@ final class DashboardPane extends VBox {
         // Other gauges are explicit placeholders: firmware does not measure them.
         gaugeRow.getChildren().add(new Gauge("TPS","%","#f7ba37",0,100));
         gaugeRow.getChildren().add(new Gauge("IAT","°C","#59b9ee",-20,120));
+        gaugeRow.widthProperty().addListener((property,before,width)->{
+            int columns=width.doubleValue()>=900?6:3;
+            double cardWidth=Math.floor((width.doubleValue()-10*(columns-1))/columns)-1;
+            for(var child:gaugeRow.getChildren())((Gauge)child).setPrefWidth(Math.max(108,cardWidth));
+        });
         gaugeRow.setPrefWrapLength(1240);
         smallRow.setPrefWrapLength(1240);
         for(String[] entry:new String[][]{
@@ -115,6 +124,11 @@ final class DashboardPane extends VBox {
             tile.getStyleClass().add("dashboard-small-card");
             tile.setPrefWidth(168);smallRow.getChildren().add(tile);
         }
+        smallRow.widthProperty().addListener((property,before,width)->{
+            int columns=width.doubleValue()>=900?7:4;
+            double cardWidth=Math.floor((width.doubleValue()-9*(columns-1))/columns)-1;
+            for(var child:smallRow.getChildren())((VBox)child).setPrefWidth(Math.max(110,cardWidth));
+        });
 
         ToggleGroup tabs=new ToggleGroup();veTab.setToggleGroup(tabs);sparkTab.setToggleGroup(tabs);
         veTab.setSelected(true);
@@ -134,10 +148,10 @@ final class DashboardPane extends VBox {
         readVe.getStyleClass().add("primary");
         readVe.setOnAction(event->onRead.accept(CalibrationMap.Kind.VE));
         readSpark.setOnAction(event->onRead.accept(CalibrationMap.Kind.IGNITION));
-        HBox controls=new HBox(8,veTab,sparkTab,new javafx.scene.layout.Region(),
-            readVe,readSpark,liveHighlight,show3d);
-        HBox.setHgrow(controls.getChildren().get(2),Priority.ALWAYS);
-        controls.setAlignment(Pos.CENTER_LEFT);
+        editMap.setId("dashboard-edit-map");
+        editMap.setOnAction(event->editSelected(0,0));
+        FlowPane controls=new FlowPane(8,8,veTab,sparkTab,
+            readVe,readSpark,editMap,liveHighlight,show3d);
         controls.getStyleClass().add("dashboard-table-actions");
         mapSource.getStyleClass().add("dashboard-subtext");mapSource.setWrapText(true);
         tableHost.getStyleClass().add("dashboard-table-host");
@@ -148,7 +162,7 @@ final class DashboardPane extends VBox {
             CalibrationMap map=maps.get(selected);
             if(map==null)return;
             double w=tableCanvas.getWidth(),h=tableCanvas.getHeight();
-            if(w<=80||h<=46)return;
+            if(w<=80||h<=46||event.getX()<72||event.getY()<38)return;
             double cw=(w-80)/16,ch=(h-46)/16;
             int col=(int)((event.getX()-72)/cw),row=(int)((event.getY()-38)/ch);
             if(col>=0&&col<16&&row>=0&&row<16)
@@ -156,6 +170,15 @@ final class DashboardPane extends VBox {
                     "RPM %d · MAP %.1f kPa · %s %.3f %s",
                     map.rpmAt(col),map.loadKpaAt(row),selected,map.cell(row,col),
                     selected==CalibrationMap.Kind.VE?"%":"°"));
+        });
+        tableCanvas.setId("dashboard-map-canvas");
+        tableCanvas.setOnMouseClicked(event->{
+            if(event.getClickCount()!=2||event.getButton()!=javafx.scene.input.MouseButton.PRIMARY)return;
+            double cw=(tableCanvas.getWidth()-80)/16,ch=(tableCanvas.getHeight()-46)/16;
+            double x=event.getX()-72,y=event.getY()-38;
+            if(cw<=0||ch<=0||x<0||y<0)return;
+            int column=(int)(x/cw),row=(int)(y/ch);
+            if(row<16&&column<16)editSelected(row,column);
         });
         tableCanvas.widthProperty().bind(tableHost.widthProperty());
         tableCanvas.heightProperty().bind(tableHost.heightProperty());
@@ -225,8 +248,17 @@ final class DashboardPane extends VBox {
     void setReadAction(Consumer<CalibrationMap.Kind> action) {
         onRead=java.util.Objects.requireNonNull(action);
     }
+    void setEditAction(Consumer<MapSelection> action) {
+        onEdit=java.util.Objects.requireNonNull(action);
+    }
+    private void editSelected(int row,int column) {
+        CalibrationMap map=maps.get(selected);
+        if(readingAllowed&&map!=null)onEdit.accept(new MapSelection(map,row,column));
+    }
     void setConnection(DeviceIdentity identity,boolean connected,boolean available) {
         boolean active=connected&&identity!=null;
+        if(mapOwner!=null&&(!active||!mapOwner.equals(identity)))clearMaps();
+        mapOwner=active?identity:null;
         if(active!=online) {
             addEvent(active?"ECU identificada.":"Ligação ou identificação da ECU indisponível.");
             if(!active)clearMeasurements();
@@ -237,6 +269,7 @@ final class DashboardPane extends VBox {
         firmwareLabel.setText(identity==null?"Firmware —":"Firmware "+identity.firmwareVersion());
         readVe.setDisable(!readingAllowed);
         readSpark.setDisable(!readingAllowed);
+        editMap.setDisable(!readingAllowed||!maps.containsKey(selected));
         if(!active) {
             status.setText("Sem ligação a uma ECU identificada");
             source.setText("Nenhum valor de sensor disponível");
@@ -298,6 +331,9 @@ final class DashboardPane extends VBox {
     }
     private void redrawMaps() {
         CalibrationMap map=maps.get(selected);
+        editMap.setDisable(!readingAllowed||map==null);
+        cellDetails.setText(map==null?"Lê uma tabela da ECU para consultar e editar células.":
+            "Duplo clique numa célula para editar; a gravação na ECU é explícita no editor.");
         viewCaption.setText(map==null?"TABELA "+selected+" 16×16 · SEM DADOS":"TABELA "+selected+" 16×16 · DADOS DA ECU");
         drawHeatmap();drawIgnition();drawSurface();
     }
@@ -446,7 +482,10 @@ final class DashboardPane extends VBox {
             this.title=title;this.unit=unit;this.minimum=min;this.maximum=max;this.accent=Color.web(color);
             getStyleClass().add("dashboard-gauge");
             setAlignment(Pos.CENTER);
-            setPrefSize(180,184);setMinWidth(150);
+            setPrefSize(180,162);setMinWidth(108);
+            canvas.widthProperty().bind(widthProperty().subtract(20));
+            canvas.setHeight(140);
+            canvas.widthProperty().addListener((property,before,width)->draw());
             getChildren().add(canvas);
             draw();
         }
@@ -464,7 +503,8 @@ final class DashboardPane extends VBox {
         void clear(){value=null;draw();}
         private void draw() {
             GraphicsContext g=canvas.getGraphicsContext2D();
-            double w=canvas.getWidth(),h=canvas.getHeight(),cx=w*.5,cy=h*.59,r=56;
+            double w=canvas.getWidth(),h=canvas.getHeight(),cx=w*.5,cy=h*.59,r=Math.min(50,w*.34);
+            if(w<=0)return;
             g.clearRect(0,0,w,h);
             g.setLineWidth(9);g.setStroke(Color.web("#2c4158"));
             g.strokeArc(cx-r,cy-r,2*r,2*r,205,-230,ArcType.OPEN);

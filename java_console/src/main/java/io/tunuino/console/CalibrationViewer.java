@@ -49,6 +49,18 @@ public final class CalibrationViewer {
             java.util.function.Function<CalibrationMap,java.util.concurrent.CompletableFuture<Void>> upload) {
         new Editor(owner,filename,map,upload).show();
     }
+    public static void show(Window owner,String filename,CalibrationMap map,int row,int column,
+            java.util.function.Function<CalibrationMap,java.util.concurrent.CompletableFuture<Void>> upload) {
+        if(row<0||row>=map.rows()||column<0||column>=map.columns())
+            throw new IllegalArgumentException("Célula fora da tabela");
+        Editor editor=new Editor(owner,filename,map,upload);
+        editor.show();
+        editor.table.getSelectionModel().setCellSelectionEnabled(true);
+        editor.table.getSelectionModel().select(row,editor.table.getColumns().get(column+1));
+        editor.table.scrollTo(row);
+        editor.table.scrollToColumn(editor.table.getColumns().get(column+1));
+        editor.table.requestFocus();
+    }
 
     /** Called on the JavaFX thread before closing the main Console window. */
     public static boolean closeAll() {
@@ -142,11 +154,10 @@ public final class CalibrationViewer {
                 }
                 try {
                     CalibrationMap converted=document.snapshot().refineTo16();
-                    // Deliberately omit the ECU writer: the current device
-                    // still stores 8x8 pages and cannot accept these bytes.
+                    // Historical files have no verified association with a connected ECU.
                     Editor local=new Editor(stage, originalFilename+"-16x16.tnmap",converted,null);
                     local.result.setText("Nova tabela 16×16 apenas local. Guarda uma cópia .tnmap."
-                        + " O firmware atual da ECU utiliza 8×8.");
+                        + " A ECU IO 0.2.0 utiliza mapas nativos 16×16.");
                     local.show();
                     result.setText("Mapa 16×16 aberto numa nova janela; mapa original preservado.");
                 } catch(IllegalArgumentException error) {

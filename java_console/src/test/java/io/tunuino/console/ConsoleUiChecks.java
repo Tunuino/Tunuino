@@ -71,8 +71,14 @@ public final class ConsoleUiChecks {
             snapshot(scene, "console-offline");
             check(scene.getStylesheets().size() == 1, "Shared theme loaded");
             check(((Button) scene.lookup("#dashboard-read-ve")).isDisabled(), "Offline dashboard blocks map read");
+            check(((Button) scene.lookup("#dashboard-edit-map")).isDisabled(), "Offline dashboard blocks ECU map editing");
             DashboardPane cockpit=(DashboardPane)scene.lookup("#dashboard");
             check(cockpit!=null,"ECU cockpit is the first page");
+            var gaugeNodes=new ArrayList<>(scene.lookupAll(".dashboard-gauge"));
+            check(gaugeNodes.size()==6,"Dashboard contains all six gauges");
+            double gaugeY=gaugeNodes.get(0).localToScene(gaugeNodes.get(0).getBoundsInLocal()).getMinY();
+            for(var gauge:gaugeNodes)check(Math.abs(gauge.localToScene(gauge.getBoundsInLocal()).getMinY()-gaugeY)<1,
+                "Six gauges fit one row at the initial desktop width");
             check(scene.lookup("#dashboard-table-host")==null||scene.lookup("#dashboard")!=null,
                 "Dashboard is real rather than a screenshot");
             ((ToggleButton)scene.lookup("#navigate-1")).fire();
@@ -97,6 +103,7 @@ public final class ConsoleUiChecks {
                 &&((Button)scene.lookup("#dashboard-read-ve")).isDisabled(),
                 "Offline map read remains disabled even with offline UI fixture");
             snapshot(scene,"console-dashboard-16x16");
+            checkMapEditing(stage,cockpit,new CalibrationMap(CalibrationMap.Kind.VE,erpm,loads,values));
             stage.setWidth(1510);stage.setHeight(1010);
             snapshot(scene,"console-dashboard-wide");
             stage.setWidth(980);stage.setHeight(720);
@@ -151,6 +158,64 @@ public final class ConsoleUiChecks {
                     });
                 });
             });
+        }
+
+        private void checkMapEditing(Stage stage,DashboardPane cockpit,CalibrationMap map) throws Exception {
+            var identity=new io.tunuino.protocol.DeviceIdentity(io.tunuino.protocol.DeviceIdentity.Family.PROTEUS,
+                io.tunuino.protocol.DeviceIdentity.McuSeries.STM32_F4,7,0,2,0,15,"0102030405060708090a0b0c");
+            cockpit.setConnection(identity,true,true);
+            cockpit.showMap(map);
+            var chosen=new java.util.concurrent.atomic.AtomicReference<DashboardPane.MapSelection>();
+            cockpit.setEditAction(chosen::set);
+            Button edit=(Button)stage.getScene().lookup("#dashboard-edit-map");
+            check(!edit.isDisabled(),"Loaded map in an idle identified session can be edited");
+            edit.fire();
+            check(chosen.get().map()==map&&chosen.get().row()==0&&chosen.get().column()==0,
+                "Edit button opens the actual ECU snapshot");
+            chosen.set(null);
+            cockpit.selectKind(CalibrationMap.Kind.IGNITION);
+            check(edit.isDisabled(),"Unloaded ignition table cannot open a stale VE snapshot");
+            cockpit.selectKind(CalibrationMap.Kind.VE);
+            var canvas=(javafx.scene.canvas.Canvas)stage.getScene().lookup("#dashboard-map-canvas");
+            double x=72+15.5*(canvas.getWidth()-80)/16;
+            double y=38+15.5*(canvas.getHeight()-46)/16;
+            doubleClick(canvas,x,y);
+            check(chosen.get()!=null&&chosen.get().row()==15&&chosen.get().column()==15,
+                "Double click selects the last of all 256 real cells without writing");
+            chosen.set(null);doubleClick(canvas,71,37);
+            check(chosen.get()==null,"Axis padding does not select a map cell");
+            cockpit.setConnection(identity,true,false);
+            doubleClick(canvas,x,y);
+            check(edit.isDisabled()&&chosen.get()==null,"Serial busy blocks button and double click");
+            cockpit.setConnection(identity,true,true);
+            check(!edit.isDisabled(),"Ending USB work preserves and unlocks the same map");
+            CalibrationViewer.show(stage,"selection-16x16.tnmap",map,15,15,null);
+            for(Window window:List.copyOf(Window.getWindows())) {
+                if(window!=stage&&window instanceof Stage editor&&editor.isShowing()) {
+                    var grid=(javafx.scene.control.TableView<?>)editor.getScene().lookup(".table-view");
+                    var selected=grid.getSelectionModel().getSelectedCells().get(0);
+                    check(selected.getRow()==15&&selected.getColumn()==16,"Editor focuses selected cell, excluding MAP axis");
+                }
+            }
+            check(CalibrationViewer.closeAll(),"Opening a cell does not modify or write the map");
+            cockpit.setConnection(null,false,false);
+            cockpit.setConnection(identity,true,true);
+            check(edit.isDisabled(),"Reconnection requires a fresh map read");
+            cockpit.showMap(map);
+            var other=new io.tunuino.protocol.DeviceIdentity(identity.family(),identity.mcuSeries(),7,0,2,0,15,
+                "1112131415161718191a1b1c");
+            cockpit.setConnection(other,true,true);
+            check(edit.isDisabled(),"A different ECU never inherits the previous maps");
+            cockpit.setConnection(null,false,false);
+            cockpit.showMap(map); // Restore only the offline screenshot fixture.
+        }
+
+        private static void doubleClick(javafx.scene.canvas.Canvas canvas,double x,double y) {
+            var point=canvas.localToScene(x,y);
+            javafx.event.Event.fireEvent(canvas,new javafx.scene.input.MouseEvent(canvas,canvas,
+                javafx.scene.input.MouseEvent.MOUSE_CLICKED,point.getX(),point.getY(),point.getX(),point.getY(),
+                javafx.scene.input.MouseButton.PRIMARY,2,false,false,false,false,
+                false,false,false,false,false,true,new javafx.scene.input.PickResult(canvas,x,y)));
         }
 
         private void checkCompact(Stage stage, String name) throws Exception {
