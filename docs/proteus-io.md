@@ -90,6 +90,13 @@ multiplied by 100, signed reference interval in microseconds and configuration
 generation. All derived values remain zero when the prerequisite `TUNUINO:E`
 calculation is invalid.
 
+The Console also offers `Calcular tempos e carga teórica` in the Maps page.
+The Java `EngineTimingClient` rejects inconsistent timing fields, overflow,
+invalid periods and status before displaying anything. Older 0.1.0 firmwares
+responding `0x83` to the new command produce a clear unsupported-feature
+message **without closing the working COM port**. The button is disabled
+while calibration changes or live recording own the USB worker.
+
 The Windows Console now has a Maps-panel read-only preview button. Its Java
 client validates the 20-byte `TUNUINO:E` response, decodes signed spark
 advance, makes all nonzero validity reasons visible and never interprets a

@@ -42,6 +42,10 @@ public final class IoChecks {
             } catch(IllegalArgumentException expected) {
                 check(session.isOpen(),"Invalid local query must not close USB session");
             }
+            EngineTimingClient.Timing unavailable=EngineTimingClient.read(session,identity,Duration.ofSeconds(2));
+            check(!unavailable.valid() && (unavailable.reasons()&EnginePreviewClient.TRIGGER_DISABLED)!=0
+                && unavailable.revolutionUs()==0 && unavailable.relativeLoadPercent()==0,
+                "Disabled settings must not produce theoretical timing");
             EnginePreviewClient.Preview disabled=EnginePreviewClient.read(session,identity,Duration.ofSeconds(2));
             check(!disabled.valid() && (disabled.reasons()&EnginePreviewClient.TRIGGER_DISABLED)!=0
                 && (disabled.reasons()&EnginePreviewClient.NO_RPM)!=0
@@ -82,6 +86,21 @@ public final class IoChecks {
                 && computed.advanceDegrees()==-5 && computed.rpm()==1000
                 && computed.mapKpa()==100 && computed.generation()>0,
                 "Real C firmware returns valid VE and ignition preview to Java");
+            EngineTimingClient.Timing timing=EngineTimingClient.read(session,identity,Duration.ofSeconds(2));
+            check(timing.valid() && timing.reasons()==0 && timing.rpm()==1000
+                && timing.revolutionUs()==60000 && timing.cycleUs()==120000
+                && timing.wheelSlotUs()==1667 && timing.relativeLoadPercent()==100
+                && timing.sparkReferenceUs()==833 && timing.generation()>0,
+                "Real C F427 dry-run crank timing and relative load decoded by Java");
+            byte[] malformedTiming=exchange(session,
+                "TUNUINO:T".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            malformedTiming[12]=0;
+            try{EngineTimingClient.decode(malformedTiming);
+                throw new AssertionError("Corrupted cycle period was accepted");}
+            catch(IOException expected){check(session.isOpen(),"Local decode keeps healthy link");}
+            try{EngineTimingClient.decode(new byte[]{(byte)0x83});
+                throw new AssertionError("Unsupported firmware response decoded as data");}
+            catch(IOException expected){check(session.isOpen(),"No fabricated unsupported data");}
             byte[] malformedPreview=exchange(session,"TUNUINO:E".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
             malformedPreview[2]=0;
             try { EnginePreviewClient.decode(malformedPreview);
@@ -90,6 +109,9 @@ public final class IoChecks {
             try{MapWriteClient.encode(map.withCell(0,0,"77.251"));throw new AssertionError("Rounded map write");}
             catch(IllegalArgumentException expected){check(session.isOpen(),"Precision rejected before write");}
             settings[2]=0;configuration(session,settings);
+            EngineTimingClient.Timing noSyncTiming=EngineTimingClient.read(session,identity,Duration.ofSeconds(2));
+            check(!noSyncTiming.valid() && (noSyncTiming.reasons()&EnginePreviewClient.NO_SYNC)!=0
+                && noSyncTiming.sparkReferenceUs()==0,"Loss of sync removes dry-run timing");
             EnginePreviewClient.Preview stopped=EnginePreviewClient.read(session,identity,Duration.ofSeconds(2));
             check(!stopped.valid()&&(stopped.reasons()&EnginePreviewClient.TRIGGER_DISABLED)!=0
                 &&stopped.vePercent()==0&&stopped.advanceDegrees()==0,

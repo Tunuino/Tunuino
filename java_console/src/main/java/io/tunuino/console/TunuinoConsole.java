@@ -7,6 +7,7 @@ import io.tunuino.transport.PacketSession;
 import io.tunuino.transport.UsbSerialPorts;
 import io.tunuino.protocol.DeviceIdentity;
 import io.tunuino.protocol.EnginePreviewClient;
+import io.tunuino.protocol.EngineTimingClient;
 import io.tunuino.protocol.IdentityClient;
 import io.tunuino.protocol.LiveDataClient;
 import io.tunuino.protocol.MapReadClient;
@@ -120,6 +121,12 @@ public final class TunuinoConsole extends Application {
         previewResult.setId("engine-preview-result");
         previewResult.setWrapText(true);
         previewResult.getStyleClass().add("muted");
+        Button modelTiming = new Button("Calcular tempos e carga teórica");
+        modelTiming.setId("engine-timing");
+        Label modelResult = new Label("Modelo temporal por consultar; não comanda atuadores.");
+        modelResult.setId("engine-timing-result");
+        modelResult.setWrapText(true);
+        modelResult.getStyleClass().add("muted");
         Label status = new Label("Offline · nenhuma ECU identificada");
         Label identityDetails = new Label("Identificação da ECU pendente");
         ComboBox<UsbSerialPorts.Port> ports = new ComboBox<>();
@@ -163,6 +170,8 @@ public final class TunuinoConsole extends Application {
             readMap.setDisable(serialBusy || monitoringActive || fileReading || !connected || !mapAvailable);
             previewMaps.setDisable(preview || programming || serialBusy || monitoringActive
                 || fileReading || !connected || !EnginePreviewClient.supports(identifiedDevice));
+            modelTiming.setDisable(preview || programming || serialBusy || monitoringActive
+                || fileReading || !connected || !EnginePreviewClient.supports(identifiedDevice));
             mapKind.setDisable(serialBusy || monitoringActive || fileReading);
             open.setDisable(monitoringActive || fileReading);
             openMap.setDisable(monitoringActive || fileReading);
@@ -172,6 +181,7 @@ public final class TunuinoConsole extends Application {
             identifiedDevice = null;
             identityDetails.setText("Identificação da ECU pendente");
             previewResult.setText("Sem pré-visualização; ligação USB indisponível.");
+            modelResult.setText("Modelo temporal indisponível: ligação USB encerrada.");
             status.setText("Falha USB: " + error.getMessage());
             refreshConnection.run();
         };
@@ -197,6 +207,7 @@ public final class TunuinoConsole extends Application {
             identifiedDevice = null;
             identityDetails.setText("Identificação da ECU pendente");
             previewResult.setText("Sem pré-visualização; identifica novamente a ECU.");
+            modelResult.setText("Modelo temporal por consultar; identifica novamente a ECU.");
             identify.setDisable(true);
             connect.setDisable(true);
             scan.setDisable(true);
@@ -269,6 +280,7 @@ public final class TunuinoConsole extends Application {
             }, identity -> {
                 identifiedDevice = identity;
                 previewResult.setText("Pré-visualização por consultar; saídas do motor desativadas.");
+                modelResult.setText("Modelo temporal por consultar; saídas do motor desativadas.");
                 identityDetails.setText(identity.family() + " · " + identity.mcuSeries()
                     + " · revisão " + identity.hardwareRevision()
                     + " · firmware " + identity.firmwareVersion() + " · UID " + identity.uid());
@@ -338,6 +350,36 @@ public final class TunuinoConsole extends Application {
                     status.setText("Falha de leitura: " + error.getMessage());
                     refreshConnection.run();
                 });
+        });
+        modelTiming.setOnAction(event -> {
+            PacketSession current = connection.get();
+            DeviceIdentity device = identifiedDevice;
+            if(serialBusy||monitoringActive||fileReading||current==null
+                    ||!current.isOpen()||!EnginePreviewClient.supports(device)) {
+                refreshConnection.run();return;
+            }
+            modelResult.setText("A calcular intervalos teóricos na ECU…");
+            status.setText("A consultar modelo temporal de bancada…");
+            serialTask(()->EngineTimingClient.read(current,device,Duration.ofSeconds(3)),result->{
+                if(result.valid()) {
+                    modelResult.setText(String.format(Locale.ROOT,
+                        "RPM %.1f · volta %.0f µs · ciclo 720° %.0f µs · dente %.0f µs"
+                        + " · índice relativo de carga %.2f %% · avanço relativo %+d µs."
+                        + " Apenas cálculo matemático, sem fase PMS nem saídas.",
+                        result.rpm(),(double)result.revolutionUs(),(double)result.cycleUs(),
+                        (double)result.wheelSlotUs(),result.relativeLoadPercent(),
+                        result.sparkReferenceUs()));
+                } else modelResult.setText("Modelo bloqueado: "+result.explanation()
+                    + ". Nenhum tempo de atuação foi calculado.");
+                status.setText(result.valid()?"Cálculo temporal teórico recebido"
+                    :"Temporização indisponível por falta de condições");
+                refreshConnection.run();
+            },error->{
+                modelResult.setText("Modelo indisponível: "+error.getMessage());
+                if(!current.isOpen()){connection.compareAndSet(current,null);identifiedDevice=null;}
+                status.setText("Consulta de temporização: "+error.getMessage());
+                refreshConnection.run();
+            });
         });
         readMap.setOnAction(event -> {
             PacketSession current = connection.get();
@@ -546,7 +588,10 @@ public final class TunuinoConsole extends Application {
                 ConsoleShell.actions(mapKind, readMap)),
             ConsoleShell.card("PRÉ-VISUALIZAÇÃO DE CÁLCULO", "Consulta os valores interpolados pelo firmware."
                 + " Os resultados exigem sensores válidos e mapas calibrados; esta função não ativa injetores nem bobinas.",
-                previewMaps, previewResult));
+                previewMaps, previewResult),
+            ConsoleShell.card("MODELO TEMPORAL · SEM SAÍDAS", "Calcula o tempo de uma volta, ciclo e dente."
+                + " O índice de carga é relativo; não determina combustível nem ponto de ignição físico.",
+                modelTiming, modelResult));
         maps.setPadding(new Insets(0, 24, 24, 24));
         shell.addPage("Mapas", "Mapas de calibração", "Tabelas VE e ignição, eixos e interpolação.",
             "M1 2H21V20H1ZM3 4V8H7V4ZM9 4V8H13V4ZM15 4V8H19V4ZM3 10V14H7V10ZM9 10V14H13V10ZM15 10V14H19V10ZM3 16V18H7V16ZM9 16V18H13V16ZM15 16V18H19V16Z", ConsoleShell.scroll(maps));

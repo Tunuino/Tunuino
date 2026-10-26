@@ -76,6 +76,9 @@ public final class ConsoleUiChecks {
             // skin its content before querying controls inside that page.
             scene.getRoot().applyCss(); scene.getRoot().layout();
             check(((Button)scene.lookup("#engine-preview")).isDisabled(), "Offline preview cannot contact ECU");
+            check(((Button)scene.lookup("#engine-timing")).isDisabled(), "Offline timing cannot contact ECU");
+            check(((Label)scene.lookup("#engine-timing-result")).getText().contains("não comanda atuadores"),
+                "Offline timing never fabricates a crank phase");
             check(((Label)scene.lookup("#engine-preview-result")).getText().contains("Sem pré-visualização"),
                 "Preview never fabricates engine values");
             ((ToggleButton)scene.lookup("#navigate-0")).fire();

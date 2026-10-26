@@ -26,6 +26,10 @@ public final class EnginePreviewClient {
                           double rpm, double mapKpa, long generation) {
         public String explanation() {
             if (valid) return "Cálculo de bancada disponível; saídas do motor desativadas";
+            return explainReasons(reasons);
+        }
+    }
+    public static String explainReasons(int reasons) {
             List<String> causes = new ArrayList<>();
             if ((reasons & NO_RPM) != 0) causes.add("RPM indisponíveis");
             if ((reasons & NO_MAP) != 0) causes.add("MAP indisponível");
@@ -36,7 +40,6 @@ public final class EnginePreviewClient {
             if ((reasons & OUT_OF_TABLE) != 0) causes.add("fora dos eixos dos mapas");
             if ((reasons & UNCALIBRATED) != 0) causes.add("mapas não calibrados");
             return String.join(" · ", causes);
-        }
     }
 
     public static boolean supports(DeviceIdentity identity) {
