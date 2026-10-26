@@ -53,7 +53,7 @@ def prepare_image(kit, destination, commit):
 
 def build_msi(image, destination, version):
     destination.mkdir(parents=True, exist_ok=True)
-    command = ["jpackage", "--type", "msi", "--name", "TunuinoConsole",
+    command = ["jpackage", "--verbose", "--type", "msi", "--name", "TunuinoConsole",
                "--app-image", str(image.resolve()), "--app-version", version,
                "--vendor", "Tunuino", "--description", "Tunuino Console, firmware e INI TunerStudio",
                "--dest", str(destination.resolve()), "--install-dir", "Programs\\TunuinoConsole",
