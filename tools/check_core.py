@@ -18,7 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 def run(args, timeout=None):
     if "firmware/src/dispatch.c" in args:
         args = list(args)
-        for source in ("firmware/src/device.c", "firmware/src/config_journal.c", "firmware/src/analog.c", "firmware/src/calibration.c"):
+        for source in ("firmware/src/device.c", "firmware/src/config_journal.c", "firmware/src/analog.c",
+                       "firmware/src/calibration.c", "firmware/src/engine_math.c"):
             if source not in args: args.append(source)
     result = subprocess.run(args, cwd=ROOT, text=True, capture_output=True, timeout=timeout)
     if result.returncode:
