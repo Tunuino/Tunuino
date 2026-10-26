@@ -140,7 +140,7 @@ int main(int argc,char **argv) {
       assert(tunuino_frame_decode(delivered+offset,length,&body,&body_size)==TUNUINO_FRAME_OK);
       assert(body[0]==0);
       if (i==0) {
-        static const char signature[]="Tunuino Proteus v0.7 F427 IO v1";
+        static const char signature[]=TUNUINO_IO_SIGNATURE;
         assert(body_size==sizeof(signature) && memcmp(body+1,signature,sizeof(signature)-1)==0);
       }
       if (i==1) assert(body_size>1 && body[body_size-1]==0);
