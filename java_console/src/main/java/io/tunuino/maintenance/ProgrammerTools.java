@@ -8,14 +8,15 @@ import java.util.*;
 /** Discover installed ST tooling or tools beside the portable app; persist explicit selections. */
 public final class ProgrammerTools {
     private final Properties settings = new Properties();
-    private final Path settingsFile = Path.of(System.getProperty("user.home"), ".tunuino", "programmers.properties");
+    private final Path settingsFile = AppPaths.data().resolve("programmers.properties");
     private final Path appRoot;
     public ProgrammerTools() {
         Path root;
         try { root = Path.of(ProgrammerTools.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getParent(); }
         catch (Exception e) { root = Path.of(".").toAbsolutePath(); }
         appRoot = root;
-        try (Reader reader = Files.newBufferedReader(settingsFile)) { settings.load(reader); }
+        Path source = Files.isRegularFile(settingsFile) ? settingsFile : AppPaths.legacyData().resolve("programmers.properties");
+        try (Reader reader = Files.newBufferedReader(source)) { settings.load(reader); }
         catch (IOException ignored) { /* First run uses discovery. */ }
     }
     public Path find(String name) {

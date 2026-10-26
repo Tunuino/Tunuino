@@ -177,6 +177,7 @@ public final class ConfigurationPane extends VBox {
     }
     private boolean file(boolean opening) {
         FileChooser chooser=new FileChooser();chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Configuração Tunuino","*.tncfg"));
+        ConsoleFiles.in(chooser, io.tunuino.maintenance.AppPaths.configurations());
         chooser.setTitle(opening?"Abrir configuração":"Guardar nova configuração");if(!opening)chooser.setInitialFileName("tunuino-proteus-io.tncfg");
         File selected=opening?chooser.showOpenDialog(owner):chooser.showSaveDialog(owner);if(selected==null)return false;
         try {

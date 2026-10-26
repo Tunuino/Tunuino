@@ -16,23 +16,46 @@ jobs:
   bundle:
     name: Assemble validated component artifacts
     if: github.repository == 'Tunuino/Tunuino' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == 'Tunuino/Tunuino'))
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    runs-on: windows-2022
+    timeout-minutes: 35
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
         ref: ${{ github.event.workflow_run.head_sha || github.sha }}
         persist-credentials: false
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '21'
     - name: Collect matching successful component runs and artifacts
       env:
         GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}
         SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
-      run: python3 tools/ci_collect_components.py
+      run: python tools/ci_collect_components.py
     - name: Verify common commit and package checksums
       env:
         GITHUB_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
-      run: python3 tools/ci_package_kit.py
+      run: python tools/ci_package_kit.py
+    - name: Build Windows installer and verify install, upgrade and uninstall
+      env:
+        GITHUB_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      run: python tools/ci_build_installer.py
+    - name: Preserve Windows installer
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: installer-windows-x64-${{ github.event.workflow_run.head_sha || github.sha }}
+        path: build/installer/
+        if-no-files-found: error
+        retention-days: 30
+    - name: Preserve installer diagnostic logs
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: installer-checks-${{ github.event.workflow_run.head_sha || github.sha }}
+        path: ${{ runner.temp }}/Tunuino installer checks/*.log
+        if-no-files-found: ignore
+        retention-days: 14
     - name: Preserve validated Bundle
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:

@@ -12,9 +12,18 @@ public final class Launcher {
     private Launcher() {}
 
     public static void main(String[] args) {
-        if (args.length == 1 && args[0].equals("--verify-runtime")) {
+        if (args.length == 1 && (args[0].equals("--verify-runtime") || args[0].equals("--verify-installation"))) {
             Platform.startup(() -> Platform.runLater(() -> {
                 try {
+                    if (args[0].equals("--verify-installation")) {
+                        java.nio.file.Path folder = io.tunuino.maintenance.AppPaths.firmware();
+                        if (folder == null) throw new java.io.IOException("Bundled firmware not found from installed application");
+                        try (var files = java.nio.file.Files.list(folder)) {
+                            var image = files.filter(p -> p.toString().endsWith(".bin")).findFirst().orElseThrow();
+                            io.tunuino.maintenance.FirmwareImage.load(image);
+                        }
+                        System.out.println("Bundled firmware validated: " + folder);
+                    }
                     Stage stage = new Stage();
                     ConsoleBranding.applyIcon(stage);
                     // Construct the actual firmware controls as well as the graphics runtime.

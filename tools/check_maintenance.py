@@ -18,10 +18,13 @@ def main():
         javac = ['javac'] if shutil.which('javac') else ['java', '--module', 'jdk.compiler/com.sun.tools.javac.Main']
         sources = [] if args.jar else sorted((ROOT / 'java_console/src/main/java/io/tunuino/maintenance').glob('*.java'))
         sources.append(ROOT / 'java_console/src/test/java/io/tunuino/FirmwareProgrammingChecks.java')
+        sources.append(ROOT / 'java_console/src/test/java/io/tunuino/AppPathsChecks.java')
         jar = args.jar.resolve() if args.jar else None
         classpath = str(jar) + os.pathsep + work if jar else work
         extra = ['-cp', str(jar)] if jar else []
         subprocess.run(javac + ['-encoding', 'UTF-8', '--release', '17', '-d', work] + extra + list(map(str, sources)), check=True)
+        env = dict(os.environ, LOCALAPPDATA=str(Path(work) / 'local-app-data'))
+        subprocess.run(['java', '-cp', classpath, 'io.tunuino.AppPathsChecks'], env=env, check=True, timeout=15)
         subprocess.run(['java', '-cp', classpath, 'io.tunuino.FirmwareProgrammingChecks']
                        + ([os.environ['GITHUB_SHA']] if jar else []), check=True, timeout=40)
 

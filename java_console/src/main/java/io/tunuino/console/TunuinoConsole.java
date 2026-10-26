@@ -485,6 +485,7 @@ public final class TunuinoConsole extends Application {
         openMap.setOnAction(event -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Abrir mapa Tunuino");
+            ConsoleFiles.in(chooser, io.tunuino.maintenance.AppPaths.maps());
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Mapa Tunuino", "*.tnmap"));
             File selected = chooser.showOpenDialog(stage);
             if (selected == null) { return; }
@@ -595,6 +596,7 @@ public final class TunuinoConsole extends Application {
             } else {
                 FileChooser chooser = new FileChooser();
                 chooser.setTitle("Guardar novo datalog");
+                ConsoleFiles.in(chooser, io.tunuino.maintenance.AppPaths.logs());
                 chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Datalog CSV", "*.csv"));
                 chooser.setInitialFileName("tunuino-" + LocalDateTime.now()
                     .format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".csv");
@@ -617,6 +619,7 @@ public final class TunuinoConsole extends Application {
         open.setOnAction(event -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Abrir datalog Tunuino");
+            ConsoleFiles.in(chooser, io.tunuino.maintenance.AppPaths.logs());
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Datalog CSV", "*.csv"));
             File selected = chooser.showOpenDialog(stage);
             if (selected == null) {

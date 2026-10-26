@@ -4,8 +4,25 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 from zipfile import ZIP_DEFLATED, ZipFile
 from ci_package_kit import validate_tunerstudio
+from ci_build_installer import SETUP_NAME
+
+
+def validate_installer(directory, commit, run_id):
+    metadata = json.loads((directory / "installer-manifest.json").read_text(encoding="utf-8-sig"))
+    if metadata["source_commit"] != commit or str(metadata["run_id"]) != str(run_id):
+        raise ValueError("Installer belongs to another commit or kit run")
+    if metadata["file"] != SETUP_NAME:
+        raise ValueError("Unexpected installer filename")
+    for check in ("install_upgrade_uninstall_verified", "user_data_preserved", "installed_runtime_verified"):
+        if metadata.get(check) is not True:
+            raise ValueError("Installer did not pass " + check)
+    package = directory / SETUP_NAME
+    if hashlib.sha256(package.read_bytes()).hexdigest() != metadata["sha256"]:
+        raise ValueError("Installer checksum mismatch")
+    return package
 
 
 def bundle(source, output, prefix=""):
@@ -47,6 +64,8 @@ def main():
         checksums.append(f"{digest}  {path.relative_to(root).as_posix()}\n")
     (root / "SHA256SUMS.txt").write_text("".join(checksums), encoding="utf-8")
     bundle(root, output / "tunuino_bundle_proteus_v07_f427_usb_bench.zip")
+    installer = validate_installer(Path("build/installer"), commit, run_id)
+    shutil.copy2(installer, output / SETUP_NAME)
     repo = os.environ["GITHUB_REPOSITORY"]
     notes = f"""## Tunuino — versão experimental de bancada
 
@@ -56,9 +75,14 @@ Esta imagem usa o startup, kernel e USB CDC do repositório **Tunuino/ChibiOS**,
 
 | Download | Conteúdo |
 |---|---|
-| `tunuino_bundle_proteus_v07_f427_usb_bench.zip` | Kit completo: Console, firmware, INI TunerStudio e instruções |
+| **`tunuino_setup_windows_x64.msi`** | **Descarga principal:** instalador Windows x64 com Java, Console, firmware e INI |
+| `tunuino_bundle_proteus_v07_f427_usb_bench.zip` | Versão portátil temporária para testes |
 
-Um único ZIP inclui `console/`, `firmware/`, `kit-manifest.json`, `START-HERE.txt` e `SHA256SUMS.txt`. Java está incluído na Console portátil. O firmware inclui `corresponding-source.tar.gz` e as licenças ChibiOS dentro do mesmo Bundle.
+**Instalação:** abrir o MSI e seguir o assistente. Inclui atalhos no ambiente de trabalho e menu Iniciar, escolha de pasta e desinstalação nas Definições do Windows. Java está incluído. O firmware, o INI correspondente, o código-fonte e as licenças estão na pasta `firmware` junto da aplicação; o seletor de firmware da Console abre essa pasta. Não grava a ECU nem instala drivers automaticamente.
+
+**Atualizações:** fechar a Console e instalar o MSI mais recente. Mapas, configurações e datalogs são guardados por predefinição em `%LOCALAPPDATA%\\TunuinoConsole` e ficam preservados na atualização e desinstalação. As definições antigas de ferramentas em `%USERPROFILE%\\.tunuino` continuam legíveis. A atualização exige descarregar e executar o novo instalador; ainda não existe atualização automática. O instalador ainda não tem assinatura digital de editor.
+
+O ZIP portátil mantém `console/`, `firmware/`, `kit-manifest.json`, `START-HERE.txt` e `SHA256SUMS.txt`. Só será retirado dos novos lançamentos após confirmação de que os testes passaram. Os dois formatos contêm os componentes do mesmo commit. O firmware inclui `corresponding-source.tar.gz` e as licenças ChibiOS.
 
 **Protocolo IO 0.2.0 com comando experimental de saídas: injeção/ignição sequenciais 720°, bomba, relé e ventoinha configuráveis. Arranca desarmado; o perfil do motor é volátil e exige confirmação explícita na Console. Ainda não foi validado num motor ou ECU física. A gravação começa em 0x08000000 e substitui o bootloader instalado.**
 
@@ -72,7 +96,7 @@ O pacote prepara a configuração das ferramentas de gravação. Não inclui aut
 
 Commit: [{commit}](https://github.com/{repo}/commit/{commit})
 
-Compilação e testes automáticos: [execução {run_id}](https://github.com/{repo}/actions/runs/{run_id}). Incluem simulação de USB e verificação do runtime Windows; não constituem teste numa ECU física.
+Compilação e testes automáticos: [execução {run_id}](https://github.com/{repo}/actions/runs/{run_id}). Incluem simulação de USB, instalação limpa e atualização MSI, atalhos, hashes dos componentes instalados, runtime instalado, desinstalação e preservação de ficheiros do utilizador. Não constituem teste numa ECU física.
 
 Não há imagem uaEFI nem F767 neste pacote.
 """

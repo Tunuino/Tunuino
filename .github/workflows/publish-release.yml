@@ -9,7 +9,7 @@ permissions:
   actions: read
 jobs:
   release:
-    name: Publish validated Bundle ZIP
+    name: Publish Windows installer and temporary test Bundle
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     if: github.repository == 'Tunuino/Tunuino' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' && github.event.workflow_run.head_repository.full_name == 'Tunuino/Tunuino'
@@ -27,12 +27,18 @@ jobs:
         run-id: ${{ github.event.workflow_run.id }}
         github-token: ${{ github.token }}
         path: build/kit
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: installer-windows-x64-${{ github.event.workflow_run.head_sha }}
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ github.token }}
+        path: build/installer
     - name: Validate synchronized kit again
       env:
         GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
         GITHUB_RUN_ID: ${{ github.event.workflow_run.id }}
       run: python3 tools/ci_package_kit.py
-    - name: Prepare single bundle with internal checksums
+    - name: Prepare installer and temporary test ZIP with internal checksums
       env:
         GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
         GITHUB_RUN_ID: ${{ github.event.workflow_run.id }}
@@ -59,7 +65,7 @@ jobs:
         gh release upload "$tag" build/release/* --clobber
         gh release edit "$tag" --draft=false --prerelease --latest=false
         gh release view "$tag" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"
-    - name: Keep only bundle attachments in previous nightly Releases
+    - name: Preserve installers and test Bundles while cleaning obsolete component ZIPs
       env:
         GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}

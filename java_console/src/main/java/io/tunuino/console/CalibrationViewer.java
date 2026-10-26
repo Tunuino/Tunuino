@@ -269,6 +269,7 @@ public final class CalibrationViewer {
         private void chooseSave(Runnable afterSave) {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Guardar nova cópia do mapa");
+            ConsoleFiles.in(chooser, io.tunuino.maintenance.AppPaths.maps());
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Mapa Tunuino", "*.tnmap"));
             String base = document.savedPath() == null ? originalFilename : document.savedPath().getFileName().toString();
             if (base.toLowerCase(Locale.ROOT).endsWith(".tnmap")) { base = base.substring(0, base.length() - 6); }

@@ -161,6 +161,7 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
     }
     private void chooseImage() {
         FileChooser chooser = new FileChooser(); chooser.setTitle("Firmware para Proteus v0.7 STM32F427");
+        ConsoleFiles.in(chooser, io.tunuino.maintenance.AppPaths.firmware());
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Firmware com manifesto", "*.bin", "*.srec"));
         File selected = chooser.showOpenDialog(stage);
         if (selected == null) return;
