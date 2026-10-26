@@ -49,6 +49,8 @@ final class DashboardPane extends VBox {
     private final ArrayDeque<String> history=new ArrayDeque<>();
     private final Canvas tableCanvas=new Canvas(840,315);
     private final Canvas surfaceCanvas=new Canvas(470,285);
+    private final Canvas ignitionOverview=new Canvas(740,285);
+    private final StackPane ignitionHost=new StackPane(ignitionOverview);
     private final StackPane surfaceHost=new StackPane(surfaceCanvas);
     private final StackPane tableHost=new StackPane(tableCanvas);
     private final ToggleButton veTab=new ToggleButton("VE 16×16");
@@ -162,6 +164,7 @@ final class DashboardPane extends VBox {
         VBox tablePanel=new VBox(7,controls,viewCaption,tableHost,cellDetails,mapSource);
         tablePanel.getStyleClass().add("dashboard-card");
         tablePanel.setMinWidth(560);VBox.setVgrow(tableHost,Priority.NEVER);
+        tablePanel.setPrefWidth(840);
         HBox.setHgrow(tablePanel,Priority.ALWAYS);
 
         records.getStyleClass().add("dashboard-small-title");
@@ -175,7 +178,10 @@ final class DashboardPane extends VBox {
         side.getChildren().get(0).getStyleClass().add("dashboard-small-title");
         side.getStyleClass().add("dashboard-card");
         side.setMinWidth(235);side.setPrefWidth(250);
-        HBox center=new HBox(10,tablePanel,side);
+        // Wide monitors show the map and engine diagnostics side by side.
+        // Smaller windows wrap the status card rather than clipping the grid.
+        FlowPane center=new FlowPane(10,10,tablePanel,side);
+        tablePanel.prefWidthProperty().bind(widthProperty().subtract(290));
 
         Label surfaceTitle=new Label("MAPA 3D  ·  VISUALIZAÇÃO DAS CÉLULAS");
         surfaceTitle.getStyleClass().add("dashboard-small-title");
@@ -189,12 +195,27 @@ final class DashboardPane extends VBox {
         surfacePanel.getStyleClass().add("dashboard-card");
         VBox.setVgrow(surfaceHost,Priority.NEVER);
         VBox.setVgrow(surfacePanel,Priority.NEVER);
+        surfacePanel.setMinWidth(350);
+        ignitionHost.getStyleClass().add("dashboard-table-host");
+        ignitionHost.setMinHeight(260);ignitionHost.setPrefHeight(285);
+        ignitionOverview.widthProperty().bind(ignitionHost.widthProperty());
+        ignitionOverview.heightProperty().bind(ignitionHost.heightProperty());
+        ignitionHost.widthProperty().addListener((a,b,c)->drawIgnition());
+        ignitionHost.heightProperty().addListener((a,b,c)->drawIgnition());
+        Label secondTitle=new Label("TABELA DE IGNIÇÃO · 16×16");
+        secondTitle.getStyleClass().add("dashboard-small-title");
+        VBox ignitionPanel=new VBox(8,secondTitle,ignitionHost);
+        ignitionPanel.getStyleClass().add("dashboard-card");
+        ignitionPanel.setMinWidth(560);
+        ignitionPanel.prefWidthProperty().bind(widthProperty().subtract(465));
+        surfacePanel.setPrefWidth(435);
+        FlowPane lower=new FlowPane(10,10,ignitionPanel,surfacePanel);
         if(mapsOnly) {
             Label heading=new Label("TABELAS NATIVAS 16×16 · ECU");
             heading.getStyleClass().add("dashboard-kicker");
             getChildren().addAll(heading,center,surfacePanel);
         } else {
-            getChildren().addAll(header,gaugeRow,smallRow,center,surfacePanel);
+            getChildren().addAll(header,gaugeRow,smallRow,center,lower);
         }
         addEvent("Painel inicializado. Sem valores simulados.");
         setConnection(null,false,false);
@@ -278,7 +299,7 @@ final class DashboardPane extends VBox {
     private void redrawMaps() {
         CalibrationMap map=maps.get(selected);
         viewCaption.setText(map==null?"TABELA "+selected+" 16×16 · SEM DADOS":"TABELA "+selected+" 16×16 · DADOS DA ECU");
-        drawHeatmap();drawSurface();
+        drawHeatmap();drawIgnition();drawSurface();
     }
     private void addEvent(String message) {
         history.addFirst("["+LocalTime.now().format(TIME)+"] "+message);
@@ -340,6 +361,39 @@ final class DashboardPane extends VBox {
             g.setStroke(Color.web("#ffffff"));
             g.setLineWidth(2.3);
             g.strokeRect(left+col*cw+1,top+row*ch+1,2*cw-2,2*ch-2);
+        }
+    }
+    /** Secondary ignition 16x16 panel; no values are fabricated before a map read. */
+    private void drawIgnition() {
+        GraphicsContext g=ignitionOverview.getGraphicsContext2D();
+        double w=ignitionOverview.getWidth(),h=ignitionOverview.getHeight();
+        if(w<=0||h<=0)return;
+        g.setFill(Color.web("#0d1928"));g.fillRect(0,0,w,h);
+        CalibrationMap map=maps.get(CalibrationMap.Kind.IGNITION);
+        double left=70,top=36,cw=(w-left-8)/16,ch=(h-top-8)/16;
+        g.setTextAlign(TextAlignment.CENTER);
+        g.setFont(Font.font("Segoe UI",9));g.setFill(DIM);
+        g.fillText("MAP / RPM",left/2,17);
+        for(int col=0;col<16;++col)
+            g.fillText(map==null?"—":Integer.toString(map.rpmAt(col)),left+cw*(col+.5),26);
+        double min=Double.POSITIVE_INFINITY,max=Double.NEGATIVE_INFINITY;
+        if(map!=null)for(int y=0;y<16;++y)for(int x=0;x<16;++x) {
+            min=Math.min(min,map.cell(y,x));max=Math.max(max,map.cell(y,x));
+        }
+        for(int row=0;row<16;++row) {
+            g.setFill(DIM);g.setFont(Font.font("Segoe UI",9));
+            g.fillText(map==null?"—":String.format(Locale.ROOT,"%.0f",map.loadKpaAt(row)),
+                left/2,top+ch*(row+.69));
+            for(int col=0;col<16;++col) {
+                double x=left+col*cw,y=top+row*ch;
+                double val=map==null?0:map.cell(row,col);
+                g.setFill(map==null?Color.web("#1a2937"):heat(max==min?.45:(val-min)/(max-min)));
+                g.fillRect(x+1,y+1,Math.max(0,cw-2),Math.max(0,ch-2));
+                if(map!=null&&cw>=34&&ch>=13) {
+                    g.setFill(Color.web("#071321"));g.setFont(Font.font("Segoe UI",9));
+                    g.fillText(String.format(Locale.ROOT,"%.1f",val),x+cw/2,y+ch*.72);
+                }
+            }
         }
     }
     private void drawSurface() {
