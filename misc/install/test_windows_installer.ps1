@@ -8,6 +8,7 @@ $work = Join-Path $env:RUNNER_TEMP 'Tunuino installer checks'
 New-Item -ItemType Directory -Force $work | Out-Null
 $install = Join-Path $work 'Application with spaces'
 $data = Join-Path $env:LOCALAPPDATA 'TunuinoConsole'
+$msiEngine = New-Object -ComObject WindowsInstaller.Installer
 $seeds = @{}
 foreach ($name in @('maps/installer-check.tnmap', 'configurations/installer-check.tncfg', 'logs/installer-check.csv', 'programmers.properties')) {
     $file = Join-Path $data $name
@@ -34,8 +35,16 @@ function Invoke-Msi([string]$arguments, [string]$label) {
     }
 }
 function Registrations {
-    @(Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
-      Get-ItemProperty | Where-Object DisplayName -eq 'TunuinoConsole')
+    # Query the Windows Installer product database, independent of ARP registry views.
+    $products = $msiEngine.GetType().InvokeMember('RelatedProducts', [Reflection.BindingFlags]::GetProperty,
+        $null, $msiEngine, @('{753927AB-8F0B-4D0C-B832-FBC38A77F21A}'))
+    foreach ($product in $products) {
+        $installedVersion = $msiEngine.GetType().InvokeMember('ProductInfo', [Reflection.BindingFlags]::GetProperty,
+            $null, $msiEngine, @($product, 'VersionString'))
+        $assignment = $msiEngine.GetType().InvokeMember('ProductInfo', [Reflection.BindingFlags]::GetProperty,
+            $null, $msiEngine, @($product, 'AssignmentType'))
+        [pscustomobject]@{ PSChildName = $product; DisplayVersion = $installedVersion; AssignmentType = $assignment }
+    }
 }
 function Assert-Payload {
     $manifest = Get-Content (Join-Path $install 'installation-manifest.json') -Raw | ConvertFrom-Json
@@ -74,13 +83,19 @@ try {
     Assert-Payload
     Assert-Runtime
     Assert-UserData
+    $initial = @(Registrations)
+    if ($initial.Count -ne 1 -or $initial[0].AssignmentType -ne '0') {
+        throw "Expected one per-user installation: $($initial | ConvertTo-Json -Compress)"
+    }
+    $previousProduct = $initial[0].PSChildName
     Invoke-Msi "/i `"$Installer`" INSTALLDIR=`"$install`"" 'upgrade'
     Assert-Payload
     Assert-Runtime
     Assert-UserData
     $registered = @(Registrations)
-    if ($registered.Count -ne 1 -or $registered[0].DisplayVersion -ne $Version) {
-        throw 'Upgrade did not replace the previous installed version'
+    if ($registered.Count -ne 1 -or $registered[0].DisplayVersion -ne $Version -or
+        $registered[0].AssignmentType -ne '0' -or $registered[0].PSChildName -eq $previousProduct) {
+        throw "Upgrade did not replace the previous installed version: $($registered | ConvertTo-Json -Compress)"
     }
     Invoke-Msi "/x $($registered[0].PSChildName)" 'uninstall'
     if (Test-Path (Join-Path $install 'TunuinoConsole.exe')) { throw 'Uninstaller left application executable' }
@@ -96,7 +111,9 @@ try {
     Assert-Runtime
     Assert-UserData
     $registered = @(Registrations)
-    if ($registered.Count -ne 1 -or $registered[0].DisplayVersion -ne $Version) { throw 'Release registration mismatch' }
+    if ($registered.Count -ne 1 -or $registered[0].DisplayVersion -ne $Version -or $registered[0].AssignmentType -ne '0') {
+        throw "Release registration mismatch: $($registered | ConvertTo-Json -Compress)"
+    }
     Invoke-Msi "/x $($registered[0].PSChildName)" 'uninstall-release'
     Assert-UserData
     Write-Output 'Installation, installed payload/runtime, shortcuts, upgrade, uninstallation and user-file preservation passed'
