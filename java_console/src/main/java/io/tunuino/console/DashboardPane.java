@@ -56,12 +56,15 @@ final class DashboardPane extends VBox {
     private final Button readVe=new Button("Ler VE da ECU");
     private final Button readSpark=new Button("Ler ignição da ECU");
     private final CheckBox show3d=new CheckBox("Vista 3D");
+    private final CheckBox liveHighlight=new CheckBox("Realçar célula ativa");
+    private final Label cellDetails=new Label("Seleciona uma célula do mapa para consultar o valor.");
     private final EnumMap<CalibrationMap.Kind,CalibrationMap> maps=new EnumMap<>(CalibrationMap.Kind.class);
     private final FlowPane gaugeRow=new FlowPane(10,8);
     private final FlowPane smallRow=new FlowPane(9,9);
     private Consumer<CalibrationMap.Kind> onRead=kind->{};
     private CalibrationMap.Kind selected=CalibrationMap.Kind.VE;
     private boolean online;
+    private LogSample latestSample;
     private boolean readingAllowed;
     private String selectedPort="USB";
     private final Label portLabel=new Label("PORTA —");
@@ -118,23 +121,45 @@ final class DashboardPane extends VBox {
         veTab.setOnAction(event->{selected=CalibrationMap.Kind.VE;redrawMaps();});
         sparkTab.setOnAction(event->{selected=CalibrationMap.Kind.IGNITION;redrawMaps();});
         show3d.setSelected(true);show3d.setId("dashboard-3d-toggle");
-        show3d.setOnAction(event->surfaceHost.setVisible(show3d.isSelected()));
+        show3d.setOnAction(event->{
+            surfaceHost.setVisible(show3d.isSelected());
+            surfaceHost.setManaged(show3d.isSelected());
+        });
+        liveHighlight.setId("dashboard-live-highlight");
+        liveHighlight.setSelected(true);
+        liveHighlight.setOnAction(event->drawHeatmap());
         readVe.setId("dashboard-read-ve");readSpark.setId("dashboard-read-ignition");
         readVe.getStyleClass().add("primary");
         readVe.setOnAction(event->onRead.accept(CalibrationMap.Kind.VE));
         readSpark.setOnAction(event->onRead.accept(CalibrationMap.Kind.IGNITION));
-        HBox controls=new HBox(8,veTab,sparkTab,new javafx.scene.layout.Region(),readVe,readSpark,show3d);
+        HBox controls=new HBox(8,veTab,sparkTab,new javafx.scene.layout.Region(),
+            readVe,readSpark,liveHighlight,show3d);
         HBox.setHgrow(controls.getChildren().get(2),Priority.ALWAYS);
         controls.setAlignment(Pos.CENTER_LEFT);
         controls.getStyleClass().add("dashboard-table-actions");
         mapSource.getStyleClass().add("dashboard-subtext");mapSource.setWrapText(true);
         tableHost.getStyleClass().add("dashboard-table-host");
         tableHost.setMinHeight(310);tableHost.setPrefHeight(325);
+        cellDetails.setWrapText(true);
+        cellDetails.getStyleClass().add("dashboard-subtext");
+        tableCanvas.setOnMouseMoved(event->{
+            CalibrationMap map=maps.get(selected);
+            if(map==null)return;
+            double w=tableCanvas.getWidth(),h=tableCanvas.getHeight();
+            if(w<=80||h<=46)return;
+            double cw=(w-80)/16,ch=(h-46)/16;
+            int col=(int)((event.getX()-72)/cw),row=(int)((event.getY()-38)/ch);
+            if(col>=0&&col<16&&row>=0&&row<16)
+                cellDetails.setText(String.format(Locale.ROOT,
+                    "RPM %d · MAP %.1f kPa · %s %.3f %s",
+                    map.rpmAt(col),map.loadKpaAt(row),selected,map.cell(row,col),
+                    selected==CalibrationMap.Kind.VE?"%":"°"));
+        });
         tableCanvas.widthProperty().bind(tableHost.widthProperty());
         tableCanvas.heightProperty().bind(tableHost.heightProperty());
         tableHost.widthProperty().addListener((a,b,c)->drawHeatmap());
         tableHost.heightProperty().addListener((a,b,c)->drawHeatmap());
-        VBox tablePanel=new VBox(7,controls,viewCaption,tableHost,mapSource);
+        VBox tablePanel=new VBox(7,controls,viewCaption,tableHost,cellDetails,mapSource);
         tablePanel.getStyleClass().add("dashboard-card");
         tablePanel.setMinWidth(560);VBox.setVgrow(tableHost,Priority.NEVER);
         HBox.setHgrow(tablePanel,Priority.ALWAYS);
@@ -215,7 +240,9 @@ final class DashboardPane extends VBox {
             return;
         }
         LogSample data=sample.get();
+        latestSample=data;
         for(Channel channel:Channel.values())gauges.get(channel).setSample(data);
+        if(liveHighlight.isSelected())drawHeatmap();
         source.setText("Telemetria USB real · relógio da ECU "+String.format(Locale.ROOT,"%.3f s",data.timeMs()/1000.0));
     }
     void monitoringStopped(String reason) {
@@ -243,7 +270,11 @@ final class DashboardPane extends VBox {
         redrawMaps();
     }
     void event(String message) { addEvent(message); }
-    private void clearMeasurements() { for(Gauge gauge:gauges.values())gauge.clear(); }
+    private void clearMeasurements() {
+        latestSample=null;
+        for(Gauge gauge:gauges.values())gauge.clear();
+        drawHeatmap();
+    }
     private void redrawMaps() {
         CalibrationMap map=maps.get(selected);
         viewCaption.setText(map==null?"TABELA "+selected+" 16×16 · SEM DADOS":"TABELA "+selected+" 16×16 · DADOS DA ECU");
@@ -295,6 +326,20 @@ final class DashboardPane extends VBox {
                     g.fillText(String.format(Locale.ROOT,"%.1f",value),x+cw/2,y+ch*.71);
                 }
             }
+        }
+        // No extra serial read: the current 2×2 interpolation cell follows
+        // real RPM/MAP samples while the map remains the last verified snapshot.
+        if(map!=null && latestSample!=null && liveHighlight.isSelected()
+                &&(latestSample.validMask()&3)==3
+                &&latestSample.rpm()>=map.rpmAt(0) && latestSample.rpm()<=map.rpmAt(15)
+                &&latestSample.mapKpa()>=map.loadKpaAt(0)
+                &&latestSample.mapKpa()<=map.loadKpaAt(15)) {
+            int col=0,row=0;
+            while(col<14&&latestSample.rpm()>map.rpmAt(col+1))++col;
+            while(row<14&&latestSample.mapKpa()>map.loadKpaAt(row+1))++row;
+            g.setStroke(Color.web("#ffffff"));
+            g.setLineWidth(2.3);
+            g.strokeRect(left+col*cw+1,top+row*ch+1,2*cw-2,2*ch-2);
         }
     }
     private void drawSurface() {
@@ -377,6 +422,12 @@ final class DashboardPane extends VBox {
                 double x1=cx+Math.cos(angle)*(r-12),y1=cy-Math.sin(angle)*(r-12);
                 double x2=cx+Math.cos(angle)*(r-4),y2=cy-Math.sin(angle)*(r-4);
                 g.strokeLine(x1,y1,x2,y2);
+            }
+            if(value!=null) {
+                double angle=Math.toRadians(205-230*clamp((value-minimum)/(maximum-minimum)));
+                g.setStroke(accent);g.setLineWidth(2.5);
+                g.strokeLine(cx,cy,cx+Math.cos(angle)*(r-15),cy-Math.sin(angle)*(r-15));
+                g.setFill(accent);g.fillOval(cx-3,cy-3,6,6);
             }
             g.setTextAlign(TextAlignment.CENTER);
             g.setFill(Color.web("#c8d9ec"));g.setFont(Font.font("Segoe UI",11));
