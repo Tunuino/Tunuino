@@ -56,7 +56,9 @@ def build_msi(image, destination, version):
     command = ["jpackage", "--verbose", "--type", "msi", "--name", "TunuinoConsole",
                "--app-image", str(image.resolve()), "--app-version", version,
                "--vendor", "Tunuino", "--description", "Tunuino Console, firmware e INI TunerStudio",
-               "--dest", str(destination.resolve()), "--install-dir", "Programs\\TunuinoConsole",
+               # A single directory avoids jpackage's ICE64 error for intermediate per-user directories.
+               # Keep it distinct from %LOCALAPPDATA%/TunuinoConsole, which belongs to the user.
+               "--dest", str(destination.resolve()), "--install-dir", "TunuinoConsoleApp",
                "--win-per-user-install", "--win-dir-chooser", "--win-menu",
                "--win-menu-group", "Tunuino", "--win-shortcut",
                "--win-upgrade-uuid", UPGRADE_UUID,
