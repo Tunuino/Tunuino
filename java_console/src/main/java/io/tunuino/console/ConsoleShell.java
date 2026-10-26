@@ -34,6 +34,7 @@ final class ConsoleShell extends BorderPane {
     private final Label device = new Label("Nenhuma ECU identificada");
     private final BorderPane workspace = new BorderPane();
     private final VBox sidebar = new VBox(8);
+    private final VBox navItems = new VBox(5);
     private final ToggleGroup section = new ToggleGroup();
 
     ConsoleShell(Node hardware, Node connectionControls, Label status, Label identity) {
@@ -50,13 +51,20 @@ final class ConsoleShell extends BorderPane {
         masthead.setAlignment(Pos.CENTER_LEFT); masthead.getStyleClass().add("masthead");
         VBox header = new VBox(masthead, connectionControls); header.getStyleClass().add("app-header");
         setTop(header);
-        sidebar.getStyleClass().add("sidebar"); sidebar.setPrefWidth(190); sidebar.setMinWidth(190);
+        sidebar.getStyleClass().add("sidebar");
+        sidebar.setPrefWidth(195); sidebar.setMinWidth(195); sidebar.setMinHeight(0);
         Label menu = new Label("ÁREA DE TRABALHO"); menu.getStyleClass().add("sidebar-caption");
-        sidebar.getChildren().add(menu);
-        Region stretch = new Region(); VBox.setVgrow(stretch, Priority.ALWAYS);
+        ScrollPane navigationScroll=new ScrollPane(navItems);
+        navigationScroll.setFitToWidth(true);
+        navigationScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        navigationScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        navigationScroll.setMinHeight(0);
+        navigationScroll.getStyleClass().add("sidebar-scroll");
+        VBox.setVgrow(navigationScroll, Priority.ALWAYS);
         Label build = new Label(BuildInfo.label()); build.getStyleClass().add("build-label"); build.setWrapText(true);
         Label local = new Label("TUNUINO\nFerramentas locais · USB"); local.getStyleClass().add("sidebar-footer");
-        sidebar.getChildren().addAll(stretch, local, build); setLeft(sidebar);
+        sidebar.getChildren().addAll(menu,navigationScroll,local,build);
+        setLeft(sidebar);
         heading.getStyleClass().add("page-heading"); description.getStyleClass().add("page-description");
         description.setWrapText(true);
         VBox pageHeader = new VBox(5, heading, description); pageHeader.getStyleClass().add("page-header");
@@ -93,7 +101,7 @@ final class ConsoleShell extends BorderPane {
         button.getStyleClass().add("navigation-button"); button.setToggleGroup(section);
         button.setId("navigate-" + navigation.size());
         button.setOnAction(event -> select(key));
-        navigation.put(key, button); sidebar.getChildren().add(sidebar.getChildren().size() - 3, button);
+        navigation.put(key, button); navItems.getChildren().add(button);
         if (pages.size() == 1) select(key);
     }
 
