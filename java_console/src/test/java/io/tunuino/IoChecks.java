@@ -94,7 +94,7 @@ public final class IoChecks {
                 "Real C F427 dry-run crank timing and relative load decoded by Java");
             byte[] malformedTiming=exchange(session,
                 "TUNUINO:T".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
-            malformedTiming[12]=0;
+            malformedTiming[13]^=1; // Cycle high byte: guaranteed to break 2 × revolution contract.
             try{EngineTimingClient.decode(malformedTiming);
                 throw new AssertionError("Corrupted cycle period was accepted");}
             catch(IOException expected){check(session.isOpen(),"Local decode keeps healthy link");}
