@@ -9,21 +9,31 @@ static int32_t signed16(const uint8_t *p) {
     uint16_t value=tunuino_device_u16(p);
     return value < 32768 ? (int32_t)value : (int32_t)value-65536;
 }
-static size_t page_offset(unsigned page) { return page==1 ? 0 : page==2 ? 256 : 416; }
-static size_t page_size(unsigned page) { return page==1 ? 256 : 160; }
-
+static size_t page_offset(unsigned page) {
+    return page==1 ? 0u : page==2 ? TUNUINO_IO_CONFIG_SIZE
+        : TUNUINO_IO_CONFIG_SIZE+TUNUINO_IO_MAP_SIZE;
+}
+static size_t page_size(unsigned page) {
+    return page==1 ? TUNUINO_IO_CONFIG_SIZE : TUNUINO_IO_MAP_SIZE;
+}
+/* Only active format: 16x16, axes U16, cells signed S16. */
 static bool map_decode(tunuino_map *map, const uint8_t *bytes, tunuino_map_kind kind) {
-    memset(map,0,sizeof(*map)); map->kind=kind;map->rpm_count=map->load_count=8;
-    for (unsigned i=0;i<8;++i) { map->rpm[i]=tunuino_device_u16(bytes+2*i);map->load_milli_kpa[i]=(int32_t)tunuino_device_u16(bytes+16+2*i)*10; }
-    for (unsigned r=0;r<8;++r) for (unsigned c=0;c<8;++c)
-        map->cells[r][c]=signed16(bytes+32+2*(r*8+c))*10;
+    memset(map,0,sizeof(*map));
+    map->kind=kind;map->rpm_count=map->load_count=TUNUINO_IO_MAP_DIM;
+    for(unsigned i=0;i<TUNUINO_IO_MAP_DIM;++i) {
+        map->rpm[i]=tunuino_device_u16(bytes+2*i);
+        map->load_milli_kpa[i]=(int32_t)tunuino_device_u16(bytes+32+2*i)*10;
+    }
+    for(unsigned r=0;r<TUNUINO_IO_MAP_DIM;++r)
+        for(unsigned c=0;c<TUNUINO_IO_MAP_DIM;++c)
+            map->cells[r][c]=signed16(bytes+64+2*(r*TUNUINO_IO_MAP_DIM+c))*10;
     return tunuino_map_validate(map)==TUNUINO_MAP_OK;
 }
 
 uint32_t tunuino_device_validation_errors(const uint8_t *p, size_t length) {
     if (p==NULL || length!=TUNUINO_IO_SETTINGS_SIZE) return TUNUINO_CONFIG_SCHEMA;
     uint32_t errors=0;
-    if(tunuino_device_u16(p)!=1 || p[5]!=0 || p[9]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
+    if(tunuino_device_u16(p)!=TUNUINO_IO_SCHEMA || p[5]!=0 || p[9]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
     for(unsigned i=27;i<32;++i) if(p[i]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
     for(unsigned i=98;i<100;++i) if(p[i]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
     for(unsigned i=102;i<256;++i) if(p[i]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
@@ -49,13 +59,13 @@ uint32_t tunuino_device_validation_errors(const uint8_t *p, size_t length) {
     for(unsigned page=2;page<=3;++page) {
         const uint8_t *m=p+page_offset(page);
         uint32_t issue=page==2?TUNUINO_CONFIG_VE:TUNUINO_CONFIG_IGNITION;
-        for(unsigned i=0;i<8;++i) {
-            if(tunuino_device_u16(m+2*i)>20000 || tunuino_device_u16(m+16+2*i)>50000
+        for(unsigned i=0;i<TUNUINO_IO_MAP_DIM;++i) {
+            if(tunuino_device_u16(m+2*i)>20000 || tunuino_device_u16(m+32+2*i)>50000
                 || (i && (tunuino_device_u16(m+2*i)<=tunuino_device_u16(m+2*i-2)
-                    || tunuino_device_u16(m+16+2*i)<=tunuino_device_u16(m+14+2*i)))) errors|=issue;
+                    || tunuino_device_u16(m+32+2*i)<=tunuino_device_u16(m+30+2*i)))) errors|=issue;
         }
-        for(unsigned i=0;i<64;++i) {
-            int32_t value=signed16(m+32+2*i);
+        for(unsigned i=0;i<TUNUINO_IO_MAP_DIM*TUNUINO_IO_MAP_DIM;++i) {
+            int32_t value=signed16(m+64+2*i);
             if((page==2 && (value<0 || value>30000)) || (page==3 && (value< -9000 || value>9000))) errors|=issue;
         }
     }
@@ -68,9 +78,9 @@ bool tunuino_device_validate(const uint8_t *p, size_t length) {
 
 static bool publish(tunuino_device *d) {
     if (++d->generation==0) d->generation=1;
-    if (!map_decode(&d->scratch,d->active+256,TUNUINO_MAP_VE)
+    if (!map_decode(&d->scratch,d->active+TUNUINO_IO_CONFIG_SIZE,TUNUINO_MAP_VE)
         || tunuino_map_snapshot_prepare(&d->ve,&d->scratch,d->generation)!=TUNUINO_MAP_OK
-        || !map_decode(&d->scratch,d->active+416,TUNUINO_MAP_IGNITION)
+        || !map_decode(&d->scratch,d->active+TUNUINO_IO_CONFIG_SIZE+TUNUINO_IO_MAP_SIZE,TUNUINO_MAP_IGNITION)
         || tunuino_map_snapshot_prepare(&d->ignition,&d->scratch,d->generation)!=TUNUINO_MAP_OK) return false;
     return true;
 }
@@ -78,16 +88,19 @@ static bool publish(tunuino_device *d) {
 void tunuino_device_init(tunuino_device *d, tunuino_device_save save, tunuino_device_clock clock, void *user) {
     memset(d,0,sizeof(*d));d->save=save;d->clock=clock;d->user=user;
     uint8_t *p=d->active;
-    put16(p,1);p[3]=36;p[4]=1; /* Acquisition remains disabled until configured. */
+    put16(p,TUNUINO_IO_SCHEMA);p[3]=36;p[4]=1; /* Acquisition remains disabled until configured. */
     put16(p+10,0);put16(p+12,4095);
     put16(p+18,0);put16(p+20,4095);
     /* An explicit user calibration is required before selecting an input. */
     p[26]=3;put16(p+32,0);put16(p+34,2048);put16(p+36,4095);
     put16(p+96,12000);put16(p+100,3300);
-    const uint16_t rpm[8]={500,1000,1500,2000,3000,4000,6000,8000};
-    const uint16_t load[8]={2000,4000,6000,8000,10000,12000,16000,20000};
-    for (unsigned page=2;page<=3;++page) for(unsigned i=0;i<8;++i) {
-        put16(p+page_offset(page)+2*i,rpm[i]);put16(p+page_offset(page)+16+2*i,load[i]);
+    const uint16_t rpm[16]={500,750,1000,1250,1500,1750,2000,2500,
+        3000,3500,4000,4500,5000,6000,7000,8000};
+    const uint16_t load[16]={2000,3000,4000,5000,6000,7000,8000,9000,
+        10000,11000,12000,13000,14000,16000,18000,20000};
+    for(unsigned page=2;page<=3;++page) for(unsigned i=0;i<16;++i) {
+        put16(p+page_offset(page)+2*i,rpm[i]);
+        put16(p+page_offset(page)+32+2*i,load[i]);
     }
     memcpy(d->staged,d->active,sizeof(d->active));(void)publish(d);
 }
@@ -148,9 +161,7 @@ static void runtime(tunuino_device *d, const tunuino_identity *id, uint8_t out[1
     put16(out+92,tunuino_device_u16(d->active+100));put16(out+94,d->tooth);put32(out+96,d->trigger_errors);
 }
 
-/* Read-only fuel/spark TABLE PREVIEW, not a fuel or ignition controller.
- * Uses the device's existing scratch map, sequentially; no extra 8-KiB
- * tables on the limited F427 task stack, no GPIO and no scheduler. */
+/* Read-only 16x16 fuel/spark TABLE PREVIEW; sequential scratch lookup. No actuation. */
 static void engine_preview(tunuino_device *d, uint8_t out[TUNUINO_ENGINE_PREVIEW_SIZE]) {
     memset(out,0,TUNUINO_ENGINE_PREVIEW_SIZE);
     out[1]=1; /* Wire format v1. 0 means no trustworthy calculation. */
@@ -173,9 +184,9 @@ static void engine_preview(tunuino_device *d, uint8_t out[TUNUINO_ENGINE_PREVIEW
         tunuino_map_status v=TUNUINO_MAP_FORMAT, a=TUNUINO_MAP_FORMAT;
         const double rpm=sample->rpm_milli/1000.0;
         const double kpa=sample->map_milli_kpa/1000.0;
-        if(map_decode(&d->scratch,d->active+256,TUNUINO_MAP_VE))
+        if(map_decode(&d->scratch,d->active+TUNUINO_IO_CONFIG_SIZE,TUNUINO_MAP_VE))
             v=tunuino_map_lookup(&d->scratch,rpm,kpa,&ve);
-        if(map_decode(&d->scratch,d->active+416,TUNUINO_MAP_IGNITION))
+        if(map_decode(&d->scratch,d->active+TUNUINO_IO_CONFIG_SIZE+TUNUINO_IO_MAP_SIZE,TUNUINO_MAP_IGNITION))
             a=tunuino_map_lookup(&d->scratch,rpm,kpa,&advance);
         if(v==TUNUINO_MAP_CLAMPED||a==TUNUINO_MAP_CLAMPED)
             reasons|=TUNUINO_ENGINE_OUT_OF_TABLE;

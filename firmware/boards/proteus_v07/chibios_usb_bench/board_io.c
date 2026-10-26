@@ -92,7 +92,7 @@ static bool flash_erase(void *user,unsigned bank){
     bool okay=flash_wait();flash_finish();return okay;
 }
 bool board_io_save(void *user,const uint8_t *bytes,size_t length){
-    (void)user;return length==576&&tunuino_journal_save(&journal,bytes);
+    (void)user;return length==TUNUINO_IO_SETTINGS_SIZE&&tunuino_journal_save(&journal,bytes);
 }
 
 static void edge_callback(void *argument){
@@ -129,7 +129,7 @@ void board_io_start(tunuino_device *d){
     palSetPadMode(GPIOB,0,PAL_MODE_INPUT_ANALOG);palSetPadMode(GPIOB,1,PAL_MODE_INPUT_ANALOG);
     palSetPadMode(GPIOE,7,PAL_MODE_INPUT);palSetPadMode(GPIOE,8,PAL_MODE_INPUT);
     adcStart(&ADCD1,NULL);
-    const tunuino_journal_io io={flash_read,flash_program,flash_erase,NULL};uint8_t saved[576];
+    const tunuino_journal_io io={flash_read,flash_program,flash_erase,NULL};uint8_t saved[TUNUINO_IO_SETTINGS_SIZE];
     if(tunuino_journal_init(&journal,&io,saved))(void)tunuino_device_restore(d,saved,sizeof(saved));
     configure_capture(d,board_io_time_us());
 }

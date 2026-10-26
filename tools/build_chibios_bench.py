@@ -135,7 +135,7 @@ def main():
     flashing = binary.with_name(binary.name + ".properties")
     flashing.write_text("format=1\ntarget=proteus-v07-f427\nmode=dfu\naddress=0x08000000\n"
                         "replaces_bootloader=true\nsource_commit=" + commit + "\n"
-                        "description=Proteus v0.7 STM32F427 - Tunuino 0.1.0 IO bench\n"
+                        "description=Proteus v0.7 STM32F427 - Tunuino 0.2.0 IO bench\n"
                         "sha256=" + hashlib.sha256(image).hexdigest() + "\n")
     ini = output / "tunuino_proteus_v07_f427_io.ini"
     shutil.copy2(ROOT / "firmware/tunerstudio/generated" / ini.name, ini)
@@ -158,10 +158,10 @@ def main():
                 "tunerstudio": {"ini_file": ini.name, "signature": signature,
                                 "output_bytes": 100, "read_only": False},
                 "engine_outputs": False, "physical_sensors": True, "maps": True,
-                "firmware_version": "0.1.0", "protocol_capabilities": 15,
+                "firmware_version": "0.2.0", "protocol_capabilities": 15,
                 "physical_sensors_validated": False,
                 "configuration_flash": {"banks": ["0x08020000", "0x08040000"],
-                    "sector_bytes": 131072, "record_bytes": 608, "schema": 1},
+                    "sector_bytes": 131072, "record_bytes": 1440, "schema": 2},
                 "usb_vid": "0xcafe", "usb_pid": "0x4001", "usb_disconnect_ms": 250,
                 "usb_ids": "development_only_not_production_allocation",
                 "artifacts_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in hashed},

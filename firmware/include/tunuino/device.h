@@ -6,8 +6,8 @@
 #include "tunuino/analog.h"
 #include "tunuino/engine_math.h"
 
-#define TUNUINO_IO_SIGNATURE "Tunuino Proteus v0.7 F427 IO v1"
-#define TUNUINO_IO_VERSION "Tunuino 0.1.0 Proteus v0.7 IO bench"
+#define TUNUINO_IO_SIGNATURE "Tunuino Proteus v0.7 F427 IO v2"
+#define TUNUINO_IO_VERSION "Tunuino 0.2.0 Proteus v0.7 IO bench"
 /* Serial protocol discovery version. 001 supports the CRC-wrapped envelope.
  * Independent of the application firmware version and INI revision. */
 #define TUNUINO_IO_TS_SERIAL_VERSION "001"
@@ -37,8 +37,10 @@
 #define TUNUINO_CONFIG_VE UINT32_C(64)
 #define TUNUINO_CONFIG_IGNITION UINT32_C(128)
 #define TUNUINO_IO_CONFIG_SIZE 256u
-#define TUNUINO_IO_MAP_SIZE 160u
-#define TUNUINO_IO_SETTINGS_SIZE 576u
+#define TUNUINO_IO_MAP_SIZE 576u
+#define TUNUINO_IO_SETTINGS_SIZE 1408u
+#define TUNUINO_IO_MAP_DIM 16u
+#define TUNUINO_IO_SCHEMA 2u
 #define TUNUINO_IO_CHANNELS 16u
 
 typedef bool (*tunuino_device_save)(void *user, const uint8_t *bytes, size_t length);

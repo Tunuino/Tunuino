@@ -10,7 +10,7 @@
 static tunuino_link link;
 static tunuino_device device;
 static tunuino_identity identity = {TUNUINO_PROTEUS,TUNUINO_STM32_F4,7,
-    0,1,0,TUNUINO_IO_CAPABILITIES,{0}};
+    0,2,0,TUNUINO_IO_CAPABILITIES,{0}};
 static const tunuino_dispatch_context context = {&identity,&device.live,&device.ve,&device.ignition,&device};
 
 int main(void) {

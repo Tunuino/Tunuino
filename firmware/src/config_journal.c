@@ -2,54 +2,62 @@
 #include "tunuino/config_journal.h"
 #include <string.h>
 
-static const uint8_t magic[8]={'T','N','U','I','O','0','0','1'};
+static const uint8_t magic[8]={'T','N','U','I','O','0','0','2'};
 static const uint8_t marker[4]={'D','O','N','E'};
 static uint32_t get32(const uint8_t *p) {return (uint32_t)p[0]<<24|(uint32_t)p[1]<<16|(uint32_t)p[2]<<8|p[3];}
 static void put32(uint8_t *p,uint32_t n){p[0]=(uint8_t)(n>>24);p[1]=(uint8_t)(n>>16);p[2]=(uint8_t)(n>>8);p[3]=(uint8_t)n;}
 static bool erased(const uint8_t *p,size_t size){for(size_t i=0;i<size;++i)if(p[i]!=255)return false;return true;}
-static bool valid(const uint8_t record[608]) {
-    return memcmp(record,magic,8)==0 && get32(record+12)==576
-        && memcmp(record+604,marker,4)==0 && get32(record+592)==tunuino_crc32(record,592)
-        && erased(record+596,8) && tunuino_device_validate(record+16,576);
+static bool valid(const uint8_t record[TUNUINO_JOURNAL_RECORD_BYTES]) {
+    const size_t size=TUNUINO_JOURNAL_RECORD_BYTES;
+    return memcmp(record,magic,8)==0 && get32(record+12)==TUNUINO_IO_SETTINGS_SIZE
+        && memcmp(record+size-4,marker,4)==0
+        && get32(record+size-16)==tunuino_crc32(record,size-16)
+        && erased(record+size-12,8)
+        && tunuino_device_validate(record+16,TUNUINO_IO_SETTINGS_SIZE);
 }
-bool tunuino_journal_init(tunuino_config_journal *j,const tunuino_journal_io *io,uint8_t settings[576]) {
+bool tunuino_journal_init(tunuino_config_journal *j,const tunuino_journal_io *io,uint8_t settings[TUNUINO_IO_SETTINGS_SIZE]) {
     if(j==NULL||io==NULL||settings==NULL||io->read==NULL||io->program==NULL||io->erase==NULL)return false;
-    memset(j,0,sizeof(*j));j->io=*io;uint8_t record[608];
-    for(unsigned bank=0;bank<2;++bank) for(size_t offset=0;offset+608<=TUNUINO_JOURNAL_BANK_BYTES;offset+=608) {
+    memset(j,0,sizeof(*j));j->io=*io;uint8_t record[TUNUINO_JOURNAL_RECORD_BYTES];
+    for(unsigned bank=0;bank<2;++bank) for(size_t offset=0;offset+TUNUINO_JOURNAL_RECORD_BYTES<=TUNUINO_JOURNAL_BANK_BYTES;offset+=TUNUINO_JOURNAL_RECORD_BYTES) {
         if(!io->read(io->user,bank,offset,record,sizeof(record)))return false;
         if(valid(record)) {
             uint32_t sequence=get32(record+8);
             if(!j->found || (uint32_t)(sequence-j->sequence)<UINT32_C(0x80000000)) {
-                j->found=true;j->sequence=sequence;j->bank=bank;j->offset=offset;memcpy(settings,record+16,576);
+                j->found=true;j->sequence=sequence;j->bank=bank;j->offset=offset;memcpy(settings,record+16,TUNUINO_IO_SETTINGS_SIZE);
             }
         }
     }
     return j->found;
 }
-bool tunuino_journal_save(tunuino_config_journal *j,const uint8_t settings[576]) {
-    if(j==NULL||!tunuino_device_validate(settings,576))return false;
-    uint8_t record[608];unsigned bank=j->found?j->bank:0;size_t offset=j->found?j->offset+608:0;
+bool tunuino_journal_save(tunuino_config_journal *j,const uint8_t settings[TUNUINO_IO_SETTINGS_SIZE]) {
+    if(j==NULL||!tunuino_device_validate(settings,TUNUINO_IO_SETTINGS_SIZE))return false;
+    uint8_t record[TUNUINO_JOURNAL_RECORD_BYTES];unsigned bank=j->found?j->bank:0;size_t offset=j->found?j->offset+TUNUINO_JOURNAL_RECORD_BYTES:0;
     if(j->found) {
         if(!j->io.read(j->io.user,j->bank,j->offset,record,sizeof(record)))return false;
-        if(valid(record)&&memcmp(record+16,settings,576)==0)return true;
+        if(valid(record)&&memcmp(record+16,settings,TUNUINO_IO_SETTINGS_SIZE)==0)return true;
     }
     /* Torn records consume their slot. Never program over a non-erased word. */
-    for(;offset+608<=TUNUINO_JOURNAL_BANK_BYTES;offset+=608) {
+    for(;offset+TUNUINO_JOURNAL_RECORD_BYTES<=TUNUINO_JOURNAL_BANK_BYTES;offset+=TUNUINO_JOURNAL_RECORD_BYTES) {
         if(!j->io.read(j->io.user,bank,offset,record,sizeof(record)))return false;
         if(erased(record,sizeof(record)))break;
     }
-    if(offset+608>TUNUINO_JOURNAL_BANK_BYTES) {
+    if(offset+TUNUINO_JOURNAL_RECORD_BYTES>TUNUINO_JOURNAL_BANK_BYTES) {
         bank=j->found?1u-j->bank:0;
         if(!j->io.erase(j->io.user,bank))return false;
         offset=0;
     }
     memset(record,255,sizeof(record));memcpy(record,magic,8);
     uint32_t sequence=j->found?j->sequence+1:1;
-    put32(record+8,sequence);put32(record+12,576);memcpy(record+16,settings,576);
-    put32(record+592,tunuino_crc32(record,592));
-    if(!j->io.program(j->io.user,bank,offset,record,604))return false;
-    if(!j->io.program(j->io.user,bank,offset+604,marker,4))return false;
+    put32(record+8,sequence);
+    put32(record+12,TUNUINO_IO_SETTINGS_SIZE);
+    memcpy(record+16,settings,TUNUINO_IO_SETTINGS_SIZE);
+    put32(record+TUNUINO_JOURNAL_RECORD_BYTES-16,
+        tunuino_crc32(record,TUNUINO_JOURNAL_RECORD_BYTES-16));
+    if(!j->io.program(j->io.user,bank,offset,record,TUNUINO_JOURNAL_RECORD_BYTES-4))
+        return false;
+    if(!j->io.program(j->io.user,bank,offset+TUNUINO_JOURNAL_RECORD_BYTES-4,marker,4))
+        return false;
     if(!j->io.read(j->io.user,bank,offset,record,sizeof(record))||!valid(record)
-        ||memcmp(record+16,settings,576)!=0)return false;
+        ||memcmp(record+16,settings,TUNUINO_IO_SETTINGS_SIZE)!=0)return false;
     j->found=true;j->sequence=sequence;j->bank=bank;j->offset=offset;return true;
 }
