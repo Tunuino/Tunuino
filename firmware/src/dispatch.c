@@ -93,7 +93,7 @@ tunuino_dispatch_status tunuino_dispatch_validate(const tunuino_dispatch_context
     if ((caps & (TUNUINO_DISPATCH_PARTIAL|TUNUINO_DISPATCH_IO))!=0
         && (c->device==NULL || caps!=TUNUINO_IO_CAPABILITIES || c->identity->family!=TUNUINO_PROTEUS
             ||c->identity->mcu_series!=TUNUINO_STM32_F4||c->identity->hardware_revision!=7
-            ||c->identity->firmware_major!=0||c->identity->firmware_minor!=1||c->identity->firmware_patch!=0))
+            ||c->identity->firmware_major!=0||c->identity->firmware_minor!=2||c->identity->firmware_patch!=0))
         return TUNUINO_DISPATCH_UNCONFIGURED;
     if (c->device!=NULL && caps!=TUNUINO_IO_CAPABILITIES)return TUNUINO_DISPATCH_UNCONFIGURED;
     if ((caps & TUNUINO_DISPATCH_MAP_READ) != 0) {
