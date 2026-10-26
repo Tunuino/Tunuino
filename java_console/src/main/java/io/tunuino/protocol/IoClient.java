@@ -20,7 +20,7 @@ public final class IoClient {
         DeviceIdentity reported=DeviceIdentity.decode(Arrays.copyOf(body,32));
         if(!reported.equals(identity)||identity.capabilities()!=15||identity.family()!=DeviceIdentity.Family.PROTEUS
             ||identity.mcuSeries()!=DeviceIdentity.McuSeries.STM32_F4||identity.hardwareRevision()!=7
-            ||!identity.firmwareVersion().equals("0.1.0")||body[32]!=0)throw new IOException("Perfil IO da ECU incompatível");
+            ||!identity.firmwareVersion().equals("0.2.0")||body[32]!=0)throw new IOException("Perfil IO da ECU incompatível");
         ByteBuffer b=ByteBuffer.wrap(body,1,100).slice();
         int fraction=Short.toUnsignedInt(b.getShort(36)),mask=b.get(38)&255,status=b.get(39)&255;
         int reference=Short.toUnsignedInt(b.getShort(92));
@@ -42,7 +42,7 @@ public final class IoClient {
         if (identity == null || identity.capabilities() != 15
                 || identity.family() != DeviceIdentity.Family.PROTEUS
                 || identity.mcuSeries() != DeviceIdentity.McuSeries.STM32_F4
-                || identity.hardwareRevision() != 7 || !identity.firmwareVersion().equals("0.1.0"))
+                || identity.hardwareRevision() != 7 || !identity.firmwareVersion().equals("0.2.0"))
             throw new IllegalStateException("O firmware não suporta leituras IO por blocos");
         if (offset < 0 || offset >= 100 || count < 1 || count > 100 - offset)
             throw new IllegalArgumentException("Intervalo de canais IO inválido");

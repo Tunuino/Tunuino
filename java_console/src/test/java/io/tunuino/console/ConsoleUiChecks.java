@@ -143,7 +143,7 @@ public final class ConsoleUiChecks {
             check(((Button)scene.lookup("#config-apply")).isDisabled(),"Offline configuration cannot write USB");
             ConfigurationPane configEditor=(ConfigurationPane)scene.lookup("#config-read").getParent().getParent().getParent();
             byte[] fixture=new byte[256];java.nio.ByteBuffer cfg=java.nio.ByteBuffer.wrap(fixture);
-            cfg.putShort(0,(short)1);fixture[3]=36;fixture[4]=1;fixture[26]=3;
+            cfg.putShort(0,(short)2);fixture[3]=36;fixture[4]=1;fixture[26]=3;
             cfg.putShort(12,(short)4095);cfg.putShort(20,(short)4095);cfg.putShort(34,(short)2048);cfg.putShort(36,(short)4095);
             cfg.putShort(96,(short)12000);cfg.putShort(100,(short)3300);
             var id=new io.tunuino.protocol.DeviceIdentity(io.tunuino.protocol.DeviceIdentity.Family.PROTEUS,

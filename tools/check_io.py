@@ -30,9 +30,9 @@ def main():
     assert section.index('nPages = 3') < section.index('blockingFactor = 100')
     assert '[UiDialogs]' in text and '[UserDefined]' not in text
     ini=configparser.ConfigParser(interpolation=None,strict=False);ini.read_string('[General]\n'+text)
-    assert ini['TunerStudio'].getint('iniVersion')==4
+    assert ini['TunerStudio'].getint('iniVersion')==5
     assert ini['OutputChannels']['ochGetCommand']=='"O%2o%2c"'
-    assert ini['Constants'].getint('nPages')==3 and ini['Constants']['pageSize']=='256, 160, 160'
+    assert ini['Constants'].getint('nPages')==3 and ini['Constants']['pageSize']=='256, 576, 576'
     assert ini['Constants'].getint('blockingFactor')>=ini['OutputChannels'].getint('ochBlockSize')
     assert ini['Constants']['endianness']=='big' and ini['OutputChannels'].getint('ochBlockSize')==100
     for field,prefix in [('pageReadCommand','r'),('pageChunkWrite','w'),('burnCommand','b'),('crc32CheckCommand','k')]:
@@ -46,7 +46,7 @@ def main():
         vectors={name:bytes.fromhex(value) for name,value in (line.split() for line in lines[:-1])}
         assert decode(vectors['signature'])==json.loads(ini['TunerStudio']['signature']).encode()
         assert decode(vectors['signature_q'])==decode(vectors['signature'])
-        assert decode(vectors['version'])==b'Tunuino 0.1.0 Proteus v0.7 IO bench\0'
+        assert decode(vectors['version'])==b'Tunuino 0.2.0 Proteus v0.7 IO bench\0'
         assert decode(vectors['ts_protocol'])==b'001'
         assert decode(vectors['ts_test'])==b'\xff'
         assert decode(vectors['ts_seconds'])==bytes(2)
@@ -78,7 +78,7 @@ def main():
         assert nosync[1]==0 and nosync[2]&0x09==0x09
         noadc=decode(vectors['engine_preview_adc_invalid'])
         assert noadc[1]==0 and noadc[2]&0x12==0x12
-        expected={'hardwareRevision':7,'firmwareMajor':0,'firmwareMinor':1,'firmwarePatch':0,'capabilities':15,
+        expected={'hardwareRevision':7,'firmwareMajor':0,'firmwareMinor':2,'firmwarePatch':0,'capabilities':15,
             'uptimeSeconds':1234,'uptimeMillis':567,'validMask':15,'ioStatus':13,'rpmValue':1234.5,
             'mapValue':100.0,'lambdaValue':1.0,'coolantValue':50.0,'adcReferenceMv':3300,'triggerTooth':12,'triggerErrors':3}
         for i in range(16):expected['raw'+str(i+1)]=2000

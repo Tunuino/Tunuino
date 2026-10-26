@@ -45,7 +45,7 @@ public final class EnginePreviewClient {
     public static boolean supports(DeviceIdentity identity) {
         return identity != null && identity.family() == DeviceIdentity.Family.PROTEUS
             && identity.mcuSeries() == DeviceIdentity.McuSeries.STM32_F4
-            && identity.hardwareRevision() == 7 && identity.firmwareVersion().equals("0.1.0")
+            && identity.hardwareRevision() == 7 && identity.firmwareVersion().equals("0.2.0")
             && identity.capabilities() == 15;
     }
 

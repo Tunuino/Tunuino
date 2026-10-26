@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.CRC32;
 
-/** Immutable F427 IO schema-1 settings; contains no fuel or ignition tables. */
+/** Immutable F427 IO schema-2 settings; VE/ignition live on separate 16x16 pages. */
 public final class IoConfiguration {
     public enum Field {
         WHEEL("Aquisição","Dentes nominais",3,1,4,120,0),
@@ -62,7 +62,7 @@ public final class IoConfiguration {
 
     public List<String> errors() {
         List<String> errors=new ArrayList<>();
-        if(bytes[0]!=0||bytes[1]!=1||bytes[5]!=0||bytes[9]!=0)errors.add("Esquema/reservas incompatíveis");
+        if(bytes[0]!=0||bytes[1]!=2||bytes[5]!=0||bytes[9]!=0)errors.add("Esquema/reservas incompatíveis");
         for(int i=27;i<32;i++)if(bytes[i]!=0)errors.add("Reservas de calibração alteradas");
         for(int i=98;i<100;i++)if(bytes[i]!=0)errors.add("Reservas de aquisição alteradas");
         for(int i=102;i<256;i++)if(bytes[i]!=0)errors.add("Reservas de configuração alteradas");

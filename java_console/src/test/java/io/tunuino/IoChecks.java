@@ -30,7 +30,7 @@ public final class IoChecks {
         Path directory=Files.createTempDirectory("tunuino-io-");
         try(PacketSession session=new PacketSession(new ProcessSerialChannel(List.of(args[0])))){
             DeviceIdentity identity=IdentityClient.identify(session,DeviceIdentity.Family.PROTEUS,Duration.ofSeconds(3));
-            check(identity.capabilities()==15&&identity.firmwareVersion().equals("0.1.0"),"IO identity");
+            check(identity.capabilities()==15&&identity.firmwareVersion().equals("0.2.0"),"IO identity");
             IoClient.Inputs initial=IoClient.read(session,identity,Duration.ofSeconds(2));
             check(initial.sample().validMask()==0&&(initial.status()&1)!=0&&initial.raw()[0]==2000,"Raw ADC without invented calibrated data");
             int[] isolated=initial.raw();isolated[0]=0;check(initial.raw()[0]==2000,"Immutable ADC snapshot");
@@ -65,7 +65,7 @@ public final class IoChecks {
             CalibrationMap map=MapReadClient.read(session,identity,CalibrationMap.Kind.VE,Duration.ofSeconds(3));
             map=map.withCell(0,0,"77.25");MapWriteClient.write(session,identity,map,Duration.ofSeconds(10));
             check(Arrays.equals(map.encode(),MapReadClient.read(session,identity,map.kind(),Duration.ofSeconds(3)).encode()),"Persist/map readback contract");
-            CalibrationMap ignition=MapReadClient.read(session,identity,CalibrationMap.Kind.IGNITION,Duration.ofSeconds(3)).withCell(7,7,"-12.34");
+            CalibrationMap ignition=MapReadClient.read(session,identity,CalibrationMap.Kind.IGNITION,Duration.ofSeconds(3)).withCell(15,15,"-12.34");
             MapWriteClient.write(session,identity,ignition,Duration.ofSeconds(10));
             check(Arrays.equals(ignition.encode(),MapReadClient.read(session,identity,ignition.kind(),Duration.ofSeconds(3)).encode()),"Signed ignition map write/readback");
             EnginePreviewClient.Preview uncalibrated=EnginePreviewClient.read(session,identity,Duration.ofSeconds(2));
@@ -75,7 +75,7 @@ public final class IoChecks {
             // These test values must NEVER be used as an engine tune.
             CalibrationMap fullVe=MapReadClient.read(session,identity,CalibrationMap.Kind.VE,Duration.ofSeconds(3));
             CalibrationMap fullIgn=MapReadClient.read(session,identity,CalibrationMap.Kind.IGNITION,Duration.ofSeconds(3));
-            for(int row=0;row<8;++row)for(int col=0;col<8;++col) {
+            for(int row=0;row<16;++row)for(int col=0;col<16;++col) {
                 fullVe=fullVe.withCell(row,col,"100.00");
                 fullIgn=fullIgn.withCell(row,col,"-5.00");
             }

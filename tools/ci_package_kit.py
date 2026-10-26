@@ -73,8 +73,8 @@ def main():
         "TunerStudio: close the Console COM connection, create a project, choose Other/Browse,\n"
         "then select firmware/tunuino_proteus_v07_f427_io.ini and the ECU COM at 115200.\n"
         "Use Firmware Default protocol. This INI requires the firmware in this same Bundle.\n"
-        "Tunuino 0.1.0 IO: configure inputs and measured calibration, then Burn. Inputs disabled until selected.\n"
-        "Raw ADC, calibrated signals, 8x8 VE/ignition maps and persistent settings; no engine outputs.\n"
+        "Tunuino 0.2.0 IO: native 16x16 only; back up previous calibration before flashing.\n"
+        "Raw ADC, calibrated signals, native 16x16 VE/ignition maps and schema-2 settings; no engine outputs.\n"
         "AV readings are MCU ADC voltages, not uncorrected external sensor voltages.\n"
         "Flash sectors 5/6 at 0x08020000/0x08040000 store calibration; firmware image stays below 0x08020000.\n")
     print(f"Validated synchronized bench kit for {commit}")

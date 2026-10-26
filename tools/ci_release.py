@@ -60,7 +60,7 @@ Esta imagem usa o startup, kernel e USB CDC do repositório **Tunuino/ChibiOS**,
 
 Um único ZIP inclui `console/`, `firmware/`, `kit-manifest.json`, `START-HERE.txt` e `SHA256SUMS.txt`. Java está incluído na Console portátil. O firmware inclui `corresponding-source.tar.gz` e as licenças ChibiOS dentro do mesmo Bundle.
 
-**Firmware 0.1.0 para testar entradas, sensores calibrados e mapas em bancada. Não controla um motor. A gravação começa em 0x08000000 e substitui o bootloader instalado. A validação física na ECU está pendente.**
+**Firmware 0.2.0 para testar entradas, sensores calibrados e mapas em bancada. Não controla um motor. A gravação começa em 0x08000000 e substitui o bootloader instalado. A validação física na ECU está pendente.**
 
 Extrair o ZIP completo antes de abrir `console/TunuinoConsole.exe`. Manter `.bin.properties` junto do `.bin`.
 

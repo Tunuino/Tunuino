@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 HERE=Path(__file__).resolve().parent
-SIGNATURE='Tunuino Proteus v0.7 F427 IO v1'
+SIGNATURE='Tunuino Proteus v0.7 F427 IO v2'
 INI_NAME='tunuino_proteus_v07_f427_io.ini'
 OUTPUT_BYTES=100
 
@@ -16,10 +16,10 @@ def render():
         '; Physical input/calibration bench. No actuator commands or engine control.',
         '; Disabled/unavailable calibrated channels evaluate to NaN, not measurements.',
         'enable2ndByteCanID = false', '', '[TunerStudio]',
-        '    iniSpecVersion = 3.51', '    iniVersion = 4', f'    signature = {json.dumps(SIGNATURE)}',
+        '    iniSpecVersion = 3.51', '    iniVersion = 5', f'    signature = {json.dumps(SIGNATURE)}',
         '    queryCommand = "S"', '    versionInfo = "V"', '    defaultRuntimeRecordPerSec = 5', '',
         '[Constants]', '    messageEnvelopeFormat = msEnvelope_1.0', '    endianness = big',
-        '    nPages = 3', '    pageSize = 256, 160, 160',
+        '    nPages = 3', '    pageSize = 256, 576, 576',
         '    pageIdentifier = "\\x00\\x01", "\\x00\\x02", "\\x00\\x03"',
         '    pageReadCommand = "r%2i%2o%2c", "r%2i%2o%2c", "r%2i%2o%2c"',
         '    pageValueWrite = "w%2i%2o%2c%v", "w%2i%2o%2c%v", "w%2i%2o%2c%v"',
@@ -28,7 +28,7 @@ def render():
         '    crc32CheckCommand = "k%2i", "k%2i", "k%2i"',
         '    blockingFactor = 100', '    blockReadTimeout = 6000',
         '    interWriteDelay = 0', '    page = 1',
-        '    configLayout = scalar, U16, 0, "", 1, 0, 1, 1, 0',
+        '    configLayout = scalar, U16, 0, "", 1, 0, 2, 2, 0',
         '    triggerEnabled = bits, U08, 2, [0:0], "Disabled", "Enabled"',
         '    triggerTeeth = scalar, U08, 3, "teeth", 1, 0, 4, 120, 0',
         '    triggerMissing = scalar, U08, 4, "teeth", 1, 0, 1, 59, 0']
@@ -47,9 +47,9 @@ def render():
     lines += ['    coolantRaw = array, U16, 32, [3], "ADC", 1, 0, 0, 4095, 0',
         '    coolantTemp = array, S16, 64, [3], "C", 0.01, 0, -40, 150, 2']
     for page,prefix,unit,minimum,maximum in [(2,'ve','%',0,300),(3,'ignition','deg BTDC',-90,90)]:
-        lines += [f'    page = {page}', f'    {prefix}Rpm = array, U16, 0, [8], "rpm", 1, 0, 0, 20000, 0',
-            f'    {prefix}Load = array, U16, 16, [8], "kPa", 0.01, 0, 0, 500, 2',
-            f'    {prefix}Cells = array, S16, 32, [8x8], "{unit}", 0.01, 0, {minimum}, {maximum}, 2']
+        lines += [f'    page = {page}', f'    {prefix}Rpm = array, U16, 0, [16], "rpm", 1, 0, 0, 20000, 0',
+            f'    {prefix}Load = array, U16, 32, [16], "kPa", 0.01, 0, 0, 500, 2',
+            f'    {prefix}Cells = array, S16, 64, [16x16], "{unit}", 0.01, 0, {minimum}, {maximum}, 2']
     lines += ['', '[ConstantExtensions]', '    readOnly = configLayout', '    readOnly = coolantCount', '',
         '[OutputChannels]', '    ochGetCommand = "O%2o%2c"', '    ochBlockSize = 100']
     channels=[('protocolRevision','U08',7,'',1),('boardFamily','U08',8,'',1),('mcuSeries','U08',9,'',1),

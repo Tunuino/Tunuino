@@ -17,11 +17,11 @@ public final class MapWriteClient {
         catch(ArithmeticException error){throw new IllegalArgumentException("A ECU aceita até duas casas decimais nos mapas",error);}
     }
     public static byte[] encode(CalibrationMap map) {
-        if(map.rows()!=8||map.columns()!=8)throw new IllegalArgumentException("O firmware IO requer mapas 8 × 8");
-        ByteBuffer out=ByteBuffer.allocate(160);
-        for(int i=0;i<8;++i){int rpm=map.rpmAt(i);if(rpm>20000)throw new IllegalArgumentException("Eixo RPM excede 20000");out.putShort((short)rpm);}
-        for(int i=0;i<8;++i){int load=exact(map.loadKpaAt(i));if(load<0||load>50000)throw new IllegalArgumentException("Eixo MAP excede 500 kPa");out.putShort((short)load);}
-        for(int row=0;row<8;++row)for(int col=0;col<8;++col){int cell=exact(map.cell(row,col));if(cell<Short.MIN_VALUE||cell>Short.MAX_VALUE)throw new IllegalArgumentException("Célula fora do formato da ECU");out.putShort((short)cell);}
+        if(map.rows()!=16||map.columns()!=16)throw new IllegalArgumentException("O firmware IO requer mapas 16 × 16");
+        ByteBuffer out=ByteBuffer.allocate(576);
+        for(int i=0;i<16;++i){int rpm=map.rpmAt(i);if(rpm>20000)throw new IllegalArgumentException("Eixo RPM excede 20000");out.putShort((short)rpm);}
+        for(int i=0;i<16;++i){int load=exact(map.loadKpaAt(i));if(load<0||load>50000)throw new IllegalArgumentException("Eixo MAP excede 500 kPa");out.putShort((short)load);}
+        for(int row=0;row<16;++row)for(int col=0;col<16;++col){int cell=exact(map.cell(row,col));if(cell<Short.MIN_VALUE||cell>Short.MAX_VALUE)throw new IllegalArgumentException("Célula fora do formato da ECU");out.putShort((short)cell);}
         return out.array();
     }
     private static Duration remaining(long deadline) throws IOException {
@@ -33,7 +33,7 @@ public final class MapWriteClient {
     }
     public static void write(PacketSession session,DeviceIdentity identity,CalibrationMap map,Duration timeout) throws IOException {
         byte[] bytes=encode(map);
-        if(identity.capabilities()!=15||!identity.firmwareVersion().equals("0.1.0"))throw new IllegalStateException("O firmware não suporta escrita de mapas IO");
+        if(identity.capabilities()!=15||!identity.firmwareVersion().equals("0.2.0"))throw new IllegalStateException("O firmware não suporta escrita de mapas IO");
         if(timeout.compareTo(Duration.ofSeconds(1))<0||timeout.compareTo(Duration.ofSeconds(30))>0)throw new IllegalArgumentException("Prazo de envio inválido");
         long deadline=System.nanoTime()+timeout.toNanos();
         IoClient.Inputs inputs=IoClient.read(session,identity,remaining(deadline));
