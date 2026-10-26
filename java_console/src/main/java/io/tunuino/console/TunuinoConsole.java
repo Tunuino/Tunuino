@@ -6,6 +6,8 @@ import io.tunuino.datalog.LogSample;
 import io.tunuino.transport.PacketSession;
 import io.tunuino.transport.UsbSerialPorts;
 import io.tunuino.protocol.DeviceIdentity;
+import io.tunuino.protocol.ConfigurationClient;
+import io.tunuino.protocol.IoClient;
 import io.tunuino.protocol.EnginePreviewClient;
 import io.tunuino.protocol.EngineTimingClient;
 import io.tunuino.protocol.IdentityClient;
@@ -42,6 +44,8 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 public final class TunuinoConsole extends Application {
+    private record DiagnosticSnapshot(ConfigurationClient.Validation validation,IoClient.Inputs inputs) {}
+
     private final ExecutorService fileWorker = Executors.newSingleThreadExecutor(r -> {
         Thread thread = new Thread(r, "tunuino-file-reader");
         thread.setDaemon(true);
@@ -142,6 +146,13 @@ public final class TunuinoConsole extends Application {
         modelResult.setWrapText(true);
         modelResult.getStyleClass().add("muted");
         Label status = new Label("Offline · nenhuma ECU identificada");
+        Button readDiagnostics = new Button("Ler diagnóstico da ECU");
+        readDiagnostics.setId("diagnostics-read");
+        readDiagnostics.getStyleClass().add("primary");
+        Label diagnosticOutput=new Label("Sem diagnóstico · liga e identifica a ECU.");
+        diagnosticOutput.setId("diagnostics-output");
+        diagnosticOutput.setWrapText(true);
+        diagnosticOutput.getStyleClass().add("muted");
         Label identityDetails = new Label("Identificação da ECU pendente");
         ComboBox<UsbSerialPorts.Port> ports = new ComboBox<>();
         ports.setPromptText("Selecionar porta USB");
@@ -180,6 +191,9 @@ public final class TunuinoConsole extends Application {
             ports.setDisable(programming || serialBusy || connected || monitoringActive);
             hardware.setDisable(preview || serialBusy || connected || monitoringActive);
             identify.setDisable(serialBusy || !connected || monitoringActive);
+            readDiagnostics.setDisable(preview||serialBusy||monitoringActive||fileReading
+                ||(firmwarePanel!=null&&firmwarePanel.isBusy())||!connected
+                ||!EnginePreviewClient.supports(identifiedDevice));
             LiveDataMonitor.Recording recording = liveMonitor == null ? null : liveMonitor.recording();
             capture.setText(recording != null ? "Parar gravação CSV" : "Gravar datalog CSV");
             monitor.setText(monitoringActive ? "Parar monitorização" : "Ver dados em tempo real");
@@ -633,6 +647,46 @@ public final class TunuinoConsole extends Application {
         dashboard.setReadAction(readMapForDashboard);
         fuelTables.setReadAction(readMapForDashboard);
         ignitionTables.setReadAction(readMapForDashboard);
+        readDiagnostics.setOnAction(event->{
+            PacketSession current=connection.get();
+            DeviceIdentity device=identifiedDevice;
+            if(serialBusy||monitoringActive||fileReading||firmwarePanel.isBusy()
+                    ||current==null||!current.isOpen()||!EnginePreviewClient.supports(device)) {
+                status.setText("Para consultar o diagnóstico, identifica a ECU e pára a monitorização.");
+                refreshConnection.run();return;
+            }
+            diagnosticOutput.setText("A ler o estado real dos sensores e da configuração…");
+            serialTask(()->new DiagnosticSnapshot(
+                    ConfigurationClient.validation(current,device,Duration.ofSeconds(3)),
+                    IoClient.read(current,device,Duration.ofSeconds(3))),
+                report->{
+                    var validation=report.validation();
+                    var values=report.inputs();
+                    int ioStatus=values.status();
+                    int valid=values.sample().validMask();
+                    diagnosticOutput.setText(
+                        "CONFIGURAÇÃO: "+validation.explanation()+"\n"
+                        +"Flash: "+(validation.persisted()?"gravada":"não gravada")
+                        +" · Alterações pendentes: "+(validation.dirty()?"sim":"não")
+                        +" · geração "+validation.generation()+"\n"
+                        +"ADC: "+((ioStatus&1)!=0?"válido":"indisponível")
+                        +" · Referência "+values.referenceMv()+" mV\n"
+                        +"Cambota: "+((ioStatus&8)!=0?"sincronização válida":"sem sincronização válida")
+                        +" · Dente "+values.tooth()+" · Erros "+values.errors()+"\n"
+                        +"RPM: "+((valid&1)!=0?String.format(Locale.ROOT,"%.1f",values.sample().rpm()):"—")
+                        +" · MAP: "+((valid&2)!=0?String.format(Locale.ROOT,"%.1f kPa",values.sample().mapKpa()):"—")
+                        +" · Lambda: "+((valid&4)!=0?String.format(Locale.ROOT,"%.3f",values.sample().lambda()):"—")
+                        +" · Temperatura: "+((valid&8)!=0?String.format(Locale.ROOT,"%.1f °C",values.sample().coolantC()):"—"));
+                    dashboard.event("Diagnóstico USB e validação de configuração recebidos.");
+                    status.setText("Diagnóstico de leitura concluído");
+                    refreshConnection.run();
+                },error->{
+                    diagnosticOutput.setText("Falha de diagnóstico: "+error.getMessage());
+                    if(!current.isOpen()){connection.compareAndSet(current,null);identifiedDevice=null;}
+                    status.setText("Diagnóstico: "+error.getMessage());
+                    refreshConnection.run();
+                });
+        });
         javafx.scene.layout.FlowPane connectionControls = ConsoleShell.actions(
             new Label("PORTA USB"), ports, scan, connect, identify);
         connectionControls.getStyleClass().add("connection-controls");
@@ -694,9 +748,9 @@ public final class TunuinoConsole extends Application {
             "M12 2A10 10 0 1 0 12 22A10 10 0 1 0 12 2ZM11 6H13V13H11ZM11 16H13V18H11Z",
             ConsoleShell.scroll(new VBox(12,
                 ConsoleShell.card("ESTADO DA ECU",
-                    "O Dashboard mostra ligação USB, firmware e leituras dos sensores presentes. "
-                    +"Os estados de relés e atuadores não são fornecidos pelo firmware de bancada.",
-                    new Label("Não são apresentados estados de atuadores simulados.")),
+                    "Verifica a configuração persistida, erros de captura e validade das entradas da ECU "
+                    +"através de dois pedidos binários só de leitura. A consulta exige USB exclusivo.",
+                    readDiagnostics, diagnosticOutput),
                 ConsoleShell.card("VALIDAÇÃO DE CALIBRAÇÃO",
                     "Verifica as leituras e os parâmetros na área Inputs / Outputs. "
                     +"Em Tuning estão disponíveis os cálculos VE/ignição e os motivos de bloqueio.",

@@ -206,6 +206,12 @@ public final class ConsoleUiChecks {
             configEditor.availability(null,false,false);
             check(reference.getText().equals("3290")&&((Button)scene.lookup("#config-apply")).isDisabled(),"Disconnect preserves local edits while blocking ECU writes");
             reference.setText("3300");check(configEditor.canClose(),"Unchanged configuration closes without prompting");
+            ((ToggleButton) scene.lookup("#navigate-7")).fire();
+            scene.getRoot().applyCss();scene.getRoot().layout();
+            check(((Button)scene.lookup("#diagnostics-read")).isDisabled(),
+                "Diagnostic read must remain disabled without a real ECU");
+            check(((Label)scene.lookup("#diagnostics-output")).getText().contains("Sem diagnóstico"),
+                "Diagnostics never invent sensor or flash state");
             ((ToggleButton) scene.lookup("#navigate-8")).fire(); snapshot(scene, "console-firmware");
             ((ToggleButton) scene.lookup("#navigate-5")).fire();
             telemetry.beginLive(); telemetry.showLive(Optional.of(samples.get(0))); telemetry.showLive(Optional.empty());
