@@ -6,6 +6,7 @@
 #include "tunuino/link.h"
 #include "tunuino/bench_tunerstudio.h"
 #include "board_io.h"
+#include "board_status.h"
 
 static tunuino_link link;
 static tunuino_device device;
@@ -21,6 +22,7 @@ int main(void) {
   bool active = false;
   halInit();
   chSysInit();
+  board_status_start();
   tunuino_device_init(&device,board_io_save,board_io_clock,NULL);
   board_io_start(&device);
   board_uid(identity.uid);
@@ -48,6 +50,7 @@ int main(void) {
 
   for (;;) {
     board_io_update(&device);
+    board_status_inputs(&device);
     uint64_t now;
     uint32_t live_generation;
     bool configured;
@@ -56,6 +59,7 @@ int main(void) {
     live_generation = tunuino_usb_generation;
     configured = usbGetDriverStateI(&USBD1) == USB_ACTIVE;
     chSysUnlock();
+    board_status_usb(configured);
     now = board_millis();
     if (!configured || live_generation != generation) {
       if (active) goto recover;
@@ -71,6 +75,7 @@ int main(void) {
         state = tunuino_link_tx_advance(&link, pending, now);
         pending = 0;
         if (state != TUNUINO_LINK_RECEIVING && state != TUNUINO_LINK_RESPONDING) goto recover;
+        if (state == TUNUINO_LINK_RECEIVING) board_status_activity();
       }
     }
     if (pending == 0 && (!active || tunuino_link_poll(&link, now) == TUNUINO_LINK_RECEIVING)) {
@@ -105,6 +110,7 @@ int main(void) {
     continue;
 
 recover:
+    board_status_usb(false);
     /* Cancel hardware and reset both CDC queues before reusing link storage.
      * A fresh USB enumeration separates old bytes/completion flags from the
      * next connection. Acquisition and saved calibration survive this reset. */

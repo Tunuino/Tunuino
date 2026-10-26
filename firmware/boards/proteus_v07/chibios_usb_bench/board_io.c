@@ -6,6 +6,7 @@
 #include "hal.h"
 #include "board_io.h"
 #include "board_outputs.h"
+#include "board_status.h"
 #include "tunuino/config_journal.h"
 #include "tunuino/capture_source.h"
 #include <string.h>
@@ -94,7 +95,12 @@ static bool flash_erase(void *user,unsigned bank){
     bool okay=flash_wait();flash_finish();return okay;
 }
 bool board_io_save(void *user,const uint8_t *bytes,size_t length){
-    (void)user;return board_outputs_idle()&&length==TUNUINO_IO_SETTINGS_SIZE&&tunuino_journal_save(&journal,bytes);
+    (void)user;
+    if(!board_outputs_idle() || length!=TUNUINO_IO_SETTINGS_SIZE)return false;
+    board_status_flash(true);
+    bool saved=tunuino_journal_save(&journal,bytes);
+    board_status_flash(false);
+    return saved;
 }
 
 static void edge_callback(void *argument){

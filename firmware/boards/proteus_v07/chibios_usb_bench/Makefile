@@ -26,7 +26,7 @@ include $(CHIBIOS)/os/hal/osal/rt-nil/osal.mk
 include $(CHIBIOS)/os/rt/rt.mk
 include $(CHIBIOS)/os/common/ports/ARMv7-M/compilers/GCC/mk/port.mk
 LDSCRIPT = ./stm32f427_bench.ld
-CSRC = $(ALLCSRC) board.c board_io.c board_outputs.c usbcfg.c main.c $(wildcard $(ROOT)/firmware/src/*.c)
+CSRC = $(ALLCSRC) board.c board_io.c board_outputs.c board_status.c usbcfg.c main.c $(wildcard $(ROOT)/firmware/src/*.c)
 CPPSRC = $(ALLCPPSRC)
 ASMSRC = $(ALLASMSRC)
 ASMXSRC = $(ALLXASMSRC)

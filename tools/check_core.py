@@ -217,11 +217,15 @@ def main():
         run(flags + core_sources + ["unit_tests/device_peer.c", "-lm", "-o", str(io_peer)])
         chibios_object = work / "chibios-bench-loop.o"
         chibios_include = ["-Iunit_tests/chibios_bench_stub", "-Ifirmware/boards/proteus_v07/chibios_usb_bench"]
+        status_source = "firmware/boards/proteus_v07/chibios_usb_bench/board_status.c"
+        status_exe = work / ("status-check.exe" if os.name == "nt" else "status-check")
+        run(flags + chibios_include + [status_source, "unit_tests/test_board_status.c", "-o", str(status_exe)])
+        print(run([str(status_exe)], timeout=10))
         run(flags + chibios_include + ["-Dmain=tunuino_chibios_bench_main", "-c",
             "firmware/boards/proteus_v07/chibios_usb_bench/main.c", "-o", str(chibios_object)])
         chibios_exe = work / ("chibios-bench-check.exe" if os.name == "nt" else "chibios-bench-check")
         run(flags + chibios_include + core_sources + ["unit_tests/test_chibios_bench.c",
-            str(chibios_object), "-lm", "-o", str(chibios_exe)])
+            status_source, str(chibios_object), "-lm", "-o", str(chibios_exe)])
         for mode in ("normal", "tunerstudio", "timeout", "corrupt", "disconnect", "reconfigure", "recover"):
             print(run([str(chibios_exe), mode], timeout=10))
         peer_exe = work / ("link-peer.exe" if os.name == "nt" else "link-peer")

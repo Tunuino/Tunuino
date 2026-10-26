@@ -167,7 +167,10 @@ def main():
                 "usb_vid": "0xcafe", "usb_pid": "0x4001", "usb_disconnect_ms": 250,
                 "usb_ids": "development_only_not_production_allocation",
                 "artifacts_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in hashed},
-                "diagnostic_symbols": {n: hex(symbols[n]) for n in ("tunuino_bench_fault", "main", "__early_init")},
+                "status_leds": {"critical_error": "PE3", "communication": "PE4",
+                    "engine_state": "PE5", "warning": "PE6", "active_high": True,
+                    "interrupt_timers": True, "physical_validation": False},
+                "diagnostic_symbols": {n: hex(symbols[n]) for n in ("tunuino_bench_fault", "main", "__early_init", "board_status_halt")},
                 "physical_ecu_validation": False}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (output / "SOURCE.txt").write_text(

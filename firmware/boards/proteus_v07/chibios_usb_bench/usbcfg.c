@@ -15,6 +15,7 @@
 */
 
 #include "hal.h"
+#include "board_status.h"
 #include "usbcfg.h"
 #include "board.h"
 
@@ -268,6 +269,7 @@ static void usb_event(USBDriver *usbp, usbevent_t event) {
 
     /* Resetting the state of the CDC subsystem.*/
     sduConfigureHookI(&SDU1);
+    board_status_usb_i(true);
 
     chSysUnlockFromISR();
     return;
@@ -281,6 +283,7 @@ static void usb_event(USBDriver *usbp, usbevent_t event) {
 
     /* Disconnection event on suspend.*/
     sduSuspendHookI(&SDU1);
+    board_status_usb_i(false);
 
     chSysUnlockFromISR();
     return;
@@ -289,6 +292,7 @@ static void usb_event(USBDriver *usbp, usbevent_t event) {
 
     /* Connection event on wakeup.*/
     sduWakeupHookI(&SDU1);
+    board_status_usb_i(usbGetDriverStateI(usbp) == USB_ACTIVE);
 
     chSysUnlockFromISR();
     return;

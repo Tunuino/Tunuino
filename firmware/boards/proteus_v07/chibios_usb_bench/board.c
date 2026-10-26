@@ -12,7 +12,7 @@ volatile uint32_t tunuino_bench_fault;
 /* ChibiOS startup calls this before C runtime initialization. */
 void __early_init(void) {
   stm32_clock_init();
-  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOEEN;
   (void)RCC->AHB1ENR;
 }
 

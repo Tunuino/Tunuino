@@ -9,6 +9,8 @@
 #include "tunuino/frame.h"
 #include "tunuino/identity.h"
 #include "board_io.h"
+#include "board_status.h"
+#include "chibios_status_model.h"
 
 int tunuino_chibios_bench_main(void);
 USBDriver USBD1;
@@ -33,7 +35,7 @@ uint64_t board_millis(void) { return now; }
 uint64_t board_io_time_us(void) { return (uint64_t)now*1000; }
 uint64_t board_io_clock(void *user) { (void)user;return now; }
 bool board_io_save(void *user,const uint8_t *bytes,size_t length) { (void)user;(void)bytes;(void)length;return false; }
-void board_io_start(tunuino_device *device) { (void)device;assert(stage==2); }
+void board_io_start(tunuino_device *device) { (void)device;assert(stage==2);assert(status_outputs==(15u<<3)); }
 void board_io_resync(tunuino_device *device) { (void)device;assert(stage==9); }
 void board_io_update(tunuino_device *device) {
     uint16_t raw[16];for(unsigned i=0;i<16;++i)raw[i]=(uint16_t)(100+i);
@@ -47,8 +49,6 @@ int sduStart(SerialUSBDriver *sdu, const SerialUSBConfig *config) {
 void chEvtRegisterMaskWithFlags(void *s, event_listener_t *l, unsigned m, eventflags_t f) {
   (void)s;(void)l;(void)m;assert(f & CHN_TRANSMISSION_END);
 }
-void chSysLock(void) {}
-void chSysUnlock(void) {}
 eventflags_t chEvtGetAndClearFlags(event_listener_t *listener) {
   eventflags_t value=flags;(void)listener;flags=0;return value;
 }
@@ -70,6 +70,7 @@ void usbConnectBus(USBDriver *usb) {
 void chThdSleepMilliseconds(uint32_t ms) {
   if (stage==6) { assert(ms==250);stage=7; }
   now+=ms;
+  status_advance(ms);
   if (tunuino_bench_fault && strcmp(mode,"recover")!=0) longjmp(done,1);
   if (busy && strcmp(mode,"disconnect")==0 && now-queued_at>=3) {
     busy=false;USBD1.state=0;++tunuino_usb_generation;flags|=CHN_DISCONNECTED;

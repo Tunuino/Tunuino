@@ -10,6 +10,11 @@ typedef struct { USBDriver *usbp; unsigned bulk_in, bulk_out, int_in; } SerialUS
 typedef struct { unsigned event; } SerialUSBDriver;
 extern USBDriver USBD1;
 #define USB_ACTIVE 4
+#define GPIOE ((void *)5)
+#define PAL_MODE_OUTPUT_PUSHPULL 1u
+void palSetPad(void *port, unsigned pad);
+void palClearPad(void *port, unsigned pad);
+void palSetPadMode(void *port, unsigned pad, unsigned mode);
 #define CHN_TRANSMISSION_END 16u
 #define CHN_DISCONNECTED 2u
 #define chnGetEventSource(p) (&(p)->event)

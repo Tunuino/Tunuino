@@ -815,7 +815,8 @@
  *          the system is halted.
  */
 #define CH_CFG_SYSTEM_HALT_HOOK(reason) do {                                \
-  /* System halt code here.*/                                               \
+  extern void board_status_halt(void);                                      \
+  board_status_halt();                                                      \
 } while (false)
 
 /**
