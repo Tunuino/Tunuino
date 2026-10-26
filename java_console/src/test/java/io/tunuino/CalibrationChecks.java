@@ -79,8 +79,10 @@ public final class CalibrationChecks {
                     "Original calibration point retained without rounding");
             }
         }
-        byte[] cRefined=java.util.HexFormat.of().parseHex(
-            Files.readString(java.nio.file.Path.of(args[2])).trim().split(" ")[1]);
+        String[] crossVectors=Files.readString(java.nio.file.Path.of(args[2])).trim().split("\\R");
+        check(crossVectors.length==2&&crossVectors[0].startsWith("refined_ve "),
+            "C VE fixture produced");
+        byte[] cRefined=java.util.HexFormat.of().parseHex(crossVectors[0].split(" ")[1]);
         check(Arrays.equals(expanded.encode(),cRefined),"C/Java 16x16 map conversion bytes and CRC");
         int[][] negativeValues=java.util.stream.IntStream.range(0,8).mapToObj(i->
             java.util.stream.IntStream.range(0,8).map(j->-10001-1001*i-601*j).toArray())
@@ -90,8 +92,7 @@ public final class CalibrationChecks {
             java.util.stream.IntStream.range(0,8).map(i->20000+17000*i).toArray(),
             negativeValues);
         CalibrationMap spark16=sparkSeed.refineTo16();
-        String[] crossVectors=Files.readString(java.nio.file.Path.of(args[2])).trim().split("\\R");
-        check(crossVectors.length==2&&crossVectors[1].startsWith("refined_ignition "),
+        check(crossVectors[1].startsWith("refined_ignition "),
             "C ignition fixture produced");
         byte[] cSpark=java.util.HexFormat.of().parseHex(crossVectors[1].split(" ")[1]);
         check(Arrays.equals(spark16.encode(),cSpark),
