@@ -117,3 +117,26 @@
 .console-shell:short .telemetry-top { -fx-spacing: 6; }
 .console-shell:short .status-bar { -fx-padding: 6 22; }
 .console-shell:short .chart { -fx-min-height: 120; }
+
+/* ECU cockpit: values are never populated with demo telemetry. */
+.ecu-dashboard { -fx-background-color: #07121f; }
+.dashboard-kicker { -fx-text-fill: #2fa7ff; -fx-font-size: 13px; -fx-font-weight: bold; }
+.dashboard-status { -fx-text-fill: #ebf3ff; -fx-font-size: 15px; -fx-font-weight: bold; }
+.dashboard-subtext { -fx-text-fill: #7798b4; -fx-font-size: 10px; }
+.dashboard-identity { -fx-alignment: center-right; -fx-padding: 8 12; -fx-background-color: #0d2030; -fx-background-radius: 8; }
+.dashboard-connected { -fx-text-fill: #24da83; -fx-font-size: 12px; -fx-font-weight: bold; }
+.dashboard-gauge { -fx-background-color: linear-gradient(to bottom,#111e2c,#0a1421); -fx-background-radius: 8;
+                  -fx-border-color: #1c324a; -fx-border-radius: 8; -fx-padding: 5; }
+.dashboard-small-card { -fx-background-color: #101e2e; -fx-background-radius: 7; -fx-border-color: #20374c;
+                        -fx-border-radius: 7; -fx-padding: 11 12; }
+.dashboard-small-title { -fx-text-fill: #9fb6cb; -fx-font-size: 10px; -fx-font-weight: bold; }
+.dashboard-small-value { -fx-text-fill: #e7f4ff; -fx-font-size: 19px; -fx-font-weight: bold; }
+.dashboard-small-note { -fx-text-fill: #62809b; -fx-font-size: 9px; }
+.dashboard-card { -fx-background-color: #101b29; -fx-border-color: #23384c; -fx-border-radius: 7;
+                   -fx-background-radius: 7; -fx-padding: 12; }
+.dashboard-table-host { -fx-background-color: #0d1928; -fx-border-color: #1d354c; -fx-border-radius: 4; }
+.dashboard-table-actions { -fx-padding: 0 0 6 0; }
+.dashboard-tab { -fx-background-color: #142537; -fx-border-color: #284562; -fx-text-fill: #b8cce2; -fx-padding: 8 16; }
+.dashboard-tab:selected { -fx-background-color: #075cbb; -fx-border-color: #1685ff; -fx-text-fill: white; -fx-font-weight: bold; }
+.dashboard-output-status { -fx-text-fill: #8cabc4; -fx-font-family: "Consolas", monospace; -fx-line-spacing: 9; -fx-font-size: 11px; }
+.dashboard-event { -fx-text-fill: #7ca6c8; -fx-font-size: 10px; -fx-padding: 2 0; }

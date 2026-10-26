@@ -57,6 +57,7 @@ public final class TunuinoConsole extends Application {
     private boolean recordingPending;
     private LiveDataMonitor liveMonitor;
     private TelemetryPane telemetry;
+    private DashboardPane dashboard;
     private ConfigurationPane configurationPane;
     private boolean serialBusy;
     private boolean configurationBusy;
@@ -148,6 +149,12 @@ public final class TunuinoConsole extends Application {
             PacketSession current = connection.get();
             boolean connected = current != null && current.isOpen();
             if (shell != null) shell.connectionState(identifiedDevice, connected);
+            if(dashboard!=null) {
+                dashboard.setPort(ports.getValue()==null?null:ports.getValue().name());
+                dashboard.setConnection(identifiedDevice,connected,
+                    !serialBusy&&!monitoringActive&&!fileReading
+                    &&(firmwarePanel==null||!firmwarePanel.isBusy()));
+            }
             if(configurationPane!=null)configurationPane.availability(identifiedDevice,connected,
                 serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()));
             connect.setText(connected ? "Desligar USB" : "Ligar USB");
@@ -291,6 +298,7 @@ public final class TunuinoConsole extends Application {
             }, usbFailure);
         });
         telemetry = new TelemetryPane();
+        dashboard = new DashboardPane();
         Label summary = new Label("Escolhe um datalog local para analisar.");
         identityDetails.setWrapText(true);
         summary.getStyleClass().add("muted");
@@ -392,6 +400,7 @@ public final class TunuinoConsole extends Application {
             }
             status.setText("A ler mapa da ECU…");
             serialTask(() -> MapReadClient.read(current, device, kind, Duration.ofSeconds(5)), map -> {
+                dashboard.showMap(map);
                 String title=device.family() + " · " + kind + " · cópia lida da ECU";
                 if((device.capabilities()&8)!=0)CalibrationViewer.show(stage,title,map,updated -> {
                     var completion=new java.util.concurrent.CompletableFuture<Void>();
@@ -400,7 +409,8 @@ public final class TunuinoConsole extends Application {
                     }
                     status.setText("A guardar e verificar o mapa na ECU…");
                     serialTask(()->{io.tunuino.protocol.MapWriteClient.write(current,device,updated,Duration.ofSeconds(15));return true;},
-                        ignored->{status.setText("Mapa guardado e verificado na ECU");refreshConnection.run();completion.complete(null);},
+                        ignored->{dashboard.showMap(updated);status.setText("Mapa guardado e verificado na ECU");
+                            refreshConnection.run();completion.complete(null);},
                         error->{if(!current.isOpen()){connection.compareAndSet(current,null);identifiedDevice=null;}
                             status.setText("Falha ao guardar mapa: "+error.getMessage());refreshConnection.run();completion.completeExceptionally(error);});
                     return completion;
@@ -464,6 +474,7 @@ public final class TunuinoConsole extends Application {
             LiveDataMonitor reading = new LiveDataMonitor(current, device, Duration.ofMillis(100));
             liveMonitor = reading;
             telemetry.beginLive();
+            dashboard.monitoringStarted();
             summary.setText("Monitorização ativa · CSV desligado");
             status.setText("A receber dados da ECU…");
             AtomicReference<Optional<LogSample>> latest = new AtomicReference<>();
@@ -475,7 +486,10 @@ public final class TunuinoConsole extends Application {
                         renderPending.set(false);
                         if (stopping.get() || !monitoringActive || monitorGeneration != generation) return;
                         Optional<LogSample> value = latest.getAndSet(null);
-                        if (value != null) telemetry.showLive(value);
+                        if(value!=null) {
+                            telemetry.showLive(value);
+                            dashboard.showSample(value);
+                        }
                         LiveDataMonitor.Recording recording = reading.recording();
                         summary.setText(recording == null ? "Monitorização ativa · CSV desligado"
                             : "CSV: " + recording.path().getFileName() + " · " + recording.samples() + " amostras gravadas");
@@ -492,6 +506,7 @@ public final class TunuinoConsole extends Application {
                 keepMonitoring.set(false);
                 liveMonitor = null;
                 telemetry.endLive("Monitorização terminada · histórico do gráfico mantido");
+                dashboard.monitoringStopped("Monitorização terminada · dados atuais indisponíveis.");
                 summary.setText(count + " amostras válidas recebidas · ficheiros CSV encerrados");
                 status.setText("ECU ligada · monitorização parada");
                 refreshConnection.run();
@@ -505,6 +520,7 @@ public final class TunuinoConsole extends Application {
                     identityDetails.setText("Identificação da ECU pendente");
                 }
                 telemetry.endLive("Monitorização interrompida · " + error.getMessage());
+                dashboard.monitoringStopped("Monitorização interrompida · dados atuais indisponíveis.");
                 status.setText("Falha de monitorização: " + error.getMessage());
                 refreshConnection.run();
             });
@@ -576,12 +592,30 @@ public final class TunuinoConsole extends Application {
             });
             fileWorker.submit(activeRead);
         });
+        dashboard.setReadAction(kind -> {
+            PacketSession current=connection.get();
+            DeviceIdentity device=identifiedDevice;
+            if(serialBusy||monitoringActive||fileReading||firmwarePanel.isBusy()
+                    ||current==null||!current.isOpen()||device==null
+                    ||(device.capabilities()&MapReadClient.CAPABILITY)==0){
+                status.setText("Para ler mapas, liga e identifica a ECU e pára a monitorização.");
+                refreshConnection.run();return;
+            }
+            status.setText("A ler mapa "+kind+" de 16×16 da ECU…");
+            serialTask(()->MapReadClient.read(current,device,kind,Duration.ofSeconds(7)),
+                map->{dashboard.showMap(map);status.setText("Tabela "+kind+" 16×16 atualizada");
+                    refreshConnection.run();},
+                error->{dashboard.event("Falha de leitura "+kind+": "+error.getMessage());
+                    if(!current.isOpen()){connection.compareAndSet(current,null);identifiedDevice=null;}
+                    status.setText("Não foi possível ler "+kind+": "+error.getMessage());
+                    refreshConnection.run();});
+        });
         javafx.scene.layout.FlowPane connectionControls = ConsoleShell.actions(
             new Label("PORTA USB"), ports, scan, connect, identify);
         connectionControls.getStyleClass().add("connection-controls");
         shell = new ConsoleShell(hardware, connectionControls, status, identityDetails);
-        shell.addPage("Painel", "Dados da centralina", "Sensores, gráficos e datalogs num só espaço.",
-            "M1 1H9V9H1ZM13 1H21V9H13ZM1 13H9V21H1ZM13 13H21V21H13Z", root);
+        shell.addPage("Dashboard", "Dashboard da ECU", "Sensores reais e tabelas VE/ignição 16×16.",
+            "M1 1H9V9H1ZM13 1H21V9H13ZM1 13H9V21H1ZM13 13H21V21H13Z", ConsoleShell.scroll(dashboard));
         VBox maps = new VBox(16,
             ConsoleShell.card("FICHEIRO LOCAL", "Abre um mapa VE ou de ignição para consultar a tabela, editar valores e guardar uma cópia .tnmap.", openMap),
             ConsoleShell.card("MAPA DA CENTRALINA", "Lê uma cópia do mapa quando esta função está disponível no firmware.",
@@ -593,7 +627,7 @@ public final class TunuinoConsole extends Application {
                 + " O índice de carga é relativo; não determina combustível nem ponto de ignição físico.",
                 modelTiming, modelResult));
         maps.setPadding(new Insets(0, 24, 24, 24));
-        shell.addPage("Mapas", "Mapas de calibração", "Tabelas VE e ignição, eixos e interpolação.",
+        shell.addPage("Tuning", "Tuning e calibração", "Edição de mapas e pré-visualização matemática.",
             "M1 2H21V20H1ZM3 4V8H7V4ZM9 4V8H13V4ZM15 4V8H19V4ZM3 10V14H7V10ZM9 10V14H13V10ZM15 10V14H19V10ZM3 16V18H7V16ZM9 16V18H13V16ZM15 16V18H19V16Z", ConsoleShell.scroll(maps));
         configurationPane=new ConfigurationPane(stage,new ConfigurationPane.Access() {
             @Override public <T> void run(ConfigurationPane.Operation<T> operation,Consumer<T> success,Consumer<Throwable> failure) {
@@ -610,10 +644,30 @@ public final class TunuinoConsole extends Application {
                 });
             }
         });
-        shell.addPage("Entradas", "Entradas e calibração", "Sensores, captura e diagnóstico da configuração.",
+        shell.addPage("Inputs / Outputs", "Entradas e calibração", "Sensores, captura e diagnóstico da configuração.",
             "M2 3H20V7H2ZM2 10H20V14H2ZM2 17H20V21H2Z", ConsoleShell.scroll(configurationPane));
-        shell.addPage("Firmware e USB", "Firmware e ligação USB", "Seleciona a imagem, verifica o dispositivo e acompanha a gravação.",
+        shell.addPage("Firmware", "Firmware e ligação USB", "Seleciona a imagem, verifica o dispositivo e acompanha a gravação.",
             "M5 4H17V18H5ZM7 6V16H15V6ZM1 6H4V8H1ZM1 11H4V13H1ZM18 6H21V8H18ZM18 11H21V13H18ZM7 0H9V3H7ZM13 0H15V3H13ZM7 19H9V22H7ZM13 19H15V22H13Z", ConsoleShell.scroll(firmwarePanel));
+        shell.addPage("Data Log", "Datalogs e monitorização", "Gravação CSV e reprodução dos sinais disponíveis.",
+            "M3 3H21V21H3ZM6 7H18V9H6ZM6 12H18V14H6ZM6 17H15V19H6Z", root);
+        shell.addPage("Diagnostics", "Diagnósticos", "Validação e análise de sinais verdadeiros.",
+            "M12 2A10 10 0 1 0 12 22A10 10 0 1 0 12 2ZM11 6H13V13H11ZM11 16H13V18H11Z",
+            ConsoleShell.scroll(new VBox(12,
+                ConsoleShell.card("ESTADO DA ECU",
+                    "O Dashboard mostra ligação USB, firmware e leituras dos sensores presentes. "
+                    +"Os estados de relés e atuadores não são fornecidos pelo firmware de bancada.",
+                    new Label("Não são apresentados estados de atuadores simulados.")),
+                ConsoleShell.card("VALIDAÇÃO DE CALIBRAÇÃO",
+                    "Verifica as leituras e os parâmetros na área Inputs / Outputs. "
+                    +"Em Tuning estão disponíveis os cálculos VE/ignição e os motivos de bloqueio.",
+                    new Label("Lê a ECU e confirma os sinais antes de qualquer afinação.")))));
+        shell.addPage("Settings", "Configurações da Console", "Identidade e funcionalidades suportadas.",
+            "M12 2L15 4L19 4L20 8L22 12L20 16L19 20L15 20L12 22L9 20L5 20L4 16L2 12L4 8L5 4L9 4Z",
+            ConsoleShell.scroll(new VBox(12,
+                ConsoleShell.card("TUNUINO CONSOLE", "Windows · JavaFX · USB CDC",
+                    new Label(io.tunuino.maintenance.BuildInfo.label())),
+                ConsoleShell.card("FORMATO ATUAL", "Firmware IO 0.2.0 e mapas VE/ignição nativos 16×16.",
+                    new Label("Dados dos instrumentos apenas quando recebidos da ECU.")))));
         javafx.geometry.Rectangle2D screen = javafx.stage.Screen.getPrimary().getVisualBounds();
         stage.setScene(new Scene(shell, Math.min(1340, screen.getWidth() - 40),
             Math.min(880, screen.getHeight() - 60)));
