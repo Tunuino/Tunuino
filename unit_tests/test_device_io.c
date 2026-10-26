@@ -109,6 +109,11 @@ int main(void){
            && body[2]==0 && (body[3]&TUNUINO_ENGINE_TRIGGER_DISABLED)
            && (body[3]&TUNUINO_ENGINE_NO_RPM) && (body[3]&TUNUINO_ENGINE_NO_MAP));
     vector("engine_preview_disabled");
+    body=query((const uint8_t *)"TUNUINO:T",9,&n);
+    assert(n==TUNUINO_ENGINE_TIMING_SIZE&&body[0]==0&&body[1]==1
+        &&body[2]==0&&(body[3]&TUNUINO_ENGINE_NO_RPM)
+        &&tunuino_device_u16(body+8)==0);
+    vector("engine_timing_disabled");
     /* Ranged output must reproduce slices of the original A response. */
     const uint8_t slice[]={'O',0,38,0,12};
     body=query(slice,sizeof(slice),&n);
@@ -150,6 +155,16 @@ int main(void){
            &&(int16_t)tunuino_device_u16(body+6)==-500
            &&body[8]==0&&body[9]==18&&body[10]==214&&body[11]==68);
     vector("engine_preview_valid");
+    body=query((const uint8_t *)"TUNUINO:T",9,&n);
+    assert(n==32&&body[0]==0&&body[1]==1&&body[2]==1&&body[3]==0);
+    assert(body[4]==0&&body[5]==18&&body[6]==214&&body[7]==68);
+    assert(tunuino_device_u16(body+8)==0); /* period is U32, not U16 */
+    assert(tunuino_device_u16(body+10)>0);
+    assert(tunuino_device_u16(body+20)==0); /* load index is U32 */
+    assert(tunuino_device_u16(body+22)==10000); /* VE100% at 100kPa. */
+    assert((int32_t)((uint32_t)body[24]<<24 | (uint32_t)body[25]<<16
+        | (uint32_t)body[26]<<8 | body[27])>0); /* -5 BTDC means after reference */
+    vector("engine_timing_valid");
     /* Direct ranged read of the high offsets from the same 100-byte block. */
     const uint8_t io_slice[]={'O',0,92,0,8};
     body=query(io_slice,sizeof(io_slice),&n);
@@ -163,6 +178,10 @@ int main(void){
            &&(body[3]&TUNUINO_ENGINE_NO_SYNC)
            &&tunuino_device_u16(body+4)==0&&tunuino_device_u16(body+6)==0);
     vector("engine_preview_no_sync");
+    body=query((const uint8_t *)"TUNUINO:T",9,&n);
+    assert(n==32&&body[2]==0&&(body[3]&TUNUINO_ENGINE_NO_SYNC)
+        &&body[8]==0&&body[9]==0&&body[10]==0&&body[11]==0);
+    vector("engine_timing_no_sync");
     body=query((const uint8_t *)"TUNUINO:P",9,&n);assert(body[2]==14);vector("partial_no_rpm");
     body=query((const uint8_t *)"TUNUINO:L",9,&n);assert(n==1&&body[0]==1); /* Legacy NOT_READY unchanged. */
     raw[0]=4095;tunuino_device_sample(&device,1234569,raw,true,0,false,0,3);assert(device.live.valid_mask==12);

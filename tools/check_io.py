@@ -65,6 +65,15 @@ def main():
         assert int.from_bytes(valid[5:7],'big',signed=True)==-500
         assert int.from_bytes(valid[7:11],'big')==1234500
         assert int.from_bytes(valid[11:15],'big')==100000
+        dryrun=decode(vectors['engine_timing_valid'])
+        assert len(dryrun)==31 and dryrun[:3]==bytes((1,1,0))
+        assert int.from_bytes(dryrun[3:7],'big')==1234500
+        assert int.from_bytes(dryrun[7:11],'big')>0
+        assert int.from_bytes(dryrun[11:15],'big')==2*int.from_bytes(dryrun[7:11],'big')
+        assert int.from_bytes(dryrun[19:23],'big')==10000
+        assert int.from_bytes(dryrun[23:27],'big',signed=True)>0
+        assert decode(vectors['engine_timing_disabled'])[1]==0
+        assert decode(vectors['engine_timing_no_sync'])[2]&0x08
         nosync=decode(vectors['engine_preview_no_sync'])
         assert nosync[1]==0 and nosync[2]&0x09==0x09
         noadc=decode(vectors['engine_preview_adc_invalid'])

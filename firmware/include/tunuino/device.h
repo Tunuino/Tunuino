@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include "tunuino/dispatch.h"
 #include "tunuino/analog.h"
+#include "tunuino/engine_math.h"
 
 #define TUNUINO_IO_SIGNATURE "Tunuino Proteus v0.7 F427 IO v1"
 #define TUNUINO_IO_VERSION "Tunuino 0.1.0 Proteus v0.7 IO bench"
@@ -16,6 +17,9 @@
  * VE centi-percent, ignition centi-degrees (signed), RPM milli, MAP milli,
  * configuration generation. Never permits physical actuation. */
 #define TUNUINO_ENGINE_PREVIEW_SIZE 20u
+/* Read-only TUNUINO:T: status/version/valid/reasons plus dry-run timing,
+ * relative air-load index, signed spark-to-reference interval, generation. */
+#define TUNUINO_ENGINE_TIMING_SIZE 32u
 #define TUNUINO_ENGINE_NO_RPM 0x01u
 #define TUNUINO_ENGINE_NO_MAP 0x02u
 #define TUNUINO_ENGINE_TRIGGER_DISABLED 0x04u

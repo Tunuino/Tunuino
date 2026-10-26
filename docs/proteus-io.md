@@ -59,6 +59,7 @@ the session; envelope corruption or transport timeout resets/re-enumerates CDC.
 | `A` | Status followed by 100 runtime bytes (legacy clients) |
 | `O` + offset U16 + count U16 | Status plus the requested range of 1..100 runtime bytes |
 | `TUNUINO:E` | Read-only VE/ignition table preview v1, with explicit sensor and calibration validity; never actuates the engine |
+| `TUNUINO:T` | Read-only **dry-run** revolution/cycle/tooth timing, relative air-load index and signed advance-to-reference interval, only when map preview is valid |
 | `TUNUINO:V` | Read-only staged validation v1: invalid setting groups, pending/persisted state, active generation and page-1 CRC |
 | `r` + page/offset/count, each U16 | Read staged bytes, count 1..256 |
 | `w` + page/offset/count U16 + bytes | Stage bytes without applying them |
@@ -76,6 +77,18 @@ configuration generation. No outputs are scheduled or enabled by this command.
 Missing RPM, MAP, synchronization, ADC, commissioning or table range forces a
 zeroed computed value; the caller must check validity before displaying
 numbers. Factory maps are zero placeholders, not an engine calibration.
+
+The independent portable `engine_math` module implements a **non-actuating**
+integer-only model: revolution and four-stroke-cycle duration, nominal tooth
+slot time, a dimensionless relative air-load index (`VE% * MAPkPa / 100kPa`)
+and signed interval between ignition advance and a hypothetical reference
+point. No injector pulse width, spark dwell, physical TDC offset, cylinder
+phase, fuel-air target, compensation tables or GPIO scheduling are calculated.
+The `TUNUINO:T` command returns status plus 31 bytes with version 1, validity,
+reason flags, measured RPM, revolution/cycle/slot microseconds, load index
+multiplied by 100, signed reference interval in microseconds and configuration
+generation. All derived values remain zero when the prerequisite `TUNUINO:E`
+calculation is invalid.
 
 The Windows Console now has a Maps-panel read-only preview button. Its Java
 client validates the 20-byte `TUNUINO:E` response, decodes signed spark

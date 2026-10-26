@@ -193,6 +193,31 @@ static void engine_preview(tunuino_device *d, uint8_t out[TUNUINO_ENGINE_PREVIEW
     out[3]=reasons;
 }
 
+static void engine_timing_preview(tunuino_device *d,
+    uint8_t out[TUNUINO_ENGINE_TIMING_SIZE]) {
+    memset(out,0,TUNUINO_ENGINE_TIMING_SIZE);
+    out[1]=1;
+    put32(out+4,d->live.rpm_milli);
+    put32(out+28,d->generation);
+    uint8_t preview[TUNUINO_ENGINE_PREVIEW_SIZE];
+    engine_preview(d,preview);
+    out[3]=preview[3];
+    if(preview[2]!=1)return;
+    tunuino_engine_math_result values;
+    if(tunuino_engine_math_calculate(d->live.rpm_milli,d->active[3],d->active[4],
+        tunuino_device_u16(preview+4),(int16_t)tunuino_device_u16(preview+6),
+        d->live.map_milli_kpa,&values)!=TUNUINO_ENGINE_MATH_OK) {
+        out[3]=TUNUINO_ENGINE_UNCALIBRATED;
+        return;
+    }
+    out[2]=1;
+    put32(out+8,values.revolution_us);
+    put32(out+12,values.cycle_us);
+    put32(out+16,values.wheel_slot_us);
+    put32(out+20,values.load_centi_percent);
+    put32(out+24,(uint32_t)values.spark_relative_us);
+}
+
 tunuino_dispatch_status tunuino_device_reply(tunuino_device *d,const tunuino_identity *id,
     const uint8_t *q,size_t length,uint8_t *response,size_t capacity,size_t *written) {
     uint8_t body[257]={0};size_t size=1;
@@ -219,6 +244,10 @@ tunuino_dispatch_status tunuino_device_reply(tunuino_device *d,const tunuino_ide
     else if(length==9 && memcmp(q,"TUNUINO:E",9)==0) {
         engine_preview(d,body);
         size=TUNUINO_ENGINE_PREVIEW_SIZE;
+    }
+    else if(length==9 && memcmp(q,"TUNUINO:T",9)==0) {
+        engine_timing_preview(d,body);
+        size=TUNUINO_ENGINE_TIMING_SIZE;
     }
     else if(length==1 && (q[0]=='S'||q[0]=='Q'||q[0]=='V'||q[0]=='F')) {
         const char *text=q[0]=='V'?TUNUINO_IO_VERSION:q[0]=='F'?TUNUINO_IO_TS_SERIAL_VERSION:TUNUINO_IO_SIGNATURE;

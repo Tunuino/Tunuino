@@ -56,6 +56,10 @@ def main():
         run(flags + ["firmware/src/frame.c", "unit_tests/test_frame.c", "-o", str(executable)])
         c_vector = run([str(executable)])
         print("C CRC, corruption, capacity, boundary and overlap checks passed")
+        engine_exe = work / ("engine-math-check.exe" if os.name == "nt" else "engine-math-check")
+        run(flags + ["firmware/src/engine_math.c", "unit_tests/test_engine_math.c",
+                     "-o", str(engine_exe)])
+        print(run([str(engine_exe)]))
         analog_exe = work / ("analog-check.exe" if os.name == "nt" else "analog-check")
         run(flags + ["firmware/src/analog.c", "unit_tests/test_analog.c", "-o", str(analog_exe)])
         print(run([str(analog_exe)]))
