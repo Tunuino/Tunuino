@@ -58,6 +58,8 @@ public final class TunuinoConsole extends Application {
     private LiveDataMonitor liveMonitor;
     private TelemetryPane telemetry;
     private DashboardPane dashboard;
+    private DashboardPane fuelTables;
+    private DashboardPane ignitionTables;
     private ConfigurationPane configurationPane;
     private boolean serialBusy;
     private boolean configurationBusy;
@@ -71,6 +73,17 @@ public final class TunuinoConsole extends Application {
         thread.setDaemon(true);
         return thread;
     });
+
+    private void updateMapViews(CalibrationMap map) {
+        if(map.rows()!=16||map.columns()!=16) {
+            if(dashboard!=null)dashboard.event("Ficheiro legado: não é um mapa ativo 16×16.");
+            return;
+        }
+        for(DashboardPane page : new DashboardPane[]{dashboard,fuelTables,ignitionTables})
+            if(page!=null)page.showMap(map);
+        fuelTables.selectKind(CalibrationMap.Kind.VE);
+        ignitionTables.selectKind(CalibrationMap.Kind.IGNITION);
+    }
 
     private <T> void serialTask(Callable<T> operation, Consumer<T> success, Consumer<Throwable> failure) {
         serialBusy = true;
@@ -150,10 +163,13 @@ public final class TunuinoConsole extends Application {
             boolean connected = current != null && current.isOpen();
             if (shell != null) shell.connectionState(identifiedDevice, connected);
             if(dashboard!=null) {
-                dashboard.setPort(ports.getValue()==null?null:ports.getValue().name());
-                dashboard.setConnection(identifiedDevice,connected,
-                    !serialBusy&&!monitoringActive&&!fileReading
-                    &&(firmwarePanel==null||!firmwarePanel.isBusy()));
+                boolean mapsAvailable=!serialBusy&&!monitoringActive&&!fileReading
+                    &&(firmwarePanel==null||!firmwarePanel.isBusy());
+                for(DashboardPane page : new DashboardPane[]{dashboard,fuelTables,ignitionTables}) {
+                    if(page==null)continue;
+                    page.setPort(ports.getValue()==null?null:ports.getValue().name());
+                    page.setConnection(identifiedDevice,connected,mapsAvailable);
+                }
             }
             if(configurationPane!=null)configurationPane.availability(identifiedDevice,connected,
                 serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()));
@@ -299,6 +315,10 @@ public final class TunuinoConsole extends Application {
         });
         telemetry = new TelemetryPane();
         dashboard = new DashboardPane();
+        fuelTables = new DashboardPane(true);
+        ignitionTables = new DashboardPane(true);
+        fuelTables.selectKind(CalibrationMap.Kind.VE);
+        ignitionTables.selectKind(CalibrationMap.Kind.IGNITION);
         Label summary = new Label("Escolhe um datalog local para analisar.");
         identityDetails.setWrapText(true);
         summary.getStyleClass().add("muted");
@@ -400,7 +420,7 @@ public final class TunuinoConsole extends Application {
             }
             status.setText("A ler mapa da ECU…");
             serialTask(() -> MapReadClient.read(current, device, kind, Duration.ofSeconds(5)), map -> {
-                dashboard.showMap(map);
+                updateMapViews(map);
                 String title=device.family() + " · " + kind + " · cópia lida da ECU";
                 if((device.capabilities()&8)!=0)CalibrationViewer.show(stage,title,map,updated -> {
                     var completion=new java.util.concurrent.CompletableFuture<Void>();
@@ -409,7 +429,7 @@ public final class TunuinoConsole extends Application {
                     }
                     status.setText("A guardar e verificar o mapa na ECU…");
                     serialTask(()->{io.tunuino.protocol.MapWriteClient.write(current,device,updated,Duration.ofSeconds(15));return true;},
-                        ignored->{dashboard.showMap(updated);status.setText("Mapa guardado e verificado na ECU");
+                        ignored->{updateMapViews(updated);status.setText("Mapa guardado e verificado na ECU");
                             refreshConnection.run();completion.complete(null);},
                         error->{if(!current.isOpen()){connection.compareAndSet(current,null);identifiedDevice=null;}
                             status.setText("Falha ao guardar mapa: "+error.getMessage());refreshConnection.run();completion.completeExceptionally(error);});
@@ -592,7 +612,7 @@ public final class TunuinoConsole extends Application {
             });
             fileWorker.submit(activeRead);
         });
-        dashboard.setReadAction(kind -> {
+        Consumer<CalibrationMap.Kind> readMapForDashboard = kind -> {
             PacketSession current=connection.get();
             DeviceIdentity device=identifiedDevice;
             if(serialBusy||monitoringActive||fileReading||firmwarePanel.isBusy()
@@ -603,13 +623,16 @@ public final class TunuinoConsole extends Application {
             }
             status.setText("A ler mapa "+kind+" de 16×16 da ECU…");
             serialTask(()->MapReadClient.read(current,device,kind,Duration.ofSeconds(7)),
-                map->{dashboard.showMap(map);status.setText("Tabela "+kind+" 16×16 atualizada");
+                map->{updateMapViews(map);status.setText("Tabela "+kind+" 16×16 atualizada");
                     refreshConnection.run();},
                 error->{dashboard.event("Falha de leitura "+kind+": "+error.getMessage());
                     if(!current.isOpen()){connection.compareAndSet(current,null);identifiedDevice=null;}
                     status.setText("Não foi possível ler "+kind+": "+error.getMessage());
                     refreshConnection.run();});
-        });
+        };
+        dashboard.setReadAction(readMapForDashboard);
+        fuelTables.setReadAction(readMapForDashboard);
+        ignitionTables.setReadAction(readMapForDashboard);
         javafx.scene.layout.FlowPane connectionControls = ConsoleShell.actions(
             new Label("PORTA USB"), ports, scan, connect, identify);
         connectionControls.getStyleClass().add("connection-controls");
@@ -629,6 +652,24 @@ public final class TunuinoConsole extends Application {
         maps.setPadding(new Insets(0, 24, 24, 24));
         shell.addPage("Tuning", "Tuning e calibração", "Edição de mapas e pré-visualização matemática.",
             "M1 2H21V20H1ZM3 4V8H7V4ZM9 4V8H13V4ZM15 4V8H19V4ZM3 10V14H7V10ZM9 10V14H13V10ZM15 10V14H19V10ZM3 16V18H7V16ZM9 16V18H13V16ZM15 16V18H19V16Z", ConsoleShell.scroll(maps));
+        shell.addPage("Fuel Tables", "Tabela de combustível · VE 16×16",
+            "Mapa volumétrico real de 256 células da ECU. O firmware de bancada não comanda injetores.",
+            "M2 2H22V22H2ZM5 5H10V10H5ZM12 5H19V10H12ZM5 12H10V19H5ZM12 12H19V19H12Z",
+            ConsoleShell.scroll(fuelTables));
+        shell.addPage("Ignition Tables", "Tabela de ignição · 16×16",
+            "Mapa real de avanço em graus. Sem temporização física de bobinas ou atuadores.",
+            "M12 2L6 13H11L8 22L18 10H13Z",ConsoleShell.scroll(ignitionTables));
+        Button autotuneUnavailable=new Button("Autotune indisponível neste firmware");
+        autotuneUnavailable.setId("autotune-start");autotuneUnavailable.setDisable(true);
+        shell.addPage("Autotune", "Autotune", "Modo desativado até existir gestão de combustível e validação física.",
+            "M12 3L21 12L12 21L3 12ZM11 7H13V13H11ZM11 16H13V18H11Z",
+            ConsoleShell.scroll(new VBox(14,
+                ConsoleShell.card("AUTOTUNE", "Não existem ainda modelos de AFR-alvo, controlo de injeção nem "
+                    +"correção em malha fechada que permitam uma afinação automática segura.",
+                    autotuneUnavailable),
+                ConsoleShell.card("DADOS REAIS", "Para analisar a mistura, podes gravar os canais reais "
+                    +"disponíveis em Data Log e editar manualmente os mapas 16×16 em Tuning.",
+                    new Label("O Dashboard nunca inventa uma medição de AFR.")))));
         configurationPane=new ConfigurationPane(stage,new ConfigurationPane.Access() {
             @Override public <T> void run(ConfigurationPane.Operation<T> operation,Consumer<T> success,Consumer<Throwable> failure) {
                 PacketSession current=connection.get();DeviceIdentity device=identifiedDevice;
@@ -644,12 +685,11 @@ public final class TunuinoConsole extends Application {
                 });
             }
         });
-        shell.addPage("Inputs / Outputs", "Entradas e calibração", "Sensores, captura e diagnóstico da configuração.",
-            "M2 3H20V7H2ZM2 10H20V14H2ZM2 17H20V21H2Z", ConsoleShell.scroll(configurationPane));
-        shell.addPage("Firmware", "Firmware e ligação USB", "Seleciona a imagem, verifica o dispositivo e acompanha a gravação.",
-            "M5 4H17V18H5ZM7 6V16H15V6ZM1 6H4V8H1ZM1 11H4V13H1ZM18 6H21V8H18ZM18 11H21V13H18ZM7 0H9V3H7ZM13 0H15V3H13ZM7 19H9V22H7ZM13 19H15V22H13Z", ConsoleShell.scroll(firmwarePanel));
         shell.addPage("Data Log", "Datalogs e monitorização", "Gravação CSV e reprodução dos sinais disponíveis.",
             "M3 3H21V21H3ZM6 7H18V9H6ZM6 12H18V14H6ZM6 17H15V19H6Z", root);
+        shell.addPage("Inputs / Outputs", "Entradas e calibração", "Sensores, captura e diagnóstico da configuração.",
+            "M2 3H20V7H2ZM2 10H20V14H2ZM2 17H20V21H2Z", ConsoleShell.scroll(configurationPane));
+
         shell.addPage("Diagnostics", "Diagnósticos", "Validação e análise de sinais verdadeiros.",
             "M12 2A10 10 0 1 0 12 22A10 10 0 1 0 12 2ZM11 6H13V13H11ZM11 16H13V18H11Z",
             ConsoleShell.scroll(new VBox(12,
@@ -661,6 +701,8 @@ public final class TunuinoConsole extends Application {
                     "Verifica as leituras e os parâmetros na área Inputs / Outputs. "
                     +"Em Tuning estão disponíveis os cálculos VE/ignição e os motivos de bloqueio.",
                     new Label("Lê a ECU e confirma os sinais antes de qualquer afinação.")))));
+        shell.addPage("Firmware", "Firmware e ligação USB", "Seleciona a imagem, verifica o dispositivo e acompanha a gravação.",
+            "M5 4H17V18H5ZM7 6V16H15V6ZM1 6H4V8H1ZM1 11H4V13H1ZM18 6H21V8H18ZM18 11H21V13H18ZM7 0H9V3H7ZM13 0H15V3H13ZM7 19H9V22H7ZM13 19H15V22H13Z", ConsoleShell.scroll(firmwarePanel));
         shell.addPage("Settings", "Configurações da Console", "Identidade e funcionalidades suportadas.",
             "M12 2L15 4L19 4L20 8L22 12L20 16L19 20L15 20L12 22L9 20L5 20L4 16L2 12L4 8L5 4L9 4Z",
             ConsoleShell.scroll(new VBox(12,

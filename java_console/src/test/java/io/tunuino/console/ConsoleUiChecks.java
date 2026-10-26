@@ -98,7 +98,7 @@ public final class ConsoleUiChecks {
                 "Offline map read remains disabled even with offline UI fixture");
             snapshot(scene,"console-dashboard-16x16");
             cockpit.clearMaps();
-            ((ToggleButton)scene.lookup("#navigate-4")).fire();
+            ((ToggleButton)scene.lookup("#navigate-5")).fire();
             scene.getRoot().applyCss();scene.getRoot().layout();
             TelemetryPane telemetry = (TelemetryPane) scene.lookup(".telemetry-pane");
             check(((Label) scene.lookup("#telemetry-value-rpm")).getText().equals("—"), "Offline values are absent");
@@ -155,7 +155,7 @@ public final class ConsoleUiChecks {
             Scene scene = stage.getScene();
             ((ToggleButton) scene.lookup("#navigate-1")).fire(); snapshot(scene, "console-maps");
             check(scene.lookup("#open-map") != null, "Maps workspace is reachable");
-            ((ToggleButton) scene.lookup("#navigate-2")).fire();
+            ((ToggleButton) scene.lookup("#navigate-6")).fire();
             scene.getRoot().applyCss();scene.getRoot().layout();
             check(((Button)scene.lookup("#config-read")).isDisabled(),"Offline configuration cannot read USB");
             check(((Button)scene.lookup("#config-apply")).isDisabled(),"Offline configuration cannot write USB");
@@ -189,8 +189,8 @@ public final class ConsoleUiChecks {
             configEditor.availability(null,false,false);
             check(reference.getText().equals("3290")&&((Button)scene.lookup("#config-apply")).isDisabled(),"Disconnect preserves local edits while blocking ECU writes");
             reference.setText("3300");check(configEditor.canClose(),"Unchanged configuration closes without prompting");
-            ((ToggleButton) scene.lookup("#navigate-3")).fire(); snapshot(scene, "console-firmware");
-            ((ToggleButton) scene.lookup("#navigate-4")).fire();
+            ((ToggleButton) scene.lookup("#navigate-8")).fire(); snapshot(scene, "console-firmware");
+            ((ToggleButton) scene.lookup("#navigate-5")).fire();
             telemetry.beginLive(); telemetry.showLive(Optional.of(samples.get(0))); telemetry.showLive(Optional.empty());
             check(((Label) scene.lookup("#telemetry-value-rpm")).getText().equals("—"), "Unavailable data clears current values");
             telemetry.endLive("Monitorização terminada");
