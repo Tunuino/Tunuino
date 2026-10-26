@@ -166,7 +166,7 @@ This **does not** yet change the ECU's active 8x8 page format, INI page
 dimensions or flash journal. A 16x16 local file must **not** be burned to the
 current F427 firmware: doing so would require a coordinated configuration
 version and safe migration of existing flash records. The Console's ECU write
-path rejects any size other than 8x8.
+path rejects any size other than 16x16.
 
 In the Console map editor, **Converter 8×8 para 16×16** opens the newly
 refined map in another window with the ECU-upload button omitted. The

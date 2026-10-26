@@ -20,7 +20,7 @@ int main(int argc,char **argv){
 #endif
     fputs("Tunuino IO host test: SYNTHETIC ADC and RPM; no hardware.\n",stderr);
     tunuino_device_init(&device,save,clock_now,NULL);
-    const tunuino_identity identity={TUNUINO_PROTEUS,TUNUINO_STM32_F4,7,0,1,0,15,{1,2,3,4,5,6,7,8,9,10,11,12}};
+    const tunuino_identity identity={TUNUINO_PROTEUS,TUNUINO_STM32_F4,7,0,2,0,15,{1,2,3,4,5,6,7,8,9,10,11,12}};
     const tunuino_dispatch_context context={&identity,&device.live,&device.ve,&device.ignition,&device};
     tunuino_link link;if(tunuino_link_init(&link,&context,1000,1000,now)!=TUNUINO_LINK_RECEIVING)return 1;
     for(;;){

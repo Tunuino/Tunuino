@@ -74,7 +74,7 @@ public final class CalibrationViewer {
         private final Button undo = new Button("Desfazer");
         private final Button redo = new Button("Refazer");
         private final Button save = new Button("Guardar cópia");
-        private final Button refine = new Button("Converter 8×8 para 16×16");
+        private final Button refine = new Button("Converter ficheiro antigo para 16×16");
         private final CheckBox colors = new CheckBox("Cores por valor");
         private double colorMinimum;
         private double colorMaximum;
