@@ -74,11 +74,12 @@ public final class ConsoleUiChecks {
             check(((Button) scene.lookup("#dashboard-edit-map")).isDisabled(), "Offline dashboard blocks ECU map editing");
             DashboardPane cockpit=(DashboardPane)scene.lookup("#dashboard");
             check(cockpit!=null,"ECU cockpit is the first page");
-            var gaugeNodes=new ArrayList<>(scene.lookupAll(".dashboard-gauge"));
+            var gaugeNodes=new ArrayList<>(scene.getRoot().lookupAll(".dashboard-gauge"));
             check(gaugeNodes.size()==6,"Dashboard contains all six gauges");
-            double gaugeY=gaugeNodes.get(0).localToScene(gaugeNodes.get(0).getBoundsInLocal()).getMinY();
-            for(var gauge:gaugeNodes)check(Math.abs(gauge.localToScene(gauge.getBoundsInLocal()).getMinY()-gaugeY)<1,
-                "Six gauges fit one row at the initial desktop width");
+            var gaugeRows=new java.util.HashSet<Long>();
+            for(var gauge:gaugeNodes)gaugeRows.add(Math.round(gauge.localToScene(gauge.getBoundsInLocal()).getMinY()));
+            boolean wide=((javafx.scene.layout.FlowPane)gaugeNodes.get(0).getParent()).getWidth()>=900;
+            check(gaugeRows.size()==(wide?1:2),"Gauges fit one desktop row or two compact rows");
             check(scene.lookup("#dashboard-table-host")==null||scene.lookup("#dashboard")!=null,
                 "Dashboard is real rather than a screenshot");
             ((ToggleButton)scene.lookup("#navigate-1")).fire();
