@@ -25,4 +25,9 @@ tunuino_map_status tunuino_map_encode(const tunuino_map *map, uint8_t *bytes, si
 tunuino_map_status tunuino_map_decode(const uint8_t *bytes, size_t length, tunuino_map *map);
 /* Output is percent VE or degrees BTDC. CLAMPED explicitly reports out-of-axis input. */
 tunuino_map_status tunuino_map_lookup(const tunuino_map *map, double rpm, double map_kpa, double *value);
+/* Offline/refinement utility: 8x8 map -> 16x16 map. Preserves all eight
+ * original axis values and grid cells exactly; new knots use interpolation.
+ * Does not change ECU page sizes or persistent layout. No in-place operation.
+ * Invalid inputs leave the caller-owned destination untouched. */
+tunuino_map_status tunuino_map_refine_16(const tunuino_map *source, tunuino_map *destination);
 #endif

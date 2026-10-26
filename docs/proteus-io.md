@@ -152,6 +152,22 @@ represented exactly with two decimal places. The Console writes a whole map,
 commits it and compares a complete native readback before reporting success.
 It refuses to overwrite pre-existing staged changes.
 
+## Safe 16x16 map preparation (offline only)
+
+The portable C map library and the Java Console both support a deterministic
+**8x8 → 16x16** map refinement operation. It retains all original RPM and load
+axis knots and their 64 original cell values exactly. New knots subdivide the
+largest available gap, and new cells are bilinear interpolations rounded to
+0.001 units. Refusal to refine an axis without enough integer space leaves
+the original map unchanged. Independent C and Java implementations produce
+byte-for-byte identical 16x16 `.tnmap` files, including CRC.
+
+This **does not** yet change the ECU's active 8x8 page format, INI page
+dimensions or flash journal. A 16x16 local file must **not** be burned to the
+current F427 firmware: doing so would require a coordinated configuration
+version and safe migration of existing flash records. The Console's ECU write
+path rejects any size other than 8x8.
+
 ## Flash journal and USB recovery
 
 The application remains limited to 128 KiB starting at 0x08000000. F427 sectors

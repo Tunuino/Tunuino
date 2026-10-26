@@ -60,6 +60,38 @@ public final class CalibrationChecks {
         CalibrationMap spark = CalibrationMap.decode(ignition);
         check(spark.kind() == CalibrationMap.Kind.IGNITION && spark.cell(0, 0) == -10
             && spark.lookup(2000, 75).value() == 15 && Arrays.equals(ignition, spark.encode()), "Signed ignition interoperability");
+        CalibrationMap seed=new CalibrationMap(CalibrationMap.Kind.VE,
+            java.util.stream.IntStream.range(0,8).map(i->500+700*i).toArray(),
+            java.util.stream.IntStream.range(0,8).map(i->20000+17000*i).toArray(),
+            java.util.stream.IntStream.range(0,8).mapToObj(i->
+                java.util.stream.IntStream.range(0,8).map(j->50000+5000*i+600*j).toArray())
+                .toArray(int[][]::new));
+        CalibrationMap expanded=seed.refineTo16();
+        check(expanded.rows()==16&&expanded.columns()==16,"16x16 offline grid");
+        for(int i=0;i<8;++i) {
+            int row=-1;
+            for(int k=0;k<16;++k)if(Math.round(expanded.loadKpaAt(k)*1000)==20000+17000*i)row=k;
+            check(row>=0,"Original load knot preserved");
+            for(int j=0;j<8;++j) {
+                int col=-1;
+                for(int k=0;k<16;++k)if(expanded.rpmAt(k)==500+700*j)col=k;
+                check(col>=0&&expanded.cell(row,col)==seed.cell(i,j),
+                    "Original calibration point retained without rounding");
+            }
+        }
+        byte[] cRefined=java.util.HexFormat.of().parseHex(
+            Files.readString(java.nio.file.Path.of(args[2])).trim().split(" ")[1]);
+        check(Arrays.equals(expanded.encode(),cRefined),"C/Java 16x16 map conversion bytes and CRC");
+        check(Arrays.equals(CalibrationMap.decode(cRefined).encode(),cRefined),"16x16 roundtrip");
+        check(seed.rows()==8&&seed.columns()==8,"Original 8x8 map is immutable");
+        int[] tooTight=java.util.stream.IntStream.range(0,8).toArray();
+        CalibrationMap tightlySpaced=new CalibrationMap(CalibrationMap.Kind.VE,tooTight,tooTight,
+            new int[8][8]);
+        try {tightlySpaced.refineTo16();throw new AssertionError("Unrefinable axis accepted");}
+        catch(IllegalArgumentException expected) {check(tightlySpaced.columns()==8,"Failure preserved original map");}
+        try {expanded.refineTo16();throw new AssertionError("Non 8x8 accepted");}
+        catch(IllegalArgumentException expected) { /* no redundant conversion */ }
+
         CalibrationDocument document = new CalibrationDocument(map);
         check(!document.isModified() && !document.canUndo() && !document.canRedo(), "Initial clean document");
         check(document.editCell(0, 0, "45.125") && document.isModified(), "Exact decimal edit");

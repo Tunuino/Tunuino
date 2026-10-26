@@ -115,3 +115,54 @@ tunuino_map_status tunuino_map_lookup(const tunuino_map *map, double rpm, double
     *value = (low * (1 - wy) + high * wy) / 1000.0;
     return clamped ? TUNUINO_MAP_CLAMPED : TUNUINO_MAP_OK;
 }
+
+/* Uniform subdivision of the largest remaining interval keeps every original
+ * RPM and kPa axis knot. Values are in integer RPM or milli-kPa, respectively. */
+static bool refine_axis_16(const int32_t original[8], int32_t refined[16]) {
+    memcpy(refined,original,8*sizeof(int32_t));
+    for(unsigned count=8;count<16;++count) {
+        unsigned best=0;
+        int64_t width=0;
+        for(unsigned i=0;i<count-1;++i) {
+            const int64_t gap=(int64_t)refined[i+1]-refined[i];
+            if(gap>width) {width=gap;best=i;}
+        }
+        if(width<2)return false;
+        const int32_t new_value=(int32_t)((int64_t)refined[best]+width/2);
+        memmove(refined+best+2,refined+best+1,(count-best-1)*sizeof(int32_t));
+        refined[best+1]=new_value;
+    }
+    return true;
+}
+
+tunuino_map_status tunuino_map_refine_16(const tunuino_map *source, tunuino_map *destination) {
+    if(source==NULL||destination==NULL||source==destination)
+        return TUNUINO_MAP_ARGUMENT;
+    if(source->rpm_count!=8||source->load_count!=8||tunuino_map_validate(source)!=TUNUINO_MAP_OK)
+        return TUNUINO_MAP_FORMAT;
+    int32_t rpm[16],load[16];
+    if(!refine_axis_16(source->rpm,rpm)||!refine_axis_16(source->load_milli_kpa,load))
+        return TUNUINO_MAP_RANGE;
+    /* At this point no further failure is possible for a validated input:
+     * every new knot lies in the original bounding rectangle, and bilinear
+     * interpolation of valid cells remains within that kind's value range. */
+    destination->kind=source->kind;
+    destination->rpm_count=destination->load_count=16;
+    for(unsigned i=0;i<16;++i)destination->rpm[i]=rpm[i];
+    for(unsigned i=0;i<16;++i)destination->load_milli_kpa[i]=load[i];
+    for(unsigned row=0;row<16;++row)for(unsigned col=0;col<16;++col) {
+        int exact_row=-1, exact_col=-1;
+        for(unsigned k=0;k<8;++k) {
+            if(source->load_milli_kpa[k]==load[row])exact_row=(int)k;
+            if(source->rpm[k]==rpm[col])exact_col=(int)k;
+        }
+        if(exact_row>=0&&exact_col>=0) {
+            destination->cells[row][col]=source->cells[exact_row][exact_col];
+        } else {
+            double value=0.0;
+            (void)tunuino_map_lookup(source,(double)rpm[col],load[row]/1000.0,&value);
+            destination->cells[row][col]=(int32_t)lround(value*1000.0);
+        }
+    }
+    return TUNUINO_MAP_OK;
+}

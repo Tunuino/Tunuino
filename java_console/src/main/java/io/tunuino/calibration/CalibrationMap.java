@@ -106,6 +106,50 @@ public final class CalibrationMap {
         return i;
     }
 
+    /**
+     * Create a 16×16 offline map without discarding any original 8×8 axis
+     * knot or the cell at the intersection of two original knots.
+     * Intermediate cells use bilinear interpolation rounded to 0.001.
+     * The resulting file cannot be uploaded to the current 8×8 ECU profile.
+     */
+    public CalibrationMap refineTo16() {
+        if (rows() != 8 || columns() != 8)
+            throw new IllegalArgumentException("A conversão exige um mapa 8 × 8");
+        int[] fineRpm = refineAxis16(rpm), fineLoad = refineAxis16(loadMilliKpa);
+        int[][] interpolated = new int[16][16];
+        for (int row = 0; row < 16; ++row) {
+            for (int col = 0; col < 16; ++col) {
+                int originalRow = Arrays.binarySearch(loadMilliKpa, fineLoad[row]);
+                int originalCol = Arrays.binarySearch(rpm, fineRpm[col]);
+                if (originalRow >= 0 && originalCol >= 0) {
+                    interpolated[row][col] = cells[originalRow][originalCol];
+                } else {
+                    double value = lookup(fineRpm[col], fineLoad[row] / 1000.0).value();
+                    interpolated[row][col] = Math.toIntExact(Math.round(value * 1000.0));
+                }
+            }
+        }
+        return new CalibrationMap(kind, fineRpm, fineLoad, interpolated);
+    }
+
+    private static int[] refineAxis16(int[] original) {
+        int[] refined = Arrays.copyOf(original, 16);
+        for (int size = 8; size < 16; ++size) {
+            int best = -1;
+            long widest = 0;
+            for (int i = 0; i < size - 1; ++i) {
+                long gap = (long)refined[i + 1] - refined[i];
+                if (gap > widest) { widest = gap; best = i; }
+            }
+            if (widest < 2)
+                throw new IllegalArgumentException("O eixo não tem espaço entre pontos para criar 16 posições únicas");
+            int middle = Math.toIntExact((long)refined[best] + widest / 2);
+            System.arraycopy(refined, best + 1, refined, best + 2, size - best - 1);
+            refined[best + 1] = middle;
+        }
+        return refined;
+    }
+
     public byte[] encode() {
         ByteBuffer b = ByteBuffer.allocate(16 + 4 * (columns() + rows() + columns() * rows()));
         b.put("TUNUINOM".getBytes(StandardCharsets.US_ASCII));

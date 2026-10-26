@@ -117,6 +117,13 @@ def main():
         if live_packet[2:-4] != expected_live or zlib.crc32(expected_live) != int.from_bytes(live_packet[-4:], "big"):
             raise AssertionError("C live data differs from independent wire layout")
         print(live_output[1])
+        refined_exe = work / ("map-refine-check.exe" if os.name == "nt" else "map-refine-check")
+        run(flags + ["firmware/src/frame.c", "firmware/src/calibration.c",
+                     "unit_tests/test_map_refine.c", "-lm", "-o", str(refined_exe)])
+        refined_output = run([str(refined_exe)]).splitlines()
+        refined_file = work / "refined-16x16-vectors.txt"
+        refined_file.write_text(refined_output[0] + "\\n", encoding="ascii")
+        print(refined_output[-1])
         map_exe = work / ("map-check.exe" if os.name == "nt" else "map-check")
         run(flags + ["firmware/src/frame.c", "firmware/src/calibration.c", "unit_tests/test_calibration.c", "-lm", "-o", str(map_exe)])
         map_output = run([str(map_exe)]).splitlines()
@@ -270,7 +277,7 @@ def main():
         print(run(["java", "-cp", str(work), "io.tunuino.TransportChecks"]))
         print(run(["java", "-cp", str(work), "io.tunuino.IdentityChecks", identity_vector]))
         print(run(["java", "-cp", str(work), "io.tunuino.LiveDataChecks", live_vector]))
-        print(run(["java", "-cp", str(work), "io.tunuino.CalibrationChecks", map_vector, ignition_vector]))
+        print(run(["java", "-cp", str(work), "io.tunuino.CalibrationChecks", map_vector, ignition_vector, str(refined_file)]))
         read_fixture = work / "map-read-vectors.txt"
         read_fixture.write_text("\n".join(read_output[:4]), encoding="ascii")
         print(run(["java", "-cp", str(work), "io.tunuino.MapReadChecks", str(read_fixture)]))
