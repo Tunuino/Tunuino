@@ -40,14 +40,15 @@ final class ConsoleShell extends BorderPane {
     ConsoleShell(Node hardware, Node connectionControls, Label status, Label identity) {
         getStyleClass().add("console-shell");
         ImageView logo = new ImageView(new Image(ConsoleShell.class.getResource("tunuino.png").toExternalForm()));
-        logo.setFitWidth(172); logo.setFitHeight(58); logo.setPreserveRatio(true);
+        logo.setFitWidth(105); logo.setFitHeight(58); logo.setPreserveRatio(true);
         StackPane logoBox = new StackPane(logo); logoBox.getStyleClass().add("brand-logo");
-        Label product = new Label("CONSOLE"); product.getStyleClass().add("eyebrow");
-        VBox productName = new VBox(3, product, device);
+        Label product = new Label("Tunuino"); product.getStyleClass().add("wordmark");
+        Label subtype = new Label("Console"); subtype.getStyleClass().add("wordmark-subtitle");
+        VBox productName = new VBox(0, product, subtype, device);
         device.getStyleClass().add("muted");
         Region gap = new Region(); HBox.setHgrow(gap, Priority.ALWAYS);
         connection.getStyleClass().addAll("connection-badge", "offline");
-        HBox masthead = new HBox(22, logoBox, productName, gap, new Label("Centralina"), hardware, connection);
+        HBox masthead = new HBox(14, logoBox, productName, gap, new Label("Centralina"), hardware, connection);
         masthead.setAlignment(Pos.CENTER_LEFT); masthead.getStyleClass().add("masthead");
         VBox header = new VBox(masthead, connectionControls); header.getStyleClass().add("app-header");
         setTop(header);
@@ -86,7 +87,7 @@ final class ConsoleShell extends BorderPane {
                 pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("compact"), compact);
                 pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("short"), shortWindow);
                 logo.setFitHeight(shortWindow ? 32 : compact ? 40 : 58);
-                logo.setFitWidth(shortWindow ? 132 : compact ? 142 : 172);
+                logo.setFitWidth(shortWindow ? 68 : compact ? 84 : 105);
             };
             scene.heightProperty().addListener((observable, oldHeight, height) -> resize.accept(height.doubleValue()));
             resize.accept(scene.getHeight());

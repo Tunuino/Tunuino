@@ -148,3 +148,13 @@
 .console-shell:short .sidebar-caption { -fx-padding: 0 10 6 10; }
 .console-shell:short .sidebar-footer, .console-shell:short .build-label { -fx-padding: 2 8; -fx-font-size: 9px; }
 .console-shell:short .navigation-button { -fx-padding: 8 9; }
+
+.wordmark { -fx-font-size: 28px; -fx-font-weight: 900; -fx-text-fill: #178dff; -fx-font-family: "Segoe UI", sans-serif; }
+.wordmark-subtitle { -fx-font-size: 14px; -fx-font-weight: bold; -fx-font-style: italic; -fx-text-fill: #9bd4ff; }
+.console-shell:compact .wordmark { -fx-font-size: 23px; }
+.console-shell:compact .wordmark-subtitle { -fx-font-size: 12px; }
+.console-shell:short .wordmark { -fx-font-size: 19px; }
+.console-shell:short .wordmark-subtitle { -fx-font-size: 10px; }
+.navigation-button:selected { -fx-background-color: #075db7; -fx-text-fill: #f3fbff; }
+.navigation-button:selected .navigation-icon { -fx-fill: #e5f7ff; }
+.brand-logo { -fx-background-color: #091827; -fx-background-radius: 7; -fx-padding: 4 7; }
