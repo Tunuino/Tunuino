@@ -67,8 +67,11 @@ final class DashboardPane extends VBox {
     private final Label portLabel=new Label("PORTA —");
     private final Label firmwareLabel=new Label("Firmware —");
 
-    DashboardPane() {
-        setId("dashboard");
+    DashboardPane() { this(false); }
+
+    /** Maps-only cockpit reuses precisely the same real 16x16 rendering logic. */
+    DashboardPane(boolean mapsOnly) {
+        setId(mapsOnly?"dashboard-map-workspace":"dashboard");
         getStyleClass().add("ecu-dashboard");
         setSpacing(12);
         setPadding(new Insets(8,14,18,14));
@@ -161,7 +164,13 @@ final class DashboardPane extends VBox {
         surfacePanel.getStyleClass().add("dashboard-card");
         VBox.setVgrow(surfaceHost,Priority.NEVER);
         VBox.setVgrow(surfacePanel,Priority.NEVER);
-        getChildren().addAll(header,gaugeRow,smallRow,center,surfacePanel);
+        if(mapsOnly) {
+            Label heading=new Label("TABELAS NATIVAS 16×16 · ECU");
+            heading.getStyleClass().add("dashboard-kicker");
+            getChildren().addAll(heading,center,surfacePanel);
+        } else {
+            getChildren().addAll(header,gaugeRow,smallRow,center,surfacePanel);
+        }
         addEvent("Painel inicializado. Sem valores simulados.");
         setConnection(null,false,false);
         redrawMaps();
@@ -211,6 +220,12 @@ final class DashboardPane extends VBox {
     }
     void monitoringStopped(String reason) {
         clearMeasurements();source.setText(reason);addEvent(reason);
+    }
+    void selectKind(CalibrationMap.Kind kind) {
+        selected=java.util.Objects.requireNonNull(kind);
+        veTab.setSelected(selected==CalibrationMap.Kind.VE);
+        sparkTab.setSelected(selected==CalibrationMap.Kind.IGNITION);
+        redrawMaps();
     }
     void showMap(CalibrationMap map) {
         if(map.columns()!=16||map.rows()!=16)
