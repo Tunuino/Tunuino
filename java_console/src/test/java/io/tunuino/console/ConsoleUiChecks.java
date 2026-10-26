@@ -99,6 +99,7 @@ public final class ConsoleUiChecks {
             snapshot(scene,"console-dashboard-16x16");
             cockpit.clearMaps();
             ((ToggleButton)scene.lookup("#navigate-4")).fire();
+            scene.getRoot().applyCss();scene.getRoot().layout();
             TelemetryPane telemetry = (TelemetryPane) scene.lookup(".telemetry-pane");
             check(((Label) scene.lookup("#telemetry-value-rpm")).getText().equals("—"), "Offline values are absent");
             List<LogSample> samples = new ArrayList<>();
