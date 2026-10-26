@@ -1,10 +1,11 @@
-/* Copyright (c) 2026 Tunuino. Proteus v0.7/F427 input acquisition only.
+/* Copyright (c) 2026 Tunuino. Proteus v0.7/F427 input acquisition.
  * Source: Tunuino/proteus @ 383558bf7ca1c53ad8bbd8fdc9dd3a4187013c46,
  * U1501 pads 26..29,34..37,40..47,58,59; STM32F427 LQFP144 pin table.
- * No injector, ignition, throttle, relay, pull-up enable or LED output is set. */
+ * Actuator pins and timing are isolated in board_outputs.c. */
 #include "ch.h"
 #include "hal.h"
 #include "board_io.h"
+#include "board_outputs.h"
 #include "tunuino/config_journal.h"
 #include "tunuino/capture_source.h"
 #include <string.h>
@@ -25,6 +26,7 @@ static volatile bool edge_overflow;
 static bool trigger_enabled;
 static uint32_t trigger_errors;
 static uint32_t saved_flash_acr;
+static uint8_t cam_first=1,cam_last=2,cam_phase;
 
 static void adc_error(ADCDriver *driver,adcerror_t error) {(void)driver;(void)error;adc_failed=true;}
 static void adc_complete(ADCDriver *driver){(void)driver;adc_completed=true;}
@@ -92,7 +94,7 @@ static bool flash_erase(void *user,unsigned bank){
     bool okay=flash_wait();flash_finish();return okay;
 }
 bool board_io_save(void *user,const uint8_t *bytes,size_t length){
-    (void)user;return length==TUNUINO_IO_SETTINGS_SIZE&&tunuino_journal_save(&journal,bytes);
+    (void)user;return board_outputs_idle()&&length==TUNUINO_IO_SETTINGS_SIZE&&tunuino_journal_save(&journal,bytes);
 }
 
 static void edge_callback(void *argument){
@@ -107,7 +109,7 @@ static void configure_capture(tunuino_device *d,uint64_t now){
     palDisablePadEvent(GPIOE,7);palDisablePadEvent(GPIOE,8);
     chSysLock();edge_head=edge_tail=0;edge_overflow=false;chSysUnlock();
     trigger_enabled=d->active[2]!=0;
-    const tunuino_position_config config={{d->active[3],d->active[4],30,12000,300000},1,2,0};
+    const tunuino_position_config config={{d->active[3],d->active[4],30,12000,300000},cam_first,cam_last,cam_phase};
     tunuino_position_config selected=config;selected.crank.maximum_rpm=tunuino_device_u16(d->active+96);
     if(tunuino_capture_source_init(&capture,&selected,(uint32_t)now,now,1000000,100000)!=TUNUINO_SOURCE_OK)trigger_enabled=false;
     if(trigger_enabled){
@@ -117,13 +119,17 @@ static void configure_capture(tunuino_device *d,uint64_t now){
     }
     applied_generation=d->generation;
 }
-void board_io_resync(tunuino_device *d){configure_capture(d,board_io_time_us());}
+void board_io_resync(tunuino_device *d){board_outputs_stop();configure_capture(d,board_io_time_us());}
+void board_io_phase(tunuino_device *d,uint8_t first,uint8_t last,uint8_t phase){
+    cam_first=first;cam_last=last;cam_phase=phase;board_io_resync(d);
+}
 void board_io_start(tunuino_device *d){
     _Static_assert(STM32_TIMCLK1%1000000u==0,"TIM2 clock must support 1 us");
     RCC->AHB1ENR|=RCC_AHB1ENR_GPIOBEN|RCC_AHB1ENR_GPIOCEN|RCC_AHB1ENR_GPIOEEN;
     RCC->APB1ENR|=RCC_APB1ENR_TIM2EN;(void)RCC->APB1ENR;
     TIM2->CR1=0;TIM2->PSC=STM32_TIMCLK1/1000000u-1u;TIM2->ARR=UINT32_MAX;
     TIM2->EGR=TIM_EGR_UG;TIM2->CNT=0;TIM2->CR1=TIM_CR1_CEN;
+    board_outputs_start(d);
     for(unsigned pin=0;pin<8;++pin)palSetPadMode(GPIOA,pin,PAL_MODE_INPUT_ANALOG);
     for(unsigned pin=0;pin<6;++pin)palSetPadMode(GPIOC,pin,PAL_MODE_INPUT_ANALOG);
     palSetPadMode(GPIOB,0,PAL_MODE_INPUT_ANALOG);palSetPadMode(GPIOB,1,PAL_MODE_INPUT_ANALOG);
@@ -146,7 +152,7 @@ void board_io_update(tunuino_device *d){
     if(ADCD1.state==ADC_READY&&(uint32_t)(ms-last_adc_start)>=10){
         adc_failed=false;adc_completed=false;last_adc_start=ms;adcStartConversion(&ADCD1,&group,adc_samples,4);
     }
-    tunuino_position_reading position={0};
+    tunuino_position_reading position={0};uint64_t crank_edge=0;
     if(trigger_enabled){
         /* Latch the complete pending batch before taking the current timer.
          * Do not mask IRQs while decoding, serializing or touching flash. */
@@ -162,9 +168,10 @@ void board_io_update(tunuino_device *d){
         }else{
             for(size_t i=0;i<count;++i)if(tunuino_capture_source_push(&capture,pending[i].counter,pending[i].kind)!=TUNUINO_SOURCE_OK){++trigger_errors;trigger_enabled=false;break;}
             size_t processed;(void)tunuino_capture_processor_drain(&capture.processor,observed,64,&processed);
-            if(trigger_enabled)(void)tunuino_capture_processor_read(&capture.processor,observed,&position);
+            if(trigger_enabled)(void)tunuino_capture_processor_anchor(&capture.processor,observed,&position,&crank_edge);
         }
     }
     tunuino_device_sample(d,now/1000,raw,adc_good&&(uint32_t)(ms-last_adc_good)<100,
         (uint32_t)(position.rpm*1000+0.5),position.crank_valid!=0,position.tooth_index,trigger_errors);
+    board_outputs_update(d,&position,(uint32_t)crank_edge,TIM2->CNT);
 }

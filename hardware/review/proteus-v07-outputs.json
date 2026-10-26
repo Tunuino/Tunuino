@@ -1,0 +1,181 @@
+{
+  "source_repository": "Tunuino/proteus",
+  "source_commit": "383558bf7ca1c53ad8bbd8fdc9dd3a4187013c46",
+  "source_path": "proteus.kicad_pcb",
+  "mcu": "U1501 STM32F427 LQFP144",
+  "pin_reference": "ST DS9405, LQFP144 pin table",
+  "status": "PCB net membership checked; no physical continuity or load validation",
+  "inactive_mcu_level": 0,
+  "low_side_driver": "VNLD5160",
+  "ignition_driver": "MIC4427, non-inverting; external ignition power stage required",
+  "outputs": [
+    {
+      "name": "LS1",
+      "pad": 123,
+      "gpio": "PD7",
+      "net": "/lowside_quad1/IN1"
+    },
+    {
+      "name": "LS2",
+      "pad": 124,
+      "gpio": "PG9",
+      "net": "/lowside_quad1/IN2"
+    },
+    {
+      "name": "LS3",
+      "pad": 125,
+      "gpio": "PG10",
+      "net": "/lowside_quad1/IN3"
+    },
+    {
+      "name": "LS4",
+      "pad": 126,
+      "gpio": "PG11",
+      "net": "/lowside_quad1/IN4"
+    },
+    {
+      "name": "LS5",
+      "pad": 127,
+      "gpio": "PG12",
+      "net": "/lowside_quad2/IN1"
+    },
+    {
+      "name": "LS6",
+      "pad": 128,
+      "gpio": "PG13",
+      "net": "/lowside_quad2/IN2"
+    },
+    {
+      "name": "LS7",
+      "pad": 129,
+      "gpio": "PG14",
+      "net": "/lowside_quad2/IN3"
+    },
+    {
+      "name": "LS8",
+      "pad": 134,
+      "gpio": "PB4",
+      "net": "/lowside_quad2/IN4"
+    },
+    {
+      "name": "LS9",
+      "pad": 135,
+      "gpio": "PB5",
+      "net": "/lowside_quad3/IN1"
+    },
+    {
+      "name": "LS10",
+      "pad": 136,
+      "gpio": "PB6",
+      "net": "/lowside_quad3/IN2"
+    },
+    {
+      "name": "LS11",
+      "pad": 137,
+      "gpio": "PB7",
+      "net": "/lowside_quad3/IN3"
+    },
+    {
+      "name": "LS12",
+      "pad": 139,
+      "gpio": "PB9",
+      "net": "/lowside_quad3/IN4"
+    },
+    {
+      "name": "LS13",
+      "pad": 140,
+      "gpio": "PB8",
+      "net": "/lowside_quad4/IN1"
+    },
+    {
+      "name": "LS14",
+      "pad": 141,
+      "gpio": "PE0",
+      "net": "/lowside_quad4/IN2"
+    },
+    {
+      "name": "LS15",
+      "pad": 142,
+      "gpio": "PE1",
+      "net": "/lowside_quad4/IN3"
+    },
+    {
+      "name": "LS16",
+      "pad": 1,
+      "gpio": "PE2",
+      "net": "/lowside_quad4/IN4"
+    },
+    {
+      "name": "IGN1",
+      "pad": 118,
+      "gpio": "PD4",
+      "net": "/mcu/IGN1"
+    },
+    {
+      "name": "IGN2",
+      "pad": 117,
+      "gpio": "PD3",
+      "net": "/mcu/IGN2"
+    },
+    {
+      "name": "IGN3",
+      "pad": 99,
+      "gpio": "PC9",
+      "net": "/mcu/IGN3"
+    },
+    {
+      "name": "IGN4",
+      "pad": 98,
+      "gpio": "PC8",
+      "net": "/mcu/IGN4"
+    },
+    {
+      "name": "IGN5",
+      "pad": 97,
+      "gpio": "PC7",
+      "net": "/mcu/IGN5"
+    },
+    {
+      "name": "IGN6",
+      "pad": 93,
+      "gpio": "PG8",
+      "net": "/mcu/IGN6"
+    },
+    {
+      "name": "IGN7",
+      "pad": 92,
+      "gpio": "PG7",
+      "net": "/mcu/IGN7"
+    },
+    {
+      "name": "IGN8",
+      "pad": 91,
+      "gpio": "PG6",
+      "net": "/mcu/IGN8"
+    },
+    {
+      "name": "IGN9",
+      "pad": 90,
+      "gpio": "PG5",
+      "net": "/mcu/IGN9"
+    },
+    {
+      "name": "IGN10",
+      "pad": 89,
+      "gpio": "PG4",
+      "net": "/mcu/IGN10"
+    },
+    {
+      "name": "IGN11",
+      "pad": 88,
+      "gpio": "PG3",
+      "net": "/mcu/IGN11"
+    },
+    {
+      "name": "IGN12",
+      "pad": 87,
+      "gpio": "PG2",
+      "net": "/mcu/IGN12"
+    }
+  ]
+}

@@ -242,6 +242,22 @@ public final class ConsoleUiChecks {
             scene.getRoot().applyCss();scene.getRoot().layout();
             check(((Button)scene.lookup("#config-read")).isDisabled(),"Offline configuration cannot read USB");
             check(((Button)scene.lookup("#config-apply")).isDisabled(),"Offline configuration cannot write USB");
+            for(String control:List.of("#engine-arm","#engine-test-pulse","#engine-configure","#engine-outputs-read"))
+                check(((Button)scene.lookup(control)).isDisabled(),"Offline actuator operation is blocked: "+control);
+            EngineControlPane enginePane=(EngineControlPane)scene.lookup("#engine-control-pane");
+            try{enginePane.profile();throw new AssertionError("An unconfigured motor must not have an invented profile");}
+            catch(IllegalArgumentException expected){}
+            @SuppressWarnings("unchecked") ComboBox<Integer> engineCylinders=(ComboBox<Integer>)scene.lookup("#engine-cylinders");
+            engineCylinders.setValue(1);
+            String[][] engineFields={{"fuel","3000"},{"dwell","2000"},{"dead","500"},{"maximum","15000"},
+                {"injectionEnd","0"},{"toothZero","0"},{"camFirst","1"},{"camLast","2"},{"camPhase","0"}};
+            for(String[] field:engineFields)((javafx.scene.control.TextField)scene.lookup("#engine-field-"+field[0])).setText(field[1]);
+            for(int column=0;column<3;++column)((javafx.scene.control.TextField)scene.lookup("#engine-cylinder-0-"+column)).setText(column==2?"180":"1");
+            byte[] engineBytes=enginePane.profile();
+            check(engineBytes.length==128&&java.nio.ByteBuffer.wrap(engineBytes).getInt(34)==18000,"Explicit cylinder/PMS form produces exact wire units");
+            ((javafx.scene.control.TextField)scene.lookup("#engine-field-dwell")).setText("5001");
+            try{enginePane.profile();throw new AssertionError("Unsafe dwell must not leave the editor");}catch(IllegalArgumentException expected){}
+            ((javafx.scene.control.TextField)scene.lookup("#engine-field-dwell")).setText("2000");
             ConfigurationPane configEditor=(ConfigurationPane)scene.lookup("#config-read").getParent().getParent().getParent();
             byte[] fixture=new byte[256];java.nio.ByteBuffer cfg=java.nio.ByteBuffer.wrap(fixture);
             cfg.putShort(0,(short)2);fixture[3]=36;fixture[4]=1;fixture[26]=3;

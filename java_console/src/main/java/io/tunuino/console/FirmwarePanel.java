@@ -218,7 +218,7 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
         String warning = "Confirmas que a placa é Proteus v0.7 com STM32F427?\n\n" + selected.description()
             + "\nDestino: " + (openblt ? port : dfu) + "\n\n";
         warning += selected.replacesBootloader()
-            ? "Esta imagem experimental SUBSTITUI o bootloader na flash. Guarda primeiro a instalação atual. Não controla o motor.\n"
+            ? "Esta imagem experimental SUBSTITUI o bootloader na flash. Guarda primeiro a instalação atual. Não está validada para utilização num motor.\n"
             : "A ECU tem de estar no bootloader OpenBLT. Não existe ainda mudança automática de modo.\n";
         warning += "Faz o ensaio na bancada, com bobinas, injetores e restantes atuadores desligados.";
         Alert confirm = ConsoleBranding.alert(Alert.AlertType.CONFIRMATION, warning, ButtonType.OK, ButtonType.CANCEL);

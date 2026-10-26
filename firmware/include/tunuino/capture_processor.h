@@ -36,4 +36,7 @@ tunuino_capture_process_status tunuino_capture_processor_drain(tunuino_capture_p
 /* Consumer only. Zeroes output unless queue is empty, healthy and fresh. */
 tunuino_capture_process_status tunuino_capture_processor_read(tunuino_capture_processor *processor,
     uint64_t now_us, tunuino_position_reading *reading);
+/* Same freshness/queue gates, plus the reference timestamp for the tooth. */
+tunuino_capture_process_status tunuino_capture_processor_anchor(tunuino_capture_processor *processor,
+    uint64_t now_us,tunuino_position_reading *reading,uint64_t *crank_edge_us);
 #endif

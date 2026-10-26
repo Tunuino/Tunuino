@@ -75,6 +75,7 @@ final class DashboardPane extends VBox {
     private String selectedPort="USB";
     private final Label portLabel=new Label("PORTA —");
     private final Label firmwareLabel=new Label("Firmware —");
+    private final Label outputs=new Label("Estado das saídas por consultar");
 
     DashboardPane() { this(false); }
 
@@ -191,9 +192,8 @@ final class DashboardPane extends VBox {
         HBox.setHgrow(tablePanel,Priority.ALWAYS);
 
         records.getStyleClass().add("dashboard-small-title");
-        Label note=new Label("Saídas do motor: não implementadas neste firmware.");
+        Label note=new Label("Perfil e armação explícita em Inputs / Outputs.");
         note.setWrapText(true);note.getStyleClass().add("dashboard-subtext");
-        Label outputs=new Label("Bomba combustível     —\nRelé principal               —\nVentoinha                      —\nIgnição / injetores      DESATIVADOS");
         outputs.setId("dashboard-engine-status");
         outputs.getStyleClass().add("dashboard-output-status");
         eventRows.setId("dashboard-event-list");
@@ -248,6 +248,11 @@ final class DashboardPane extends VBox {
     void setReadAction(Consumer<CalibrationMap.Kind> action) {
         onRead=java.util.Objects.requireNonNull(action);
     }
+    void showOutputs(io.tunuino.protocol.EngineOutputClient.State state){
+        outputs.setText(state.description()+"\n"+state.faultsDescription()
+            +"\nSaídas ativas: "+state.activeChannels()
+            +"\nInjeção: "+state.injectionUs()+" µs");
+    }
     void setEditAction(Consumer<MapSelection> action) {
         onEdit=java.util.Objects.requireNonNull(action);
     }
@@ -271,6 +276,7 @@ final class DashboardPane extends VBox {
         readSpark.setDisable(!readingAllowed);
         editMap.setDisable(!readingAllowed||!maps.containsKey(selected));
         if(!active) {
+            outputs.setText("Estado das saídas indisponível");
             status.setText("Sem ligação a uma ECU identificada");
             source.setText("Nenhum valor de sensor disponível");
         } else {

@@ -59,7 +59,7 @@ def main():
                 "physical_ecu_validation": False}
     (root / "kit-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (root / "START-HERE.txt").write_text(
-        "Experimental Proteus v0.7 / F427 ChibiOS USB bench kit. Not an engine-control image.\n"
+        "Experimental Proteus v0.7 / F427 kit with configurable physical outputs. Starts disarmed.\n"
         "Read https://github.com/Tunuino/Tunuino_documents/blob/main/proteus-v07-bringup.md\n"
         "Backup the installed firmware before flashing; image starts at 0x08000000.\n"
         "Disconnect engine actuators for the bench test. Physical USB validation is pending.\n"
@@ -74,7 +74,9 @@ def main():
         "then select firmware/tunuino_proteus_v07_f427_io.ini and the ECU COM at 115200.\n"
         "Use Firmware Default protocol. This INI requires the firmware in this same Bundle.\n"
         "Tunuino 0.2.0 IO: native 16x16 only; back up previous calibration before flashing.\n"
-        "Raw ADC, calibrated signals, native 16x16 VE/ignition maps and schema-2 settings; no engine outputs.\n"
+        "Raw ADC, 16x16 maps and configurable sequential outputs via Console Inputs / Outputs.\n"
+        "Engine profile is volatile; verify pin mapping, TDC, dwell and injector calibration on a test bench.\n"
+        "A running experimental profile requires Console output-state polling; a 2-second host timeout cuts all outputs.\n"
         "AV readings are MCU ADC voltages, not uncorrected external sensor voltages.\n"
         "Flash sectors 5/6 at 0x08020000/0x08040000 store calibration; firmware image stays below 0x08020000.\n")
     print(f"Validated synchronized bench kit for {commit}")

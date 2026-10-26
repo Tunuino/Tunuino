@@ -1,4 +1,4 @@
-/* Copyright (c) 2026 Tunuino. ChibiOS input/calibration bench; no engine outputs. */
+/* Copyright (c) 2026 Tunuino. ChibiOS acquisition and explicitly armed outputs. */
 #include "ch.h"
 #include "hal.h"
 #include "board.h"

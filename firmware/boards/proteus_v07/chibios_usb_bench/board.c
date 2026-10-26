@@ -1,4 +1,4 @@
-/* Copyright (c) 2026 Tunuino. No engine GPIO is configured. */
+/* Copyright (c) 2026 Tunuino. Early clocks/USB pads; outputs initialize separately. */
 #include "ch.h"
 #include "hal.h"
 #include "board.h"

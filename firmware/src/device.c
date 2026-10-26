@@ -1,4 +1,4 @@
-/* Copyright (c) 2026 Tunuino. Input acquisition and calibration bench, no actuators. */
+/* Copyright (c) 2026 Tunuino. IO/calibration protocol and explicit board output hook. */
 #include "tunuino/device.h"
 #include <string.h>
 
@@ -229,10 +229,35 @@ static void engine_timing_preview(tunuino_device *d,
     put32(out+24,(uint32_t)values.spark_relative_us);
 }
 
+bool tunuino_device_engine_values(tunuino_device *d,uint16_t *ve,int16_t *advance){
+    uint8_t preview[TUNUINO_ENGINE_PREVIEW_SIZE];engine_preview(d,preview);
+    if(preview[2]){*ve=tunuino_device_u16(preview+4);*advance=(int16_t)tunuino_device_u16(preview+6);return true;}
+    /* At starter speed use the explicitly calibrated first RPM column.
+     * Never extrapolate above the RPM axis or outside either MAP axis. */
+    if(preview[3]!=TUNUINO_ENGINE_OUT_OF_TABLE)return false;
+    double values[2];
+    for(unsigned i=0;i<2;++i){
+        const uint8_t *p=d->active+TUNUINO_IO_CONFIG_SIZE+i*TUNUINO_IO_MAP_SIZE;
+        if(d->live.rpm_milli>(uint32_t)tunuino_device_u16(p+30)*1000u
+            ||d->live.map_milli_kpa<(uint32_t)tunuino_device_u16(p+32)*10u
+            ||d->live.map_milli_kpa>(uint32_t)tunuino_device_u16(p+62)*10u
+            ||!map_decode(&d->scratch,p,i==0?TUNUINO_MAP_VE:TUNUINO_MAP_IGNITION))return false;
+        tunuino_map_status s=tunuino_map_lookup(&d->scratch,d->live.rpm_milli/1000.0,d->live.map_milli_kpa/1000.0,&values[i]);
+        if(s!=TUNUINO_MAP_OK&&s!=TUNUINO_MAP_CLAMPED)return false;
+    }
+    if(values[0]<=0||values[0]>300||values[1]< -90||values[1]>90)return false;
+    *ve=(uint16_t)(values[0]*100+0.5);
+    *advance=(int16_t)(values[1]*100+(values[1]>=0?0.5:-0.5));return true;
+}
+
 tunuino_dispatch_status tunuino_device_reply(tunuino_device *d,const tunuino_identity *id,
     const uint8_t *q,size_t length,uint8_t *response,size_t capacity,size_t *written) {
     uint8_t body[257]={0};size_t size=1;
-    if(length==1 && q[0]=='D') {memcpy(d->staged,d->active,sizeof(d->staged));d->dirty=false;}
+    if(length>=10 && memcmp(q,"TUNUINO:X",9)==0 && d->output_command){
+        if(capacity<(q[9]==0?30u:7u))return TUNUINO_DISPATCH_CAPACITY;
+        if(!d->output_command(d->output_user,q+9,length-9,body,sizeof(body),&size)){body[0]=0x84;size=1;}
+    }
+    else if(length==1 && q[0]=='D') {memcpy(d->staged,d->active,sizeof(d->staged));d->dirty=false;}
     else if(length==1 && q[0]=='A') {runtime(d,id,body+1);size=101;}
     else if(length==5 && q[0]=='O') {
         /* TunerStudio ranged output: big-endian U16 offset/count. Keep A for

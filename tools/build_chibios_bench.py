@@ -79,7 +79,7 @@ def main():
         fields = line.split()
         if len(fields) == 3:
             symbols[fields[2]] = int(fields[0], 16)
-    vectors = {"Reset_Handler": 1, "SysTick_Handler": 15, "Vector14C": 16 + 67, "Vector88": 16 + 18, "Vector9C": 16 + 23, "Vector130": 16 + 60}
+    vectors = {"Reset_Handler": 1, "SysTick_Handler": 15, "Vector14C": 16 + 67, "Vector88": 16 + 18, "Vector9C": 16 + 23, "Vector130": 16 + 60,"Vector108":16+50}
     for name, index in vectors.items():
         value = struct.unpack_from("<I", image, index * 4)[0]
         if (value & ~1) != (symbols[name] & ~1) or not value & 1:
@@ -157,7 +157,9 @@ def main():
                 "capabilities": ["USB CDC", "real STM32 UID", "Tunuino identity protocol", "TunerStudio calibrated sensors", "16 physical ADC inputs", "missing-tooth crank input", "map read/write", "persistent calibration"],
                 "tunerstudio": {"ini_file": ini.name, "signature": signature,
                                 "output_bytes": 100, "read_only": False},
-                "engine_outputs": False, "physical_sensors": True, "maps": True,
+                "engine_outputs": True, "engine_outputs_default_armed": False,
+                "engine_control": "experimental_sequential_720_runtime_profile",
+                "output_protocol": "TUNUINO:X/v1", "physical_sensors": True, "maps": True,
                 "firmware_version": "0.2.0", "protocol_capabilities": 15,
                 "physical_sensors_validated": False,
                 "configuration_flash": {"banks": ["0x08020000", "0x08040000"],

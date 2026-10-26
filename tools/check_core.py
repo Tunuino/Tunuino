@@ -49,6 +49,9 @@ def main():
         work = Path(directory)
         executable = work / ("frame-check.exe" if os.name == "nt" else "frame-check")
         flags = [compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-pedantic", "-Ifirmware/include"]
+        output_exe=work / ("outputs-check.exe" if os.name=="nt" else "outputs-check")
+        run(flags+["firmware/src/outputs.c","firmware/src/engine_control.c","unit_tests/test_outputs.c","-lm","-o",str(output_exe)])
+        print(run([str(output_exe)]))
         mailbox_exe = work / ("mailbox-check.exe" if os.name == "nt" else "mailbox-check")
         mailbox_threads = [] if os.name == "nt" else ["-pthread"]
         run(flags + mailbox_threads + ["firmware/src/live_mailbox.c", "unit_tests/test_live_mailbox.c",
@@ -193,6 +196,15 @@ def main():
             "firmware/boards/proteus_v07/usb_bench/main.c", "-o", str(bench_object)])
         bench_exe = work / ("usb-bench-check.exe" if os.name == "nt" else "usb-bench-check")
         core_sources = [str(p.relative_to(ROOT)) for p in sorted((ROOT / "firmware/src").glob("*.c"))]
+        output_board_exe=work / ("board-outputs-check.exe" if os.name=="nt" else "board-outputs-check")
+        run(flags+["-Iunit_tests/output_board_stub","-Ifirmware/boards/proteus_v07/chibios_usb_bench"]
+            +core_sources+["firmware/boards/proteus_v07/chibios_usb_bench/board_outputs.c",
+                "unit_tests/test_board_outputs.c","-lm","-o",str(output_board_exe)])
+        print(run([str(output_board_exe)]))
+        output_peer=work / ("output-peer.exe" if os.name=="nt" else "output-peer")
+        run(flags+["-Iunit_tests/output_board_stub","-Ifirmware/boards/proteus_v07/chibios_usb_bench","-DTUNUINO_OUTPUT_PEER"]
+            +core_sources+["firmware/boards/proteus_v07/chibios_usb_bench/board_outputs.c",
+                "unit_tests/test_board_outputs.c","-lm","-o",str(output_peer)])
         run(flags + bench_include + core_sources + ["unit_tests/test_usb_bench.c",
             str(bench_object), "-lm", "-o", str(bench_exe)])
         for mode in ("normal", "timeout", "corrupt", "close"):
@@ -269,6 +281,7 @@ def main():
         sources.extend([java_root / "calibration/IoConfiguration.java", java_root / "protocol/ConfigurationClient.java",
             ROOT / "java_console/src/test/java/io/tunuino/ConfigurationChecks.java"])
         sources.append(java_root / "transport/ProcessSerialChannel.java")
+        sources.extend([java_root/"protocol/EngineOutputClient.java",ROOT/"java_console/src/test/java/io/tunuino/EngineOutputChecks.java"])
         sources.extend(sorted((ROOT / "java_tools/src/main/java").rglob("*.java")))
         sources.extend(sorted((ROOT / "java_tools/src/test/java").rglob("*.java")))
         javac = ["javac"] if shutil.which("javac") else ["java", "--module", "jdk.compiler/com.sun.tools.javac.Main"]
@@ -284,6 +297,7 @@ def main():
         print(run(["java", "-cp", str(work), "io.tunuino.FirmwareLinkChecks", str(peer_exe)], timeout=30))
         print(run(["java", "-cp", str(work), "io.tunuino.IoChecks", str(io_peer)], timeout=30))
         print(run(["java", "-cp", str(work), "io.tunuino.ConfigurationChecks", str(io_peer)], timeout=30))
+        print(run(["java","-cp",str(work),"io.tunuino.EngineOutputChecks",str(output_peer)],timeout=30))
         simulator = build_simulator(work / "simulator")
         print(run(["java", "-cp", str(work), "io.tunuino.TelemetryChecks", str(simulator)], timeout=30))
         print(run(["java", "-cp", str(work), "io.tunuino.tools.ToolChecks", str(simulator)], timeout=45))

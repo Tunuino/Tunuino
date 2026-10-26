@@ -66,6 +66,8 @@ public final class TunuinoConsole extends Application {
     private DashboardPane fuelTables;
     private DashboardPane ignitionTables;
     private ConfigurationPane configurationPane;
+    private EngineControlPane engineControlPane;
+    private boolean engineArmed;
     private boolean serialBusy;
     private boolean configurationBusy;
     private Runnable refreshControls = () -> {};
@@ -206,9 +208,10 @@ public final class TunuinoConsole extends Application {
             if (firmwarePanel != null) firmwarePanel.refreshControls();
             PacketSession current = connection.get();
             boolean connected = current != null && current.isOpen();
+            if(!connected||identifiedDevice==null)engineArmed=false;
             if (shell != null) shell.connectionState(identifiedDevice, connected);
             if(dashboard!=null) {
-                boolean mapsAvailable=!serialBusy&&!monitoringActive&&!fileReading
+                boolean mapsAvailable=!engineArmed&&!serialBusy&&!monitoringActive&&!fileReading
                     &&(firmwarePanel==null||!firmwarePanel.isBusy());
                 for(DashboardPane page : new DashboardPane[]{dashboard,fuelTables,ignitionTables}) {
                     if(page==null)continue;
@@ -217,6 +220,8 @@ public final class TunuinoConsole extends Application {
                 }
             }
             if(configurationPane!=null)configurationPane.availability(identifiedDevice,connected,
+                engineArmed||serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()));
+            if(engineControlPane!=null)engineControlPane.availability(identifiedDevice,connected,
                 serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()));
             connect.setText(connected ? "Desligar USB" : "Ligar USB");
             boolean programming = firmwarePanel != null && firmwarePanel.isBusy();
@@ -233,12 +238,12 @@ public final class TunuinoConsole extends Application {
             monitor.setText(monitoringActive ? "Parar monitorização" : "Ver dados em tempo real");
             boolean liveAvailable = identifiedDevice != null
                 && (identifiedDevice.capabilities() & LiveDataClient.CAPABILITY) != 0;
-            monitor.setDisable(programming || (monitoringActive ? !keepMonitoring.get()
+            monitor.setDisable(engineArmed||programming || (monitoringActive ? !keepMonitoring.get()
                 : serialBusy || !connected || !liveAvailable || fileReading));
             capture.setDisable(!monitoringActive || !keepMonitoring.get() || recordingPending);
             boolean mapAvailable = identifiedDevice != null
                 && (identifiedDevice.capabilities() & MapReadClient.CAPABILITY) != 0;
-            readMap.setDisable(serialBusy || monitoringActive || fileReading || !connected || !mapAvailable);
+            readMap.setDisable(engineArmed||serialBusy || monitoringActive || fileReading || !connected || !mapAvailable);
             previewMaps.setDisable(preview || programming || serialBusy || monitoringActive
                 || fileReading || !connected || !EnginePreviewClient.supports(identifiedDevice));
             modelTiming.setDisable(preview || programming || serialBusy || monitoringActive
@@ -740,24 +745,24 @@ public final class TunuinoConsole extends Application {
         shell.addPage("Tuning", "Tuning e calibração", "Edição de mapas e pré-visualização matemática.",
             "M1 2H21V20H1ZM3 4V8H7V4ZM9 4V8H13V4ZM15 4V8H19V4ZM3 10V14H7V10ZM9 10V14H13V10ZM15 10V14H19V10ZM3 16V18H7V16ZM9 16V18H13V16ZM15 16V18H19V16Z", ConsoleShell.scroll(maps));
         shell.addPage("Fuel Tables", "Tabela de combustível · VE 16×16",
-            "Mapa volumétrico real de 256 células da ECU. O firmware de bancada não comanda injetores.",
+            "Mapa volumétrico real de 256 células. O comando físico exige perfil do motor e armação explícita em Inputs / Outputs.",
             "M2 2H22V22H2ZM5 5H10V10H5ZM12 5H19V10H12ZM5 12H10V19H5ZM12 12H19V19H12Z",
             ConsoleShell.scroll(fuelTables));
         shell.addPage("Ignition Tables", "Tabela de ignição · 16×16",
-            "Mapa real de avanço em graus. Sem temporização física de bobinas ou atuadores.",
+            "Mapa real de avanço em graus. Configura PMS, canais e dwell em Inputs / Outputs antes de armar.",
             "M12 2L6 13H11L8 22L18 10H13Z",ConsoleShell.scroll(ignitionTables));
         Button autotuneUnavailable=new Button("Autotune indisponível neste firmware");
         autotuneUnavailable.setId("autotune-start");autotuneUnavailable.setDisable(true);
         shell.addPage("Autotune", "Autotune", "Modo desativado até existir gestão de combustível e validação física.",
             "M12 3L21 12L12 21L3 12ZM11 7H13V13H11ZM11 16H13V18H11Z",
             ConsoleShell.scroll(new VBox(14,
-                ConsoleShell.card("AUTOTUNE", "Não existem ainda modelos de AFR-alvo, controlo de injeção nem "
+                ConsoleShell.card("AUTOTUNE", "Não existem ainda modelos de AFR-alvo nem "
                     +"correção em malha fechada que permitam uma afinação automática segura.",
                     autotuneUnavailable),
                 ConsoleShell.card("DADOS REAIS", "Para analisar a mistura, podes gravar os canais reais "
                     +"disponíveis em Data Log e editar manualmente os mapas 16×16 em Tuning.",
                     new Label("O Dashboard nunca inventa uma medição de AFR.")))));
-        configurationPane=new ConfigurationPane(stage,new ConfigurationPane.Access() {
+        ConfigurationPane.Access ecuAccess=new ConfigurationPane.Access() {
             @Override public <T> void run(ConfigurationPane.Operation<T> operation,Consumer<T> success,Consumer<Throwable> failure) {
                 PacketSession current=connection.get();DeviceIdentity device=identifiedDevice;
                 if(serialBusy||monitoringActive||fileReading||firmwarePanel.isBusy()||current==null||!current.isOpen()
@@ -771,7 +776,14 @@ public final class TunuinoConsole extends Application {
                     failure.accept(error);status.setText("Configuração: "+error.getMessage());refreshConnection.run();
                 });
             }
+        };
+        configurationPane=new ConfigurationPane(stage,ecuAccess);
+        engineControlPane=new EngineControlPane(stage,ecuAccess,value->{
+            engineArmed=value.armed();
+            for(DashboardPane page:new DashboardPane[]{dashboard,fuelTables,ignitionTables})page.showOutputs(value);
+            refreshControls.run();
         });
+        configurationPane.getChildren().add(engineControlPane);
         shell.addPage("Data Log", "Datalogs e monitorização", "Gravação CSV e reprodução dos sinais disponíveis.",
             "M3 3H21V21H3ZM6 7H18V9H6ZM6 12H18V14H6ZM6 17H15V19H6Z", root);
         shell.addPage("Inputs / Outputs", "Entradas e calibração", "Sensores, captura e diagnóstico da configuração.",
@@ -807,6 +819,8 @@ public final class TunuinoConsole extends Application {
         stage.setMinWidth(Math.min(960, screen.getWidth() - 40));
         stage.setMinHeight(Math.min(680, screen.getHeight() - 60));
         stage.setOnCloseRequest(event -> {
+            if(engineArmed){event.consume();ConsoleBranding.alert(Alert.AlertType.INFORMATION,
+                "Pára as saídas em Inputs / Outputs antes de fechar a Console.").show();return;}
             if(configurationBusy){
                 event.consume();
                 ConsoleBranding.alert(Alert.AlertType.INFORMATION,"Espera que a operação de configuração termine antes de fechar.").show();
@@ -833,6 +847,7 @@ public final class TunuinoConsole extends Application {
         keepMonitoring.set(false);
         if (portRefresh != null) portRefresh.stop();
         if (telemetry != null) telemetry.stopPlayback();
+        if(engineControlPane!=null)engineControlPane.close();
         if (firmwarePanel != null) firmwarePanel.close();
         if (activeRead != null) {
             activeRead.cancel(true);

@@ -45,6 +45,8 @@
 
 typedef bool (*tunuino_device_save)(void *user, const uint8_t *bytes, size_t length);
 typedef uint64_t (*tunuino_device_clock)(void *user);
+typedef bool (*tunuino_device_output_command)(void *user,const uint8_t *request,
+    size_t length,uint8_t *response,size_t capacity,size_t *written);
 typedef struct tunuino_device {
     uint8_t active[TUNUINO_IO_SETTINGS_SIZE], staged[TUNUINO_IO_SETTINGS_SIZE];
     tunuino_map_snapshot ve, ignition;
@@ -56,6 +58,8 @@ typedef struct tunuino_device {
     tunuino_device_save save;
     tunuino_device_clock clock;
     void *user;
+    tunuino_device_output_command output_command;
+    void *output_user;
 } tunuino_device;
 
 void tunuino_device_init(tunuino_device *device, tunuino_device_save save,
@@ -71,4 +75,5 @@ tunuino_dispatch_status tunuino_device_reply(tunuino_device *device,
     const tunuino_identity *identity, const uint8_t *request, size_t length,
     uint8_t *response, size_t capacity, size_t *written);
 uint16_t tunuino_device_u16(const uint8_t *bytes);
+bool tunuino_device_engine_values(tunuino_device *device,uint16_t *ve_centi,int16_t *advance_centi);
 #endif

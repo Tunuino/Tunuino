@@ -104,3 +104,11 @@ tunuino_capture_process_status tunuino_capture_processor_read(tunuino_capture_pr
     }
     return status;
 }
+tunuino_capture_process_status tunuino_capture_processor_anchor(tunuino_capture_processor *p,
+    uint64_t now,tunuino_position_reading *reading,uint64_t *edge){
+    if(!edge)return TUNUINO_PROCESS_ARGUMENT;
+    *edge=0;
+    tunuino_capture_process_status status=tunuino_capture_processor_read(p,now,reading);
+    if(status==TUNUINO_PROCESS_READY&&reading->crank_valid)*edge=p->last_crank_us;
+    return status;
+}
