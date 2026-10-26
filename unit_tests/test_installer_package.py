@@ -23,6 +23,7 @@ class InstallerChecks(unittest.TestCase):
             root = Path(temporary); kit = root / 'kit'; image = root / 'image'
             (kit / 'console/app').mkdir(parents=True)
             (kit / 'console/app/tunuino-console.jar').write_bytes(b'jar')
+            (kit / 'console/app/.jpackage.xml').write_text('<jpackage-state/>')
             (kit / 'firmware').mkdir()
             for name in ('test.bin', 'test.bin.properties', 'test.ini', 'corresponding-source.tar.gz', 'LICENSE'):
                 (kit / 'firmware' / name).write_bytes(name.encode())
@@ -36,6 +37,8 @@ class InstallerChecks(unittest.TestCase):
             self.assertTrue((image / 'firmware/test.bin.properties').is_file())
             self.assertTrue((image / 'firmware/test.ini').is_file())
             self.assertTrue((image / 'firmware/corresponding-source.tar.gz').is_file())
+            self.assertTrue((image / 'app/.jpackage.xml').is_file())
+            self.assertNotIn('app/.jpackage.xml', manifest['files_sha256'])
             self.assertFalse((image / 'maps').exists())
 
     def test_release_rejects_unverified_mixed_or_changed_installer(self):

@@ -85,5 +85,6 @@ jobs:
       with:
         name: console-windows-x64-${{ github.sha }}
         path: build/windows/TunuinoConsole/
+        include-hidden-files: true
         if-no-files-found: error
         retention-days: '30'

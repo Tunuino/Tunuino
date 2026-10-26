@@ -22,6 +22,8 @@ def prepare_image(kit, destination, commit):
     manifest = json.loads((kit / "kit-manifest.json").read_text(encoding="utf-8-sig"))
     if manifest["source_commit"] != commit:
         raise ValueError("Installer kit belongs to another commit")
+    if not (kit / "console/app/.jpackage.xml").is_file():
+        raise ValueError("Console artifact lost app/.jpackage.xml; upload it with include-hidden-files: true")
     shutil.copytree(kit / "console", destination)
     shutil.copytree(kit / "firmware", destination / "firmware")
     shutil.copy2(kit / "kit-manifest.json", destination / "kit-manifest.json")

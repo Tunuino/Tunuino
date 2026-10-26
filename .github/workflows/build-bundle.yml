@@ -61,5 +61,6 @@ jobs:
       with:
         name: Tunuino-Proteus-v07-USB-Bench-Kit-${{ github.event.workflow_run.head_sha || github.sha }}
         path: build/kit/
+        include-hidden-files: true
         if-no-files-found: error
         retention-days: 30
