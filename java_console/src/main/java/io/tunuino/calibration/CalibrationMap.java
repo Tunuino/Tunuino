@@ -125,7 +125,10 @@ public final class CalibrationMap {
                     interpolated[row][col] = cells[originalRow][originalCol];
                 } else {
                     double value = lookup(fineRpm[col], fineLoad[row] / 1000.0).value();
-                    interpolated[row][col] = Math.toIntExact(Math.round(value * 1000.0));
+                    // C lround() uses ties away from zero, including negative spark.
+                    double milli=value*1000.0;
+                    interpolated[row][col] = Math.toIntExact(
+                        milli>=0 ? Math.round(milli) : -Math.round(-milli));
                 }
             }
         }

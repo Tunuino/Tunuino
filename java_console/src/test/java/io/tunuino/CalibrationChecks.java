@@ -82,6 +82,20 @@ public final class CalibrationChecks {
         byte[] cRefined=java.util.HexFormat.of().parseHex(
             Files.readString(java.nio.file.Path.of(args[2])).trim().split(" ")[1]);
         check(Arrays.equals(expanded.encode(),cRefined),"C/Java 16x16 map conversion bytes and CRC");
+        int[][] negativeValues=java.util.stream.IntStream.range(0,8).mapToObj(i->
+            java.util.stream.IntStream.range(0,8).map(j->-10001-1001*i-601*j).toArray())
+            .toArray(int[][]::new);
+        CalibrationMap sparkSeed=new CalibrationMap(CalibrationMap.Kind.IGNITION,
+            java.util.stream.IntStream.range(0,8).map(i->500+700*i).toArray(),
+            java.util.stream.IntStream.range(0,8).map(i->20000+17000*i).toArray(),
+            negativeValues);
+        CalibrationMap spark16=sparkSeed.refineTo16();
+        String[] crossVectors=Files.readString(java.nio.file.Path.of(args[2])).trim().split("\\R");
+        check(crossVectors.length==2&&crossVectors[1].startsWith("refined_ignition "),
+            "C ignition fixture produced");
+        byte[] cSpark=java.util.HexFormat.of().parseHex(crossVectors[1].split(" ")[1]);
+        check(Arrays.equals(spark16.encode(),cSpark),
+            "Negative ignition interpolation must use identical C/Java ties-away-from-zero rounding");
         check(Arrays.equals(CalibrationMap.decode(cRefined).encode(),cRefined),"16x16 roundtrip");
         check(seed.rows()==8&&seed.columns()==8,"Original 8x8 map is immutable");
         int[] tooTight=java.util.stream.IntStream.range(0,8).toArray();

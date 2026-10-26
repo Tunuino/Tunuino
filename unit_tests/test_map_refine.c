@@ -38,6 +38,15 @@ int main(void) {
     printf("refined_ve ");
     for(size_t i=0;i<count;++i)printf("%02x",serialized[i]);
     puts("");
+    source.kind=TUNUINO_MAP_IGNITION;
+    for(unsigned row=0;row<8;++row)for(unsigned col=0;col<8;++col)
+        source.cells[row][col]=-10001-(int32_t)row*1001-(int32_t)col*601;
+    assert(tunuino_map_refine_16(&source,&converted)==TUNUINO_MAP_OK);
+    assert(tunuino_map_validate(&converted)==TUNUINO_MAP_OK);
+    assert(tunuino_map_encode(&converted,serialized,sizeof(serialized),&count)==TUNUINO_MAP_OK);
+    printf("refined_ignition ");
+    for(size_t i=0;i<count;++i)printf("%02x",serialized[i]);
+    puts("");
     tunuino_map before=converted;
     for(unsigned i=0;i<8;++i) {source.rpm[i]=(int32_t)i;source.load_milli_kpa[i]=(int32_t)i;}
     assert(tunuino_map_refine_16(&source,&converted)==TUNUINO_MAP_RANGE);
