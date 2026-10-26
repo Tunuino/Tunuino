@@ -1,6 +1,6 @@
 # Proteus v0.7 F427 ChibiOS USB implementation
 
-The current image is the [0.1.0 input/calibration profile](proteus-io.md),
+The current image is the [0.2.0 input/calibration profile](proteus-io.md),
 with ADC, missing-tooth inputs and persistent maps. No engine outputs are
 initialized. The former identity-only behavior remains in regression fixtures.
 
@@ -28,7 +28,7 @@ adapted from its STM32F429 Discovery demo, retaining their notices.
 - USB device CDC class 0x02; communications/data interfaces; interrupt IN EP1,
   bulk OUT/IN EP2. VID/PID CAFE:4001 are development identifiers.
 - Product: `Proteus v0.7 ChibiOS USB bench`. Serial: 24 hexadecimal digits from
-  the real STM32 UID. Tunuino identity firmware version 0.1.0.
+  the real STM32 UID. Tunuino identity firmware version 0.2.0.
 
 The startup sequence 
 `usb_serial_start()` pattern:

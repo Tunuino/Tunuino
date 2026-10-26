@@ -1,4 +1,4 @@
-# Proteus v0.7 / STM32F427 input and calibration profile 0.1.0
+# Proteus v0.7 / STM32F427 input and calibration profile 0.2.0 (16×16)
 
 The ChibiOS image implements acquisition, calibration storage and USB access.
 It does not initialize actuator GPIO or schedule injection, ignition, throttle,
@@ -31,9 +31,9 @@ establish a physical TDC or actuator timing reference.
 
 ## Wire profile
 
-Identity is Proteus/F4, revision 7, firmware 0.1.0, capabilities 15: live data,
+Identity is Proteus/F4, revision 7, firmware 0.2.0, capabilities 15: live data,
 map reads, partial live data and this IO profile. The signature is
-`Tunuino Proteus v0.7 F427 IO v1`. The matching definition is
+`Tunuino Proteus v0.7 F427 IO v2`. The matching definition is
 `firmware/tunerstudio/generated/tunuino_proteus_v07_f427_io.ini`.
 The former 0.0.3 identity-only profile remains a separate regression fixture.
 
@@ -68,7 +68,7 @@ the session; envelope corruption or transport timeout resets/re-enumerates CDC.
 | `D` | Discard all staged edits; restore active bytes |
 | `TUNUINO:P` | Partial live frame v2, independent validity per channel |
 
-The INI revision 4 uses ranged `O%2o%2c` runtime reads while retaining
+The INI revision 5 uses ranged `O%2o%2c` runtime reads while retaining
 the old `A` request. Reads outside the 100-byte block receive status 0x83,
 without ending the serial session. The read-only native `TUNUINO:E` preview
 returns 20 bytes including status: version 1, validity, reason bits, signed
@@ -92,7 +92,7 @@ calculation is invalid.
 
 The Console also offers `Calcular tempos e carga teórica` in the Maps page.
 The Java `EngineTimingClient` rejects inconsistent timing fields, overflow,
-invalid periods and status before displaying anything. Older 0.1.0 firmwares
+invalid periods and status before displaying anything. Older IO firmwares
 responding `0x83` to the new command produce a clear unsupported-feature
 message **without closing the working COM port**. The button is disabled
 while calibration changes or live recording own the USB worker.
@@ -126,76 +126,61 @@ Runtime offsets exclude the status byte:
 | 60..91 | 16 × U16 | Raw ADC counts in the ordering above |
 | 92 / 94 / 96 | U16 / U16 / U32 | ADC reference mV / tooth index / capture errors |
 
-## Settings and maps
+## Native 16×16 settings and maps
 
-`device.h`, `device.c` and the generated INI define schema 1. Page 1 has 256
-bytes; VE page 2 and ignition page 3 each have 160. Page 1 contains trigger
-enable/wheel settings, independent channel selectors, MAP/lambda two-point
-curves, a three-point coolant curve, maximum RPM and ADC reference voltage.
-Raw breakpoints must increase. Reserved bytes must be zero. Sensors and trigger
-start disabled. Default physical calibration values are zero placeholders;
-selecting an uncalibrated sensor is rejected at Burn.
+The F427 IO v2 application uses **only 16×16** for both VE and ignition.
+Its versioned firmware identity is 0.2.0 and its TunerStudio signature is
+`Tunuino Proteus v0.7 F427 IO v2`. Configuration schema is 2; the INI has
+three pages sized **256, 576, 576** bytes (1,408 bytes total).
 
-The Console Inputs workspace now reads/edits page 1, validates the staged data
-with the firmware, persists and checks a full readback. It preserves both maps,
-rejects pre-existing pending edits and detects stale configuration snapshots.
-It also displays the 16 raw ADC channels, their MCU-pin voltages and capture
-state, with no fabricated values when a signal is unavailable. File backups
-and exact decimal calibration are documented in [console-configuration.md](console-configuration.md).
+Page 1 contains the inputs, trigger, sensor calibration and ADC reference
+using the established 256-byte layout, except schema value 2 at offset 0.
+Both map pages have 16 U16 RPM points (offsets 0..31), 16 U16 kPa×100
+points (offsets 32..63) and 256 signed U16/S16 map cells
+(offsets 64..575), row-major. VE values are positive percentage×100;
+ignition advance is signed degrees×100. All axes strictly increase.
+Defaults deliberately have zero map cells and disabled sensor selection:
+the factory configuration is NOT an engine tune.
 
-Each map has eight U16 RPM bins at offset 0, eight U16 kPa ×100 bins at 16 and
-64 S16 cells at 32, row-major (load row, RPM column). VE uses percent ×100,
-ignition degrees ×100, including negative advance. Axes must strictly increase.
-Tables start with zero cells and are not engine tunes. Native `.tnmap` units
-have three decimal places; Console writes reject values that cannot be
-represented exactly with two decimal places. The Console writes a whole map,
-commits it and compares a complete native readback before reporting success.
-It refuses to overwrite pre-existing staged changes.
+The Console map editor reads complete 16×16 maps, stages each page in
+bounded 64-byte writes, burns the validated 1,408-byte configuration and
+verifies the native map by full readback with CRC32. A Console for the
+old firmware is rejected by the changed device identity. Files for
+earlier map formats can be imported and converted **one way** to
+16×16 local files; the ECU itself has no 8×8 page or 8×8 operating mode.
+No actuator GPIO is enabled by any map operation.
 
-## Safe 16x16 map preparation (offline only)
+## Flash schema transition and backup requirement
 
-The portable C map library and the Java Console both support a deterministic
-**8x8 → 16x16** map refinement operation. It retains all original RPM and load
-axis knots and their 64 original cell values exactly. New knots subdivide the
-largest available gap, and new cells are bilinear interpolations rounded to
-0.001 units. Refusal to refine an axis without enough integer space leaves
-the original map unchanged. Independent C and Java implementations produce
-byte-for-byte identical 16x16 `.tnmap` files, including CRC.
+The F427 firmware reserves STM32F427 flash sectors 5 and 6, starting at
+0x08020000 and 0x08040000 (128 KiB each), for an append-only journal.
+The 0.2.0 journal records have **1,440 bytes** and schema-2 magic
+`TNUIO002`: 16-byte header, 1,408 configuration bytes, CRC32,
+8 erased guard bytes and a four-byte commit marker programmed last.
+An interrupted write is rejected by the commit marker/CRC.
+The other sector is erased on rollover only after a valid record was selected.
 
-This **does not** yet change the ECU's active 8x8 page format, INI page
-dimensions or flash journal. A 16x16 local file must **not** be burned to the
-current F427 firmware: doing so would require a coordinated configuration
-version and safe migration of existing flash records. The Console's ECU write
-path rejects any size other than 16x16.
+**Compatibility warning:** records from firmware 0.1.0 are not read as
+schema-2 configurations. On the first boot of v0.2.0, if only old records
+exist, factory-disabled inputs and zeroed 16×16 maps are used.
+The prior flash sectors are not automatically reinterpreted as new maps,
+but a subsequent Burn can eventually overwrite them. Back up the old
+calibration externally before upgrading. Do not test new firmware on an
+installed engine or connected actuators. Flashing from 0x08000000 replaces
+the installed application/bootloader. A full ECU restore requires an
+appropriate prior firmware and calibration backup.
 
-In the Console map editor, **Converter 8×8 para 16×16** opens the newly
-refined map in another window with the ECU-upload button omitted. The
-source map remains unchanged, and the 16×16 map can be saved explicitly
-as a local `.tnmap` for later firmware versions.
-
-## Flash journal and USB recovery
-
-The application remains limited to 128 KiB starting at 0x08000000. F427 sectors
-5 (0x08020000) and 6 (0x08040000), 128 KiB each, are reserved for configuration.
-They must not be used by a bootloader or another application image. Records
-are 608 bytes: magic, sequence, length, all 576 setting bytes, CRC and a commit
-marker programmed last. Torn records consume their slot. Rollover erases the
-other sector while preserving the newest complete record. Identical saves do
-not program flash again. Startup accepts only CRC-valid, schema-valid records.
-The driver programs aligned 32-bit words, refreshes flash caches and verifies
-readback. No option-byte or mass-erase operation is used by the journal.
-
-TIM2 provides the protocol clock across flash stalls. Burn responses have a
-fresh TX deadline; clients allow up to 6 seconds per flash exchange. After a
-terminal transport fault the main loop disconnects/stops USB, resets CDC queues
-and link state, waits 250 ms and starts a fresh enumeration. Saved settings
-survive that recovery. A desktop client must reopen the resulting COM session.
+Existing USB CDC identification, CRC32 framing, realtime 100-byte
+sensor record, native `TUNUINO:E` preview and `TUNUINO:T` mathematical
+dry-run are retained. No injector/coil timing outputs are implemented.
+TunerStudio compatibility still requires validation with its real Windows
+application, independently of passing automated INI and communication tests.
 
 ## Verification
 
 `tools/check_core.py` checks the actual portable C profile against Java clients,
 calibration, partial sensors/CSV, signed map writes and full readback. The flash
-model interrupts each of 153 programming steps and tests corruption and bank
+model interrupts each of 361 programming steps and tests corruption and bank
 rollover. The actual ChibiOS main loop is compiled with a modeled USB driver,
 including recovery followed by a valid request. `tools/check_io.py` independently
 compares INI fields, page commands, signed units and CRCs with C wire vectors.

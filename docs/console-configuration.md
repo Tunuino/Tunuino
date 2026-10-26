@@ -1,8 +1,8 @@
 # F427 IO configuration workspace
 
-The Console's Inputs workspace edits schema-1 page 1, reads all 16 ADC channels,
+The Console's Inputs workspace edits schema-2 page 1, reads all 16 ADC channels,
 and reports firmware validation. It requires the matching Bundle firmware with
-`TUNUINO:V`; an older 0.1.0 image that lacks this command receives an update
+`TUNUINO:V`; an older image that lacks this command receives an update
 message before staging any edits. Acquisition configuration does not enable
 engine actuators. Use measured sensor curves; no physical calibration is inferred.
 
@@ -27,15 +27,15 @@ and configuration transactions share the exclusive serial worker.
 |---|---|---|
 | 0 / 1 | U08 / U08 | Success status 0 / format 1 |
 | 2 / 3 | U08 / U08 | Pending edits / previously persisted, each 0 or 1 |
-| 4 | U32 | Invalid groups: schema 1, trigger 2, MAP 4, lambda 8, coolant 16, ADC 32, VE 64, ignition 128 |
+| 4 | U32 | Invalid groups: schema-invalid group 1, trigger 2, MAP 4, lambda 8, coolant 16, ADC 32, VE 64, ignition 128 |
 | 8 | U32 | Nonzero active configuration generation |
 | 12 | U32 | CRC32 of staged page 1 (256 bytes) |
 
 The query never saves or activates data. Burn uses the same grouped validation;
 unused/disabled calibration endpoints must still fit their documented ranges.
-The existing TunerStudio commands, signature and runtime block remain compatible.
+The runtime block and serial protocol are unchanged, but the TunerStudio signature now identifies the 16×16 firmware as IO v2. The new INI must be used.
 
-Local `.tncfg` backups contain ASCII `TNCFG001`, U16 length 256, 256 page bytes
+Local `.tncfg` backups contain ASCII `TNCFG002`, U16 length 256, 256 page bytes
 and CRC32 of the preceding 266 bytes (270 total). They contain no maps and are
 not written to the ECU merely by opening a file. Import validates length,
 schema, reserved fields, curve ranges and CRC. Saves use CREATE_NEW. Decimal

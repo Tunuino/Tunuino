@@ -42,7 +42,7 @@ public final class IoConfiguration {
             this.min=min;this.max=max;this.decimals=decimals;
         }
     }
-    private static final byte[] MAGIC="TNCFG001".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] MAGIC="TNCFG002".getBytes(StandardCharsets.US_ASCII);
     private final byte[] bytes;
     public IoConfiguration(byte[] bytes) {
         if(bytes==null||bytes.length!=256)throw new IllegalArgumentException("A configuração IO requer 256 bytes");
