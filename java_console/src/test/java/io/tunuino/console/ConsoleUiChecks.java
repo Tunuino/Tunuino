@@ -148,7 +148,8 @@ public final class ConsoleUiChecks {
             stage.setWidth(1060); stage.setHeight(720);
             later(() -> {
                 checkCompact(stage, "console-compact");
-                stage.setWidth(960); stage.setHeight(680);
+                double frameWidth=stage.getWidth()-scene.getWidth();
+                stage.setMinWidth(940);stage.setWidth(944+frameWidth);stage.setHeight(680);
                 later(() -> {
                     checkCompact(stage, "console-small");
                     double frameHeight = stage.getHeight() - scene.getHeight();

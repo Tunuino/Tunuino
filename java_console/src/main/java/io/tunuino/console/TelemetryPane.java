@@ -71,7 +71,7 @@ public final class TelemetryPane extends BorderPane {
         }
         cards.widthProperty().addListener((observable, before, after) -> {
             double width = Math.max(0, after.doubleValue());
-            int columns = width >= 660 ? 4 : 2;
+            int columns = width >= 4 * 150 + 3 * cards.getHgap() + 4 ? 4 : 2;
             double cardWidth = Math.max(150, Math.floor((width - (columns - 1) * 12 - 4) / columns));
             cards.getChildren().forEach(node -> ((VBox) node).setPrefWidth(cardWidth));
         });
