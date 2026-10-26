@@ -40,7 +40,8 @@ final class ConsoleShell extends BorderPane {
     ConsoleShell(Node hardware, Node connectionControls, Label status, Label identity) {
         getStyleClass().add("console-shell");
         ImageView logo = new ImageView(new Image(ConsoleShell.class.getResource("tunuino.png").toExternalForm()));
-        logo.setFitWidth(105); logo.setFitHeight(58); logo.setPreserveRatio(true);
+        logo.setId("console-logo");
+        logo.setFitWidth(270); logo.setFitHeight(90); logo.setPreserveRatio(true);
         StackPane logoBox = new StackPane(logo); logoBox.getStyleClass().add("brand-logo");
         Label product = new Label("Tunuino"); product.getStyleClass().add("wordmark");
         Label subtype = new Label("Console"); subtype.getStyleClass().add("wordmark-subtitle");
@@ -86,8 +87,8 @@ final class ConsoleShell extends BorderPane {
                 boolean shortWindow = height < 700;
                 pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("compact"), compact);
                 pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("short"), shortWindow);
-                logo.setFitHeight(shortWindow ? 32 : compact ? 40 : 58);
-                logo.setFitWidth(shortWindow ? 68 : compact ? 84 : 105);
+                logo.setFitWidth(shortWindow ? 228 : compact ? 246 : 270);
+                logo.setFitHeight(shortWindow ? 76 : compact ? 82 : 90);
             };
             scene.heightProperty().addListener((observable, oldHeight, height) -> resize.accept(height.doubleValue()));
             resize.accept(scene.getHeight());
