@@ -304,6 +304,7 @@ def main():
         sources.append(java_root / "protocol/AuxControlClient.java")
         sources.append(java_root / "calibration/FeatureConfiguration.java")
         sources.append(java_root / "calibration/IoAssignments.java")
+        sources.append(java_root / "calibration/ProteusRouting.java")
         sources.append(java_root / "protocol/IoAssignmentClient.java")
         sources.append(ROOT / "java_console/src/test/java/io/tunuino/AuxControlChecks.java")
         sources.append(java_root / "calibration/BaseMaps.java")

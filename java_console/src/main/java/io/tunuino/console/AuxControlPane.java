@@ -23,13 +23,13 @@ final class AuxControlPane extends VBox {
         idleMode.getItems().addAll("Desativado","PWM por temperatura","PWM com controlo PI de RPM");boostMode.getItems().addAll("Desativado","Duty fixo","Controlo PI de pressão MAP");
         idleMode.setId("aux-idle-mode");boostMode.setId("aux-boost-mode");idleChannel.setId("aux-idle-channel");boostChannel.setId("aux-boost-channel");tpsChannel.setId("aux-tps-channel");
         for(int i=0;i<=16;i++){idleChannel.getItems().add(i);boostChannel.getItems().add(i);}for(int i=0;i<=11;i++)tpsChannel.getItems().add(i);
-        FunctionChoices.integers(tpsChannel,"TPS — posição da borboleta",io.tunuino.calibration.IoAssignments.Group.ANALOG);
-        FunctionChoices.integers(idleChannel,"Válvula de ralenti",io.tunuino.calibration.IoAssignments.Group.POWER);
-        FunctionChoices.integers(boostChannel,"Válvula de controlo do turbo",io.tunuino.calibration.IoAssignments.Group.POWER);
+        FunctionChoices.integers(tpsChannel,io.tunuino.calibration.IoAssignments.Group.ANALOG,3);
+        FunctionChoices.integers(idleChannel,io.tunuino.calibration.IoAssignments.Group.POWER,16);
+        FunctionChoices.integers(boostChannel,io.tunuino.calibration.IoAssignments.Group.POWER,17);
         Map<String,GridPane> grids=new LinkedHashMap<>();for(String name:List.of("TPS","Ralenti","Turbo")){GridPane g=new GridPane();g.setHgap(18);g.setVgap(9);grids.put(name,g);}
-        grids.get("TPS").addRow(0,new Label("Entrada para a função TPS"),tpsChannel);
-        grids.get("Ralenti").addRow(0,new Label("Modo"),idleMode);grids.get("Ralenti").addRow(1,new Label("Saída para a válvula de ralenti"),idleChannel);
-        grids.get("Turbo").addRow(0,new Label("Modo"),boostMode);grids.get("Turbo").addRow(1,new Label("Saída para a válvula de turbo"),boostChannel);
+        grids.get("TPS").addRow(0,new Label("Entrada para a função TPS"),FunctionChoices.control(tpsChannel));
+        grids.get("Ralenti").addRow(0,new Label("Modo"),idleMode);grids.get("Ralenti").addRow(1,new Label("Saída para a válvula de ralenti"),FunctionChoices.control(idleChannel));
+        grids.get("Turbo").addRow(0,new Label("Modo"),boostMode);grids.get("Turbo").addRow(1,new Label("Saída para a válvula de turbo"),FunctionChoices.control(boostChannel));
         for(var f:AuxConfiguration.Field.values()){
             String group=f.name().startsWith("TPS_")?"TPS":f.name().startsWith("BOOST_")?"Turbo":"Ralenti";
             ComboBox<String> c=new ComboBox<>();c.setEditable(true);c.setPrefWidth(175);TextField input=c.getEditor();input.setId("aux-field-"+f.name());fields.put(f,input);choices.put(f,c);

@@ -33,7 +33,7 @@ final class FeatureControlPane extends VBox {
             "Cilindros","Ajustes individuais sobre o combustível efetivo, antes do tempo morto, e sobre o avanço. Confirmar medição por cilindro antes de ativar. Os limites de pulso e duty continuam a aplicar-se.");
         for(String group:List.of("Sensores","Tensão","Lambda","Transientes","Limites","Flex fuel","Cilindros")){
             GridPane grid=new GridPane();grid.setHgap(18);grid.setVgap(9);grids.put(group,grid);
-            var column=new ColumnConstraints();column.setPercentWidth(65);grid.getColumnConstraints().addAll(column,new ColumnConstraints());
+            var column=new ColumnConstraints();column.setPercentWidth(50);grid.getColumnConstraints().addAll(column,new ColumnConstraints());
             var scroll=new ScrollPane(ConsoleShell.card(group.toUpperCase(Locale.ROOT),help.get(group),grid));scroll.setFitToWidth(true);scroll.setPrefViewportHeight(560);tabs.getTabs().add(new Tab(group,scroll));
         }
         for(var option:FeatureConfiguration.Option.values()){var c=new CheckBox(option.label);c.setId("feature-option-"+option.name());c.setWrapText(true);options.put(option,c);GridPane g=grids.get(option.group);g.add(c,0,g.getRowCount(),2,1);}
@@ -41,11 +41,11 @@ final class FeatureControlPane extends VBox {
             var c=new ComboBox<String>();c.setEditable(true);c.setPrefWidth(165);c.setId("feature-choice-"+f.name());c.getEditor().setId("feature-field-"+f.name());
             if(f.offset<76){for(int i=f.min;i<=f.max;i++)c.getItems().add(Integer.toString(i));
                 String function=switch(f){case IAT_INPUT->"IAT — temperatura do ar";case VOLT_INPUT->"Tensão da bateria";case LAUNCH_INPUT->"Comando de launch control";case FLEX_INPUT->"Etanol — flex fuel";default->throw new IllegalArgumentException();};
-                FunctionChoices.numericStrings(c,function,f==FeatureConfiguration.Field.IAT_INPUT?io.tunuino.calibration.IoAssignments.Group.TEMPERATURE:io.tunuino.calibration.IoAssignments.Group.ANALOG);
+                FunctionChoices.numericStrings(c,f==FeatureConfiguration.Field.IAT_INPUT?io.tunuino.calibration.IoAssignments.Group.TEMPERATURE:io.tunuino.calibration.IoAssignments.Group.ANALOG,switch(f){case IAT_INPUT->2;case VOLT_INPUT->4;case LAUNCH_INPUT->6;case FLEX_INPUT->5;default->throw new IllegalArgumentException();});
             }
             else if(f.decimals==3&&f.name().contains("TARGET"))c.getItems().addAll("0.85","0.9","0.95","1");
             else c.getItems().add(java.math.BigDecimal.valueOf(f.reference,f.decimals).stripTrailingZeros().toPlainString());
-            fields.put(f,c);GridPane g=grids.get(f.group);var l=new Label(f.label);l.setWrapText(true);g.addRow(g.getRowCount(),l,c);
+            fields.put(f,c);GridPane g=grids.get(f.group);var l=new Label(f.label);l.setWrapText(true);g.addRow(g.getRowCount(),l,f.offset<76?FunctionChoices.control(c):c);
         }
         getChildren().addAll(tabs,ConsoleShell.card("REFERÊNCIAS E CÓPIAS","O ficheiro .tnaux inclui TPS, ralenti, turbo e todas estas funções. Abrir uma cópia prepara a edição; só Guardar envia à ECU. Guarda também o perfil .tncfg e os mapas .tnmap.",ConsoleShell.actions(reference,base,backup,open)));
         fill(baseline);

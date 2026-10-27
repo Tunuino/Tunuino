@@ -26,8 +26,7 @@ final class OutputTestPane extends VBox {
         read.setId("output-test-read");stop.setId("output-test-stop");stop.getStyleClass().add("danger");
         inject.setId("test-injector-start");spark.setId("test-ignition-start");relay.setId("test-aux-start");
         injector.setId("test-injector-channel");ignition.setId("test-ignition-channel");
-        FunctionChoices.integers(injector,"Teste de injetor",io.tunuino.calibration.IoAssignments.Group.POWER);
-        FunctionChoices.integers(ignition,"Teste de ignição",io.tunuino.calibration.IoAssignments.Group.IGNITION);
+        injector.setConverter(testNames(false));ignition.setConverter(testNames(true));injector.setPrefWidth(365);ignition.setPrefWidth(365);
         injectorMs.setId("test-injector-duration");ignitionMs.setId("test-ignition-duration");auxiliaryMs.setId("test-aux-duration");
         auxiliary.setId("test-aux-function");auxiliary.getItems().addAll("Bomba de combustível", "Ventoinha", "Relé principal");
         auxiliary.getSelectionModel().selectFirst();auxiliary.setOnAction(e->route());
@@ -35,23 +34,28 @@ final class OutputTestPane extends VBox {
         getChildren().add(ConsoleShell.card("TESTES DE ATUADORES", "Motor parado e controlo desarmado. Cada comando termina automaticamente; escolher uma opção não liga nenhuma saída.",
             ConsoleShell.actions(read,stop),state));
         TabPane tabs=new TabPane();tabs.setId("output-test-tabs");tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
-        tabs.getTabs().addAll(tab("Injetores", ConsoleShell.card("INJETORES · LOW-SIDE", "Um pulso de 1 a 20 ms na saída LS selecionada. Confirma a cablagem do injetor.",
-                ConsoleShell.actions(new Label("Saída LS"),injector,new Label("Pulso (ms)"),injectorMs),inject)),
+        tabs.getTabs().addAll(tab("Injetores", ConsoleShell.card("INJETORES · LOW-SIDE", "Escolhe o injetor do perfil guardado. O pulso termina automaticamente, entre 1 e 20 ms.",
+                ConsoleShell.actions(new Label("Injetor"),injector,new Label("Pulso (ms)"),injectorMs),inject)),
             tab("Ignição", ConsoleShell.card("IGNIÇÃO · SINAL LÓGICO", "Um pulso de carga até 5 ms numa saída IGN. A saída comanda a etapa externa de ignição.",
-                ConsoleShell.actions(new Label("Saída IGN"),ignition,new Label("Dwell (ms)"),ignitionMs),spark)),
+                ConsoleShell.actions(new Label("Ignição"),ignition,new Label("Dwell (ms)"),ignitionMs),spark)),
             tab("Relés e bomba", ConsoleShell.card("RELÉS E BOMBA", "Ativação temporizada de 100 a 800 ms, apenas nas saídas auxiliares atribuídas no perfil enviado à ECU.",
                 ConsoleShell.actions(auxiliary,new Label("Duração (ms)"),auxiliaryMs),routing,relay)));
         getChildren().add(tabs);
         read.setOnAction(e->execute.accept((s,d)->EngineOutputClient.read(s)));
         stop.setOnAction(e->execute.accept((s,d)->EngineOutputClient.stop(s)));
-        inject.setOnAction(e->confirm("LS "+injector.getValue(),injectorMs.getValue()+" ms",(s,d)->EngineOutputClient.pulse(s,injector.getValue()-1,micros(injectorMs))));
-        spark.setOnAction(e->confirm("IGN "+ignition.getValue(),ignitionMs.getValue()+" ms",(s,d)->EngineOutputClient.pulse(s,15+ignition.getValue(),micros(ignitionMs))));
-        relay.setOnAction(e->{int channel=auxChannel();if(channel>=0)confirm(auxiliary.getValue()+" · LS "+(channel+1),auxiliaryMs.getValue()+" ms",
+        inject.setOnAction(e->{if(injector.getValue()!=null)confirm(injector.getConverter().toString(injector.getValue()),injectorMs.getValue()+" ms",(s,d)->EngineOutputClient.pulse(s,injector.getValue()-1,micros(injectorMs)));});
+        spark.setOnAction(e->{if(ignition.getValue()!=null)confirm(ignition.getConverter().toString(ignition.getValue()),ignitionMs.getValue()+" ms",(s,d)->EngineOutputClient.pulse(s,15+ignition.getValue(),micros(ignitionMs)));});
+        relay.setOnAction(e->{int channel=auxChannel();if(channel>=0)confirm(auxiliary.getValue()+" · "+io.tunuino.calibration.ProteusRouting.connection(io.tunuino.calibration.IoAssignments.Group.POWER,channel+1),auxiliaryMs.getValue()+" ms",
             (s,d)->EngineOutputClient.auxiliaryTest(s,channel,auxiliaryMs.getValue()));});
         update(false,false,null,null,"Sem estado de saídas recebido da ECU.");
     }
     private static ComboBox<Integer> channels(int count){ComboBox<Integer> c=new ComboBox<>();for(int i=1;i<=count;i++)c.getItems().add(i);c.getSelectionModel().selectFirst();return c;}
     private static ComboBox<Integer> durations(Integer... values){ComboBox<Integer> c=new ComboBox<>();c.getItems().addAll(values);c.getSelectionModel().selectFirst();return c;}
+    private javafx.util.StringConverter<Integer> testNames(boolean spark){return new javafx.util.StringConverter<>(){
+        @Override public String toString(Integer channel){if(channel==null||profile==null)return "Lê o perfil do motor";for(int i=0;i<(profile[1]&255);i++)if((profile[32+8*i+(spark?1:0)]&255)+1==channel)return (spark?"Ignição ":"Injetor ")+(i+1)+" · "+io.tunuino.calibration.ProteusRouting.connection(spark?io.tunuino.calibration.IoAssignments.Group.IGNITION:io.tunuino.calibration.IoAssignments.Group.POWER,channel);return "Sem função no perfil";}
+        @Override public Integer fromString(String s){throw new UnsupportedOperationException();}
+    };}
+    private void testChannels(ComboBox<Integer> choice,boolean spark){var channels=new java.util.ArrayList<Integer>();if(profile!=null)for(int i=0;i<(profile[1]&255);i++)channels.add((profile[32+8*i+(spark?1:0)]&255)+1);if(!choice.getItems().equals(channels)){Integer old=choice.getValue();choice.getItems().setAll(channels);if(channels.contains(old))choice.setValue(old);else choice.getSelectionModel().selectFirst();}}
     private static ComboBox<String> pulseDurations(String... values){ComboBox<String> c=new ComboBox<>();c.getItems().addAll(values);c.getSelectionModel().selectFirst();return c;}
     private static int micros(ComboBox<String> value){return new java.math.BigDecimal(value.getValue()).movePointRight(3).intValueExact();}
     private static Tab tab(String title,javafx.scene.Node node){return new Tab(title,node);}
@@ -61,12 +65,12 @@ final class OutputTestPane extends VBox {
         if(alert.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK)execute.accept(command);
     }
     private int auxChannel(){if(profile==null)return -1;return (profile[22+auxiliary.getSelectionModel().getSelectedIndex()]&255)-1;}
-    private void route(){int ch=auxChannel();routing.setText(ch<0?"Função sem saída atribuída no perfil enviado à ECU.":auxiliary.getValue()+" → LS "+(ch+1));}
+    private void route(){int ch=auxChannel();routing.setText(ch<0?"Lê o perfil do motor para obter a ligação atribuída.":auxiliary.getValue()+" → "+io.tunuino.calibration.ProteusRouting.connection(io.tunuino.calibration.IoAssignments.Group.POWER,ch+1));}
     void update(boolean available,boolean busy,EngineOutputClient.State value,byte[] uploaded,String description){
-        profile=value!=null&&value.configured()&&uploaded!=null?uploaded.clone():null;route();state.setText(description);
+        profile=value!=null&&value.configured()&&uploaded!=null?uploaded.clone():null;testChannels(injector,false);testChannels(ignition,true);route();state.setText(description);
         boolean idle=available&&!busy,ready=idle&&value!=null&&value.timerReady()&&!value.armed();
         read.setDisable(!idle);stop.setDisable(!idle);
-        inject.setDisable(!ready);spark.setDisable(!ready);relay.setDisable(!ready||auxChannel()<0);
+        inject.setDisable(!ready||injector.getValue()==null);spark.setDisable(!ready||ignition.getValue()==null);relay.setDisable(!ready||auxChannel()<0);
         for(Control c:List.of(injector,ignition,injectorMs,ignitionMs,auxiliary,auxiliaryMs))c.setDisable(!idle||value!=null&&value.armed());
         // Changing the auxiliary selection must preserve the latest availability gate.
         auxiliary.setOnAction(e->{route();relay.setDisable(!ready||auxChannel()<0);});

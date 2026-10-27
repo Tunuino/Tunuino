@@ -1,0 +1,332 @@
+{
+  "source_repository": "Tunuino/proteus",
+  "source_commit": "383558bf7ca1c53ad8bbd8fdc9dd3a4187013c46",
+  "source_path": "proteus.kicad_pcb",
+  "source_sha256": "67243188a87679fb8c332f70d42c4c54f350283acc7d7115c240efeecb497792",
+  "validation": "connector_contacts_checked_in_pcb_source_not_physical_validation",
+  "groups": {
+    "TEMPERATURE": [
+      {
+        "channel": 1,
+        "connector": "White35",
+        "contact": 19,
+        "net": "/AT1"
+      },
+      {
+        "channel": 2,
+        "connector": "White35",
+        "contact": 30,
+        "net": "/AT2"
+      },
+      {
+        "channel": 3,
+        "connector": "White35",
+        "contact": 20,
+        "net": "/AT3"
+      },
+      {
+        "channel": 4,
+        "connector": "White35",
+        "contact": 31,
+        "net": "/AT4"
+      }
+    ],
+    "ANALOG": [
+      {
+        "channel": 1,
+        "connector": "White35",
+        "contact": 13,
+        "net": "/AV1"
+      },
+      {
+        "channel": 2,
+        "connector": "White35",
+        "contact": 24,
+        "net": "/AV2"
+      },
+      {
+        "channel": 3,
+        "connector": "White35",
+        "contact": 14,
+        "net": "/AV3"
+      },
+      {
+        "channel": 4,
+        "connector": "White35",
+        "contact": 25,
+        "net": "/AV4"
+      },
+      {
+        "channel": 5,
+        "connector": "White35",
+        "contact": 15,
+        "net": "/AV5"
+      },
+      {
+        "channel": 6,
+        "connector": "White35",
+        "contact": 26,
+        "net": "/AV6"
+      },
+      {
+        "channel": 7,
+        "connector": "White35",
+        "contact": 16,
+        "net": "/AV7"
+      },
+      {
+        "channel": 8,
+        "connector": "White35",
+        "contact": 27,
+        "net": "/AV8"
+      },
+      {
+        "channel": 9,
+        "connector": "White35",
+        "contact": 17,
+        "net": "/AV9"
+      },
+      {
+        "channel": 10,
+        "connector": "White35",
+        "contact": 28,
+        "net": "/AV10"
+      },
+      {
+        "channel": 11,
+        "connector": "White35",
+        "contact": 18,
+        "net": "/AV11"
+      }
+    ],
+    "IGNITION": [
+      {
+        "channel": 1,
+        "connector": "Black35",
+        "contact": 35,
+        "net": "/IGN1"
+      },
+      {
+        "channel": 2,
+        "connector": "Black35",
+        "contact": 34,
+        "net": "/IGN2"
+      },
+      {
+        "channel": 3,
+        "connector": "Black35",
+        "contact": 22,
+        "net": "/IGN3"
+      },
+      {
+        "channel": 4,
+        "connector": "Black35",
+        "contact": 33,
+        "net": "/IGN4"
+      },
+      {
+        "channel": 5,
+        "connector": "Black35",
+        "contact": 32,
+        "net": "/IGN5"
+      },
+      {
+        "channel": 6,
+        "connector": "Black35",
+        "contact": 31,
+        "net": "/IGN6"
+      },
+      {
+        "channel": 7,
+        "connector": "Black35",
+        "contact": 30,
+        "net": "/IGN7"
+      },
+      {
+        "channel": 8,
+        "connector": "Black35",
+        "contact": 29,
+        "net": "/IGN8"
+      },
+      {
+        "channel": 9,
+        "connector": "Black35",
+        "contact": 28,
+        "net": "/IGN9"
+      },
+      {
+        "channel": 10,
+        "connector": "Black35",
+        "contact": 27,
+        "net": "/IGN10"
+      },
+      {
+        "channel": 11,
+        "connector": "Black35",
+        "contact": 26,
+        "net": "/IGN11"
+      },
+      {
+        "channel": 12,
+        "connector": "Black35",
+        "contact": 25,
+        "net": "/IGN12"
+      }
+    ],
+    "POWER": [
+      {
+        "channel": 1,
+        "connector": "Black35",
+        "contact": 3,
+        "net": "/LS1"
+      },
+      {
+        "channel": 2,
+        "connector": "Black35",
+        "contact": 15,
+        "net": "/LS2"
+      },
+      {
+        "channel": 3,
+        "connector": "Black35",
+        "contact": 4,
+        "net": "/LS3"
+      },
+      {
+        "channel": 4,
+        "connector": "Black35",
+        "contact": 16,
+        "net": "/LS4"
+      },
+      {
+        "channel": 5,
+        "connector": "Black35",
+        "contact": 5,
+        "net": "/LS5"
+      },
+      {
+        "channel": 6,
+        "connector": "Black35",
+        "contact": 6,
+        "net": "/LS6"
+      },
+      {
+        "channel": 7,
+        "connector": "Black35",
+        "contact": 7,
+        "net": "/LS7"
+      },
+      {
+        "channel": 8,
+        "connector": "Black35",
+        "contact": 19,
+        "net": "/LS8"
+      },
+      {
+        "channel": 9,
+        "connector": "Black35",
+        "contact": 8,
+        "net": "/LS9"
+      },
+      {
+        "channel": 10,
+        "connector": "Black35",
+        "contact": 20,
+        "net": "/LS10"
+      },
+      {
+        "channel": 11,
+        "connector": "Black35",
+        "contact": 9,
+        "net": "/LS11"
+      },
+      {
+        "channel": 12,
+        "connector": "Black35",
+        "contact": 21,
+        "net": "/LS12"
+      },
+      {
+        "channel": 13,
+        "connector": "Black35",
+        "contact": 10,
+        "net": "/LS13"
+      },
+      {
+        "channel": 14,
+        "connector": "Black35",
+        "contact": 11,
+        "net": "/LS14"
+      },
+      {
+        "channel": 15,
+        "connector": "Black35",
+        "contact": 12,
+        "net": "/LS15"
+      },
+      {
+        "channel": 16,
+        "connector": "Black35",
+        "contact": 23,
+        "net": "/LS16"
+      }
+    ]
+  },
+  "typical_functions": {
+    "MAP": [
+      "ANALOG",
+      1
+    ],
+    "TPS": [
+      "ANALOG",
+      2
+    ],
+    "CLT": [
+      "TEMPERATURE",
+      3
+    ],
+    "IAT": [
+      "TEMPERATURE",
+      2
+    ],
+    "LAMBDA": [
+      "ANALOG",
+      10
+    ],
+    "PUMP": [
+      "POWER",
+      10
+    ],
+    "FAN": [
+      "POWER",
+      11
+    ],
+    "MAIN_RELAY": [
+      "POWER",
+      12
+    ]
+  },
+  "application_proposals": {
+    "IDLE": [
+      "POWER",
+      13
+    ],
+    "BOOST": [
+      "POWER",
+      14
+    ],
+    "ANALOG_ETHANOL": [
+      "ANALOG",
+      4
+    ],
+    "CONDITIONED_LAUNCH": [
+      "ANALOG",
+      6
+    ]
+  },
+  "notes": [
+    "Connector numbers come from the PCB contacts, not MCU GPIO names.",
+    "Legacy alternative assignments remain supported; reading or updating the Console never rewires a saved configuration.",
+    "Application proposals are not dedicated connector functions."
+  ]
+}

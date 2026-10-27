@@ -271,7 +271,7 @@ public final class ConsoleUiChecks {
             String[][] engineFields={{"fuel","3"},{"dwell","2"},{"dead","0,5"},{"maximum","15"},
                 {"injectionEnd","0"},{"toothZero","0"},{"camFirst","1"},{"camLast","2"},{"camPhase","0"}};
             for(String[] field:engineFields)enginePane.setting(field[0],field[1]);
-            for(int column=0;column<2;++column){@SuppressWarnings("unchecked") var route=(ComboBox<String>)scene.lookup("#engine-cylinder-channel-0-"+column);route.setValue("1");check(route.getConverter().toString("1").contains(column==0?"Injetor":"Ignição"),"Cylinder choices use function names");}
+            for(int column=0;column<2;++column){@SuppressWarnings("unchecked") var route=(ComboBox<String>)scene.lookup("#engine-cylinder-channel-0-"+column);route.setValue("1");check(route.getConverter().toString("1").contains(column==0?"Preto 35/3":"Preto 35/35"),"Cylinder choices use function names");}
             ((javafx.scene.control.TextField)scene.lookup("#engine-cylinder-0-2")).setText("180");
             byte[] engineBytes=enginePane.profile();
             check(engineBytes.length==128&&java.nio.ByteBuffer.wrap(engineBytes).getInt(34)==18000,"Explicit cylinder/PMS form produces exact wire units");
@@ -284,6 +284,11 @@ public final class ConsoleUiChecks {
             engineTabs.getSelectionModel().selectFirst();scene.getRoot().applyCss();scene.getRoot().layout();
             ((Button)scene.lookup("#engine-generic-base")).fire();
             check(engineCylinders.getValue()==4,"Generic configuration uses selected firing-order preset");
+            engineTabs.getSelectionModel().select(5);scene.getRoot().applyCss();scene.getRoot().layout();
+            @SuppressWarnings("unchecked") var pumpRoute=(ComboBox<String>)scene.lookup("#engine-channel-pump");
+            check(pumpRoute.getItems().size()==2&&pumpRoute.getValue().equals("10")&&pumpRoute.getConverter().toString("10").contains("Preto 35/20"),"Pump offers disabled and the conventional connector contact, not sixteen repeated choices");
+            pumpRoute.setValue("15");check(pumpRoute.getItems().size()==3&&pumpRoute.getValue().equals("15"),"Custom loaded route remains selectable and is not silently replaced");pumpRoute.setValue("10");
+            snapshot(scene,"console-routing-auxiliary-quick");engineTabs.getSelectionModel().selectFirst();scene.getRoot().applyCss();scene.getRoot().layout();
             check(!((javafx.scene.control.CheckBox)scene.lookup("#engine-autonomous")).isSelected(),"Generic base does not enable autonomous startup");
             check(((Button)scene.lookup("#engine-configure")).isDisabled(),"Offline base cannot send a profile");
             snapshot(scene,"console-generic-base");
@@ -316,12 +321,18 @@ public final class ConsoleUiChecks {
             ((ToggleButton)scene.lookup("#navigate-14")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
             var functionPane=(IoAssignmentsPane)scene.lookup("#io-assignments-pane");
             check(((Button)scene.lookup("#io-functions-read")).isDisabled()&&((Button)scene.lookup("#io-functions-save")).isDisabled(),"Offline function writes are blocked");
+            var advancedRoutes=(javafx.scene.control.TitledPane)scene.lookup("#io-functions-advanced");check(!advancedRoutes.isExpanded(),"Full terminal matrix is hidden by default");
+            @SuppressWarnings("unchecked") var quickMap=(ComboBox<Integer>)scene.lookup("#io-quick-ANALOG-1");
+            check(quickMap.getItems().size()==2&&quickMap.getConverter().toString(1).contains("Branco 35/13"),"MAP shows one conventional recommendation and disabled");
+            advancedRoutes.setExpanded(true);scene.getRoot().applyCss();scene.getRoot().layout();
             @SuppressWarnings("unchecked") var analogFunction=(ComboBox<io.tunuino.calibration.IoAssignments.Function>)scene.lookup("#io-function-ANALOG-0");
             check(analogFunction.getItems().stream().anyMatch(f->f.label().startsWith("MAP"))&&analogFunction.getItems().stream().noneMatch(f->f.label().contains("Injetor")),"Analog inputs list sensor functions, never injector outputs");
             analogFunction.setValue(analogFunction.getItems().stream().filter(f->f.id()==3).findFirst().orElseThrow());check(functionPane.candidate().function(io.tunuino.calibration.IoAssignments.Group.ANALOG,0)==3,"Selecting TPS changes local function only");
+            quickMap.setValue(1);check(functionPane.candidate().function(io.tunuino.calibration.IoAssignments.Group.ANALOG,0)==3&&quickMap.getValue()==0,"Quick selection does not steal an occupied sensor input");
             analogFunction.getSelectionModel().selectFirst();
             var functionTabs=(javafx.scene.control.TabPane)scene.lookup("#io-functions-tabs");
-            for(int tab=0;tab<4;tab++){functionTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();snapshot(scene,"console-io-functions-"+tab);}
+            advancedRoutes.setExpanded(false);var quickTabs=(javafx.scene.control.TabPane)scene.lookup("#io-quick-tabs");
+            for(int tab=0;tab<3;tab++){quickTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();snapshot(scene,"console-quick-routing-"+tab);}
             ((ToggleButton)scene.lookup("#navigate-11")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
             var outputTabs=(javafx.scene.control.TabPane)scene.lookup("#output-test-tabs");
             check(outputTabs.getTabs().size()==3,"Separate injector, ignition and relay test tabs");

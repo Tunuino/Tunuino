@@ -86,12 +86,12 @@ final class EngineControlPane extends VBox {
                 case "fanOn"->choices.getItems().addAll("90","95","100","105");
                 case "fanOff"->choices.getItems().addAll("85","90","95","100");
                 case "camPhase"->choices.getItems().addAll("0","1");
-                case "pump","fan","relay"->{for(int i=0;i<=16;i++)choices.getItems().add(Integer.toString(i));FunctionChoices.numericStrings(choices,d[1],io.tunuino.calibration.IoAssignments.Group.POWER);choices.setId("engine-channel-"+d[0]);}
+                case "pump","fan","relay"->{for(int i=0;i<=16;i++)choices.getItems().add(Integer.toString(i));FunctionChoices.numericStrings(choices,io.tunuino.calibration.IoAssignments.Group.POWER,d[0].equals("pump")?13:d[0].equals("fan")?14:15);choices.setId("engine-channel-"+d[0]);}
                 default->{}
             }
             selectors.put(d[0],choices);TextField field=choices.getEditor();choices.setValue(d[2]);field.setPrefColumnCount(10);
             field.setId("engine-field-"+d[0]);fields.put(d[0],field);
-            grid.add(new Label(d[1]),0,row);grid.add(choices,1,row);
+            grid.add(new Label(d[1]),0,row);grid.add(java.util.Set.of("pump","fan","relay").contains(d[0])?FunctionChoices.control(choices):choices,1,row);
         }
         wiring.setHgap(12);wiring.setVgap(7);
         wiring.addRow(0,new Label("Cilindro"),new Label("Função de injeção"),new Label("Função de ignição"),new Label("PMS no ciclo (°)"));
@@ -99,9 +99,9 @@ final class EngineControlPane extends VBox {
             for(int j=0;j<3;++j){TextField f;javafx.scene.Node control;
                 if(j<2){ComboBox<String> choice=new ComboBox<>();choice.setEditable(true);choice.setPrefWidth(105);
                     for(int channel=1;channel<=(j==0?16:12);channel++)choice.getItems().add(Integer.toString(channel));
-                    FunctionChoices.numericStrings(choice,(j==0?"Injetor ":"Ignição ")+(i+1),j==0?io.tunuino.calibration.IoAssignments.Group.POWER:io.tunuino.calibration.IoAssignments.Group.IGNITION);
+                    FunctionChoices.numericStrings(choice,j==0?io.tunuino.calibration.IoAssignments.Group.POWER:io.tunuino.calibration.IoAssignments.Group.IGNITION,i+1);
                     choice.setId("engine-cylinder-channel-"+i+"-"+j);
-                    cylinderSelectors.put(i+"-"+j,choice);f=choice.getEditor();control=choice;
+                    cylinderSelectors.put(i+"-"+j,choice);f=choice.getEditor();control=FunctionChoices.control(choice);
                 }else{f=new TextField();control=f;}
                 f.setId("engine-cylinder-"+i+"-"+j);f.setPrefColumnCount(7);cylinders[i][j]=f;wiring.add(control,j+1,i+1);}}
         count.setOnAction(event->{acknowledge.setSelected(false);presetSummary.setText(count.getValue()==null?"Seleciona o número de cilindros ou aplica um modelo.":"Cilindros: "+count.getValue()+" · verifica a ordem e as atribuições no separador Cilindros.");for(int i=0;i<12;++i)for(var f:cylinders[i])f.setDisable(count.getValue()==null||i>=count.getValue());controls();});
@@ -111,7 +111,7 @@ final class EngineControlPane extends VBox {
             ConsoleShell.actions(load,read,stop),result));
         TabPane tabs=new TabPane();tabs.setId("engine-configuration-tabs");tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         tabs.getTabs().add(new Tab("Motor",ConsoleShell.card("MODELO DE CONFIGURAÇÃO",
-            "Escolhe cilindros e ordem de ignição. O modelo propõe LS/IGN por número de cilindro e PMS relativos ao cilindro 1. Confirma as ligações e completa a calibração real.",
+            "Escolhe cilindros e ordem de ignição. O modelo propõe as ligações habituais de injeção/ignição e PMS relativos ao cilindro 1. Confirma as ligações e completa a calibração real.",
             ConsoleShell.actions(presets,applyPreset),grids.get("Motor"),presetSummary)));
         presetSummary.setWrapText(true);
         TextField displacement=new TextField("2000"),injectorFlow=new TextField("250");
@@ -141,7 +141,7 @@ final class EngineControlPane extends VBox {
         for(String group:java.util.List.of("Injeção","Ignição","Sincronização","Auxiliares"))
             tabs.getTabs().add(new Tab(group,ConsoleShell.card(group.toUpperCase(java.util.Locale.ROOT),
                 group.equals("Sincronização")?"PMS, dente zero e janela de fase dependem do motor. Configura a roda fónica em Sensores e entradas."
-                :group.equals("Auxiliares")?"Atribui LS independentes aos relés. 0 significa desativado. Os valores propostos devem corresponder à instalação."
+                :group.equals("Auxiliares")?"Escolhe a ligação recomendada ou Personalizar para outra cablagem. Os contactos aparecem por conector."
                 :"Escolhe um valor da lista ou escreve a calibração da carga instalada. ReqFuel usa VE 100% e MAP 100 kPa, antes do tempo morto.",grids.get(group))));
         tabs.getTabs().add(new Tab("Arranque e aquecimento",fueling));
         fueling.onChanged(()->{acknowledge.setSelected(false);controls();});
@@ -196,11 +196,11 @@ final class EngineControlPane extends VBox {
             cylinderSelectors.get(i+"-0").setValue(Integer.toString(i+1));cylinderSelectors.get(i+"-1").setValue(Integer.toString(i+1));
             cylinders[i][2].setText(BigDecimal.valueOf(preset.tdcCentidegrees(i+1),2).stripTrailingZeros().toPlainString());
         }
-        setting("pump",Integer.toString(preset.cylinders()+1));
-        setting("fan",Integer.toString(preset.cylinders()+2));
-        setting("relay",Integer.toString(preset.cylinders()+3));
-        presetSummary.setText(preset.name()+" · injetores LS 1–"+preset.cylinders()+" · ignição IGN 1–"+preset.cylinders()
-            +" · bomba LS "+(preset.cylinders()+1)+" · ventoinha LS "+(preset.cylinders()+2)+" · relé LS "+(preset.cylinders()+3));
+        setting("pump","10");
+        setting("fan","11");
+        setting("relay","12");
+        presetSummary.setText(preset.name()+" · injeção/ignição pelas ligações habituais do pinout"
+            +" · bomba: Preto 35/20 · ventoinha: Preto 35/9 · relé: Preto 35/21");
         acknowledge.setSelected(false);
         result.setText("Modelo aplicado apenas à edição. Completa ReqFuel, dwell, tempo morto e sincronização; confirma LS/IGN antes de enviar à ECU.");controls();
     }

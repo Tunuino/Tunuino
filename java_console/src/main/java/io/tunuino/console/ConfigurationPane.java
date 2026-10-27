@@ -43,7 +43,7 @@ public final class ConfigurationPane extends VBox {
     private final Access access;
     private final EnumMap<IoConfiguration.Field,TextField> fields=new EnumMap<>(IoConfiguration.Field.class);
     private final CheckBox trigger=new CheckBox("Ativar captura de cambota/cames");
-    private final ComboBox<String> map=channels("MAP — pressão do coletor",false),lambda=channels("Lambda — mistura de combustível",false),coolant=channels("CLT — temperatura do motor",true);
+    private final ComboBox<Integer> map=channels(io.tunuino.calibration.IoAssignments.Group.ANALOG,1),lambda=channels(io.tunuino.calibration.IoAssignments.Group.ANALOG,2),coolant=channels(io.tunuino.calibration.IoAssignments.Group.TEMPERATURE,1);
     private final Button read=new Button("Ler configuração"),apply=new Button("Guardar na ECU"),
         discard=new Button("Descartar pendentes da ECU"),reset=new Button("Repor edição"),
         newLocal=new Button("Nova configuração local"),saveFile=new Button("Guardar ficheiro"),openFile=new Button("Abrir ficheiro"),readInputs=new Button("Ler entradas ADC");
@@ -70,8 +70,8 @@ public final class ConfigurationPane extends VBox {
         for(String group:List.of("Aquisição","MAP","Lambda","Temperatura")) {
             GridPane grid=new GridPane();grid.setHgap(16);grid.setVgap(10);int row=0;
             if(group.equals("Aquisição"))grid.add(trigger,0,row++,2,1);
-            else {ComboBox<String> selector=group.equals("MAP")?map:group.equals("Lambda")?lambda:coolant;
-                grid.add(new Label("Canal de entrada"),0,row);grid.add(selector,1,row++);}
+            else {ComboBox<Integer> selector=group.equals("MAP")?map:group.equals("Lambda")?lambda:coolant;
+                grid.add(new Label("Ligação do sensor"),0,row);grid.add(FunctionChoices.control(selector),1,row++);}
             for(IoConfiguration.Field field:IoConfiguration.Field.values())if(field.group.equals(group)) {
                 TextField editor=new TextField();editor.setPrefColumnCount(10);editor.setMaxWidth(160);
                 editor.setId("config-field-"+field.name());fields.put(field,editor);
@@ -94,7 +94,7 @@ public final class ConfigurationPane extends VBox {
         adc.setPrefHeight(360);adc.setId("config-adc-table");
         forms.getTabs().add(new Tab("Entradas ADC",ConsoleShell.card("ENTRADAS E ESTADO", "A tensão mostrada é no pino MCU; os divisores externos não são inferidos.",readInputs,inputState,adc)));
         trigger.selectedProperty().addListener((p,a,b)->refresh());
-        for(ComboBox<String> selector:List.of(map,lambda,coolant))selector.setOnAction(e->{if(!loading)refresh();});
+        for(ComboBox<Integer> selector:List.of(map,lambda,coolant))selector.setOnAction(e->{if(!loading&&!FunctionChoices.updating(selector))refresh();});
         read.setOnAction(e->{
             if(hasLocalChanges()&&!confirm("Repor edição local?","A leitura substituirá a edição local pelos valores da ECU."))return;
             access.run((s,id)->ConfigurationClient.read(s,id,Duration.ofSeconds(5)),this::loaded,this::failed);
@@ -136,11 +136,8 @@ public final class ConfigurationPane extends VBox {
         choices.disableProperty().bind(newLocal.disableProperty());use.disableProperty().bind(newLocal.disableProperty());
         return ConsoleShell.actions(choices,use);
     }
-    private static ComboBox<String> channels(String function,boolean temperature) {
-        ComboBox<String> choice=new ComboBox<>();choice.getItems().add("Desativado");
-        for(int i=1;i<=(temperature?4:11);i++)choice.getItems().add(function+" · entrada "+(temperature?"de temperatura ":"analógica ")+i);
-        choice.setPrefWidth(355);
-        choice.getSelectionModel().select(0);return choice;
+    private static ComboBox<Integer> channels(io.tunuino.calibration.IoAssignments.Group group,int function) {
+        ComboBox<Integer> choice=new ComboBox<>();for(int i=0;i<=group.count;i++)choice.getItems().add(i);choice.setValue(0);FunctionChoices.integers(choice,group,function);return choice;
     }
     public void availability(DeviceIdentity identity,boolean connected,boolean busy) {
         if(!connected||!Objects.equals(device,identity)) {
@@ -159,8 +156,8 @@ public final class ConfigurationPane extends VBox {
     private void display(IoConfiguration config) {
         loading=true;
         try {
-            trigger.setSelected(config.triggerEnabled());map.getSelectionModel().select(config.mapChannel());
-            lambda.getSelectionModel().select(config.lambdaChannel());coolant.getSelectionModel().select(config.coolantChannel());
+            trigger.setSelected(config.triggerEnabled());map.setValue(config.mapChannel());
+            lambda.setValue(config.lambdaChannel());coolant.setValue(config.coolantChannel());
             fields.forEach((field,editor)->editor.setText(config.value(field)));
         }finally{loading=false;}
     }
@@ -168,8 +165,8 @@ public final class ConfigurationPane extends VBox {
 
         EnumMap<IoConfiguration.Field,String> values=new EnumMap<>(IoConfiguration.Field.class);
         fields.forEach((field,editor)->values.put(field,editor.getText()));
-        return base.edited(values,trigger.isSelected(),map.getSelectionModel().getSelectedIndex(),
-            lambda.getSelectionModel().getSelectedIndex(),coolant.getSelectionModel().getSelectedIndex());
+        return base.edited(values,trigger.isSelected(),map.getValue(),
+            lambda.getValue(),coolant.getValue());
     }
     private void refresh() {
         if(loading)return;
@@ -182,7 +179,7 @@ public final class ConfigurationPane extends VBox {
         apply.setDisable(!editable||!sameDevice||!valid||!changed||snapshot.validation().dirty());
         discard.setDisable(!editable||!sameDevice||!snapshot.validation().dirty());
         newLocal.setDisable(!editable);reset.setDisable(!editable);saveFile.setDisable(!editable||!valid);openFile.setDisable(!editable);
-        trigger.setDisable(!editable);for(ComboBox<String> choice:List.of(map,lambda,coolant))choice.setDisable(!editable);
+        trigger.setDisable(!editable);for(ComboBox<Integer> choice:List.of(map,lambda,coolant))choice.setDisable(!editable);
         fields.values().forEach(field->field.setDisable(!editable));
     }
     private boolean confirm(String title,String text) {

@@ -67,7 +67,7 @@ def main():
     installer = validate_installer(Path("build/installer"), commit, run_id)
     shutil.copy2(installer, output / SETUP_NAME)
     repo = os.environ["GITHUB_REPOSITORY"]
-    notes = f"""## Tunuino — funções de entradas e saídas
+    notes = f"""## Tunuino — ligações rápidas da Proteus
 
 Console Windows x64, firmware **Proteus v0.7 / STM32F427** e **INI TunerStudio**, produzidos a partir do mesmo commit.
 
@@ -83,6 +83,8 @@ Esta imagem usa o startup, kernel e USB CDC do repositório **Tunuino/ChibiOS**,
 **Atualizações:** fechar a Console e instalar o MSI mais recente. Mapas, configurações e datalogs são guardados por predefinição em `%LOCALAPPDATA%\\TunuinoConsole` e ficam preservados na atualização e desinstalação. As definições antigas de ferramentas em `%USERPROFILE%\\.tunuino` continuam legíveis. A atualização exige descarregar e executar o novo instalador; ainda não existe atualização automática. O instalador ainda não tem assinatura digital de editor.
 
 O ZIP portátil mantém `console/`, `firmware/`, `kit-manifest.json`, `START-HERE.txt` e `SHA256SUMS.txt`. Só será retirado dos novos lançamentos após confirmação de que os testes passaram. Os dois formatos contêm os componentes do mesmo commit. O firmware inclui `corresponding-source.tar.gz` e as licenças ChibiOS.
+
+**Ligações rápidas:** listas curtas com Desativada, Recomendada/Proposta e Atual quando diferente. As alternativas completas ficam em Personalizar e a matriz manual fica fechada em Avançado. As recomendações identificam conector e contacto: bomba Preto35/20, ventoinha Preto35/9, relé Preto35/21, MAP Branco35/13, TPS Branco35/24, CLT Branco35/20 e IAT Branco35/30. Configurações anteriores são preservadas; escolher uma recomendação não ocupa uma ligação usada por outra função. [Guia](https://github.com/Tunuino/Tunuino_documents/blob/main/ligacoes-rapidas-proteus.md).
 
 **Funções de entradas e saídas:** novo quadro em Configuração → Funções de I/O, com escolhas pelo nome: MAP, lambda, TPS, temperaturas, injetores, ignição, bomba, ventoinha, relé e válvulas PWM. Cada ligação mostra apenas funções compatíveis; mover uma função retira a atribuição anterior. Alterações das páginas 1 e 4 são validadas e guardadas numa única operação, com releitura e sem armar saídas. As listas das restantes janelas e do INI também usam nomes de funções. [Guia](https://github.com/Tunuino/Tunuino_documents/blob/main/funcoes-entradas-saidas.md).
 
