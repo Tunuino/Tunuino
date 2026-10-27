@@ -69,6 +69,7 @@ public final class TunuinoConsole extends Application {
     private EngineControlPane engineControlPane;
     private AuxControlPane auxControlPane;
     private FeatureControlPane featureControlPane;
+    private IoAssignmentsPane ioAssignmentsPane;
     private boolean engineArmed;
     private boolean engineAutonomous;
     private boolean serialBusy;
@@ -235,6 +236,7 @@ public final class TunuinoConsole extends Application {
                 engineArmed||serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()));
             if(auxControlPane!=null)auxControlPane.availability(identifiedDevice,connected,serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()),engineArmed);
             if(featureControlPane!=null)featureControlPane.availability(identifiedDevice,connected,serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()),engineArmed);
+            if(ioAssignmentsPane!=null)ioAssignmentsPane.availability(identifiedDevice,connected,serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()),engineArmed);
             if(engineControlPane!=null)engineControlPane.availability(identifiedDevice,connected,
                 serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()));
             connect.setText(connected ? "Desligar USB" : "Ligar USB");
@@ -814,6 +816,7 @@ public final class TunuinoConsole extends Application {
         engineControlPane=new EngineControlPane(stage,ecuAccess,outputState);
         auxControlPane=new AuxControlPane(stage,ecuAccess,outputState);
         featureControlPane=new FeatureControlPane(stage,ecuAccess,outputState);
+        ioAssignmentsPane=new IoAssignmentsPane(stage,ecuAccess,value->{engineControlPane.externalState(value);outputState.accept(value);});
         shell.addPage("Data Log", "Datalogs e monitorização", "Gravação CSV e reprodução dos sinais disponíveis.",
             "M3 3H21V21H3ZM6 7H18V9H6ZM6 12H18V14H6ZM6 17H15V19H6Z", root);
         shell.addPage("Inputs / Outputs", "Sensores e entradas", "Roda fónica, sensores e leitura das entradas ADC.",
@@ -847,12 +850,14 @@ public final class TunuinoConsole extends Application {
         shell.label("Aux Control","Ralenti e turbo");
         shell.addPage("Fuel Features","Combustível e proteções","Compensações, alvo lambda, transientes, limites e ajustes por cilindro.","M3 4H19V18H3ZM6 8H16V14H6Z",ConsoleShell.scroll(featureControlPane));
         shell.label("Fuel Features","Combustível e proteções");
+        shell.addPage("IO Functions","Funções de entradas e saídas","Escolhe as funções compatíveis pelo nome, sem códigos de pinos do microcontrolador.","M2 3H20V7H2ZM2 10H20V14H2ZM2 17H20V21H2Z",ConsoleShell.scroll(ioAssignmentsPane));
+        shell.label("IO Functions","Funções de I/O");
         shell.label("Dashboard","Painel");shell.label("Data Log","Datalogs");shell.label("Tuning","Mapas e cálculos");
         shell.label("Fuel Tables","Combustível · VE");shell.label("Ignition Tables","Ignição · avanço");
         shell.label("Inputs / Outputs","Sensores e entradas");shell.label("Diagnostics","Estado da ECU");
         shell.label("Engine","Motor e saídas");shell.label("Output Tests","Testes de atuadores");shell.label("Settings","Sobre a Console");
         shell.group("Monitorização","Dashboard","Data Log");
-        shell.group("Configuração","Engine","Inputs / Outputs","Aux Control","Fuel Features");
+        shell.group("Configuração","Engine","Inputs / Outputs","IO Functions","Aux Control","Fuel Features");
         shell.group("Afinação","Fuel Tables","Ignition Tables","Tuning","Autotune");
         shell.group("Diagnóstico","Output Tests","Diagnostics");
         shell.group("Sistema","Firmware","Settings");

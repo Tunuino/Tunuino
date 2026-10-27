@@ -14,10 +14,10 @@ public final class FeatureConfiguration {
     }
     public enum Field {
         TRANSIENT_DELAY("Pausa lambda após transiente (ms)","Lambda",178,0,0,5000,500),
-        IAT_INPUT("Entrada IAT (0 desligado; 1–4 TEMP)","Sensores",72,0,0,4,0),
-        VOLT_INPUT("Entrada tensão (0 desligado; 1–11 AV)","Sensores",73,0,0,11,0),
-        LAUNCH_INPUT("Entrada launch (0 desligado; 1–11 AV)","Limites",74,0,0,11,0),
-        FLEX_INPUT("Entrada etanol (0 desligado; 1–11 AV)","Flex fuel",75,0,0,11,0),
+        IAT_INPUT("Entrada para temperatura do ar (IAT)","Sensores",72,0,0,4,0),
+        VOLT_INPUT("Entrada para tensão da bateria","Sensores",73,0,0,11,0),
+        LAUNCH_INPUT("Entrada para comando de launch","Limites",74,0,0,11,0),
+        FLEX_INPUT("Entrada para teor de etanol","Flex fuel",75,0,0,11,0),
         IAT_RAW1("IAT ADC 1","Sensores",76,0,0,4095,400),
         IAT_RAW2("IAT ADC 2","Sensores",78,0,0,4095,2000),
         IAT_RAW3("IAT ADC 3","Sensores",80,0,0,4095,3600),

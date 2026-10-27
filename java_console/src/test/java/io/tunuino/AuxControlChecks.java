@@ -48,8 +48,20 @@ public final class AuxControlChecks {
             var invalid=full.edited(Map.of(FeatureConfiguration.Field.VOLT_INPUT,"1"),EnumSet.allOf(FeatureConfiguration.Option.class));
             try{AuxControlClient.apply(session,d,withFeatures,new AuxConfiguration(invalid.bytes()),timeout);throw new AssertionError("MAP/battery input collision accepted");}catch(java.io.IOException expected){}
             check(!AuxControlClient.read(session,d,timeout).validation().dirty(),"Rejected sensor collision is discarded");
-            outputs=EngineOutputClient.read(session);saved=withFeatures;desired=withFeatures.configuration();
+            var assignments=IoAssignmentClient.read(session,d,timeout);var routes=assignments.assignments();
+            check(Arrays.equals(routes.core().bytes(),assignments.core().configuration().bytes())&&Arrays.equals(routes.auxiliary().bytes(),assignments.auxiliary().configuration().bytes()),"Function view preserves the exact configuration when unchanged");
+            check(routes.functions(IoAssignments.Group.TEMPERATURE).size()==3&&routes.functions(IoAssignments.Group.IGNITION).size()==2,"Selectors offer only compatible functions and configured cylinders");
+            check(!routes.withFunction(IoAssignments.Group.POWER,0,0).errors().isEmpty(),"A required injector cannot silently disappear from the profile");
+            try{routes.withFunction(IoAssignments.Group.TEMPERATURE,0,13);throw new AssertionError("Relay assigned to temperature input");}catch(IllegalArgumentException expected){}
+            var moved=routes.withFunction(IoAssignments.Group.ANALOG,6,1).withFunction(IoAssignments.Group.POWER,9,1).withFunction(IoAssignments.Group.TEMPERATURE,2,2);
+            check(moved.function(IoAssignments.Group.ANALOG,0)==0&&moved.function(IoAssignments.Group.POWER,0)==0&&moved.errors().isEmpty(),"Moving a function clears its previous terminal without duplicating it");
+            var routed=IoAssignmentClient.apply(session,d,assignments,moved,timeout);
+            check(routed.core().configuration().mapChannel()==7&&(routed.core().configuration().engineProfile()[32]&255)==9&&(routed.auxiliary().configuration().bytes()[72]&255)==3,"Actual board commits MAP, injector and IAT assignments in both pages");
+            check(routed.core().validation().generation()==assignments.core().validation().generation()+1&&!routed.engine().armed()&&routed.core().configuration().value(IoConfiguration.Field.MAP_HIGH).equals("250"),"One atomic generation, calibrated values retained, never auto-arm");
+            try{IoAssignmentClient.apply(session,d,assignments,routes,timeout);throw new AssertionError("Stale assignment snapshot accepted");}catch(java.io.IOException expected){}
+            outputs=EngineOutputClient.read(session);saved=routed.auxiliary();desired=saved.configuration();
             EngineOutputClient.arm(session,outputs.generation());
+            try{IoAssignmentClient.apply(session,d,routed,moved.withFunction(IoAssignments.Group.POWER,10,1),timeout);throw new AssertionError("Armed assignment write accepted");}catch(java.io.IOException expected){}
             try{AuxControlClient.apply(session,d,saved,desired.edited(Map.of(AuxConfiguration.Field.IDLE_P,"6"),1,8,2,9,3),timeout);throw new AssertionError("Running write accepted");}catch(java.io.IOException expected){}
             check(!AuxControlClient.read(session,d,timeout).validation().dirty(),"Running write changes no staged bytes");EngineOutputClient.stop(session);
         }

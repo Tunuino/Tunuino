@@ -271,7 +271,8 @@ public final class ConsoleUiChecks {
             String[][] engineFields={{"fuel","3"},{"dwell","2"},{"dead","0,5"},{"maximum","15"},
                 {"injectionEnd","0"},{"toothZero","0"},{"camFirst","1"},{"camLast","2"},{"camPhase","0"}};
             for(String[] field:engineFields)enginePane.setting(field[0],field[1]);
-            for(int column=0;column<3;++column)((javafx.scene.control.TextField)scene.lookup("#engine-cylinder-0-"+column)).setText(column==2?"180":"1");
+            for(int column=0;column<2;++column){@SuppressWarnings("unchecked") var route=(ComboBox<String>)scene.lookup("#engine-cylinder-channel-0-"+column);route.setValue("1");check(route.getConverter().toString("1").contains(column==0?"Injetor":"Ignição"),"Cylinder choices use function names");}
+            ((javafx.scene.control.TextField)scene.lookup("#engine-cylinder-0-2")).setText("180");
             byte[] engineBytes=enginePane.profile();
             check(engineBytes.length==128&&java.nio.ByteBuffer.wrap(engineBytes).getInt(34)==18000,"Explicit cylinder/PMS form produces exact wire units");
             var units=java.nio.ByteBuffer.wrap(engineBytes);
@@ -312,6 +313,15 @@ public final class ConsoleUiChecks {
             featuresTabs.getSelectionModel().select(1);scene.getRoot().applyCss();scene.getRoot().layout();
             var dead=(javafx.scene.control.TextField)scene.lookup("#feature-field-DEAD1");dead.setText("1,234");check(new io.tunuino.calibration.FeatureConfiguration(featuresPane.candidate().bytes()).raw(io.tunuino.calibration.FeatureConfiguration.Field.DEAD1)==1234,"GUI latency stored in exact ms");
             for(int tab=0;tab<7;tab++){featuresTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();snapshot(scene,"console-features-"+tab);}
+            ((ToggleButton)scene.lookup("#navigate-14")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
+            var functionPane=(IoAssignmentsPane)scene.lookup("#io-assignments-pane");
+            check(((Button)scene.lookup("#io-functions-read")).isDisabled()&&((Button)scene.lookup("#io-functions-save")).isDisabled(),"Offline function writes are blocked");
+            @SuppressWarnings("unchecked") var analogFunction=(ComboBox<io.tunuino.calibration.IoAssignments.Function>)scene.lookup("#io-function-ANALOG-0");
+            check(analogFunction.getItems().stream().anyMatch(f->f.label().startsWith("MAP"))&&analogFunction.getItems().stream().noneMatch(f->f.label().contains("Injetor")),"Analog inputs list sensor functions, never injector outputs");
+            analogFunction.setValue(analogFunction.getItems().stream().filter(f->f.id()==3).findFirst().orElseThrow());check(functionPane.candidate().function(io.tunuino.calibration.IoAssignments.Group.ANALOG,0)==3,"Selecting TPS changes local function only");
+            analogFunction.getSelectionModel().selectFirst();
+            var functionTabs=(javafx.scene.control.TabPane)scene.lookup("#io-functions-tabs");
+            for(int tab=0;tab<4;tab++){functionTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();snapshot(scene,"console-io-functions-"+tab);}
             ((ToggleButton)scene.lookup("#navigate-11")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
             var outputTabs=(javafx.scene.control.TabPane)scene.lookup("#output-test-tabs");
             check(outputTabs.getTabs().size()==3,"Separate injector, ignition and relay test tabs");

@@ -43,7 +43,7 @@ public final class ConfigurationPane extends VBox {
     private final Access access;
     private final EnumMap<IoConfiguration.Field,TextField> fields=new EnumMap<>(IoConfiguration.Field.class);
     private final CheckBox trigger=new CheckBox("Ativar captura de cambota/cames");
-    private final ComboBox<String> map=channels(false),lambda=channels(false),coolant=channels(true);
+    private final ComboBox<String> map=channels("MAP — pressão do coletor",false),lambda=channels("Lambda — mistura de combustível",false),coolant=channels("CLT — temperatura do motor",true);
     private final Button read=new Button("Ler configuração"),apply=new Button("Guardar na ECU"),
         discard=new Button("Descartar pendentes da ECU"),reset=new Button("Repor edição"),
         newLocal=new Button("Nova configuração local"),saveFile=new Button("Guardar ficheiro"),openFile=new Button("Abrir ficheiro"),readInputs=new Button("Ler entradas ADC");
@@ -86,7 +86,7 @@ public final class ConfigurationPane extends VBox {
             forms.getTabs().add(new Tab(group.equals("Aquisição")?"Roda fónica":group,card));
         }
         getChildren().add(forms);
-        TableColumn<AdcRow,String> name=new TableColumn<>("Entrada"),raw=new TableColumn<>("ADC"),volts=new TableColumn<>("Pino MCU (V)");
+        TableColumn<AdcRow,String> name=new TableColumn<>("Entrada"),raw=new TableColumn<>("ADC"),volts=new TableColumn<>("Tensão de diagnóstico (V)");
         name.setCellValueFactory(v->new SimpleStringProperty(v.getValue().channel()));
         raw.setCellValueFactory(v->new SimpleStringProperty(v.getValue().raw()));
         volts.setCellValueFactory(v->new SimpleStringProperty(v.getValue().volts()));
@@ -136,9 +136,10 @@ public final class ConfigurationPane extends VBox {
         choices.disableProperty().bind(newLocal.disableProperty());use.disableProperty().bind(newLocal.disableProperty());
         return ConsoleShell.actions(choices,use);
     }
-    private static ComboBox<String> channels(boolean temperature) {
+    private static ComboBox<String> channels(String function,boolean temperature) {
         ComboBox<String> choice=new ComboBox<>();choice.getItems().add("Desativado");
-        for(int i=1;i<=(temperature?4:11);i++)choice.getItems().add((temperature?"AT":"AV")+i);
+        for(int i=1;i<=(temperature?4:11);i++)choice.getItems().add(function+" · entrada "+(temperature?"de temperatura ":"analógica ")+i);
+        choice.setPrefWidth(355);
         choice.getSelectionModel().select(0);return choice;
     }
     public void availability(DeviceIdentity identity,boolean connected,boolean busy) {
@@ -197,7 +198,7 @@ public final class ConfigurationPane extends VBox {
     }
     void showInputs(IoClient.Inputs value) {
         boolean valid=(value.status()&1)!=0;int[] counts=value.raw();adc.getItems().clear();
-        for(int i=0;i<16;i++)adc.getItems().add(new AdcRow(i<11?"AV"+(i+1):i==11?"12V dividido":"AT"+(i-11),
+        for(int i=0;i<16;i++)adc.getItems().add(new AdcRow(i<11?"Entrada analógica "+(i+1):i==11?"Monitorização da alimentação":"Entrada de temperatura "+(i-11),
             valid?Integer.toString(counts[i]):"—",valid?String.format(Locale.ROOT,"%.3f",counts[i]*value.referenceMv()/4095000.0):"—"));
         inputState.setText("ADC "+(valid?"válido":"indisponível")+" · cambota "+((value.status()&8)!=0?"sincronizada":"sem sincronismo")
             +" · erros de captura: "+value.errors()+" · revisão "+value.generation());

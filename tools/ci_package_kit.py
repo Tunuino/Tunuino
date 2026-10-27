@@ -77,6 +77,7 @@ def main():
         "Console: Sensors and inputs; Engine and outputs; separate Actuator tests for injectors, ignition and assigned relays.\n"
         "Engine profile is saved atomically with sensors/maps. Verify pin mapping, TDC, dwell and injector calibration.\n"
         "Autonomous mode runs without USB. Manual mode retains a 2-second host supervision timeout.\n"
+        "I/O Functions: choose compatible sensor and actuator functions by name; review routing and save with outputs disarmed.\n"
         "TPS/idle/boost: separate page 4, reserved LS outputs, PWM tables or PI and overboost cut. All start disabled.\n"
         "Fuel features: IAT/voltage compensation, lambda target/PI, TPS acceleration, DFCO, RPM/launch cuts, analog ethanol, protections and cylinder trims.\n"
         "New features start disabled; initialize references in Console, then calibrate sensors and settings. Times are milliseconds.\n"

@@ -65,9 +65,9 @@ final class EngineControlPane extends VBox {
             {"fanOn","Ventoinha liga (°C)","95"},{"fanOff","Ventoinha desliga (°C)","90"},
             {"injectionEnd","Fim de injeção relativo ao PMS (°)",""},
             {"toothZero","Ângulo do dente zero, ciclo 720° (°)",""},
-            {"pump","Bomba: LS 1–16; 0 sem atribuição","0"},
-            {"fan","Ventoinha: LS 1–16; 0 sem atribuição","0"},
-            {"relay","Relé principal: LS 1–16; 0 sem atribuição","0"},
+            {"pump","Bomba de combustível","0"},
+            {"fan","Ventoinha de refrigeração","0"},
+            {"relay","Relé principal","0"},
             {"camFirst","Janela de fase: primeiro dente",""},
             {"camLast","Janela de fase: último dente",""},
             {"camPhase","Volta de referência da fase (0 ou 1)",""}};
@@ -85,7 +85,7 @@ final class EngineControlPane extends VBox {
                 case "fanOn"->choices.getItems().addAll("90","95","100","105");
                 case "fanOff"->choices.getItems().addAll("85","90","95","100");
                 case "camPhase"->choices.getItems().addAll("0","1");
-                case "pump","fan","relay"->{for(int i=0;i<=16;i++)choices.getItems().add(Integer.toString(i));}
+                case "pump","fan","relay"->{for(int i=0;i<=16;i++)choices.getItems().add(Integer.toString(i));FunctionChoices.numericStrings(choices,d[1],io.tunuino.calibration.IoAssignments.Group.POWER);choices.setId("engine-channel-"+d[0]);}
                 default->{}
             }
             selectors.put(d[0],choices);TextField field=choices.getEditor();choices.setValue(d[2]);field.setPrefColumnCount(10);
@@ -93,11 +93,13 @@ final class EngineControlPane extends VBox {
             grid.add(new Label(d[1]),0,row);grid.add(choices,1,row);
         }
         wiring.setHgap(12);wiring.setVgap(7);
-        wiring.addRow(0,new Label("Cilindro"),new Label("Injetor LS 1–16"),new Label("Ignição 1–12"),new Label("PMS no ciclo (°)"));
+        wiring.addRow(0,new Label("Cilindro"),new Label("Função de injeção"),new Label("Função de ignição"),new Label("PMS no ciclo (°)"));
         for(int i=0;i<12;++i){wiring.add(new Label(Integer.toString(i+1)),0,i+1);
             for(int j=0;j<3;++j){TextField f;javafx.scene.Node control;
                 if(j<2){ComboBox<String> choice=new ComboBox<>();choice.setEditable(true);choice.setPrefWidth(105);
                     for(int channel=1;channel<=(j==0?16:12);channel++)choice.getItems().add(Integer.toString(channel));
+                    FunctionChoices.numericStrings(choice,(j==0?"Injetor ":"Ignição ")+(i+1),j==0?io.tunuino.calibration.IoAssignments.Group.POWER:io.tunuino.calibration.IoAssignments.Group.IGNITION);
+                    choice.setId("engine-cylinder-channel-"+i+"-"+j);
                     cylinderSelectors.put(i+"-"+j,choice);f=choice.getEditor();control=choice;
                 }else{f=new TextField();control=f;}
                 f.setId("engine-cylinder-"+i+"-"+j);f.setPrefColumnCount(7);cylinders[i][j]=f;wiring.add(control,j+1,i+1);}}
@@ -240,7 +242,7 @@ final class EngineControlPane extends VBox {
     }
     private void run(ConfigurationPane.Operation<EngineOutputClient.State> operation,byte[] sent,byte[] sentFueling){
         if(!available||busy)return;busy=true;controls();
-        access.run(operation,value->{busy=false;state=value;
+        access.run(operation,value->{busy=false;externalConfiguration(value.generation());state=value;
             if(sent!=null)uploadedProfile=sent.clone();
             if(sentFueling!=null)uploadedFueling=sentFueling.clone();
             result.setText(value.description()+" · "+value.faultsDescription()
@@ -311,4 +313,8 @@ final class EngineControlPane extends VBox {
     private boolean matchesProfile(){try{return uploadedProfile!=null&&java.util.Arrays.equals(uploadedProfile,profile())
         &&uploadedFueling!=null&&java.util.Arrays.equals(uploadedFueling,fueling.candidate().bytes());}catch(IllegalArgumentException error){return false;}}
     void close(){refresh.stop();}
+    void externalConfiguration(long generation){
+        if(state!=null&&state.generation()!=generation){uploadedProfile=null;uploadedFueling=null;acknowledge.setSelected(false);controls();}
+    }
+    void externalState(EngineOutputClient.State value){externalConfiguration(value.generation());state=value;controls();}
 }

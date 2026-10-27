@@ -26,6 +26,8 @@ final class OutputTestPane extends VBox {
         read.setId("output-test-read");stop.setId("output-test-stop");stop.getStyleClass().add("danger");
         inject.setId("test-injector-start");spark.setId("test-ignition-start");relay.setId("test-aux-start");
         injector.setId("test-injector-channel");ignition.setId("test-ignition-channel");
+        FunctionChoices.integers(injector,"Teste de injetor",io.tunuino.calibration.IoAssignments.Group.POWER);
+        FunctionChoices.integers(ignition,"Teste de ignição",io.tunuino.calibration.IoAssignments.Group.IGNITION);
         injectorMs.setId("test-injector-duration");ignitionMs.setId("test-ignition-duration");auxiliaryMs.setId("test-aux-duration");
         auxiliary.setId("test-aux-function");auxiliary.getItems().addAll("Bomba de combustível", "Ventoinha", "Relé principal");
         auxiliary.getSelectionModel().selectFirst();auxiliary.setOnAction(e->route());

@@ -1,7 +1,7 @@
 [
   {
     "name": "IAT_INPUT",
-    "label": "Entrada IAT (0 desligado; 1–4 TEMP)",
+    "label": "Entrada para temperatura do ar (IAT)",
     "group": "Sensores",
     "offset": 72,
     "decimals": 0,
@@ -12,7 +12,7 @@
   },
   {
     "name": "VOLT_INPUT",
-    "label": "Entrada tensão (0 desligado; 1–11 AV)",
+    "label": "Entrada para tensão da bateria",
     "group": "Sensores",
     "offset": 73,
     "decimals": 0,
@@ -23,7 +23,7 @@
   },
   {
     "name": "LAUNCH_INPUT",
-    "label": "Entrada launch (0 desligado; 1–11 AV)",
+    "label": "Entrada para comando de launch",
     "group": "Limites",
     "offset": 74,
     "decimals": 0,
@@ -34,7 +34,7 @@
   },
   {
     "name": "FLEX_INPUT",
-    "label": "Entrada etanol (0 desligado; 1–11 AV)",
+    "label": "Entrada para teor de etanol",
     "group": "Flex fuel",
     "offset": 75,
     "decimals": 0,

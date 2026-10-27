@@ -39,7 +39,10 @@ final class FeatureControlPane extends VBox {
         for(var option:FeatureConfiguration.Option.values()){var c=new CheckBox(option.label);c.setId("feature-option-"+option.name());c.setWrapText(true);options.put(option,c);GridPane g=grids.get(option.group);g.add(c,0,g.getRowCount(),2,1);}
         for(var f:FeatureConfiguration.Field.values()){
             var c=new ComboBox<String>();c.setEditable(true);c.setPrefWidth(165);c.setId("feature-choice-"+f.name());c.getEditor().setId("feature-field-"+f.name());
-            if(f.offset<76)for(int i=f.min;i<=f.max;i++)c.getItems().add(Integer.toString(i));
+            if(f.offset<76){for(int i=f.min;i<=f.max;i++)c.getItems().add(Integer.toString(i));
+                String function=switch(f){case IAT_INPUT->"IAT — temperatura do ar";case VOLT_INPUT->"Tensão da bateria";case LAUNCH_INPUT->"Comando de launch control";case FLEX_INPUT->"Etanol — flex fuel";default->throw new IllegalArgumentException();};
+                FunctionChoices.numericStrings(c,function,f==FeatureConfiguration.Field.IAT_INPUT?io.tunuino.calibration.IoAssignments.Group.TEMPERATURE:io.tunuino.calibration.IoAssignments.Group.ANALOG);
+            }
             else if(f.decimals==3&&f.name().contains("TARGET"))c.getItems().addAll("0.85","0.9","0.95","1");
             else c.getItems().add(java.math.BigDecimal.valueOf(f.reference,f.decimals).stripTrailingZeros().toPlainString());
             fields.put(f,c);GridPane g=grids.get(f.group);var l=new Label(f.label);l.setWrapText(true);g.addRow(g.getRowCount(),l,c);

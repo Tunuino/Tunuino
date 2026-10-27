@@ -67,7 +67,7 @@ def main():
     installer = validate_installer(Path("build/installer"), commit, run_id)
     shutil.copy2(installer, output / SETUP_NAME)
     repo = os.environ["GITHUB_REPOSITORY"]
-    notes = f"""## Tunuino — combustível, lambda e proteções
+    notes = f"""## Tunuino — funções de entradas e saídas
 
 Console Windows x64, firmware **Proteus v0.7 / STM32F427** e **INI TunerStudio**, produzidos a partir do mesmo commit.
 
@@ -83,6 +83,8 @@ Esta imagem usa o startup, kernel e USB CDC do repositório **Tunuino/ChibiOS**,
 **Atualizações:** fechar a Console e instalar o MSI mais recente. Mapas, configurações e datalogs são guardados por predefinição em `%LOCALAPPDATA%\\TunuinoConsole` e ficam preservados na atualização e desinstalação. As definições antigas de ferramentas em `%USERPROFILE%\\.tunuino` continuam legíveis. A atualização exige descarregar e executar o novo instalador; ainda não existe atualização automática. O instalador ainda não tem assinatura digital de editor.
 
 O ZIP portátil mantém `console/`, `firmware/`, `kit-manifest.json`, `START-HERE.txt` e `SHA256SUMS.txt`. Só será retirado dos novos lançamentos após confirmação de que os testes passaram. Os dois formatos contêm os componentes do mesmo commit. O firmware inclui `corresponding-source.tar.gz` e as licenças ChibiOS.
+
+**Funções de entradas e saídas:** novo quadro em Configuração → Funções de I/O, com escolhas pelo nome: MAP, lambda, TPS, temperaturas, injetores, ignição, bomba, ventoinha, relé e válvulas PWM. Cada ligação mostra apenas funções compatíveis; mover uma função retira a atribuição anterior. Alterações das páginas 1 e 4 são validadas e guardadas numa única operação, com releitura e sem armar saídas. As listas das restantes janelas e do INI também usam nomes de funções. [Guia](https://github.com/Tunuino/Tunuino_documents/blob/main/funcoes-entradas-saidas.md).
 
 **Combustível e proteções:** nova página da Console com referências aspiradas/sobrealimentadas, configuração no INI e todas as novas funções desativadas na atualização. Acrescenta compensação IAT, tempo morto/dwell por tensão em ms, alvo lambda por MAP e PI de correção, enriquecimento de aceleração por TPS, DFCO, limitador por corte de combustível, launch com entrada analógica condicionada, flex fuel por controlador analógico, corte retido por CLT/tensão e ajustes individuais por cilindro. As definições TPS/ralenti/turbo são preservadas e o backup `.tnaux` inclui toda a página. Alvo lambda é uma curva de três pontos por MAP, sem aprendizagem VE/Autotune. Flex fuel não lê diretamente sensores de frequência. VVT, detonação e borboleta eletrónica continuam pendentes. Firmware antigo rejeita esta extensão; exportar todas as configurações antes de atualizar ou voltar a versões anteriores. [Guia](https://github.com/Tunuino/Tunuino_documents/blob/main/combustivel-protecoes.md).
 

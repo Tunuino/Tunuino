@@ -16,7 +16,7 @@ def render():
         '; Persistent engine, sensor and 16x16 map configuration.',
         '; Disabled/unavailable calibrated channels evaluate to NaN, not measurements.',
         'enable2ndByteCanID = false', '', '[TunerStudio]',
-        '    iniSpecVersion = 3.51', '    iniVersion = 9', f'    signature = {json.dumps(SIGNATURE)}',
+        '    iniSpecVersion = 3.51', '    iniVersion = 10', f'    signature = {json.dumps(SIGNATURE)}',
         '    queryCommand = "S"', '    versionInfo = "V"', '    defaultRuntimeRecordPerSec = 5', '',
         '[Constants]', '    messageEnvelopeFormat = msEnvelope_1.0', '    endianness = big',
         '    nPages = 4', '    pageSize = 256, 576, 576, 256',
@@ -32,10 +32,11 @@ def render():
         '    triggerEnabled = bits, U08, 2, [0:0], "Disabled", "Enabled"',
         '    triggerTeeth = scalar, U08, 3, "teeth", 1, 0, 4, 120, 0',
         '    triggerMissing = scalar, U08, 4, "teeth", 1, 0, 1, 59, 0']
-    choices='"Disabled", '+', '.join(f'"AV{i}"' for i in range(1,12))
-    lines += [f'    mapInput = bits, U08, 6, [0:3], {choices}',
-              f'    lambdaInput = bits, U08, 7, [0:3], {choices}',
-              '    coolantInput = bits, U08, 8, [0:2], "Disabled", "AT1", "AT2", "AT3", "AT4"']
+    def input_choices(function,count=11):
+        return '"Disabled", '+', '.join(f'"{function} - input {i}"' for i in range(1,count+1))
+    lines += [f'    mapInput = bits, U08, 6, [0:3], {input_choices("MAP sensor")}',
+              f'    lambdaInput = bits, U08, 7, [0:3], {input_choices("Wideband lambda")}',
+              f'    coolantInput = bits, U08, 8, [0:2], {input_choices("Coolant temperature",4)}']
     fields=[('mapRawLow','U16',10,'ADC',1,0,4095,0),('mapRawHigh','U16',12,'ADC',1,1,4095,0),
         ('mapLow','U16',14,'kPa',0.01,0,500,2),('mapHigh','U16',16,'kPa',0.01,0,500,2),
         ('lambdaRawLow','U16',18,'ADC',1,0,4095,0),('lambdaRawHigh','U16',20,'ADC',1,1,4095,0),
@@ -57,14 +58,15 @@ def render():
         ('camLast','U08',154,'tooth',1,0,119,0)]
     for name,kind,offset,unit,scale,minimum,maximum,decimals in engine_fields:
         lines.append(f'    {name} = scalar, {kind}, {offset}, "{unit}", {scale}, 0, {minimum}, {maximum}, {decimals}')
-    ls=', '.join(f'"LS {i}"' for i in range(1,17)); ign=', '.join(f'"IGN {i}"' for i in range(1,13))
-    for name,offset in [('pumpOutput',150),('fanOutput',151),('mainRelayOutput',152)]:
-        lines.append(f'    {name} = bits, U08, {offset}, [0:4], "Disabled", {ls}')
+    def output_choices(function,count=16):
+        return ', '.join(f'"{function} - output {i}"' for i in range(1,count+1))
+    for name,offset,function in [('pumpOutput',150,'Fuel pump'),('fanOutput',151,'Cooling fan'),('mainRelayOutput',152,'Main relay')]:
+        lines.append(f'    {name} = bits, U08, {offset}, [0:4], "Disabled", {output_choices(function)}')
     lines.append('    camPhase = bits, U08, 155, [0:0], "First revolution", "Second revolution"')
     for i in range(12):
         at=160+i*8
-        lines += [f'    cylinder{i+1}Injector = bits, U08, {at}, [0:3], {ls}',
-            f'    cylinder{i+1}Ignition = bits, U08, {at+1}, [0:3], {ign}',
+        lines += [f'    cylinder{i+1}Injector = bits, U08, {at}, [0:3], {output_choices(f"Injector cylinder {i+1}")}',
+            f'    cylinder{i+1}Ignition = bits, U08, {at+1}, [0:3], {output_choices(f"Ignition cylinder {i+1}",12)}',
             f'    cylinder{i+1}Tdc = scalar, U32, {at+2}, "deg", 0.01, 0, 0, 719.99, 2']
     lines += ['    fuelCorrectionsEnabled = bits, U08, 103, [0:0], "Disabled", "Enabled"',
         '    fixedCrankingAdvance = bits, U08, 126, [0:0], "Use ignition table", "Use fixed cranking advance"']
@@ -83,9 +85,9 @@ def render():
     lines += ['    page = 4', '    auxFormat = bits, U08, 0, [0:0], "Factory disabled", "Configured"',
         '    idleMode = bits, U08, 1, [0:1], "Disabled", "Temperature duty", "RPM PI", "INVALID"',
         '    boostMode = bits, U08, 3, [0:1], "Disabled", "Fixed duty", "MAP PI", "INVALID"']
-    ls='"Disabled", '+', '.join(f'"LS {i}"' for i in range(1,17))
-    lines += [f'    idleOutput = bits, U08, 2, [0:4], {ls}',f'    boostOutput = bits, U08, 4, [0:4], {ls}',
-        '    tpsInput = bits, U08, 5, [0:3], "Disabled", '+', '.join(f'"AV{i}"' for i in range(1,12))]
+    lines += [f'    idleOutput = bits, U08, 2, [0:4], "Disabled", {output_choices("Idle valve")}',
+        f'    boostOutput = bits, U08, 4, [0:4], "Disabled", {output_choices("Boost valve")}',
+        f'    tpsInput = bits, U08, 5, [0:3], {input_choices("Throttle position TPS")}']
     aux_fields=[('tpsClosed','U16',6,'ADC',1,0,4095,0),('tpsOpen','U16',8,'ADC',1,0,4095,0),
         ('idleFrequency','U16',10,'Hz',1,10,300,0),('boostFrequency','U16',12,'Hz',1,10,100,0),
         ('idleMinimum','U16',14,'%',0.01,0,100,2),('idleMaximum','U16',16,'%',0.01,0,100,2),
@@ -110,7 +112,12 @@ def render():
     for f in feature_fields:
         kind='U08' if f['offset']<76 else 'S16' if f['min']<0 else 'U16'
         scale=10**(-f['decimals'])
-        lines.append(f'    feature{f["name"]} = scalar, {kind}, {f["offset"]}, "{f["unit"]}", {scale:g}, 0, {f["min"]*scale:g}, {f["max"]*scale:g}, {f["decimals"]}')
+        if f['offset']<76:
+            function={'IAT_INPUT':'Intake air temperature','VOLT_INPUT':'Battery voltage','LAUNCH_INPUT':'Launch command','FLEX_INPUT':'Ethanol controller'}[f['name']]
+            width=2 if f['name']=='IAT_INPUT' else 3
+            lines.append(f'    feature{f["name"]} = bits, U08, {f["offset"]}, [0:{width}], {input_choices(function,f["max"])}')
+        else:
+            lines.append(f'    feature{f["name"]} = scalar, {kind}, {f["offset"]}, "{f["unit"]}", {scale:g}, 0, {f["min"]*scale:g}, {f["max"]*scale:g}, {f["decimals"]}')
     lines += ['', '[ConstantExtensions]', '    readOnly = configLayout', '    readOnly = coolantCount', '',
         '[OutputChannels]', '    ochGetCommand = "O%2o%2c"', '    ochBlockSize = 100']
     channels=[('engineState','U08',31,'',1),('protocolRevision','U08',7,'',1),('boardFamily','U08',8,'',1),('mcuSeries','U08',9,'',1),
@@ -179,7 +186,7 @@ def render():
         '    dialog = inputSetup, "Tunuino input acquisition"',
         '        field = "Engine and sensor settings share one verified flash commit."',
         '        field = "Use measured calibration data before selecting sensor inputs."',
-        '        field = "Crank PE7, cam PE8, rising edge, missing-tooth wheel."']
+        '        field = "Dedicated crank and cam inputs; rising edge, missing-tooth wheel."']
     for label,field in [('Acquisition','triggerEnabled'),('Wheel slots including missing','triggerTeeth'),('Missing teeth','triggerMissing'),
         ('Maximum RPM','maximumRpm'),('MAP channel','mapInput'),('Lambda channel','lambdaInput'),('Coolant channel','coolantInput'),('ADC reference (measured)','adcReference')]:
         lines.append(f'        field = "{label}", {field}')
