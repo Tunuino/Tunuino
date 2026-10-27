@@ -12,6 +12,7 @@ final class FuelCorrectionPane extends VBox {
     private final CheckBox fixed=new CheckBox("Usar avanço fixo durante o arranque");
     private final LinkedHashMap<String,Field> definitions=new LinkedHashMap<>();
     private final LinkedHashMap<String,TextField> fields=new LinkedHashMap<>();
+    private final LinkedHashMap<String,ComboBox<String>> selectors=new LinkedHashMap<>();
     private boolean blocked;
     private boolean configured;
     private Runnable changed=()->{};
@@ -36,6 +37,7 @@ final class FuelCorrectionPane extends VBox {
     private void add(GridPane grid,String key,String label,int offset,int decimals,int min,int max,String... choices){
         ComboBox<String> combo=new ComboBox<>();combo.setEditable(true);combo.setPrefWidth(150);combo.getItems().addAll(choices);
         TextField input=combo.getEditor();input.setId("fuel-correction-"+key);fields.put(key,input);
+        selectors.put(key,combo);
         definitions.put(key,new Field(offset,decimals,min,max));int row=grid.getRowCount();grid.addRow(row,new Label(label),combo);
         input.textProperty().addListener((p,a,b)->changed.run());
         combo.disableProperty().bind(input.disableProperty());
@@ -58,7 +60,8 @@ final class FuelCorrectionPane extends VBox {
     void set(FuelCorrections value){
         FuelCorrections display=value.configured()?value:FuelCorrections.reference();configured=value.configured();
         for(var entry:definitions.entrySet()){
-            Field f=entry.getValue();fields.get(entry.getKey()).setText(BigDecimal.valueOf(display.value(f.offset(),f.minimum()<0),f.decimals()).stripTrailingZeros().toPlainString());
+            Field f=entry.getValue();String text=BigDecimal.valueOf(display.value(f.offset(),f.minimum()<0),f.decimals()).stripTrailingZeros().toPlainString();
+            selectors.get(entry.getKey()).setValue(text);fields.get(entry.getKey()).setText(text);
         }
         fixed.setSelected(display.fixedAdvance());enabled.setSelected(value.enabled());refresh();
     }
