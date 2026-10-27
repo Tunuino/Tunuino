@@ -202,3 +202,6 @@
 .status-bar, .console-shell:short .status-bar { -fx-padding:3 10; -fx-background-color:#0b131b; }
 .page-header { -fx-padding:10 18; }
 .panel { -fx-background-color:#111b24; -fx-padding:14; -fx-background-radius:4; -fx-border-radius:4; }
+
+.console-shell:compact .wordmark, .console-shell:short .wordmark { -fx-font-size:32px; }
+.console-shell:compact .wordmark-subtitle, .console-shell:short .wordmark-subtitle { -fx-font-size:18px; }

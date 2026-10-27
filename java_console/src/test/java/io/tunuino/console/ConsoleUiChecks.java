@@ -119,7 +119,13 @@ public final class ConsoleUiChecks {
             cockpit.event("Dados sintéticos de teste da interface · sem ECU física");
             snapshot(scene,"console-reference-layout");
             stage.setWidth(1510);stage.setHeight(1010);
-            snapshot(scene,"console-dashboard-wide");
+            later(()->checkWideDashboard(stage));
+        }
+        private void checkWideDashboard(Stage stage) throws Exception {
+            Scene scene=stage.getScene();DashboardPane cockpit=(DashboardPane)scene.lookup("#dashboard");
+            snapshot(scene,"console-reference-layout");snapshot(scene,"console-dashboard-wide");
+            var build=(Label)scene.lookup("#console-active-build");
+            check(build.getWidth()>=build.prefWidth(-1),"Active build remains readable in the header");
             stage.setWidth(980);stage.setHeight(720);
             cockpit.clearMaps();
             ((ToggleButton)scene.lookup("#navigate-2")).fire();

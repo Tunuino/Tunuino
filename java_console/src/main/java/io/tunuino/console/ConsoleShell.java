@@ -58,7 +58,7 @@ final class ConsoleShell extends BorderPane {
         Label product=new Label("Tunuino");product.getStyleClass().add("wordmark");
         Label subtype=new Label("Console");subtype.getStyleClass().add("wordmark-subtitle");
         Label build=new Label(BuildInfo.label());build.setId("console-active-build");build.getStyleClass().add("build-label");
-        VBox productName=new VBox(-3,product,subtype,build);
+        VBox productName=new VBox(-3,product,subtype,build);productName.setMinWidth(200);productName.setPrefWidth(200);
         device.getStyleClass().add("muted");device.setWrapText(true);device.setMaxWidth(210);
         connection.getStyleClass().addAll("connection-badge","offline");
         VBox state=new VBox(3,connection,device);state.setMinWidth(180);state.setMaxWidth(215);
