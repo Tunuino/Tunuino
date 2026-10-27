@@ -14,6 +14,7 @@ final class FunctionChoices {
     static <T> void choose(ComboBox<T> choice,IoAssignments.Group group,ProteusRouting.Recommendation recommended,ToIntFunction<T> number,Consumer<T> raw){
         var all=List.copyOf(choice.getItems());boolean[] changing={false};choice.getProperties().put("routing-rebuilding",changing);
         Function<T,String> text=n->{if(n==null)return "Escolher ligação";int ch;try{ch=number.applyAsInt(n);}catch(RuntimeException e){return "Escolher ligação";}if(ch==0)return "Desativada";return (ch==recommended.channel()?recommended.label():"Atual")+" · "+ProteusRouting.shortConnection(group,ch);};
+        choice.getStyleClass().add("routing-choice");
         choice.setEditable(false);choice.setPrefWidth(245);choice.setConverter(new StringConverter<>(){
             @Override public String toString(T n){return text.apply(n);}
             @Override public T fromString(String s){throw new UnsupportedOperationException("Escolhe uma ligação da lista");}

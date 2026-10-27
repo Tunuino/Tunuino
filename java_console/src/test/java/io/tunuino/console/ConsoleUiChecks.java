@@ -70,6 +70,8 @@ public final class ConsoleUiChecks {
             Scene scene = stage.getScene();
             snapshot(scene, "console-offline");
             check(scene.getStylesheets().size() == 1, "Shared theme loaded");
+            check(((Label)scene.lookup("#console-active-build")).getText().contains(io.tunuino.maintenance.BuildInfo.label()),
+                "Active source revision is visible beside the product name");
             check(scene.getRoot().lookupAll(".navigation-group").size()==5,"Navigation groups configuration, tuning, diagnostics, monitoring and system");
             check(((Button) scene.lookup("#dashboard-read-ve")).isDisabled(), "Offline dashboard blocks map read");
             check(((Button) scene.lookup("#dashboard-edit-map")).isDisabled(), "Offline dashboard blocks ECU map editing");
@@ -236,6 +238,49 @@ public final class ConsoleUiChecks {
                 - coolant.localToScene(coolant.getBoundsInLocal()).getMinY()) < 1, "Four indicators fit on one row");
         }
 
+        private void auditRouting(javafx.scene.Node root, String page) throws Exception {
+            var seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<javafx.scene.Node, Boolean>());
+            var pending = new java.util.ArrayDeque<javafx.scene.Node>(); pending.add(root);
+            var rows = new ArrayList<String>();
+            while (!pending.isEmpty()) {
+                var node = pending.removeFirst(); if (!seen.add(node)) continue;
+                if (node instanceof javafx.scene.Parent parent) pending.addAll(parent.getChildrenUnmodifiable());
+                if (node instanceof javafx.scene.control.TabPane tabs)
+                    for (var tab : tabs.getTabs()) if (tab.getContent() != null) pending.add(tab.getContent());
+                if (node instanceof javafx.scene.control.TitledPane pane && pane.getContent() != null) pending.add(pane.getContent());
+                if (node instanceof javafx.scene.control.ScrollPane pane && pane.getContent() != null) pending.add(pane.getContent());
+                if (node instanceof ComboBox<?> choice && choice.getStyleClass().contains("routing-choice")) {
+                    check(!choice.isEditable(), page + ": routing cannot expose a raw numeric editor");
+                    check(choice.getItems().size() <= 3, page + ": at most three quick routing choices: " + choice.getId());
+                    var labels = new ArrayList<String>();
+                    for (Object value : choice.getItems()) {
+                        @SuppressWarnings("unchecked") var typed = (ComboBox<Object>) choice;
+                        String text = typed.getConverter().toString(value); labels.add(text);
+                        check(text.equals("Desativada") || text.matches("(Recomendada|Proposta|Atual) · (Preto|Branco) 35/[0-9]+"),
+                            page + ": only connector choices, never repeated function names or MCU GPIO: " + text);
+                    }
+                    var customize = (Button) choice.getProperties().get("routing-customize");
+                    check(customize != null && customize.getParent() == choice.getParent(), page + ": full choices require a separate Customize button");
+                    check(new java.util.HashSet<>(labels).size() == labels.size(), page + ": duplicate quick choices");
+                    rows.add(choice.getId() + "\t" + String.join(" | ", labels));
+                }
+            }
+            int expected = switch (page) { case "sensors", "tps-idle-boost" -> 3; case "engine" -> 27;
+                case "fuel-protections" -> 4; case "io-functions" -> 13; default -> throw new IllegalArgumentException(page); };
+            check(rows.size() == expected, page + ": every routing selector was inspected: " + rows.size() + "/" + expected);
+            if (snapshots != null) Files.write(snapshots.resolve("routing-audit-" + page + ".tsv"), rows);
+            System.out.println("Routing audit " + page + ": " + rows.size() + " selectors passed");
+        }
+
+        private <T> void customRoute(ComboBox<T> choice, T custom) {
+            T original = choice.getValue();
+            choice.setValue(custom);
+            check(choice.getValue().equals(custom) && choice.getItems().contains(custom), "Existing custom routing survives in " + choice.getId());
+            check(choice.getItems().size() <= 3, "Custom routing keeps the short list in " + choice.getId());
+            if (custom instanceof String) check(choice.getEditor().getText().equals(custom), "Wire channel retained exactly in " + choice.getId());
+            choice.setValue(original);
+        }
+
         private void checkWorkspaces(Stage stage, TelemetryPane telemetry, List<LogSample> samples) throws Exception {
             Scene scene = stage.getScene();
             ((ToggleButton) scene.lookup("#navigate-1")).fire(); snapshot(scene, "console-maps");
@@ -251,6 +296,18 @@ public final class ConsoleUiChecks {
             wheelPreset.setValue("60-2");((Button)scene.lookup("#config-preset-apply-Aquisição")).fire();
             check(configEditor.candidate().value(io.tunuino.calibration.IoConfiguration.Field.WHEEL).equals("60")
                 &&!configEditor.candidate().triggerEnabled(),"Wheel preset edits local values without enabling capture");
+            auditRouting(configEditor,"sensors");
+            for (String key : List.of("map","lambda","coolant")) {
+                @SuppressWarnings("unchecked") var route = (ComboBox<Integer>)configEditor.lookup("#config-" + key + "-channel");
+                if (route == null) { // Non-selected tab contents are deliberately not attached to the scene.
+                    var tabs=(javafx.scene.control.TabPane)scene.lookup("#config-form-tabs");
+                    tabs.getSelectionModel().select(key.equals("map")?1:key.equals("lambda")?2:3);
+                    scene.getRoot().applyCss(); scene.getRoot().layout();
+                    route=(ComboBox<Integer>)scene.lookup("#config-" + key + "-channel");
+                }
+                customRoute(route, key.equals("coolant")?4:11);
+            }
+            ((javafx.scene.control.TabPane)scene.lookup("#config-form-tabs")).getSelectionModel().selectFirst();
             snapshot(scene,"console-sensor-presets");
             ((ToggleButton)scene.lookup("#navigate-10")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
             for(String control:List.of("#engine-arm","#engine-configure","#engine-outputs-read"))
@@ -266,6 +323,11 @@ public final class ConsoleUiChecks {
             var engineTabs=(javafx.scene.control.TabPane)scene.lookup("#engine-configuration-tabs");
             engineTabs.getSelectionModel().select(1);scene.getRoot().applyCss();scene.getRoot().layout();
             check(((javafx.scene.control.TextField)scene.lookup("#engine-cylinder-1-2")).getText().equals("540"),"1-3-4-2 gives cylinder 2 the correct 720-degree phase");
+            auditRouting(enginePane,"engine");
+            for (int cylinder=0;cylinder<12;cylinder++) for(int output=0;output<2;output++) {
+                @SuppressWarnings("unchecked") var route=(ComboBox<String>)scene.lookup("#engine-cylinder-channel-"+cylinder+"-"+output);
+                customRoute(route,output==0?"16":"12");
+            }
             snapshot(scene,"console-cylinder-assignments");
             engineCylinders.setValue(1);
             String[][] engineFields={{"fuel","3"},{"dwell","2"},{"dead","0,5"},{"maximum","15"},
@@ -288,6 +350,10 @@ public final class ConsoleUiChecks {
             @SuppressWarnings("unchecked") var pumpRoute=(ComboBox<String>)scene.lookup("#engine-channel-pump");
             check(pumpRoute.getItems().size()==2&&pumpRoute.getValue().equals("10")&&pumpRoute.getConverter().toString("10").contains("Preto 35/20"),"Pump offers disabled and the conventional connector contact, not sixteen repeated choices");
             pumpRoute.setValue("15");check(pumpRoute.getItems().size()==3&&pumpRoute.getValue().equals("15"),"Custom loaded route remains selectable and is not silently replaced");pumpRoute.setValue("10");
+            for (String key : List.of("pump","fan","relay")) {
+                @SuppressWarnings("unchecked") var route=(ComboBox<String>)scene.lookup("#engine-channel-"+key);
+                customRoute(route,"15");
+            }
             snapshot(scene,"console-routing-auxiliary-quick");engineTabs.getSelectionModel().selectFirst();scene.getRoot().applyCss();scene.getRoot().layout();
             check(!((javafx.scene.control.CheckBox)scene.lookup("#engine-autonomous")).isSelected(),"Generic base does not enable autonomous startup");
             check(((Button)scene.lookup("#engine-configure")).isDisabled(),"Offline base cannot send a profile");
@@ -309,6 +375,7 @@ public final class ConsoleUiChecks {
             check(((Button)scene.lookup("#aux-read")).isDisabled()&&((Button)scene.lookup("#aux-save")).isDisabled(),"Offline auxiliary writes are blocked");
             ((Button)scene.lookup("#aux-reference")).fire();check(auxPane.candidate().idleMode()==0&&auxPane.candidate().boostMode()==0,"Auxiliary reference leaves valves disabled");
             var auxTabs=(javafx.scene.control.TabPane)scene.lookup("#aux-tabs");check(auxTabs.getTabs().size()==3,"Dedicated TPS, idle and boost settings");
+            auditRouting(auxPane,"tps-idle-boost");
             for(int tab=0;tab<3;tab++){auxTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();snapshot(scene,"console-idle-boost-"+tab);}
             ((ToggleButton)scene.lookup("#navigate-13")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
             var featuresPane=(FeatureControlPane)scene.lookup("#feature-control-pane");
@@ -317,6 +384,7 @@ public final class ConsoleUiChecks {
             var featuresTabs=(javafx.scene.control.TabPane)scene.lookup("#features-tabs");check(featuresTabs.getTabs().size()==7,"Dedicated sensor, voltage, lambda, transient, limit, flex and cylinder groups");
             featuresTabs.getSelectionModel().select(1);scene.getRoot().applyCss();scene.getRoot().layout();
             var dead=(javafx.scene.control.TextField)scene.lookup("#feature-field-DEAD1");dead.setText("1,234");check(new io.tunuino.calibration.FeatureConfiguration(featuresPane.candidate().bytes()).raw(io.tunuino.calibration.FeatureConfiguration.Field.DEAD1)==1234,"GUI latency stored in exact ms");
+            auditRouting(featuresPane,"fuel-protections");
             for(int tab=0;tab<7;tab++){featuresTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();snapshot(scene,"console-features-"+tab);}
             ((ToggleButton)scene.lookup("#navigate-14")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
             var functionPane=(IoAssignmentsPane)scene.lookup("#io-assignments-pane");
@@ -331,15 +399,28 @@ public final class ConsoleUiChecks {
             quickMap.setValue(1);check(functionPane.candidate().function(io.tunuino.calibration.IoAssignments.Group.ANALOG,0)==3&&quickMap.getValue()==0,"Quick selection does not steal an occupied sensor input");
             analogFunction.getSelectionModel().selectFirst();
             var functionTabs=(javafx.scene.control.TabPane)scene.lookup("#io-functions-tabs");
-            advancedRoutes.setExpanded(false);var quickTabs=(javafx.scene.control.TabPane)scene.lookup("#io-quick-tabs");
+            advancedRoutes.setExpanded(false);auditRouting(functionPane,"io-functions");var quickTabs=(javafx.scene.control.TabPane)scene.lookup("#io-quick-tabs");
             for(int tab=0;tab<3;tab++){quickTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();snapshot(scene,"console-quick-routing-"+tab);}
             ((ToggleButton)scene.lookup("#navigate-11")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
+            var outputPane=(OutputTestPane)scene.lookup("#output-test-pane");
             var outputTabs=(javafx.scene.control.TabPane)scene.lookup("#output-test-tabs");
+            outputPane.update(false,false,new io.tunuino.protocol.EngineOutputClient.State(0,0,0,0,true,1,true,1,0,true,false),
+                engineBytes,"Perfil sintético de teste da interface · sem ECU física");
             check(outputTabs.getTabs().size()==3,"Separate injector, ignition and relay test tabs");
             String[] testButtons={"#test-injector-start","#test-ignition-start","#test-aux-start"};
             for(int tab=0;tab<3;tab++){
                 outputTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();
                 check(((Button)scene.lookup(testButtons[tab])).isDisabled(),"Offline test cannot drive an actuator");
+                if (tab < 2) {
+                    @SuppressWarnings("unchecked") var channel=(ComboBox<Integer>)scene.lookup(tab==0?"#test-injector-channel":"#test-ignition-channel");
+                    check(channel.getItems().equals(List.of(1)),"Test choices contain only the configured cylinder");
+                    check(channel.getConverter().toString(1).startsWith(tab==0?"Injetor 1 · Preto 35":"Ignição 1 · Preto 35"),
+                        "Actuator tests show the cylinder function and physical connector");
+                } else {
+                    @SuppressWarnings("unchecked") var function=(ComboBox<String>)scene.lookup("#test-aux-function");
+                    check(function.getItems().equals(List.of("Bomba de combustível","Ventoinha","Relé principal")),
+                        "Relay tests offer three actual functions rather than all physical outputs");
+                }
                 snapshot(scene,"console-output-test-"+tab);
             }
             check(scene.lookup("#config-read")==null,"Actuator-test workspace is independent of sensor calibration");

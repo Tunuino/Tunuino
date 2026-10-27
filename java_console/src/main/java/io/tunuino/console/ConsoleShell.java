@@ -54,7 +54,8 @@ final class ConsoleShell extends BorderPane {
         logo.setFitWidth(270); logo.setFitHeight(90); logo.setPreserveRatio(true);
         StackPane logoBox = new StackPane(logo); logoBox.getStyleClass().add("brand-logo");
         Label product = new Label("Tunuino"); product.getStyleClass().add("wordmark");
-        Label subtype = new Label("Console"); subtype.getStyleClass().add("wordmark-subtitle");
+        Label subtype = new Label("Console · " + BuildInfo.label());
+        subtype.setId("console-active-build"); subtype.getStyleClass().add("wordmark-subtitle");
         VBox productName = new VBox(0, product, subtype, device);
         device.getStyleClass().add("muted");
         Region gap = new Region(); HBox.setHgrow(gap, Priority.ALWAYS);
