@@ -40,6 +40,7 @@ final class EngineControlPane extends VBox {
     private boolean available,busy;
     private byte[] uploadedProfile;
     private byte[] uploadedFueling;
+    private long uploadedGeneration;
     private final Timeline refresh;
     EngineControlPane(Stage owner,ConfigurationPane.Access access,Consumer<EngineOutputClient.State> onState){
         this.access=access;this.onState=onState;setSpacing(12);setPadding(new javafx.geometry.Insets(0,24,24,24));
@@ -243,7 +244,7 @@ final class EngineControlPane extends VBox {
     private void run(ConfigurationPane.Operation<EngineOutputClient.State> operation,byte[] sent,byte[] sentFueling){
         if(!available||busy)return;busy=true;controls();
         access.run(operation,value->{busy=false;externalConfiguration(value.generation());state=value;
-            if(sent!=null)uploadedProfile=sent.clone();
+            if(sent!=null){uploadedProfile=sent.clone();uploadedGeneration=value.generation();}
             if(sentFueling!=null)uploadedFueling=sentFueling.clone();
             result.setText(value.description()+" · "+value.faultsDescription()
                 +" · ativas: "+value.activeChannels()
@@ -279,7 +280,8 @@ final class EngineControlPane extends VBox {
                     for(int j=0;j<2;j++)cylinderSelectors.get(i+"-"+j).setValue(i<p[1]?Integer.toString((p[32+8*i+j]&255)+1):"");
                     cylinders[i][2].setText(i<p[1]?BigDecimal.valueOf(b.getInt(34+8*i),2).stripTrailingZeros().toPlainString():"");
                 }
-                uploadedProfile=p;uploadedFueling=configuration.fuelCorrections().bytes();acknowledge.setSelected(false);
+                uploadedProfile=p;uploadedGeneration=value.snapshot().validation().generation();uploadedFueling=configuration.fuelCorrections().bytes();acknowledge.setSelected(false);
+                if(uploadedGeneration!=state.generation()){uploadedProfile=null;uploadedFueling=null;result.setText("O perfil mudou durante a leitura; lê novamente antes de ativar ou testar saídas.");onState.accept(state);controls();return;}
                 result.setText("Perfil lido da ECU · "+state.description()+" · "+(state.autonomous()?"autónomo, independente da USB":"ativação manual"));
             }
             onState.accept(state);controls();
@@ -314,7 +316,7 @@ final class EngineControlPane extends VBox {
         &&uploadedFueling!=null&&java.util.Arrays.equals(uploadedFueling,fueling.candidate().bytes());}catch(IllegalArgumentException error){return false;}}
     void close(){refresh.stop();}
     void externalConfiguration(long generation){
-        if(state!=null&&state.generation()!=generation){uploadedProfile=null;uploadedFueling=null;acknowledge.setSelected(false);controls();}
+        if(uploadedProfile!=null&&uploadedGeneration!=generation){uploadedProfile=null;uploadedFueling=null;acknowledge.setSelected(false);controls();}
     }
     void externalState(EngineOutputClient.State value){externalConfiguration(value.generation());state=value;controls();}
 }
