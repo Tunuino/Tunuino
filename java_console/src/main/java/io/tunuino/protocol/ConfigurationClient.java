@@ -18,7 +18,7 @@ public final class ConfigurationClient {
     public record Validation(boolean dirty,boolean persisted,int errors,long generation,long pageCrc) {
         public String explanation() {
             List<String> issues=new ArrayList<>();
-            String[] names={"esquema/reservas","cambota/limite RPM","MAP","lambda","temperatura","referência ADC","mapa VE","mapa de ignição","perfil de motor","modo autónomo: perfil, sensores e mapa VE completo","correções de arranque/aquecimento","TPS, ralenti/turbo ou conflito de saídas"};
+            String[] names={"esquema/reservas","cambota/limite RPM","MAP","lambda","temperatura","referência ADC","mapa VE","mapa de ignição","perfil de motor","modo autónomo: perfil, sensores e mapa VE completo","correções de arranque/aquecimento","TPS, ralenti/turbo, combustível/proteções ou conflito de entradas/saídas"};
             for(int i=0;i<names.length;i++)if((errors&(1<<i))!=0)issues.add(names[i]);
             return issues.isEmpty()?"Configuração validada pelo firmware":String.join(" · ",issues);
         }

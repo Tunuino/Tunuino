@@ -13,7 +13,7 @@ public final class AuxControlClient {
     public record Snapshot(AuxConfiguration configuration,ConfigurationClient.Validation validation,long pageCrc){}
     public record State(int idleMode,int boostMode,boolean tpsValid,boolean configured,int tps,int idleDuty,int boostDuty,
         int idleTarget,int boostTarget,long generation,int boostCut,boolean boostActive,boolean idleActive,long channels){}
-    private static void accepted(byte[] b)throws IOException{if(b==null||b.length!=1||b[0]!=0)throw new IOException("A ECU recusou a configuração de ralenti/turbo; confirma perfil, sensores e saídas desarmadas");}
+    private static void accepted(byte[] b)throws IOException{if(b==null||b.length!=1||b[0]!=0)throw new IOException("A ECU recusou a configuração de auxiliares e combustível; confirma perfil, sensores e saídas desarmadas");}
     private static Duration remaining(long deadline)throws IOException{long n=deadline-System.nanoTime();if(n<=0)throw new IOException("Tempo de configuração excedido");return Duration.ofNanos(Math.min(n,Duration.ofSeconds(6).toNanos()));}
     private static Snapshot read(PacketSession s,DeviceIdentity d,long deadline)throws IOException{
         var before=ConfigurationClient.validation(s,d,remaining(deadline));byte[] bytes=new byte[256];
@@ -51,8 +51,11 @@ public final class AuxControlClient {
     }
     private static int u(ByteBuffer p,int at){return Short.toUnsignedInt(p.getShort(at));}
     public record FeatureState(int flags,int valid,int tps,int iat,int voltage,int ethanol,int target,long multiplier,int trim,int extra,int dead,int dwell,int state,int advance,long generation){
-        public String description(){return String.format(java.util.Locale.forLanguageTag("pt-PT"),"IAT %s · tensão %s · etanol %s · alvo λ %.3f · correção lambda %.2f %% · adicional %.3f ms · tempo morto %.3f ms · dwell %.3f ms · estados 0x%02X",
-            (valid&2)!=0?String.format(java.util.Locale.ROOT,"%.2f °C",iat/100.0):"indisponível",(valid&4)!=0?String.format(java.util.Locale.ROOT,"%.2f V",voltage/100.0):"indisponível",(valid&8)!=0?String.format(java.util.Locale.ROOT,"%.2f %%",ethanol/100.0):"indisponível",target/1000.0,trim/100.0,extra/1000.0,dead/1000.0,dwell/1000.0,state);}
+        public String description(){
+            String[] names={"corte em desaceleração","limitador de RPM","limitador launch","correção lambda ativa","enriquecimento de aceleração","proteção retida"};var active=new java.util.ArrayList<String>();for(int i=0;i<names.length;i++)if((state&(1<<i))!=0)active.add(names[i]);
+            return String.format(java.util.Locale.forLanguageTag("pt-PT"),"IAT %s · tensão %s · etanol %s · alvo λ %s · correção lambda %.2f %% · adicional %.3f ms · tempo morto %.3f ms · dwell %.3f ms · %s",
+            (valid&2)!=0?String.format(java.util.Locale.ROOT,"%.2f °C",iat/100.0):"indisponível",(valid&4)!=0?String.format(java.util.Locale.ROOT,"%.2f V",voltage/100.0):"indisponível",(valid&8)!=0?String.format(java.util.Locale.ROOT,"%.2f %%",ethanol/100.0):"indisponível",target==0?"indisponível":String.format(java.util.Locale.ROOT,"%.3f",target/1000.0),trim/100.0,extra/1000.0,dead/1000.0,dwell/1000.0,active.isEmpty()?"sem correção transitória nem corte ativo":String.join(", ",active));
+        }
     }
     public static FeatureState decodeFeatures(byte[] b)throws IOException{
         if(b==null||b.length!=40||b[0]!=0||b[1]!=1||(b[2]&255)>1||(b[3]&192)!=0||b[29]!=0||(b[28]&192)!=0)throw new IOException("Estado de funções inválido; instala o Bundle correspondente");
