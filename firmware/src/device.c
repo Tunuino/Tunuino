@@ -37,7 +37,8 @@ uint32_t tunuino_device_validation_errors(const uint8_t *p, size_t length) {
     if(tunuino_device_u16(p)!=TUNUINO_IO_SCHEMA || p[5]!=0 || p[9]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
     for(unsigned i=27;i<32;++i) if(p[i]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
     for(unsigned i=98;i<100;++i) if(p[i]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
-    for(unsigned i=103;i<128;++i) if(p[i]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
+    tunuino_fuel_corrections fueling;
+    if(!tunuino_fuel_corrections_decode(p+103,&fueling))errors|=TUNUINO_CONFIG_FUELING;
     bool has_profile=false;
     for(unsigned i=128;i<256;++i)if(p[i])has_profile=true;
     tunuino_engine_profile profile;

@@ -25,7 +25,7 @@ public final class ConfigurationChecks {
         values.put(IoConfiguration.Field.LAMBDA_LOW,"0.5");values.put(IoConfiguration.Field.LAMBDA_HIGH,"1.5");
         values.put(IoConfiguration.Field.TEMP_RAW_1,"1000");values.put(IoConfiguration.Field.TEMP_RAW_2,"2000");values.put(IoConfiguration.Field.TEMP_RAW_3,"3000");
         values.put(IoConfiguration.Field.TEMP_1,"100");values.put(IoConfiguration.Field.TEMP_2,"50");values.put(IoConfiguration.Field.TEMP_3,"-10.25");
-        return original.edited(values,true,1,2,1);
+        return original.edited(values,true,1,2,1).withFuelCorrections(io.tunuino.calibration.FuelCorrections.reference());
     }
     public static void main(String[] args)throws Exception{
         Path directory=Files.createTempDirectory("tunuino-configuration-");

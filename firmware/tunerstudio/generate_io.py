@@ -16,7 +16,7 @@ def render():
         '; Persistent engine, sensor and 16x16 map configuration.',
         '; Disabled/unavailable calibrated channels evaluate to NaN, not measurements.',
         'enable2ndByteCanID = false', '', '[TunerStudio]',
-        '    iniSpecVersion = 3.51', '    iniVersion = 6', f'    signature = {json.dumps(SIGNATURE)}',
+        '    iniSpecVersion = 3.51', '    iniVersion = 7', f'    signature = {json.dumps(SIGNATURE)}',
         '    queryCommand = "S"', '    versionInfo = "V"', '    defaultRuntimeRecordPerSec = 5', '',
         '[Constants]', '    messageEnvelopeFormat = msEnvelope_1.0', '    endianness = big',
         '    nPages = 3', '    pageSize = 256, 576, 576',
@@ -66,6 +66,16 @@ def render():
         lines += [f'    cylinder{i+1}Injector = bits, U08, {at}, [0:3], {ls}',
             f'    cylinder{i+1}Ignition = bits, U08, {at+1}, [0:3], {ign}',
             f'    cylinder{i+1}Tdc = scalar, U32, {at+2}, "deg", 0.01, 0, 0, 719.99, 2']
+    lines += ['    fuelCorrectionsEnabled = bits, U08, 103, [0:0], "Disabled", "Enabled"',
+        '    fixedCrankingAdvance = bits, U08, 126, [0:0], "Use ignition table", "Use fixed cranking advance"']
+    correction_fields=[('crankingRpm','U16',104,'rpm',1,100,1000,0),
+        ('crankingFuel','U16',106,'%',0.01,50,500,2),('afterstartFuel','U16',108,'%',0.01,100,300,2),
+        ('afterstartDuration','U16',110,'ms',1,0,60000,0),('crankingAdvance','S16',124,'deg BTDC',0.01,-10,20,2)]
+    for i in range(3):
+        correction_fields += [(f'warmupTemperature{i+1}','S16',112+4*i,'C',0.01,-40,150,2),
+            (f'warmupFuel{i+1}','U16',114+4*i,'%',0.01,50,500,2)]
+    for name,kind,offset,unit,scale,minimum,maximum,decimals in correction_fields:
+        lines.append(f'    {name} = scalar, {kind}, {offset}, "{unit}", {scale}, 0, {minimum}, {maximum}, {decimals}')
     for page,prefix,unit,minimum,maximum in [(2,'ve','%',0,300),(3,'ignition','deg BTDC',-90,90)]:
         lines += [f'    page = {page}', f'    {prefix}Rpm = array, U16, 0, [16], "rpm", 1, 0, 0, 20000, 0',
             f'    {prefix}Load = array, U16, 32, [16], "kPa", 0.01, 0, 0, 500, 2',
@@ -120,7 +130,7 @@ def render():
     lines += ['', '[Menu]', '    menuDialog = main', '    menu = "Engine configuration"',
         '        subMenu = engineSetup, "Engine and operation"',
         '        subMenu = cylinderSetup, "Cylinder wiring and firing phases"',
-        '        subMenu = fuelSetup, "Injection"', '        subMenu = ignitionSetup, "Ignition"',
+        '        subMenu = fuelSetup, "Injection"', '        subMenu = fuelCorrectionSetup, "Cranking, afterstart and warm-up"', '        subMenu = ignitionSetup, "Ignition"',
         '        subMenu = phaseSetup, "Crank and cam synchronization"',
         '        subMenu = auxiliarySetup, "Pump, fan and main relay"',
         '    menu = "Sensors and tuning"',
@@ -154,6 +164,17 @@ def render():
                 '        field = "STOP is latched until explicit activation or ECU power cycle."',
                 '        field = "Configure measured sensor calibrations and the complete VE map before enabling autonomous mode."']
         for label,field in fields:lines.append(f'        field = "{label}", {field}')
+    lines += ['    dialog = fuelCorrectionSetup, "Cranking, afterstart and warm-up"',
+        '        field = "100% preserves base fuel. Dead time is added after corrections."',
+        '        field = "Below cranking RPM use cranking fuel; above it use warm-up times decaying afterstart fuel."',
+        '        field = "Disabling retains the correction values for later use."']
+    for label,name in [('Apply corrections','fuelCorrectionsEnabled'),('Cranking below','crankingRpm'),
+        ('Fuel while cranking','crankingFuel'),('Fuel just after start','afterstartFuel'),('Afterstart decay time','afterstartDuration'),
+        ('Cranking ignition mode','fixedCrankingAdvance'),('Fixed cranking advance','crankingAdvance')]:
+        lines.append(f'        field = "{label}", {name}')
+    for i in range(3):
+        lines += [f'        field = "Warm-up temperature {i+1}", warmupTemperature{i+1}',
+            f'        field = "Fuel at temperature {i+1}", warmupFuel{i+1}']
     lines += ['    dialog = cylinderSetup, "Cylinder wiring and phases"',
         '        field = "PMS/TDC is relative to cylinder 1 over 720 degrees. Outputs must be unique."',
         '        field = "Unused cylinder records must be LS1 / IGN1 / 0 degrees. Console presets clear these records automatically."']

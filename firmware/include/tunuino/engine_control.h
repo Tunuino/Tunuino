@@ -3,6 +3,7 @@
 #define TUNUINO_ENGINE_CONTROL_H
 #include "tunuino/outputs.h"
 #include "tunuino/position.h"
+#include "tunuino/fuel_corrections.h"
 #define TUNUINO_ENGINE_PROFILE_SIZE 128u
 typedef struct { uint8_t injector,coil; uint32_t tdc_centi; } tunuino_cylinder;
 typedef struct {
@@ -15,6 +16,8 @@ typedef struct {
 typedef struct {
     tunuino_outputs outputs;
     tunuino_engine_profile profile;
+    tunuino_fuel_corrections fueling;
+    tunuino_fuel_correction_state fuel_state;
     uint32_t generation,armed_at,last_now,last_angle,cycle;
     uint32_t last_injection_us;
     uint32_t scheduled_cycle[28];

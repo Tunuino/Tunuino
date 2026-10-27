@@ -112,6 +112,32 @@ int main(void){
         }
     }
     tunuino_engine_control_stop(&e,0);assert(!mask);
+    /* The actual GPIO scheduler uses corrected fuel, adds dead time once,
+     * and still refuses a corrected pulse above the configured limit. */
+    uint8_t correction[25]={1};p16(correction+1,700);p16(correction+3,15000);p16(correction+5,11000);p16(correction+7,1000);
+    p16(correction+9,(uint16_t)(int16_t)-2000);p16(correction+11,16000);p16(correction+13,2000);p16(correction+15,12000);
+    p16(correction+17,8000);p16(correction+19,10000);p16(correction+21,1000);correction[23]=1;
+    profile(p);clock_us=0;tunuino_engine_control_init(&e,gpio,NULL);
+    assert(tunuino_engine_control_configure(&e,p,60,2,1));
+    assert(tunuino_fuel_corrections_decode(correction,&e.fueling));assert(tunuino_engine_control_arm(&e,0,1));
+    memset(rises,0,sizeof(rises));memset(falls,0,sizeof(falls));
+    for(clock_us=0;clock_us<=600000;clock_us+=10){
+        tunuino_outputs_poll(&e.outputs,clock_us);
+        if(clock_us%250==0){
+            unsigned slot=(unsigned)((uint64_t)clock_us*600u/1000000u),rev=slot/60,tooth=slot%60;if(tooth>57)tooth=57;
+            uint32_t edge=(uint32_t)(((uint64_t)(rev*60+tooth)*1000000u+300u)/600u);
+            tunuino_position_reading pos={1,1,(uint8_t)(rev%2),(uint16_t)tooth,600.0};
+            tunuino_engine_control_update(&e,clock_us,edge,&pos,60,1,true,10000,2000,100000,true,20000);
+            assert(!e.outputs.fault&&e.last_injection_us==5000);
+        }
+    }
+    assert(rises[0]>=2&&last_width[0]==5000&&last_width[16]==2000);
+    tunuino_engine_control_stop(&e,0);assert(!mask);
+    p16(p+8,4500);assert(tunuino_engine_control_configure(&e,p,60,2,1));
+    assert(tunuino_engine_control_arm(&e,clock_us,1));
+    tunuino_position_reading start_position={1,1,0,0,600.0};
+    tunuino_engine_control_update(&e,clock_us,clock_us,&start_position,60,1,true,10000,2000,100000,true,20000);
+    assert(e.outputs.fault==TUNUINO_OUTPUT_CALIBRATION&&!mask); /* rich pulse is cut, never silently clipped */
     puts("Outputs: reset-low, bounded dwell/injection, overlap, late IRQ, independent watchdog, timer wrap, profile validation, sequential 720-degree fuel/spark and synchronization cut passed. Synthetic GPIO only.");
     return 0;
 }

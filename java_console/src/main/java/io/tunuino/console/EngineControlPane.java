@@ -27,6 +27,7 @@ final class EngineControlPane extends VBox {
     private final ComboBox<io.tunuino.calibration.EnginePreset> presets=new ComboBox<>();
     private final Button applyPreset=new Button("Aplicar modelo à edição");
     private final OutputTestPane tests;
+    private final FuelCorrectionPane fueling=new FuelCorrectionPane();
     private final CheckBox acknowledge=new CheckBox("Confirmo cablagem, polaridade, PMS e limites das cargas ligadas");
     private final CheckBox autonomous=new CheckBox("Funcionamento autónomo: ativar o perfil guardado ao ligar a ECU");
     private final Button load=new Button("Ler configuração do motor");
@@ -38,6 +39,7 @@ final class EngineControlPane extends VBox {
     private DeviceIdentity identity;
     private boolean available,busy;
     private byte[] uploadedProfile;
+    private byte[] uploadedFueling;
     private final Timeline refresh;
     EngineControlPane(Stage owner,ConfigurationPane.Access access,Consumer<EngineOutputClient.State> onState){
         this.access=access;this.onState=onState;setSpacing(12);setPadding(new javafx.geometry.Insets(0,24,24,24));
@@ -125,6 +127,7 @@ final class EngineControlPane extends VBox {
             setting("maximum","20");setting("prime","2000");setting("fanOn","95");setting("fanOff","90");
             setting("injectionEnd","0");
             autonomous.setSelected(false);
+            fueling.set(new io.tunuino.calibration.FuelCorrections(new byte[25]));
             result.setText("Base local preenchida. ReqFuel estimado para gasolina AFR 14,7, ar 1,184 g/L e combustível 0,745 g/mL. Confirma caudal à pressão usada, dwell e tempo morto. Mede dente zero e janela de fase antes de guardar. Os mapas base estão em Afinação.");
         }catch(IllegalArgumentException error){result.setText("Base: "+error.getMessage());}});
         VBox motorContent=(VBox)tabs.getTabs().get(0).getContent();
@@ -137,12 +140,15 @@ final class EngineControlPane extends VBox {
                 group.equals("Sincronização")?"PMS, dente zero e janela de fase dependem do motor. Configura a roda fónica em Sensores e entradas."
                 :group.equals("Auxiliares")?"Atribui LS independentes aos relés. 0 significa desativado. Os valores propostos devem corresponder à instalação."
                 :"Escolhe um valor da lista ou escreve a calibração da carga instalada. ReqFuel usa VE 100% e MAP 100 kPa, antes do tempo morto.",grids.get(group))));
+        tabs.getTabs().add(new Tab("Arranque e aquecimento",fueling));
+        fueling.onChanged(()->{acknowledge.setSelected(false);controls();});
         getChildren().addAll(tabs,ConsoleShell.card("GUARDAR E ATIVAR", "Guardar não ativa as saídas nesta sessão. O modo autónomo ativa o perfil no próximo arranque elétrico e mantém o motor independente da USB. PARAR mantém as saídas desligadas até nova ativação explícita ou reinício da ECU.",
             autonomous,ConsoleShell.actions(configure),acknowledge,arm));
         read.setOnAction(event->run((session,device)->EngineOutputClient.read(session)));
         load.setOnAction(event->loadProfile());
         configure.setOnAction(event->{try{
             byte[] bytes=profile();
+            var corrections=fueling.candidate();
             boolean automatic=autonomous.isSelected();
             if(automatic){
                 Alert confirm=ConsoleBranding.alert(Alert.AlertType.CONFIRMATION,
@@ -152,11 +158,11 @@ final class EngineControlPane extends VBox {
             }
             run((session,device)->{
                 var current=ConfigurationClient.read(session,device,java.time.Duration.ofSeconds(10));
-                ConfigurationClient.apply(session,device,current,current.configuration().withEngine(bytes,automatic),java.time.Duration.ofSeconds(25));
+                ConfigurationClient.apply(session,device,current,current.configuration().withEngine(bytes,automatic).withFuelCorrections(corrections),java.time.Duration.ofSeconds(25));
                 var saved=EngineOutputClient.read(session);
                 if(!saved.persisted()||saved.autonomous()!=automatic)throw new IllegalStateException("Estado do motor não confirmou a configuração guardada; lê novamente");
                 return saved;
-            },bytes);
+            },bytes,corrections.bytes());
         }catch(IllegalArgumentException error){result.setText(error.getMessage());}});
         arm.setOnAction(event->{
             if(!acknowledge.isSelected()||!matchesProfile())return;
@@ -230,9 +236,13 @@ final class EngineControlPane extends VBox {
         run(operation,null);
     }
     private void run(ConfigurationPane.Operation<EngineOutputClient.State> operation,byte[] sent){
+        run(operation,sent,null);
+    }
+    private void run(ConfigurationPane.Operation<EngineOutputClient.State> operation,byte[] sent,byte[] sentFueling){
         if(!available||busy)return;busy=true;controls();
         access.run(operation,value->{busy=false;state=value;
             if(sent!=null)uploadedProfile=sent.clone();
+            if(sentFueling!=null)uploadedFueling=sentFueling.clone();
             result.setText(value.description()+" · "+value.faultsDescription()
                 +" · ativas: "+value.activeChannels()
                 +" · injeção "+String.format(java.util.Locale.forLanguageTag("pt-PT"),"%.3f",value.injectionUs()/1000.0)+" ms · perfil "+(value.configured()?value.cylinders()+" cilindros":"por configurar")
@@ -249,6 +259,7 @@ final class EngineControlPane extends VBox {
                 result.setText("Há alterações pendentes na ECU. Guarda ou descarta antes de carregar o perfil ativo.");controls();return;
             }
             byte[] p=configuration.engineProfile();
+            fueling.set(configuration.fuelCorrections());
             autonomous.setSelected(configuration.autonomous());
             if(!io.tunuino.calibration.EngineProfile.valid(p,configuration.bytes()[3]&255,configuration.bytes()[4]&255)){
                 uploadedProfile=null;result.setText("Ainda não existe um perfil de motor guardado. Escolhe um modelo e completa a calibração.");
@@ -266,20 +277,21 @@ final class EngineControlPane extends VBox {
                     for(int j=0;j<2;j++)cylinderSelectors.get(i+"-"+j).setValue(i<p[1]?Integer.toString((p[32+8*i+j]&255)+1):"");
                     cylinders[i][2].setText(i<p[1]?BigDecimal.valueOf(b.getInt(34+8*i),2).stripTrailingZeros().toPlainString():"");
                 }
-                uploadedProfile=p;acknowledge.setSelected(false);
+                uploadedProfile=p;uploadedFueling=configuration.fuelCorrections().bytes();acknowledge.setSelected(false);
                 result.setText("Perfil lido da ECU · "+state.description()+" · "+(state.autonomous()?"autónomo, independente da USB":"ativação manual"));
             }
             onState.accept(state);controls();
         },error->{busy=false;result.setText("Leitura do motor: "+error.getMessage());controls();});
     }
     void availability(DeviceIdentity device,boolean connected,boolean blocked){
-        if(!java.util.Objects.equals(identity,device)||!connected){identity=device;state=null;uploadedProfile=null;acknowledge.setSelected(false);}
+        if(!java.util.Objects.equals(identity,device)||!connected){identity=device;state=null;uploadedProfile=null;uploadedFueling=null;acknowledge.setSelected(false);}
         available=connected&&device!=null&&!blocked;controls();
     }
     private void controls(){boolean idle=available&&!busy;
         boolean armed=state!=null&&state.armed();
         read.setDisable(!idle);load.setDisable(!idle);stop.setDisable(!idle);configure.setDisable(!idle||armed);
         autonomous.setDisable(armed||busy);
+        fueling.blocked(armed||busy);
         arm.setDisable(!idle||armed||state==null||!state.configured()||!state.timerReady()||!acknowledge.isSelected()||!matchesProfile());
         tests.update(available,busy,state,uploadedProfile,result.getText());
         presets.setDisable(armed||busy);applyPreset.setDisable(armed||busy);
@@ -296,6 +308,7 @@ final class EngineControlPane extends VBox {
             for(int j=0;j<2;j++)cylinderSelectors.get(i+"-"+j).setDisable(disabled);
         }
     }
-    private boolean matchesProfile(){try{return uploadedProfile!=null&&java.util.Arrays.equals(uploadedProfile,profile());}catch(IllegalArgumentException error){return false;}}
+    private boolean matchesProfile(){try{return uploadedProfile!=null&&java.util.Arrays.equals(uploadedProfile,profile())
+        &&uploadedFueling!=null&&java.util.Arrays.equals(uploadedFueling,fueling.candidate().bytes());}catch(IllegalArgumentException error){return false;}}
     void close(){refresh.stop();}
 }

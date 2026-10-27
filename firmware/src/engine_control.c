@@ -8,6 +8,7 @@ void tunuino_engine_control_init(tunuino_engine_control *e,tunuino_output_write 
 }
 void tunuino_engine_control_stop(tunuino_engine_control *e,uint8_t fault){
     tunuino_outputs_stop(&e->outputs,fault);e->mode=fault?3:0;e->have_phase=0;e->fan_on=0;e->last_injection_us=0;
+    memset(&e->fuel_state,0,sizeof(e->fuel_state));
 }
 bool tunuino_engine_control_configure(tunuino_engine_control *e,const uint8_t p[128],uint16_t slots,uint8_t missing,uint32_t generation){
     tunuino_engine_profile profile;
@@ -18,6 +19,7 @@ bool tunuino_engine_control_arm(tunuino_engine_control *e,uint32_t now,uint32_t 
     if(e->outputs.armed||!e->configured||generation!=e->generation)return false;
     tunuino_outputs_arm(&e->outputs,now,20000);e->mode=1;e->armed_at=e->last_now=now;
     e->cycle=0;e->have_phase=0;e->fan_on=0;e->last_injection_us=0;
+    memset(&e->fuel_state,0,sizeof(e->fuel_state));
     for(unsigned i=0;i<28;++i)e->scheduled_cycle[i]=UINT32_MAX;
     return e->outputs.armed!=0;
 }
@@ -78,7 +80,13 @@ void tunuino_engine_control_update(tunuino_engine_control *e,uint32_t now,uint32
     }
     e->have_phase=1;e->mode=2;e->last_angle=current;e->last_now=now;
     uint64_t fuel=(uint64_t)e->profile.required_fuel_us*ve*map;
-    uint32_t injection=(uint32_t)((fuel+500000000u)/1000000000u)+e->profile.dead_us;
+    uint32_t multiplier;
+    if(!tunuino_fuel_corrections_apply(&e->fueling,&e->fuel_state,now,(uint32_t)(r->rpm*1000+0.5),
+        clt_valid,clt,&multiplier,&advance)){
+        tunuino_engine_control_stop(e,TUNUINO_OUTPUT_CALIBRATION);return;
+    }
+    uint64_t base=(fuel+500000000u)/1000000000u;
+    uint32_t injection=(uint32_t)((base*multiplier+5000u)/10000u)+e->profile.dead_us;
     if(injection==0||injection>e->profile.maximum_injection_us
         ||injection>(uint64_t)revolution*16u/10u||e->profile.dwell_us>(uint64_t)revolution*16u/10u){
         tunuino_engine_control_stop(e,TUNUINO_OUTPUT_CALIBRATION);return;

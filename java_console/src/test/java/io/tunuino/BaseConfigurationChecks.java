@@ -24,10 +24,13 @@ public final class BaseConfigurationChecks {
         b.putShort(2,(short)3000).putShort(4,(short)2500).putShort(6,(short)500).putShort(8,(short)15000)
             .putShort(12,(short)9500).putShort(14,(short)9000);p[25]=1;p[26]=2;
         check(EngineProfile.valid(p,36,1),"Valid profile accepted");
-        var stored=IoConfiguration.localDefaults().withEngine(p,false);
+        var corrections=FuelCorrections.reference();check(corrections.valid()&&corrections.value(7,false)==10000,"Editable start/warm-up reference uses ms");
+        byte[] disabled=corrections.bytes();disabled[0]=0;check(new FuelCorrections(disabled).valid(),"Disabled corrections retain valid calibration");
+        byte[] bad=corrections.bytes();bad[24]=1;check(!new FuelCorrections(bad).valid(),"Unknown correction flags rejected");
+        var stored=IoConfiguration.localDefaults().withEngine(p,false).withFuelCorrections(corrections);
         check(stored.errors().isEmpty()&&!stored.autonomous(),"Manual profile may be stored before sensor calibration");
         var file=Files.createTempDirectory("tunuino-profile-backup-").resolve("motor.tncfg");
-        try{stored.writeNew(file);check(Arrays.equals(p,IoConfiguration.read(file).engineProfile()),"Motor survives backup and restore");}
+        try{stored.writeNew(file);check(Arrays.equals(p,IoConfiguration.read(file).engineProfile()),"Motor survives backup and restore");check(Arrays.equals(corrections.bytes(),IoConfiguration.read(file).fuelCorrections().bytes()),"Start/warm-up corrections survive backup");}
         finally{Files.deleteIfExists(file);Files.deleteIfExists(file.getParent());}
         byte[] original=stored.bytes();original[132]=0;
         check(stored.engineProfile()[4]!=0,"Profile storage is immutable");

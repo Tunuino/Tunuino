@@ -56,6 +56,7 @@ static bool command(void *user,const uint8_t *q,size_t length,uint8_t *out,size_
     if(length==129&&q[0]==1&&!d->dirty){
         chSysLock();okay=tunuino_engine_control_configure(&engine,q+1,d->active[3],d->active[4],d->generation);chSysUnlock();
         if(okay){
+            (void)tunuino_fuel_corrections_decode(d->active+103,&engine.fueling);
             autonomous=persisted_profile=boot_pending=false;
             board_io_phase(d,engine.profile.cam_first,engine.profile.cam_last,engine.profile.cam_phase);
         }
@@ -112,6 +113,7 @@ void board_outputs_restore(tunuino_device *d,bool boot){
         d->active[3],d->active[4],d->generation);
     chSysUnlock();
     if(!okay)return;
+    (void)tunuino_fuel_corrections_decode(d->active+103,&engine.fueling);
     board_io_phase(d,engine.profile.cam_first,engine.profile.cam_last,engine.profile.cam_phase);
     persisted_profile=true;autonomous=d->active[TUNUINO_ENGINE_POLICY_OFFSET]==1;
     /* Only power-up may auto-arm. Saving, reconnecting, STOP and faults never do. */

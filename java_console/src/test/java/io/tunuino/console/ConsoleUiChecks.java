@@ -286,6 +286,18 @@ public final class ConsoleUiChecks {
             check(!((javafx.scene.control.CheckBox)scene.lookup("#engine-autonomous")).isSelected(),"Generic base does not enable autonomous startup");
             check(((Button)scene.lookup("#engine-configure")).isDisabled(),"Offline base cannot send a profile");
             snapshot(scene,"console-generic-base");
+            engineTabs.getSelectionModel().select(6);scene.getRoot().applyCss();scene.getRoot().layout();
+            FuelCorrectionPane fuelPane=(FuelCorrectionPane)scene.lookup("#fuel-correction-pane");
+            var correctionsEnabled=(javafx.scene.control.CheckBox)scene.lookup("#fuel-corrections-enabled");
+            check(!correctionsEnabled.isSelected()&&!fuelPane.candidate().configured(),"Existing profiles keep corrections disabled");
+            correctionsEnabled.fire();
+            check(fuelPane.candidate().enabled()&&fuelPane.candidate().value(7,false)==10000,"Start/warm-up reference is editable and uses ms");
+            var crankFuel=(javafx.scene.control.TextField)scene.lookup("#fuel-correction-cranking");crankFuel.setText("150,25");
+            check(fuelPane.candidate().value(3,false)==15025,"Exact comma decimal fuel percentage");
+            var aseTime=(javafx.scene.control.TextField)scene.lookup("#fuel-correction-duration");aseTime.setText("1000.5");
+            try{fuelPane.candidate();throw new AssertionError("Fractional ms duration rounded silently");}catch(IllegalArgumentException expected){}
+            aseTime.setText("10000");snapshot(scene,"console-start-warmup");
+            correctionsEnabled.fire();check(!fuelPane.candidate().enabled()&&fuelPane.candidate().configured(),"Disabling retains valid values");
             ((ToggleButton)scene.lookup("#navigate-11")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
             var outputTabs=(javafx.scene.control.TabPane)scene.lookup("#output-test-tabs");
             check(outputTabs.getTabs().size()==3,"Separate injector, ignition and relay test tabs");

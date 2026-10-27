@@ -52,6 +52,10 @@ static void persistence(void){
     uint8_t *motor=settings+128;motor[0]=motor[1]=1;
     put16(motor+2,3000);put16(motor+4,2000);put16(motor+6,500);put16(motor+8,15000);
     put16(motor+12,9500);put16(motor+14,9000);motor[25]=1;motor[26]=2;
+    uint8_t *correction=settings+103;correction[0]=1;
+    put16(correction+1,400);put16(correction+3,15000);put16(correction+5,11000);put16(correction+7,10000);
+    put16(correction+9,(uint16_t)(int16_t)-2000);put16(correction+11,16000);put16(correction+13,2000);put16(correction+15,12000);
+    put16(correction+17,8000);put16(correction+19,10000);put16(correction+21,1000);
     settings[102]=1;assert(tunuino_device_validate(settings,sizeof(settings)));
     for(int cut=0;cut<=(int)(TUNUINO_JOURNAL_RECORD_BYTES/4);++cut){
         memcpy(flash,baseline,sizeof(flash));remaining=-1;

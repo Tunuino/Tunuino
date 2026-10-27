@@ -30,7 +30,7 @@ def main():
     assert section.index('nPages = 3') < section.index('blockingFactor = 100')
     assert '[UiDialogs]' in text and '[UserDefined]' not in text
     ini=configparser.ConfigParser(interpolation=None,strict=False);ini.read_string('[General]\n'+text)
-    assert ini['TunerStudio'].getint('iniVersion')==6
+    assert ini['TunerStudio'].getint('iniVersion')==7
     assert ini['OutputChannels']['ochGetCommand']=='"O%2o%2c"'
     assert ini['OutputChannels']['engineState']=='scalar, U08, 31, "", 1, 0'
     for name in ('engineMode','engineAutonomous','engineFault'):

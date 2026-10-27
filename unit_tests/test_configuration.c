@@ -11,7 +11,7 @@ static void damage(uint8_t *p,unsigned group){
     switch(group){
         case 0:p[5]=1;break;case 1:p[2]=2;break;case 2:p[6]=12;break;case 3:p[7]=12;break;
         case 4:p[8]=5;break;case 5:put16(p+100,2700);break;
-        case 8:p[128]=1;break;case 9:p[102]=2;break;
+        case 10:p[103]=2;break;case 8:p[128]=1;break;case 9:p[102]=2;break;
         case 6:put16(p+256,20001);break;case 7:put16(p+TUNUINO_IO_CONFIG_SIZE+TUNUINO_IO_MAP_SIZE+64,(uint16_t)(int16_t)-9001);break;
     }
 }
@@ -25,7 +25,7 @@ int main(void){
     assert(tunuino_device_validation_errors(modified,TUNUINO_IO_SETTINGS_SIZE)==TUNUINO_CONFIG_MAP);
     memcpy(modified,original,TUNUINO_IO_SETTINGS_SIZE);put16(modified+22,5001);
     assert(tunuino_device_validation_errors(modified,TUNUINO_IO_SETTINGS_SIZE)==TUNUINO_CONFIG_LAMBDA);
-    for(unsigned group=0;group<10;++group){
+    for(unsigned group=0;group<11;++group){
         memcpy(modified,original,TUNUINO_IO_SETTINGS_SIZE);damage(modified,group);
         assert(tunuino_device_validation_errors(modified,TUNUINO_IO_SETTINGS_SIZE)==(UINT32_C(1)<<group));
         assert(!tunuino_device_validate(modified,TUNUINO_IO_SETTINGS_SIZE));
