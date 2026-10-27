@@ -19,7 +19,7 @@ def run(args, timeout=None):
     if "firmware/src/dispatch.c" in args:
         args = list(args)
         for source in ("firmware/src/device.c", "firmware/src/config_journal.c", "firmware/src/analog.c",
-                       "firmware/src/calibration.c", "firmware/src/engine_math.c"):
+                       "firmware/src/calibration.c", "firmware/src/engine_math.c", "firmware/src/engine_profile.c"):
             if source not in args: args.append(source)
     result = subprocess.run(args, cwd=ROOT, text=True, capture_output=True, timeout=timeout)
     if result.returncode:
@@ -50,7 +50,7 @@ def main():
         executable = work / ("frame-check.exe" if os.name == "nt" else "frame-check")
         flags = [compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-pedantic", "-Ifirmware/include"]
         output_exe=work / ("outputs-check.exe" if os.name=="nt" else "outputs-check")
-        run(flags+["firmware/src/outputs.c","firmware/src/engine_control.c","unit_tests/test_outputs.c","-lm","-o",str(output_exe)])
+        run(flags+["firmware/src/outputs.c","firmware/src/engine_control.c","firmware/src/engine_profile.c","unit_tests/test_outputs.c","-lm","-o",str(output_exe)])
         print(run([str(output_exe)]))
         mailbox_exe = work / ("mailbox-check.exe" if os.name == "nt" else "mailbox-check")
         mailbox_threads = [] if os.name == "nt" else ["-pthread"]
@@ -285,6 +285,9 @@ def main():
         sources.extend([java_root / "calibration/IoConfiguration.java", java_root / "protocol/ConfigurationClient.java",
             ROOT / "java_console/src/test/java/io/tunuino/ConfigurationChecks.java"])
         sources.append(java_root / "transport/ProcessSerialChannel.java")
+        sources.append(java_root / "calibration/EngineProfile.java")
+        sources.append(java_root / "calibration/BaseMaps.java")
+        sources.append(ROOT / "java_console/src/test/java/io/tunuino/BaseConfigurationChecks.java")
         sources.extend([java_root/"calibration/EnginePreset.java",ROOT/"java_console/src/test/java/io/tunuino/EnginePresetChecks.java"])
         sources.extend([java_root/"protocol/EngineOutputClient.java",ROOT/"java_console/src/test/java/io/tunuino/EngineOutputChecks.java"])
         sources.extend(sorted((ROOT / "java_tools/src/main/java").rglob("*.java")))
@@ -304,6 +307,7 @@ def main():
         print(run(["java", "-cp", str(work), "io.tunuino.ConfigurationChecks", str(io_peer)], timeout=30))
         print(run(["java","-cp",str(work),"io.tunuino.EngineOutputChecks",str(output_peer)],timeout=30))
         print(run(["java","-cp",str(work),"io.tunuino.EnginePresetChecks"]))
+        print(run(["java","-cp",str(work),"io.tunuino.BaseConfigurationChecks"]))
         simulator = build_simulator(work / "simulator")
         print(run(["java", "-cp", str(work), "io.tunuino.TelemetryChecks", str(simulator)], timeout=30))
         print(run(["java", "-cp", str(work), "io.tunuino.tools.ToolChecks", str(simulator)], timeout=45))

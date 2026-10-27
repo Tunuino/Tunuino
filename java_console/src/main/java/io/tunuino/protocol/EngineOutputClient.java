@@ -17,7 +17,7 @@ public final class EngineOutputClient {
         return body;
     }
     public record State(int mode,int faults,long active,long pending,boolean configured,int cylinders,
-                        boolean timerReady,long generation,long injectionUs) {
+                        boolean timerReady,long generation,long injectionUs,boolean persisted,boolean autonomous) {
         public boolean armed(){return mode==1||mode==2||mode==4;}
         public String faultsDescription(){
             if(faults==0)return "sem falhas";
@@ -40,13 +40,13 @@ public final class EngineOutputClient {
     }
     public static State decode(byte[] b)throws IOException {
         if(b==null||b.length!=24||b[0]!=0||b[1]!=1||(b[2]&255)>4||(b[3]&240)!=0
-            ||(b[12]&255)>1||(b[13]&255)>12||(b[14]&255)>1||b[15]!=0)
+            ||(b[12]&255)>1||(b[13]&255)>12||(b[14]&255)>1||(b[15]&252)!=0)
             throw new IOException("Estado de saídas inválido");
         ByteBuffer p=ByteBuffer.wrap(b);long active=Integer.toUnsignedLong(p.getInt(4));
         long pending=Integer.toUnsignedLong(p.getInt(8)),injection=Integer.toUnsignedLong(p.getInt(20));
         if((active&0xf0000000L)!=0||(pending&0xf0000000L)!=0||injection>20000)
             throw new IOException("Máscara/tempo de saídas inválido");
-        return new State(b[2],b[3],active,pending,b[12]!=0,b[13],b[14]!=0,Integer.toUnsignedLong(p.getInt(16)),injection);
+        return new State(b[2],b[3],active,pending,b[12]!=0,b[13],b[14]!=0,Integer.toUnsignedLong(p.getInt(16)),injection,(b[15]&1)!=0,(b[15]&2)!=0);
     }
     public static State read(PacketSession session)throws IOException {return decode(exchange(session,new byte[]{0}));}
     private static void accepted(byte[] body)throws IOException {if(body.length!=1)throw new IOException("Confirmação de comando inválida");}

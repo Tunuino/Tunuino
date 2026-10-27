@@ -20,6 +20,8 @@ int main(void) {
   size_t received = 0, offset = 0, pending = 0;
   uint8_t receive[64];
   bool active = false;
+  bool recovering = false;
+  uint64_t retry_at = 0;
   halInit();
   chSysInit();
   board_status_start();
@@ -32,25 +34,29 @@ int main(void) {
   }
   tunuino_usb_serial_init();
   sduObjectInit(&SDU1);
-  if (sduStart(&SDU1, &serusbcfg) != MSG_OK) {
-    tunuino_bench_fault = 11;
-    for (;;) chThdSleepMilliseconds(100);
-  }
+  bool serial_ready=sduStart(&SDU1, &serusbcfg)==MSG_OK;
   chEvtRegisterMaskWithFlags(chnGetEventSource(&SDU1), &events, EVENT_MASK(0),
                            CHN_TRANSMISSION_END | CHN_DISCONNECTED);
   /* Detach before starting the controller so the host sees a fresh device. */
   usbDisconnectBus(&USBD1);
   chThdSleepMilliseconds(250);
-  if (usbStart(&USBD1, &usbcfg) != MSG_OK) {
+  if (!serial_ready || usbStart(&USBD1, &usbcfg) != MSG_OK) {
     tunuino_bench_fault = 12;
-    for (;;) chThdSleepMilliseconds(100);
-  }
-  usbConnectBus(&USBD1);
-  board_io_resync(&device);
+    usbStop(&USBD1);sduStop(&SDU1);recovering=true;retry_at=board_millis()+250;
+  }else usbConnectBus(&USBD1);
+  board_io_usb_recover(&device);
 
   for (;;) {
     board_io_update(&device);
     board_status_inputs(&device);
+    if(recovering){
+      if(board_millis()<retry_at){chThdSleepMilliseconds(1);continue;}
+      if(sduStart(&SDU1,&serusbcfg)!=MSG_OK || usbStart(&USBD1,&usbcfg)!=MSG_OK){
+        usbStop(&USBD1);sduStop(&SDU1);retry_at=board_millis()+250;continue;
+      }
+      (void)chEvtGetAndClearFlags(&events);
+      usbConnectBus(&USBD1);tunuino_bench_fault=0;recovering=false;
+    }
     uint64_t now;
     uint32_t live_generation;
     bool configured;
@@ -80,7 +86,7 @@ int main(void) {
     }
     if (pending == 0 && (!active || tunuino_link_poll(&link, now) == TUNUINO_LINK_RECEIVING)) {
       if (offset == received) {
-        received = chnReadTimeout(&SDU1, receive, sizeof(receive), TIME_MS2I(1));
+        received = chnReadTimeout(&SDU1, receive, sizeof(receive), TIME_IMMEDIATE);
         offset = 0;
       }
       now = board_millis();
@@ -102,7 +108,7 @@ int main(void) {
       if (tunuino_link_tx_view(&link, now, &bytes, &remaining) != TUNUINO_LINK_RESPONDING) goto recover;
       if (remaining > 63) remaining = 63;
       (void)chEvtGetAndClearFlags(&events);
-      pending = chnWriteTimeout(&SDU1, bytes, remaining, TIME_MS2I(1));
+      pending = chnWriteTimeout(&SDU1, bytes, remaining, TIME_IMMEDIATE);
       /* Queue acceptance is not completion. Advance only on the physical
        * CHN_TRANSMISSION_END notification from ChibiOS sduDataTransmitted. */
     }
@@ -117,9 +123,9 @@ recover:
     usbDisconnectBus(&USBD1);usbStop(&USBD1);sduStop(&SDU1);
     tunuino_link_abort(&link);active=false;pending=received=offset=0;generation=0;
     tunuino_bench_fault=20;
-    chThdSleepMilliseconds(250);
-    if(sduStart(&SDU1,&serusbcfg)!=MSG_OK || usbStart(&USBD1,&usbcfg)!=MSG_OK)goto recover;
-    (void)chEvtGetAndClearFlags(&events);
-    usbConnectBus(&USBD1);board_io_resync(&device);tunuino_bench_fault=0;
+    board_io_usb_recover(&device);
+    recovering=true;retry_at=board_millis()+250;
+    /* Service capture and engine on every loop throughout USB detach/retry. */
+    chThdSleepMilliseconds(1);
   }
 }

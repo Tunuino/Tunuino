@@ -48,6 +48,11 @@ static void persistence(void){
     assert(!tunuino_journal_init(&journal,&io,settings));
     assert(tunuino_journal_save(&journal,device.active));assert(journal.sequence==1);
     memcpy(baseline,flash,sizeof(flash));memcpy(settings,device.active,TUNUINO_IO_SETTINGS_SIZE);put16(settings+100,3290);
+    /* Motor profile is part of the same atomic record, including every torn-write case. */
+    uint8_t *motor=settings+128;motor[0]=motor[1]=1;
+    put16(motor+2,3000);put16(motor+4,2000);put16(motor+6,500);put16(motor+8,15000);
+    put16(motor+12,9500);put16(motor+14,9000);motor[25]=1;motor[26]=2;
+    settings[102]=1;assert(tunuino_device_validate(settings,sizeof(settings)));
     for(int cut=0;cut<=(int)(TUNUINO_JOURNAL_RECORD_BYTES/4);++cut){
         memcpy(flash,baseline,sizeof(flash));remaining=-1;
         tunuino_config_journal recovery;uint8_t loaded[TUNUINO_IO_SETTINGS_SIZE];assert(tunuino_journal_init(&recovery,&io,loaded));

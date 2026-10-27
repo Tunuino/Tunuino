@@ -27,6 +27,8 @@ static const char *mode;
 static uint8_t packet[64], queued[64], delivered[512];
 static size_t packet_size, queued_size, delivered_size;
 static eventflags_t flags;
+static uint32_t last_engine_update;
+static unsigned updates_during_recovery;
 
 void halInit(void) { assert(stage++ == 0); }
 void chSysInit(void) { assert(stage++ == 1); }
@@ -37,7 +39,11 @@ uint64_t board_io_clock(void *user) { (void)user;return now; }
 bool board_io_save(void *user,const uint8_t *bytes,size_t length) { (void)user;(void)bytes;(void)length;return false; }
 void board_io_start(tunuino_device *device) { (void)device;assert(stage==2);assert(status_outputs==(15u<<3)); }
 void board_io_resync(tunuino_device *device) { (void)device;assert(stage==9); }
+void board_io_usb_recover(tunuino_device *device) { (void)device; }
 void board_io_update(tunuino_device *device) {
+    if(last_engine_update)assert(now-last_engine_update<=1);
+    last_engine_update=now;
+    if(restarts)++updates_during_recovery;
     uint16_t raw[16];for(unsigned i=0;i<16;++i)raw[i]=(uint16_t)(100+i);
     tunuino_device_sample(device,now,raw,true,0,false,0,0);
 }
@@ -68,7 +74,7 @@ void usbConnectBus(USBDriver *usb) {
 
 }
 void chThdSleepMilliseconds(uint32_t ms) {
-  if (stage==6) { assert(ms==250);stage=7; }
+  if (stage==6) { assert(ms==(restarts?1u:250u));stage=7; }
   now+=ms;
   status_advance(ms);
   if (tunuino_bench_fault && strcmp(mode,"recover")!=0) longjmp(done,1);
@@ -152,6 +158,7 @@ int main(int argc,char **argv) {
     assert(offset==delivered_size);
   } else if (strcmp(mode,"recover")==0) {
     assert(restarts==1&&writes==1&&completions==1&&tunuino_bench_fault==0&&USBD1.state==USB_ACTIVE);
+    assert(updates_during_recovery>=250);
   } else if (strcmp(mode,"corrupt")==0) assert(writes==0 && tunuino_bench_fault==20 && USBD1.state==0);
   else if (strcmp(mode,"timeout")==0) assert(writes==1 && completions==0 && tunuino_bench_fault==20 && USBD1.state==0);
   else if (strcmp(mode,"disconnect")==0 || strcmp(mode,"reconfigure")==0)

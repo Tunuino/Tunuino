@@ -68,6 +68,7 @@ public final class TunuinoConsole extends Application {
     private ConfigurationPane configurationPane;
     private EngineControlPane engineControlPane;
     private boolean engineArmed;
+    private boolean engineAutonomous;
     private boolean serialBusy;
     private boolean configurationBusy;
     private Runnable refreshControls = () -> {};
@@ -94,11 +95,20 @@ public final class TunuinoConsole extends Application {
 
     private void openEcuMapEditor(Stage owner,CalibrationMap map,int row,int column,
             PacketSession session,DeviceIdentity device) {
-        String title=device.family()+" · "+map.kind()+" · cópia lida da ECU";
+        openMapEditor(owner,map,row,column,session,device,device.family()+" · "+map.kind()+" · cópia lida da ECU");
+    }
+    private void openBaseMap(Stage owner,CalibrationMap.Kind kind,io.tunuino.calibration.BaseMaps.Template template){
+        CalibrationMap map=io.tunuino.calibration.BaseMaps.create(template,kind);
+        PacketSession session=connection.get();DeviceIdentity device=identifiedDevice;
+        String title=template+" · "+kind+" · modelo local, não lido da ECU";
+        if(session==null||!session.isOpen()||device==null)CalibrationViewer.show(owner,title,map);
+        else openMapEditor(owner,map,0,0,session,device,title);
+    }
+    private void openMapEditor(Stage owner,CalibrationMap map,int row,int column,PacketSession session,DeviceIdentity device,String title){
         java.util.function.Function<CalibrationMap,java.util.concurrent.CompletableFuture<Void>> upload=null;
         if(device.capabilities()==15&&device.firmwareVersion().equals("0.2.0"))upload=updated->{
             var completion=new java.util.concurrent.CompletableFuture<Void>();
-            if(stopping.get()||serialBusy||monitoringActive||fileReading||configurationBusy
+            if(stopping.get()||engineArmed||serialBusy||monitoringActive||fileReading||configurationBusy
                     ||firmwarePanel.isBusy()||connection.get()!=session||!session.isOpen()
                     ||identifiedDevice!=device) {
                 completion.completeExceptionally(new IllegalStateException(
@@ -238,7 +248,7 @@ public final class TunuinoConsole extends Application {
             monitor.setText(monitoringActive ? "Parar monitorização" : "Ver dados em tempo real");
             boolean liveAvailable = identifiedDevice != null
                 && (identifiedDevice.capabilities() & LiveDataClient.CAPABILITY) != 0;
-            monitor.setDisable(engineArmed||programming || (monitoringActive ? !keepMonitoring.get()
+            monitor.setDisable((engineArmed&&!engineAutonomous)||programming || (monitoringActive ? !keepMonitoring.get()
                 : serialBusy || !connected || !liveAvailable || fileReading));
             capture.setDisable(!monitoringActive || !keepMonitoring.get() || recordingPending);
             boolean mapAvailable = identifiedDevice != null
@@ -444,12 +454,12 @@ public final class TunuinoConsole extends Application {
             serialTask(()->EngineTimingClient.read(current,device,Duration.ofSeconds(3)),result->{
                 if(result.valid()) {
                     modelResult.setText(String.format(Locale.ROOT,
-                        "RPM %.1f · volta %.0f µs · ciclo 720° %.0f µs · dente %.0f µs"
-                        + " · índice relativo de carga %.2f %% · avanço relativo %+d µs."
+                        "RPM %.1f · volta %.3f ms · ciclo 720° %.3f ms · dente %.3f ms"
+                        + " · índice relativo de carga %.2f %% · avanço relativo %+.3f ms."
                         + " Apenas cálculo matemático, sem fase PMS nem saídas.",
-                        result.rpm(),(double)result.revolutionUs(),(double)result.cycleUs(),
-                        (double)result.wheelSlotUs(),result.relativeLoadPercent(),
-                        result.sparkReferenceUs()));
+                        result.rpm(),result.revolutionUs()/1000.0,result.cycleUs()/1000.0,
+                        result.wheelSlotUs()/1000.0,result.relativeLoadPercent(),
+                        result.sparkReferenceUs()/1000.0));
                 } else modelResult.setText("Modelo bloqueado: "+result.explanation()
                     + ". Nenhum tempo de atuação foi calculado.");
                 status.setText(result.valid()?"Cálculo temporal teórico recebido"
@@ -734,7 +744,17 @@ public final class TunuinoConsole extends Application {
         shell = new ConsoleShell(hardware, connectionControls, status, identityDetails);
         shell.addPage("Dashboard", "Dashboard da ECU", "Sensores reais e tabelas VE/ignição 16×16.",
             "M1 1H9V9H1ZM13 1H21V9H13ZM1 13H9V21H1ZM13 13H21V21H13Z", ConsoleShell.scroll(dashboard));
+        ComboBox<io.tunuino.calibration.BaseMaps.Template> baseTemplate=new ComboBox<>();
+        baseTemplate.getItems().addAll(io.tunuino.calibration.BaseMaps.Template.values());baseTemplate.getSelectionModel().selectFirst();
+        baseTemplate.setId("base-map-template");
+        Button baseVe=new Button("Criar base VE 16×16"),baseSpark=new Button("Criar base ignição 16×16");
+        baseVe.setId("base-map-ve");baseSpark.setId("base-map-ignition");
+        baseVe.setOnAction(e->openBaseMap(stage,CalibrationMap.Kind.VE,baseTemplate.getValue()));
+        baseSpark.setOnAction(e->openBaseMap(stage,CalibrationMap.Kind.IGNITION,baseTemplate.getValue()));
+        for(DashboardPane page:new DashboardPane[]{dashboard,fuelTables,ignitionTables})
+            page.onBaseMap(kind->openBaseMap(stage,kind,io.tunuino.calibration.BaseMaps.Template.NATURALLY_ASPIRATED));
         VBox maps = new VBox(16,
+            ConsoleShell.card("MAPAS BASE PRÉ-DEFINIDOS", "Referências editáveis para começar a afinação: 200–7000 rpm e 20–105 kPa absolutos. A base aspirada não cobre pressão de turbo. Confirma mistura e avanço para o teu motor antes de utilizar. Criar abre uma cópia local; guardar na ECU é uma ação separada.",baseTemplate,ConsoleShell.actions(baseVe,baseSpark)),
             ConsoleShell.card("FICHEIRO LOCAL", "Abre um mapa VE ou de ignição para consultar a tabela, editar valores e guardar uma cópia .tnmap.", openMap),
             ConsoleShell.card("MAPA DA CENTRALINA", "Lê uma cópia do mapa quando esta função está disponível no firmware.",
                 ConsoleShell.actions(mapKind, readMap)),
@@ -783,6 +803,7 @@ public final class TunuinoConsole extends Application {
         configurationPane=new ConfigurationPane(stage,ecuAccess);
         engineControlPane=new EngineControlPane(stage,ecuAccess,value->{
             engineArmed=value.armed();
+            engineAutonomous=value.autonomous();
             for(DashboardPane page:new DashboardPane[]{dashboard,fuelTables,ignitionTables})page.showOutputs(value);
             refreshControls.run();
         });
@@ -834,7 +855,7 @@ public final class TunuinoConsole extends Application {
         stage.setMinWidth(Math.min(960, screen.getWidth() - 40));
         stage.setMinHeight(Math.min(680, screen.getHeight() - 60));
         stage.setOnCloseRequest(event -> {
-            if(engineArmed){event.consume();ConsoleBranding.alert(Alert.AlertType.INFORMATION,
+            if(engineArmed&&!engineAutonomous){event.consume();ConsoleBranding.alert(Alert.AlertType.INFORMATION,
                 "Pára as saídas em Motor e saídas ou Testes de atuadores antes de fechar a Console.").show();return;}
             if(configurationBusy){
                 event.consume();

@@ -12,6 +12,7 @@ typedef void (*vtfunc_t)(virtual_timer_t *, void *);
 struct virtual_timer { bool armed; systime_t due; vtfunc_t callback; void *argument; };
 #define EVENT_MASK(n) (1u << (n))
 #define TIME_MS2I(ms) (ms)
+#define TIME_IMMEDIATE 0
 #define MSG_OK 0
 void chSysInit(void);
 void chSysLock(void);

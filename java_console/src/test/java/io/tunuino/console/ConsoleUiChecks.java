@@ -268,15 +268,24 @@ public final class ConsoleUiChecks {
             check(((javafx.scene.control.TextField)scene.lookup("#engine-cylinder-1-2")).getText().equals("540"),"1-3-4-2 gives cylinder 2 the correct 720-degree phase");
             snapshot(scene,"console-cylinder-assignments");
             engineCylinders.setValue(1);
-            String[][] engineFields={{"fuel","3000"},{"dwell","2000"},{"dead","500"},{"maximum","15000"},
+            String[][] engineFields={{"fuel","3"},{"dwell","2"},{"dead","0,5"},{"maximum","15"},
                 {"injectionEnd","0"},{"toothZero","0"},{"camFirst","1"},{"camLast","2"},{"camPhase","0"}};
             for(String[] field:engineFields)enginePane.setting(field[0],field[1]);
             for(int column=0;column<3;++column)((javafx.scene.control.TextField)scene.lookup("#engine-cylinder-0-"+column)).setText(column==2?"180":"1");
             byte[] engineBytes=enginePane.profile();
             check(engineBytes.length==128&&java.nio.ByteBuffer.wrap(engineBytes).getInt(34)==18000,"Explicit cylinder/PMS form produces exact wire units");
-            enginePane.setting("dwell","5001");
+            var units=java.nio.ByteBuffer.wrap(engineBytes);
+            check(units.getShort(2)==3000&&units.getShort(4)==2000&&units.getShort(6)==500&&units.getShort(8)==15000,
+                "Milliseconds and comma decimals preserve exact internal timer units");
+            enginePane.setting("dwell","5.001");
             try{enginePane.profile();throw new AssertionError("Unsafe dwell must not leave the editor");}catch(IllegalArgumentException expected){}
-            enginePane.setting("dwell","2000");
+            enginePane.setting("dwell","2");
+            engineTabs.getSelectionModel().selectFirst();scene.getRoot().applyCss();scene.getRoot().layout();
+            ((Button)scene.lookup("#engine-generic-base")).fire();
+            check(engineCylinders.getValue()==4,"Generic configuration uses selected firing-order preset");
+            check(!((javafx.scene.control.CheckBox)scene.lookup("#engine-autonomous")).isSelected(),"Generic base does not enable autonomous startup");
+            check(((Button)scene.lookup("#engine-configure")).isDisabled(),"Offline base cannot send a profile");
+            snapshot(scene,"console-generic-base");
             ((ToggleButton)scene.lookup("#navigate-11")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
             var outputTabs=(javafx.scene.control.TabPane)scene.lookup("#output-test-tabs");
             check(outputTabs.getTabs().size()==3,"Separate injector, ignition and relay test tabs");

@@ -59,10 +59,10 @@ def main():
                 "physical_ecu_validation": False}
     (root / "kit-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (root / "START-HERE.txt").write_text(
-        "Experimental Proteus v0.7 / F427 kit with configurable physical outputs. Starts disarmed.\n"
+        "Proteus v0.7 / F427 kit with persistent engine configuration and optional autonomous startup.\n"
         "Read https://github.com/Tunuino/Tunuino_documents/blob/main/proteus-v07-bringup.md\n"
         "Backup the installed firmware before flashing; image starts at 0x08000000.\n"
-        "Disconnect engine actuators for the bench test. Physical USB validation is pending.\n"
+        "New engine-control behavior still requires physical timing and electrical validation.\n"
         "Extract the whole Console directory, then run console/TunuinoConsole.exe.\n"
         "Select firmware/*.bin in the Console; keep its .bin.properties beside it.\n"
         "DFU uses STM32_Programmer_CLI.exe from installed CubeProgrammer or an existing compatible bundle.\n"
@@ -75,8 +75,9 @@ def main():
         "Use Firmware Default protocol. This INI requires the firmware in this same Bundle.\n"
         "Tunuino 0.2.0 IO: native 16x16 only; back up previous calibration before flashing.\n"
         "Console: Sensors and inputs; Engine and outputs; separate Actuator tests for injectors, ignition and assigned relays.\n"
-        "Engine profile is volatile; verify pin mapping, TDC, dwell and injector calibration on a test bench.\n"
-        "A running experimental profile requires Console output-state polling; a 2-second host timeout cuts all outputs.\n"
+        "Engine profile is saved atomically with sensors/maps. Verify pin mapping, TDC, dwell and injector calibration.\n"
+        "Autonomous mode runs without USB. Manual mode retains a 2-second host supervision timeout.\n"
+        "Base VE/ignition maps are local editable references, not a validated calibration. Console times use milliseconds.\n"
         "AV readings are MCU ADC voltages, not uncorrected external sensor voltages.\n"
         "Flash sectors 5/6 at 0x08020000/0x08040000 store calibration; firmware image stays below 0x08020000.\n")
     print(f"Validated synchronized bench kit for {commit}")

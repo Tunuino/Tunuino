@@ -57,6 +57,7 @@ int main(void){
     aux[2]=1;aux[3]=244;d.trigger_valid=true;assert(request(&d,aux,8)[0]==0x84);d.trigger_valid=false;
     d.dirty=true;assert(request(&d,aux,8)[0]==0x84);d.dirty=false;
     ++d.generation;assert(request(&d,aux,8)[0]==0x84);--d.generation;
+    assert(request(&d,config,129)[0]==0);
     assert(request(&d,aux,8)[0]==0);irq();d.trigger_valid=true;
     board_outputs_update(&d,&position,0,TIM2->CNT);off();assert(board_outputs_idle());d.trigger_valid=false;
     assert(request(&d,stop,1)[0]==0);
@@ -75,18 +76,60 @@ int main(void){
     uint16_t ve;int16_t advance;
     assert(tunuino_device_engine_values(&d,&ve,&advance)&&ve==10000&&advance==1000);
     d.live.map_milli_kpa=300000;assert(!tunuino_device_engine_values(&d,&ve,&advance));
+    /* Persisted autonomous profile: no host lease, no arm on save/reconnect,
+     * stop/fault latch, actual timed outputs and rejection of running writes. */
+    board_outputs_stop();d.live.map_milli_kpa=100000;d.live.coolant_milli_c=90000;
+    d.active[6]=1;d.active[8]=1;p16(d.active+16,20000);p16(d.active+64,10000);
+    memcpy(d.active+128,p,128);d.active[102]=1;
+    assert(tunuino_device_validate(d.active,sizeof(d.active)));
+    assert(tunuino_device_restore(&d,d.active,sizeof(d.active)));
+    board_outputs_restore(&d,false);r=request(&d,status,1);assert(r[2]==0&&r[15]==3);off();
+    board_outputs_restore(&d,true);off();
+    memset(&position,0,sizeof(position));
+    for(unsigned i=0;i<500;++i){TIM2->CNT+=5000;board_outputs_update(&d,&position,0,TIM2->CNT);}
+    r=request(&d,status,1);assert(r[2]==1&&r[3]==0&&r[15]==3); /* >2s, no USB */
+    uint8_t write[]={'w',0,1,0,96,0,2,0x17,0x70};
+    tunuino_identity identity={TUNUINO_PROTEUS,TUNUINO_STM32_F4,7,0,2,0,15,{1}};
+    assert(tunuino_device_reply(&d,&identity,write,sizeof(write),response,sizeof(response),&response_size)==TUNUINO_DISPATCH_OK);
+    const uint8_t *body;size_t bytes;assert(tunuino_frame_decode(response,response_size,&body,&bytes)==TUNUINO_FRAME_OK);
+    assert(body[0]==0x84&&!d.dirty); /* refused before any staged mutation */
+    d.adc_valid=d.trigger_valid=true;d.live.valid_mask=15;d.live.rpm_milli=3000000;
+    uint32_t origin=TIM2->CNT;
+    for(unsigned step=0;step<1000;++step){
+        uint32_t next=origin+step*100u;
+        if(GPTD5.state==GPT_ONESHOT&&(int32_t)(next-alarm_at)>=0)irq();
+        TIM2->CNT=next;uint32_t elapsed=next-origin,phase=elapsed%20000u;
+        position.crank_valid=position.cycle_valid=true;position.rpm=3000;
+        position.revolution_phase=(elapsed/20000u)%2;position.tooth_index=(uint16_t)(phase*36u/20000u);
+        if(position.tooth_index>34)position.tooth_index=34;
+        uint32_t edge=next-phase+(uint32_t)position.tooth_index*20000u/36u;
+        board_outputs_update(&d,&position,edge,next);
+    }
+    r=request(&d,status,1);assert(r[2]==2&&r[3]==0);
+    position.cycle_valid=false;board_outputs_update(&d,&position,TIM2->CNT,TIM2->CNT);off();
+    assert(request(&d,status,1)[2]==3);
+    position.cycle_valid=true;board_outputs_update(&d,&position,TIM2->CNT,TIM2->CNT);off();
+    assert(request(&d,status,1)[2]==3); /* no automatic restart after fault */
+    request(&d,stop,1);board_outputs_update(&d,&position,TIM2->CNT,TIM2->CNT);off();
+    assert(request(&d,status,1)[2]==0);
+    const uint8_t activate[]={6,'R','U','N','!'};assert(request(&d,activate,5)[0]==0);
+    assert(request(&d,status,1)[2]==1);request(&d,stop,1);off();
     puts("F427 output adapter: actual framed commands, reset GPIO levels, LS/IGN pin routing, GPT IRQ pulse edges, arm gates, profile phase wiring, main-loop stall and host lease cut passed. Register model only.");
     return 0;
 }
 #else
+static bool save_profile(void *user,const uint8_t *bytes,size_t length){
+    (void)user;return length==TUNUINO_IO_SETTINGS_SIZE&&tunuino_device_validate(bytes,length)&&board_outputs_idle();
+}
 int main(void){
 #ifdef _WIN32
     _setmode(_fileno(stdin),_O_BINARY);_setmode(_fileno(stdout),_O_BINARY);
 #endif
     /* Keep standalone adapter checks linked and exercised before serving. */
     (void)irq;(void)off;(void)p16;(void)request;
-    tunuino_device d;tunuino_device_init(&d,NULL,NULL,NULL);board_outputs_start(&d);
+    tunuino_device d;tunuino_device_init(&d,save_profile,NULL,NULL);board_outputs_start(&d);
     d.persisted=true;d.active[2]=1;
+    memcpy(d.staged,d.active,sizeof(d.staged));
     const tunuino_identity id={TUNUINO_PROTEUS,TUNUINO_STM32_F4,7,0,2,0,15,{1}};
     for(;;){int hi=getchar();if(hi==EOF)break;int lo=getchar();if(lo==EOF)return 1;
         size_t total=((unsigned)hi<<8|(unsigned)lo)+6;uint8_t frame[TUNUINO_MAX_BODY+6];

@@ -19,6 +19,8 @@ static const pin pins[28]={
 static tunuino_engine_control engine;
 static bool timer_ready;
 static uint32_t last_host_seen;
+static bool autonomous,persisted_profile,boot_pending;
+static uint32_t loaded_generation;
 static void write_pin(void *user,unsigned channel,bool high){
     (void)user;if(high)palSetPad(pins[channel].port,pins[channel].pad);
     else palClearPad(pins[channel].port,pins[channel].pad);
@@ -40,20 +42,28 @@ static void put32(uint8_t *p,uint32_t v){p[0]=(uint8_t)(v>>24);p[1]=(uint8_t)(v>
 static uint32_t u32(const uint8_t *p){return (uint32_t)tunuino_device_u16(p)<<16|tunuino_device_u16(p+2);}
 static bool command(void *user,const uint8_t *q,size_t length,uint8_t *out,size_t capacity,size_t *written){
     tunuino_device *d=user;bool okay=false;
+    if(loaded_generation!=d->generation)board_outputs_restore(d,false);
     if(length==1&&q[0]==0&&capacity>=24){
         last_host_seen=TIM2->CNT;
         memset(out,0,24);chSysLock();
         out[1]=1;out[2]=engine.mode;out[3]=engine.outputs.fault;
         put32(out+4,engine.outputs.active_mask);put32(out+8,tunuino_outputs_pending(&engine.outputs));
         out[12]=engine.configured;out[13]=engine.profile.cylinders;out[14]=timer_ready;
+        out[15]=(uint8_t)((persisted_profile?1u:0u)|(autonomous?2u:0u));
         put32(out+16,engine.generation);put32(out+20,engine.last_injection_us);
         chSysUnlock();*written=24;return true;
     }
     if(length==129&&q[0]==1&&!d->dirty){
         chSysLock();okay=tunuino_engine_control_configure(&engine,q+1,d->active[3],d->active[4],d->generation);chSysUnlock();
-        if(okay)board_io_phase(d,engine.profile.cam_first,engine.profile.cam_last,engine.profile.cam_phase);
+        if(okay){
+            autonomous=persisted_profile=boot_pending=false;
+            board_io_phase(d,engine.profile.cam_first,engine.profile.cam_last,engine.profile.cam_phase);
+        }
     }else if(length==9&&q[0]==2&&memcmp(q+1,"ARM!",4)==0&&timer_ready&&!d->dirty
         &&d->persisted&&d->active[2]&&u32(q+5)==d->generation){
+        chSysLock();last_host_seen=TIM2->CNT;okay=tunuino_engine_control_arm(&engine,TIM2->CNT,d->generation);timer_schedule();chSysUnlock();
+    }else if(length==5&&q[0]==6&&memcmp(q+1,"RUN!",4)==0&&timer_ready
+        &&persisted_profile&&!d->dirty&&d->persisted&&d->active[2]){
         chSysLock();last_host_seen=TIM2->CNT;okay=tunuino_engine_control_arm(&engine,TIM2->CNT,d->generation);timer_schedule();chSysUnlock();
     }else if(length==1&&q[0]==3){board_outputs_stop();okay=true;
     }else if(length==8&&q[0]==4&&memcmp(q+4,"TEST",4)==0&&timer_ready
@@ -88,18 +98,41 @@ void board_outputs_start(tunuino_device *d){
     /* Write inactive latches before changing pin mode: no startup pulse. */
     for(unsigned i=0;i<28;++i){palClearPad(pins[i].port,pins[i].pad);palSetPadMode(pins[i].port,pins[i].pad,PAL_MODE_OUTPUT_PUSHPULL);}
     tunuino_engine_control_init(&engine,write_pin,NULL);
+    autonomous=persisted_profile=boot_pending=false;loaded_generation=d->generation;
     timer_ready=gptStart(&GPTD5,&timer_config)==MSG_OK;
     d->output_command=command;d->output_user=d;
+    d->configuration_writable=board_outputs_idle;
 }
+void board_outputs_restore(tunuino_device *d,bool boot){
+    board_outputs_stop();loaded_generation=d->generation;
+    autonomous=persisted_profile=false;engine.configured=0;
+    if(!d->persisted||d->dirty||!tunuino_device_validate(d->active,sizeof(d->active)))return;
+    chSysLock();
+    bool okay=tunuino_engine_control_configure(&engine,d->active+TUNUINO_ENGINE_PROFILE_OFFSET,
+        d->active[3],d->active[4],d->generation);
+    chSysUnlock();
+    if(!okay)return;
+    board_io_phase(d,engine.profile.cam_first,engine.profile.cam_last,engine.profile.cam_phase);
+    persisted_profile=true;autonomous=d->active[TUNUINO_ENGINE_POLICY_OFFSET]==1;
+    /* Only power-up may auto-arm. Saving, reconnecting, STOP and faults never do. */
+    boot_pending=boot&&autonomous;
+}
+bool board_outputs_autonomous(void){return autonomous;}
 void board_outputs_stop(void){
+    boot_pending=false;
     chSysLock();tunuino_engine_control_stop(&engine,0);timer_schedule();chSysUnlock();
 }
 bool board_outputs_idle(void){bool idle;chSysLock();idle=!engine.outputs.armed;chSysUnlock();return idle;}
 void board_outputs_update(tunuino_device *d,const tunuino_position_reading *position,uint32_t edge,uint32_t now){
+    if(loaded_generation!=d->generation)board_outputs_restore(d,false);
     uint16_t ve=0;int16_t advance=0;
     bool valid=!d->dirty&&d->adc_valid&&d->trigger_valid;
     if(valid)valid=tunuino_device_engine_values(d,&ve,&advance);
     chSysLock();
+    if(boot_pending){
+        boot_pending=false;
+        if(timer_ready&&!d->dirty)(void)tunuino_engine_control_arm(&engine,now,d->generation);
+    }
     if(engine.configured&&engine.generation!=d->generation){
         tunuino_engine_control_stop(&engine,TUNUINO_OUTPUT_CALIBRATION);engine.configured=0;
     }
@@ -108,7 +141,7 @@ void board_outputs_update(tunuino_device *d,const tunuino_position_reading *posi
         else tunuino_outputs_poll(&engine.outputs,now);
         if(!tunuino_outputs_pending(&engine.outputs))tunuino_engine_control_stop(&engine,0);
     }else if(engine.outputs.armed){
-        if((uint32_t)(now-last_host_seen)>2000000u)tunuino_engine_control_stop(&engine,TUNUINO_OUTPUT_WATCHDOG);
+        if(!autonomous&&(uint32_t)(now-last_host_seen)>2000000u)tunuino_engine_control_stop(&engine,TUNUINO_OUTPUT_WATCHDOG);
         else if(d->dirty)tunuino_engine_control_stop(&engine,TUNUINO_OUTPUT_CALIBRATION);
         else tunuino_engine_control_update(&engine,now,edge,position,d->active[3],d->generation,
             valid,ve,advance,d->live.map_milli_kpa,(d->live.valid_mask&TUNUINO_LIVE_COOLANT_VALID)!=0,d->live.coolant_milli_c);

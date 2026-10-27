@@ -1,39 +1,54 @@
-# Contrato do controlo experimental de saídas
+# Contrato do controlo sequencial e persistência
 
-Alvo: Proteus v0.7 STM32F427. [Pinos e origem do PCB](../hardware/review/proteus-v07-outputs.json). O nível inativo dos 28 sinais MCU é zero. LS1–LS16 entram nos drivers VNLD5160; IGN1–IGN12 entram nos buffers não inversores MIC4427 e exigem uma etapa de potência externa apropriada. Não são saídas de potência para ligar o primário de uma bobina diretamente.
+Alvo: Proteus v0.7 STM32F427. [Origem dos pinos](../hardware/review/proteus-v07-outputs.json).
+LS1–LS16 comandam drivers VNLD5160; IGN1–IGN12 são sinais lógicos para etapas externas de ignição. Latches são colocados a zero antes de configurar GPIO.
 
-O arranque configura os latches a zero antes de selecionar GPIO de saída. A configuração de aquisição e os mapas conservam o protocolo IO 0.2.0 e o esquema de flash 2. O perfil de motor é separado, volátil e não pertence ao backup `.tncfg`. Não há armação automática no arranque, na identificação, no carregamento do perfil ou na recuperação USB.
+## Perfil persistente
 
-## Perfil e cálculo
+O bloco IO esquema 2 conserva 1408 bytes: página 1 (256), VE (576), ignição (576). Extensão retrocompatível nos bytes anteriormente reservados da página 1:
 
-O perfil explicita 1–12 cilindros, saída LS e IGN distintas para cada cilindro, ângulo PMS de cada cilindro no ciclo 720°, ângulo do dente zero, janela e volta de referência do sensor de fase, ReqFuel de referência, dwell, tempo morto, pulso máximo, fim de injeção e canais opcionais de bomba, ventoinha e relé. As auxiliares não podem partilhar uma saída com um injetor ou entre si. Este primeiro perfil suporta injeção sequencial e ignição sequencial com carga a nível alto. Não implementa bobinas com entrada de carga invertida, injetores peak-and-hold, injeção em bancada ou wasted-spark.
+- 102: política U8, 0 ativação manual supervisionada por USB, 1 ativação autónoma ao ligar alimentação.
+- 103–127: zero.
+- 128–255: perfil formato 1, 128 bytes. Todos zero representam motor não configurado.
 
-`pulso_us = round(ReqFuel_us × VE_centi × MAP_milli_kPa / 1 000 000 000) + tempo_morto_us`.
+O perfil é gravado no mesmo registo CRC/commit-marker dos sensores e mapas, sem alterar o tamanho dos registos nem perder configurações esquema 2 anteriores. `.tncfg` inclui agora também o motor; os mapas continuam em `.tnmap`. Configurações antigas sem perfil continuam sem saídas automáticas. Atualizar Console, firmware e INI em conjunto.
 
-ReqFuel refere-se a VE 100% e MAP 100 kPa. O perfil exige calibração real; não calcula automaticamente ReqFuel a partir de cilindrada, caudal ou combustível. Não há compensação IAT/barométrica, curva de tempo morto por tensão, enriquecimento de arranque/aquecimento, aceleração, lambda em malha fechada, knock, controlo de boost ou borboleta eletrónica. O uso da primeira coluna RPM abaixo do eixo permite cálculo a baixa rotação; não se extrapola acima do eixo RPM nem fora dos eixos MAP. Um pulso acima do máximo configurado ou 80% do ciclo provoca corte, em vez de truncar silenciosamente a quantidade de combustível.
+Perfil relativo a 128: formato U8 em 0; cilindros U8 em 1; U16 ReqFuel em 2, dwell em 4, tempo morto em 6, pulso máximo em 8 (unidades internas de temporizador); U16 escorva em ms em 10; S16 temperaturas liga/desliga em centi°C em 12/14 e fim de injeção em centigraus em 16; U32 dente zero em centigraus em 18; U8 bomba/ventoinha/relé em 22/23/24 (0 desligado, 1–16 LS); U8 janela de fase primeiro/último/volta em 25/26/27; zero em 28–31. Doze descritores de 8 bytes em 32: injetor U8 e IGN U8 zero-based, PMS U32 centigraus, duas reservas zero. Descritores inativos zero. As interfaces convertem os tempos de injeção, dwell e tempo morto para **ms**, precisão de 0,001 ms.
 
-## Temporização e bloqueios
+Autónomo exige perfil válido, captura, MAP, temperatura e todas as células VE não nulas. Esta validação estrutural não certifica a afinação nem o ponto mecânico. Escritas e Burn são recusados enquanto armado; não existe afinação em tempo real nesta revisão. Guardar um perfil recarrega-o desarmado. Só o arranque elétrico pode ativá-lo automaticamente. STOP/falhas não rearmam por consultas, reconexão USB ou recuperação do sinal.
 
-O contador TIM2 a 1 MHz fornece a referência dos dentes. O consumidor de captura só expõe o timestamp com posição quando a fila está drenada, íntegra e fresca. O agendador usa a posição 720°, ângulos PMS e RPM medidos para preparar pares de flancos com até 3 ms de antecedência. Cada canal/ciclo só pode ser agendado uma vez. O GPT5 a 1 MHz executa os flancos e o prazo de supervisão em interrupção, separado da leitura USB. Dwell máximo 5 ms; injeção máxima 20 ms. O cálculo do modelo não mede a precisão dos flancos físicos sob carga e aceleração.
+## Execução
 
-Perda de fase depois de entrar em funcionamento, sinais inválidos, referência incoerente, RPM no limite, alteração de configuração, pulsewidth inválido, flanco atrasado mais de 100 µs ou ausência de serviço do motor por 20 ms desativam todos os canais e cancelam pulsos pendentes. O limite de idade do último dente considera a duração da falha da roda. A gravação da flash é recusada enquanto o agendador está armado. Uma falha não permite retomar automaticamente: exige desarmar e armar explicitamente.
+Injeção/ignição sequenciais quatro tempos, 1–12 cilindros, referência de fase 720°. O cálculo é:
 
-A Console consulta o estado das saídas a cada 750 ms quando armado. A ausência destas consultas durante 2 segundos provoca corte. Neste perfil experimental, a monitorização USB/CSV separada fica bloqueada durante a armação para manter disponível a consulta de estado e a ordem de paragem no mesmo proprietário da porta. O perfil não constitui ainda funcionamento autónomo da ECU sem Console.
+`pulso = ReqFuel × VE_percent / 100 × MAP_kPa / 100 + tempo_morto`.
 
-O prazo de 20 ms é supervisionado por interrupção de temporizador; **não é um watchdog independente de bloqueios de CPU/interrupções nem substitui uma proteção externa de dwell**. Antes de qualquer ligação a um motor faltam ensaios de arranque/reset, níveis elétricos, polaridade, sincronismo/PMS, precisão/jitter sob carga, aceleração e falhas de alimentação/interrupções.
+ReqFuel corresponde a VE 100% / MAP 100 kPa. O agendador TIM2/GPT5 continua limitado a dwell 5 ms e injeção 20 ms. Pulso superior ao máximo ou 80% do ciclo produz corte. Referência atrasada, falha de sincronismo/sensores, mudança de geração e ausência de serviço por 20 ms cancelam saídas. O motor não depende de consultas USB no modo autónomo; o modo manual mantém supervisão de 2 segundos. Pedidos de runtime TunerStudio também renovam a supervisão manual.
 
-## Protocolo binário nativo
+A recuperação USB é uma máquina de estados sem pausa bloqueante de 250 ms no serviço do motor. Leituras/escritas CDC são não bloqueantes. No modo autónomo, recuperação USB não reinicia o descodificador nem para as saídas. O serviço continua no ciclo principal; o prazo de 20 ms é supervisionado por GPT em interrupção, não por watchdog externo. Não garante proteção contra todos os bloqueios de CPU/interrupções.
 
-Pedidos CRC habituais, corpo `TUNUINO:X` seguido do opcode. Inteiros em big-endian. Recusa `0x84`; firmware sem suporte devolve `0x83` e a Console conserva a ligação.
+Bomba: escorva limitada e funcionamento com rotação; ventoinha: histerese, liga se temperatura inválida; relé principal ligado enquanto armado. Perda de sincronismo após funcionamento mantém corte até intervenção/reinício. Ainda não existe recuperação automática de um motor que parou por falha de sincronismo.
 
-| Opcode | Pedido após opcode | Resposta |
+## Comandos
+
+Corpo CRC `TUNUINO:X` + opcode; inteiros big-endian. Recusa 0x84.
+
+| Opcode | Pedido | Efeito |
 |---|---|---|
-| 0 | vazio | 24 bytes de estado; renova o prazo de comunicação |
-| 1 | perfil de 128 bytes | status; exige saídas desarmadas e ausência de alterações de calibração pendentes |
-| 2 | `ARM!` + geração U32 | status; exige perfil atual, timer disponível, aquisição ativa e calibração persistida |
-| 3 | vazio | status; cancela todos os pulsos e níveis auxiliares |
-| 4 | canal U8, duração U16, `TEST` | status; um pulso de bancada com motor desarmado e nenhuma rotação válida |
+| 0 | vazio | Estado 24 bytes, renova supervisão manual |
+| 1 | perfil 128 bytes | Compatibilidade: perfil apenas RAM; desativa política autónoma na sessão |
+| 2 | `ARM!` + geração U32 | Ativação explícita da geração atual |
+| 3 | vazio | STOP, cancela tudo e bloqueia reativação automática nesta sessão |
+| 4 | canal U8 + duração U16 + `TEST` | Pulso individual, unidade interna do temporizador |
+| 5 | canal U8 + duração U16 ms + `AUX!` | Relé atribuído, 1–800 ms, motor parado |
+| 6 | `RUN!` | Ativação explícita do perfil persistente, usado pelo TunerStudio |
 
-Estado: status U8, formato 1 U8, modo U8 (0 desarmado, 1 espera fase, 2 sequencial, 3 corte, 4 pulso), falhas U8 (1 atraso, 2 prazo, 4 sincronismo/sinal, 8 calibração), máscara ativa U32, máscara agendada U32, perfil válido U8, cilindros U8, temporizador válido U8, reservado U8, geração U32, último pulso calculado U32 em µs. Canais 0–15 são LS1–LS16; canais 16–27 são IGN1–IGN12. Uma máscara não mede corrente ou realimentação do driver.
+Estado: 0 status; 1 formato=1; 2 modo (0 parado, 1 espera fase, 2 sequencial, 3 corte, 4 teste); 3 falhas (1 atraso, 2 prazo, 4 sincronismo, 8 calibração); 4 máscara ativa U32; 8 máscara pendente U32; 12 perfil válido; 13 cilindros; 14 timer; 15 flags (1 perfil persistente, 2 autónomo); 16 geração U32; 20 pulso U32 em unidades internas do temporizador.
 
-Perfil: formato U8 em 0, cilindros U8 em 1; U16 ReqFuel em 2, dwell em 4, tempo morto em 6, pulso máximo em 8, escorva ms em 10; S16 ventoinha liga/desliga em centi°C em 12/14, fim de injeção relativo ao PMS em centigraus em 16; U32 ângulo do dente zero em centigraus em 18; U8 bomba/ventoinha/relé em 22/23/24 (0 não atribuído, 1–16 LS); U8 primeiro/último dente da janela e volta de fase em 25/26/27; reservas zero 28–31. De 32 a 127, doze descritores de 8 bytes: injetor U8 zero-based, ignição U8 zero-based, PMS U32 em centigraus e duas reservas zero. Descritores não utilizados devem ser zero.
+Runtime IO permanece com 100 bytes. Byte 31 antes reservado: modo nos bits 0–2, perfil persistente no bit 4, autónomo no bit 5, falha no bit 7. As restantes posições não mudam. `TUNUINO:V` acrescenta erros 256 perfil, 512 política autónoma.
+
+## Limites atuais
+
+Não há controlo de ralenti, turbo, VVT, knock, flex fuel, launch control, Lua, compensação IAT/barométrica, deadtime por tensão, enriquecimentos de arranque/aquecimento/aceleração nem lambda em malha fechada. Também não há calibração OEM específica ou suporte a rodas compostas fora do descodificador missing-tooth. Não apresentar estas funções como prontas.
+
+Testes de registos/flash simulados exercitam comandos, temporizadores, corte, persistência e perda de USB. Precisão física, polaridades, alimentação, carga, PMS e funcionamento real continuam por validar. [Utilização e estado](https://github.com/Tunuino/Tunuino_documents/blob/main/configuracao-persistente-mapas-base.md).

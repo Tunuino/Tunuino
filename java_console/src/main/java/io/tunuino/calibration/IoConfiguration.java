@@ -49,6 +49,16 @@ public final class IoConfiguration {
         this.bytes=bytes.clone();
     }
     public byte[] bytes(){return bytes.clone();}
+    public byte[] engineProfile(){return Arrays.copyOfRange(bytes,128,256);}
+    public boolean autonomous(){return bytes[102]==1;}
+    public IoConfiguration withEngine(byte[] profile,boolean autonomous){
+        if(profile==null||profile.length!=128)throw new IllegalArgumentException("Perfil de motor inválido");
+        byte[] updated=bytes.clone();updated[102]=(byte)(autonomous?1:0);
+        System.arraycopy(profile,0,updated,128,128);
+        IoConfiguration candidate=new IoConfiguration(updated);
+        if(!candidate.errors().isEmpty())throw new IllegalArgumentException(String.join(" · ",candidate.errors()));
+        return candidate;
+    }
     public static IoConfiguration localDefaults(){
         byte[] p=new byte[256];ByteBuffer b=ByteBuffer.wrap(p);
         b.putShort(0,(short)2);p[3]=36;p[4]=1;p[26]=3;
@@ -72,7 +82,11 @@ public final class IoConfiguration {
         if(bytes[0]!=0||bytes[1]!=2||bytes[5]!=0||bytes[9]!=0)errors.add("Esquema/reservas incompatíveis");
         for(int i=27;i<32;i++)if(bytes[i]!=0)errors.add("Reservas de calibração alteradas");
         for(int i=98;i<100;i++)if(bytes[i]!=0)errors.add("Reservas de aquisição alteradas");
-        for(int i=102;i<256;i++)if(bytes[i]!=0)errors.add("Reservas de configuração alteradas");
+        for(int i=103;i<128;i++)if(bytes[i]!=0)errors.add("Reservas de configuração alteradas");
+        byte[] profile=engineProfile();boolean hasProfile=!EngineProfile.empty(profile);
+        if(hasProfile&&!EngineProfile.valid(profile,bytes[3]&255,bytes[4]&255))errors.add("Perfil de motor inválido: verifica saídas, PMS, fase e limites");
+        if((bytes[102]&255)>1||(autonomous()&&(!hasProfile||!triggerEnabled()||mapChannel()==0||coolantChannel()==0)))
+            errors.add("Funcionamento autónomo exige perfil, aquisição, MAP e temperatura configurados");
         for(Field field:Field.values())if(raw(field)<field.min||raw(field)>field.max)errors.add(field.label+": fora dos limites");
         if((bytes[2]&255)>1||raw(Field.MISSING)>=raw(Field.WHEEL)/2)errors.add("Roda/dentes em falta incompatíveis");
         if(mapChannel()>11||raw(Field.MAP_RAW_LOW)>=raw(Field.MAP_RAW_HIGH)

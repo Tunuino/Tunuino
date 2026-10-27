@@ -49,3 +49,13 @@ Host tests exercise the C firmware through Java clients, pending/stale edits,
 exact units, map preservation, file CRC and persistence failure. JavaFX checks
 exercise the real form, invalid/busy/offline gating, ADC scaling and local edits.
 These tests do not validate physical ADC accuracy, trigger timing or flash hardware.
+
+## Motor extension
+
+Page 1 now stores activation policy at byte 102 and the engine profile at 128–255.
+Existing schema-2 configurations with zero extension bytes remain valid. Backups
+include these fields. Validation adds flags 256 (engine profile) and 512
+(autonomous prerequisites). See `engine-outputs.md` for layout and startup rules.
+Base maps are deliberately labeled local starting references. They are never
+reported as ECU readback, nor uploaded simply by selecting a template. The engine
+form uses milliseconds and exact decimal conversion to internal timer units.

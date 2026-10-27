@@ -65,6 +65,7 @@ final class DashboardPane extends VBox {
     private final FlowPane gaugeRow=new FlowPane(10,8);
     private final FlowPane smallRow=new FlowPane(9,9);
     private Consumer<CalibrationMap.Kind> onRead=kind->{};
+    private Consumer<CalibrationMap.Kind> onBase=kind->{};
     record MapSelection(CalibrationMap map,int row,int column) {}
     private Consumer<MapSelection> onEdit=selection->{};
     private DeviceIdentity mapOwner;
@@ -76,6 +77,8 @@ final class DashboardPane extends VBox {
     private final Label portLabel=new Label("PORTA —");
     private final Label firmwareLabel=new Label("Firmware —");
     private final Label outputs=new Label("Estado das saídas por consultar");
+
+    void onBaseMap(Consumer<CalibrationMap.Kind> action){onBase=java.util.Objects.requireNonNull(action);}
 
     DashboardPane() { this(false); }
 
@@ -147,12 +150,13 @@ final class DashboardPane extends VBox {
         liveHighlight.setOnAction(event->drawHeatmap());
         readVe.setId("dashboard-read-ve");readSpark.setId("dashboard-read-ignition");
         readVe.getStyleClass().add("primary");
+        Button base=new Button("Criar mapa base");base.setId("dashboard-base-map");base.setOnAction(event->onBase.accept(selected));
         readVe.setOnAction(event->onRead.accept(CalibrationMap.Kind.VE));
         readSpark.setOnAction(event->onRead.accept(CalibrationMap.Kind.IGNITION));
         editMap.setId("dashboard-edit-map");
         editMap.setOnAction(event->editSelected(0,0));
         FlowPane controls=new FlowPane(8,8,veTab,sparkTab,
-            readVe,readSpark,editMap,liveHighlight,show3d);
+            readVe,readSpark,editMap,base,liveHighlight,show3d);
         controls.getStyleClass().add("dashboard-table-actions");
         mapSource.getStyleClass().add("dashboard-subtext");mapSource.setWrapText(true);
         tableHost.getStyleClass().add("dashboard-table-host");
@@ -251,7 +255,7 @@ final class DashboardPane extends VBox {
     void showOutputs(io.tunuino.protocol.EngineOutputClient.State state){
         outputs.setText(state.description()+"\n"+state.faultsDescription()
             +"\nSaídas ativas: "+state.activeChannels()
-            +"\nInjeção: "+state.injectionUs()+" µs");
+            +"\nInjeção: "+String.format(Locale.forLanguageTag("pt-PT"),"%.3f",state.injectionUs()/1000.0)+" ms");
     }
     void setEditAction(Consumer<MapSelection> action) {
         onEdit=java.util.Objects.requireNonNull(action);

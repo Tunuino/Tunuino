@@ -30,8 +30,12 @@ def main():
     assert section.index('nPages = 3') < section.index('blockingFactor = 100')
     assert '[UiDialogs]' in text and '[UserDefined]' not in text
     ini=configparser.ConfigParser(interpolation=None,strict=False);ini.read_string('[General]\n'+text)
-    assert ini['TunerStudio'].getint('iniVersion')==5
+    assert ini['TunerStudio'].getint('iniVersion')==6
     assert ini['OutputChannels']['ochGetCommand']=='"O%2o%2c"'
+    assert ini['OutputChannels']['engineState']=='scalar, U08, 31, "", 1, 0'
+    for name in ('engineMode','engineAutonomous','engineFault'):
+        assert 'engineState' in ini['OutputChannels'][name]
+    assert 'engineProfileFormat' in ini['Constants'] and 'enginePolicy' in ini['Constants']
     assert ini['Constants'].getint('nPages')==3 and ini['Constants']['pageSize']=='256, 576, 576'
     assert ini['Constants'].getint('blockingFactor')>=ini['OutputChannels'].getint('ochBlockSize')
     assert ini['Constants']['endianness']=='big' and ini['OutputChannels'].getint('ochBlockSize')==100
@@ -46,7 +50,7 @@ def main():
         vectors={name:bytes.fromhex(value) for name,value in (line.split() for line in lines[:-1])}
         assert decode(vectors['signature'])==json.loads(ini['TunerStudio']['signature']).encode()
         assert decode(vectors['signature_q'])==decode(vectors['signature'])
-        assert decode(vectors['version'])==b'Tunuino 0.2.0 Proteus v0.7 IO bench\0'
+        assert decode(vectors['version'])==b'Tunuino 0.2.0 Proteus v0.7 engine configuration\0'
         assert decode(vectors['ts_protocol'])==b'001'
         assert decode(vectors['ts_test'])==b'\xff'
         assert decode(vectors['ts_seconds'])==bytes(2)

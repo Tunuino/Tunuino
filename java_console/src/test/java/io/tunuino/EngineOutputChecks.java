@@ -33,6 +33,21 @@ public final class EngineOutputChecks {
             check(EngineOutputClient.stop(session).active()==0,"Stop acknowledgement reflects actual inactive GPIO");
             p[33]=12;try{EngineOutputClient.configure(session,p);throw new AssertionError("Invalid coil accepted");}catch(java.io.IOException expected){}
             try{EngineOutputClient.pulse(session,16,5001);throw new AssertionError("Dwell cap bypassed");}catch(IllegalArgumentException expected){}
+            p[33]=0;
+            var identity=new io.tunuino.protocol.DeviceIdentity(io.tunuino.protocol.DeviceIdentity.Family.PROTEUS,
+                io.tunuino.protocol.DeviceIdentity.McuSeries.STM32_F4,7,0,2,0,15,"010000000000000000000000");
+            var timeout=java.time.Duration.ofSeconds(10);
+            var before=io.tunuino.protocol.ConfigurationClient.read(session,identity,timeout);
+            var saved=io.tunuino.protocol.ConfigurationClient.apply(session,identity,before,before.configuration().withEngine(p,false),timeout);
+            check(java.util.Arrays.equals(p,saved.configuration().engineProfile()),"Persisted motor page reads back exactly");
+            var restored=EngineOutputClient.read(session);
+            check(restored.persisted()&&restored.configured()&&!restored.autonomous()&&!restored.armed(),"Actual board loads saved profile without arming on save");
+            check(io.tunuino.protocol.IoClient.read(session,identity,timeout).generation()==saved.validation().generation(),"Runtime with persisted-engine flags decodes in the Console");
+            EngineOutputClient.arm(session,restored.generation());
+            byte[] write={'w',0,1,0,96,0,2,0x17,0x70};
+            check(session.exchange(write,timeout)[0]==(byte)0x84,"Running configuration writes are rejected before staging");
+            check(!io.tunuino.protocol.ConfigurationClient.validation(session,identity,timeout).dirty(),"Rejected edit leaves active engine configuration unchanged");
+            EngineOutputClient.stop(session);
         }
         System.out.println("Engine outputs C/Java: actual board protocol, profile, generation gate, disarmed bench pulse, no-sync inhibition, explicit stop and channel/dwell bounds passed. Synthetic registers only.");
     }

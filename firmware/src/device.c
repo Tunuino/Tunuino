@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Tunuino. IO/calibration protocol and explicit board output hook. */
 #include "tunuino/device.h"
+#include "tunuino/engine_control.h"
 #include <string.h>
 
 uint16_t tunuino_device_u16(const uint8_t *p) { return (uint16_t)((uint16_t)p[0] << 8 | p[1]); }
@@ -36,7 +37,12 @@ uint32_t tunuino_device_validation_errors(const uint8_t *p, size_t length) {
     if(tunuino_device_u16(p)!=TUNUINO_IO_SCHEMA || p[5]!=0 || p[9]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
     for(unsigned i=27;i<32;++i) if(p[i]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
     for(unsigned i=98;i<100;++i) if(p[i]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
-    for(unsigned i=102;i<256;++i) if(p[i]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
+    for(unsigned i=103;i<128;++i) if(p[i]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
+    bool has_profile=false;
+    for(unsigned i=128;i<256;++i)if(p[i])has_profile=true;
+    tunuino_engine_profile profile;
+    if(has_profile&&!tunuino_engine_profile_decode(p+128,p[3],p[4],&profile))errors|=TUNUINO_CONFIG_ENGINE;
+    if(p[102]>1 || (p[102] && (!has_profile||!p[2]||!p[6]||!p[8])))errors|=TUNUINO_CONFIG_AUTONOMOUS;
     if(p[2]>1 || p[3]<4 || p[3]>120 || p[4]<1 || p[4]>=p[3]/2
         || tunuino_device_u16(p+96)<1000 || tunuino_device_u16(p+96)>20000) errors|=TUNUINO_CONFIG_TRIGGER;
     if(p[6]>11 || tunuino_device_u16(p+10)>=tunuino_device_u16(p+12)
@@ -67,6 +73,8 @@ uint32_t tunuino_device_validation_errors(const uint8_t *p, size_t length) {
         for(unsigned i=0;i<TUNUINO_IO_MAP_DIM*TUNUINO_IO_MAP_DIM;++i) {
             int32_t value=signed16(m+64+2*i);
             if((page==2 && (value<0 || value>30000)) || (page==3 && (value< -9000 || value>9000))) errors|=issue;
+            /* Autonomous operation requires an explicitly populated fuel map. */
+            if(p[102]&&page==2&&value==0)errors|=TUNUINO_CONFIG_AUTONOMOUS;
         }
     }
     return errors;
@@ -153,6 +161,11 @@ static void runtime(tunuino_device *d, const tunuino_identity *id, uint8_t out[1
     (void)tunuino_frame_encode((const uint8_t *)"TUNUINO?",8,query,sizeof(query),&size);
     (void)tunuino_identity_reply(id,query,size,packet,sizeof(packet),&size);
     (void)tunuino_frame_decode(packet,size,&body,&size);memcpy(out,body+1,31);
+    if(d->output_command){
+        const uint8_t q=0;uint8_t state[24];size_t length=0;
+        if(d->output_command(d->output_user,&q,1,state,sizeof(state),&length)&&length==24)
+            out[31]=(uint8_t)(state[2]|((state[15]&1u)?16u:0u)|((state[15]&2u)?32u:0u)|(state[3]?128u:0u));
+    }
     put32(out+32,(uint32_t)(d->live.time_ms/1000));put16(out+36,(uint16_t)(d->live.time_ms%1000));
     out[38]=d->live.valid_mask;out[39]=(uint8_t)((d->adc_valid?1:0)|(d->dirty?2:0)|(d->persisted?4:0)|(d->trigger_valid?8:0));
     put32(out+40,d->live.rpm_milli);put32(out+44,d->live.map_milli_kpa);put32(out+48,d->live.lambda_million);
@@ -306,6 +319,7 @@ tunuino_dispatch_status tunuino_device_reply(tunuino_device *d,const tunuino_ide
     } else if(length>=3 && (q[0]=='r'||q[0]=='w'||q[0]=='b'||q[0]=='k')) {
         unsigned page=tunuino_device_u16(q+1);
         if(page<1||page>3)body[0]=0x83;
+        else if((q[0]=='w'||q[0]=='b')&&d->configuration_writable&&!d->configuration_writable())body[0]=0x84;
         else if(q[0]=='b' && length==3) {
             if(!tunuino_device_validate(d->staged,sizeof(d->staged)))body[0]=0x84;
             else if(d->save==NULL || !d->save(d->user,d->staged,sizeof(d->staged)))body[0]=0x80;

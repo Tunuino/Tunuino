@@ -7,7 +7,7 @@
 #include "tunuino/engine_math.h"
 
 #define TUNUINO_IO_SIGNATURE "Tunuino Proteus v0.7 F427 IO v2"
-#define TUNUINO_IO_VERSION "Tunuino 0.2.0 Proteus v0.7 IO bench"
+#define TUNUINO_IO_VERSION "Tunuino 0.2.0 Proteus v0.7 engine configuration"
 /* Serial protocol discovery version. 001 supports the CRC-wrapped envelope.
  * Independent of the application firmware version and INI revision. */
 #define TUNUINO_IO_TS_SERIAL_VERSION "001"
@@ -36,6 +36,10 @@
 #define TUNUINO_CONFIG_ADC UINT32_C(32)
 #define TUNUINO_CONFIG_VE UINT32_C(64)
 #define TUNUINO_CONFIG_IGNITION UINT32_C(128)
+#define TUNUINO_CONFIG_ENGINE UINT32_C(256)
+#define TUNUINO_CONFIG_AUTONOMOUS UINT32_C(512)
+#define TUNUINO_ENGINE_POLICY_OFFSET 102u
+#define TUNUINO_ENGINE_PROFILE_OFFSET 128u
 #define TUNUINO_IO_CONFIG_SIZE 256u
 #define TUNUINO_IO_MAP_SIZE 576u
 #define TUNUINO_IO_SETTINGS_SIZE 1408u
@@ -60,6 +64,7 @@ typedef struct tunuino_device {
     void *user;
     tunuino_device_output_command output_command;
     void *output_user;
+    bool (*configuration_writable)(void);
 } tunuino_device;
 
 void tunuino_device_init(tunuino_device *device, tunuino_device_save save,

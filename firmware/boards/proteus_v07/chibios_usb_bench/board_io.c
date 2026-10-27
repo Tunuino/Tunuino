@@ -126,6 +126,7 @@ static void configure_capture(tunuino_device *d,uint64_t now){
     applied_generation=d->generation;
 }
 void board_io_resync(tunuino_device *d){board_outputs_stop();configure_capture(d,board_io_time_us());}
+void board_io_usb_recover(tunuino_device *d){if(!board_outputs_autonomous())board_io_resync(d);}
 void board_io_phase(tunuino_device *d,uint8_t first,uint8_t last,uint8_t phase){
     cam_first=first;cam_last=last;cam_phase=phase;board_io_resync(d);
 }
@@ -143,6 +144,7 @@ void board_io_start(tunuino_device *d){
     adcStart(&ADCD1,NULL);
     const tunuino_journal_io io={flash_read,flash_program,flash_erase,NULL};uint8_t saved[TUNUINO_IO_SETTINGS_SIZE];
     if(tunuino_journal_init(&journal,&io,saved))(void)tunuino_device_restore(d,saved,sizeof(saved));
+    board_outputs_restore(d,true);
     configure_capture(d,board_io_time_us());
 }
 void board_io_update(tunuino_device *d){
