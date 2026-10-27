@@ -31,6 +31,7 @@ static const uint8_t *request(tunuino_device *d,const uint8_t *op,size_t count){
     const uint8_t *body;size_t bytes;assert(tunuino_frame_decode(response,response_size,&body,&bytes)==TUNUINO_FRAME_OK);return body;
 }
 #ifndef TUNUINO_OUTPUT_PEER
+#include "aux_fixture.h"
 int main(void){
     tunuino_device d;tunuino_device_init(&d,NULL,NULL,NULL);board_outputs_start(&d);off();assert(board_outputs_idle());
     unsigned configured=0;for(unsigned i=0;i<5;++i)for(unsigned bit=0;bit<16;++bit)configured+=(output_gpio[i].configured>>bit)&1u;
@@ -114,6 +115,21 @@ int main(void){
     assert(request(&d,status,1)[2]==0);
     const uint8_t activate[]={6,'R','U','N','!'};assert(request(&d,activate,5)[0]==0);
     assert(request(&d,status,1)[2]==1);request(&d,stop,1);off();
+    /* Persisted page 4 drives actual PWM pins and latches overboost cut. */
+    uint8_t aux_config[256];aux_fixture(aux_config);aux_config[1]=1;aux_config[2]=8;aux_config[3]=2;aux_config[4]=9;aux_config[5]=3;
+    memcpy(d.active+TUNUINO_IO_AUX_OFFSET,aux_config,256);assert(tunuino_device_validate(d.active,sizeof(d.active)));
+    assert(tunuino_device_restore(&d,d.active,sizeof(d.active)));board_outputs_restore(&d,false);
+    d.adc_valid=true;d.raw[2]=400;d.live.valid_mask=14;d.live.rpm_milli=0;d.live.map_milli_kpa=100000;d.live.coolant_milli_c=20000;
+    memset(&position,0,sizeof(position));assert(request(&d,activate,5)[0]==0);
+    board_outputs_update(&d,&position,TIM2->CNT,TIM2->CNT);const uint8_t aux_state[]={7};r=request(&d,aux_state,1);
+    assert(r[4]==1&&tunuino_device_u16(r+6)==0&&tunuino_device_u16(r+8)==3500);
+    irq();assert(GPIOB->value&(1u<<4));irq();assert(!(GPIOB->value&(1u<<4))); /* LS8 duty */
+    d.raw[2]=0;board_outputs_update(&d,&position,TIM2->CNT,TIM2->CNT);r=request(&d,aux_state,1);
+    assert(r[4]==0&&tunuino_device_u16(r+8)==0); /* invalid TPS commands safe OFF */
+    d.live.map_milli_kpa=200000;board_outputs_update(&d,&position,TIM2->CNT,TIM2->CNT);off();
+    r=request(&d,status,1);assert(r[2]==3&&(r[3]&16));
+    d.live.map_milli_kpa=100000;board_outputs_update(&d,&position,TIM2->CNT,TIM2->CNT);off();assert(request(&d,status,1)[2]==3);
+    request(&d,stop,1);
     puts("F427 output adapter: actual framed commands, reset GPIO levels, LS/IGN pin routing, GPT IRQ pulse edges, arm gates, profile phase wiring, main-loop stall and host lease cut passed. Register model only.");
     return 0;
 }

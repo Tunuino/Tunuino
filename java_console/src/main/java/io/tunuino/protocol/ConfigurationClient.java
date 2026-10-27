@@ -18,7 +18,7 @@ public final class ConfigurationClient {
     public record Validation(boolean dirty,boolean persisted,int errors,long generation,long pageCrc) {
         public String explanation() {
             List<String> issues=new ArrayList<>();
-            String[] names={"esquema/reservas","cambota/limite RPM","MAP","lambda","temperatura","referência ADC","mapa VE","mapa de ignição","perfil de motor","modo autónomo: perfil, sensores e mapa VE completo","correções de arranque/aquecimento"};
+            String[] names={"esquema/reservas","cambota/limite RPM","MAP","lambda","temperatura","referência ADC","mapa VE","mapa de ignição","perfil de motor","modo autónomo: perfil, sensores e mapa VE completo","correções de arranque/aquecimento","TPS, ralenti/turbo ou conflito de saídas"};
             for(int i=0;i<names.length;i++)if((errors&(1<<i))!=0)issues.add(names[i]);
             return issues.isEmpty()?"Configuração validada pelo firmware":String.join(" · ",issues);
         }
@@ -28,7 +28,7 @@ public final class ConfigurationClient {
     public static Validation decodeValidation(byte[] body)throws IOException {
         if(body==null||body.length!=16||body[0]!=0||body[1]!=1||(body[2]&255)>1||(body[3]&255)>1)throw new IOException("Diagnóstico de configuração incompatível");
         ByteBuffer bytes=ByteBuffer.wrap(body);long errors=Integer.toUnsignedLong(bytes.getInt(4)),generation=Integer.toUnsignedLong(bytes.getInt(8));
-        if(errors>2047||generation==0)throw new IOException("Diagnóstico de configuração inválido");
+        if(errors>4095||generation==0)throw new IOException("Diagnóstico de configuração inválido");
         return new Validation(body[2]!=0,body[3]!=0,(int)errors,generation,Integer.toUnsignedLong(bytes.getInt(12)));
     }
     private static Duration remaining(long deadline)throws IOException {

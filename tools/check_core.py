@@ -19,7 +19,7 @@ def run(args, timeout=None):
     if "firmware/src/dispatch.c" in args:
         args = list(args)
         for source in ("firmware/src/device.c", "firmware/src/config_journal.c", "firmware/src/analog.c",
-                       "firmware/src/calibration.c", "firmware/src/engine_math.c", "firmware/src/engine_profile.c", "firmware/src/fuel_corrections.c"):
+                       "firmware/src/calibration.c", "firmware/src/engine_math.c", "firmware/src/engine_profile.c", "firmware/src/fuel_corrections.c", "firmware/src/aux_control.c"):
             if source not in args: args.append(source)
     result = subprocess.run(args, cwd=ROOT, text=True, capture_output=True, timeout=timeout)
     if result.returncode:
@@ -52,6 +52,8 @@ def main():
         output_exe=work / ("outputs-check.exe" if os.name=="nt" else "outputs-check")
         run(flags+["firmware/src/outputs.c","firmware/src/engine_control.c","firmware/src/engine_profile.c","firmware/src/fuel_corrections.c","unit_tests/test_outputs.c","-lm","-o",str(output_exe)])
         print(run([str(output_exe)]))
+        for name,sources in [("aux-control",["firmware/src/aux_control.c","unit_tests/test_aux_control.c"]),("pwm",["firmware/src/outputs.c","unit_tests/test_pwm.c"])]:
+            extra=work / (name+(".exe" if os.name=="nt" else ""));run(flags+sources+["-o",str(extra)]);print(run([str(extra)]))
         fuel_exe=work / ("fuel-corrections.exe" if os.name=="nt" else "fuel-corrections")
         run(flags+["firmware/src/fuel_corrections.c","unit_tests/test_fuel_corrections.c","-o",str(fuel_exe)])
         print(run([str(fuel_exe)]))
@@ -199,6 +201,8 @@ def main():
             "firmware/boards/proteus_v07/usb_bench/main.c", "-o", str(bench_object)])
         bench_exe = work / ("usb-bench-check.exe" if os.name == "nt" else "usb-bench-check")
         core_sources = [str(p.relative_to(ROOT)) for p in sorted((ROOT / "firmware/src").glob("*.c"))]
+        migration=work / ("journal-migration.exe" if os.name=="nt" else "journal-migration")
+        run(flags+core_sources+["unit_tests/test_journal_migration.c","-lm","-o",str(migration)]);print(run([str(migration)],timeout=30))
         output_board_exe=work / ("board-outputs-check.exe" if os.name=="nt" else "board-outputs-check")
         run(flags+["-Iunit_tests/output_board_stub","-Ifirmware/boards/proteus_v07/chibios_usb_bench"]
             +core_sources+["firmware/boards/proteus_v07/chibios_usb_bench/board_outputs.c",
@@ -215,7 +219,7 @@ def main():
         io_exe = work / ("io-check.exe" if os.name == "nt" else "io-check")
         run(flags + core_sources + ["unit_tests/test_device_io.c", "-lm", "-o", str(io_exe)])
         assert run([str(io_exe)], timeout=20).splitlines()[-1] == "OK"
-        print("IO configuration, calibration, partial telemetry, maps and 153 flash interruption cases passed. Host model.")
+        print("IO configuration, calibration, partial telemetry, maps and flash interruption cases passed. Host model.")
         io_peer = work / ("io-peer.exe" if os.name == "nt" else "io-peer")
         run(flags + core_sources + ["unit_tests/device_peer.c", "-lm", "-o", str(io_peer)])
         chibios_object = work / "chibios-bench-loop.o"
@@ -290,6 +294,9 @@ def main():
         sources.append(java_root / "transport/ProcessSerialChannel.java")
         sources.append(java_root / "calibration/EngineProfile.java")
         sources.append(java_root / "calibration/FuelCorrections.java")
+        sources.append(java_root / "calibration/AuxConfiguration.java")
+        sources.append(java_root / "protocol/AuxControlClient.java")
+        sources.append(ROOT / "java_console/src/test/java/io/tunuino/AuxControlChecks.java")
         sources.append(java_root / "calibration/BaseMaps.java")
         sources.append(ROOT / "java_console/src/test/java/io/tunuino/BaseConfigurationChecks.java")
         sources.extend([java_root/"calibration/EnginePreset.java",ROOT/"java_console/src/test/java/io/tunuino/EnginePresetChecks.java"])
@@ -311,6 +318,7 @@ def main():
         print(run(["java", "-cp", str(work), "io.tunuino.ConfigurationChecks", str(io_peer)], timeout=30))
         print(run(["java","-cp",str(work),"io.tunuino.EngineOutputChecks",str(output_peer)],timeout=30))
         print(run(["java","-cp",str(work),"io.tunuino.EnginePresetChecks"]))
+        print(run(["java","-cp",str(work),"io.tunuino.AuxControlChecks",str(output_peer)],timeout=45))
         print(run(["java","-cp",str(work),"io.tunuino.BaseConfigurationChecks"]))
         simulator = build_simulator(work / "simulator")
         print(run(["java", "-cp", str(work), "io.tunuino.TelemetryChecks", str(simulator)], timeout=30))

@@ -1,3 +1,5 @@
+> Extensão de ralenti/turbo e migração do registo para 1664 bytes: [idle-boost.md](idle-boost.md). As três primeiras páginas conservam os offsets descritos abaixo.
+
 # Contrato do controlo sequencial e persistência
 
 Alvo: Proteus v0.7 STM32F427. [Origem dos pinos](../hardware/review/proteus-v07-outputs.json).
@@ -49,7 +51,7 @@ Runtime IO permanece com 100 bytes. Byte 31 antes reservado: modo nos bits 0–2
 
 ## Limites atuais
 
-Não há controlo de ralenti, turbo, VVT, knock, flex fuel, launch control, Lua, compensação IAT/barométrica, deadtime por tensão, enriquecimento de aceleração nem lambda em malha fechada. Também não há calibração OEM específica ou suporte a rodas compostas fora do descodificador missing-tooth. Não apresentar estas funções como prontas.
+Não há controlo VVT, knock, flex fuel, launch control, Lua, compensação IAT/barométrica, deadtime por tensão, enriquecimento de aceleração nem lambda em malha fechada. Também não há calibração OEM específica ou suporte a rodas compostas fora do descodificador missing-tooth. Não apresentar estas funções como prontas.
 
 Testes de registos/flash simulados exercitam comandos, temporizadores, corte, persistência e perda de USB. Precisão física, polaridades, alimentação, carga, PMS e funcionamento real continuam por validar. [Utilização e estado](https://github.com/Tunuino/Tunuino_documents/blob/main/configuracao-persistente-mapas-base.md).
 

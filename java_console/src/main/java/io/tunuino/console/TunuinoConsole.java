@@ -67,6 +67,7 @@ public final class TunuinoConsole extends Application {
     private DashboardPane ignitionTables;
     private ConfigurationPane configurationPane;
     private EngineControlPane engineControlPane;
+    private AuxControlPane auxControlPane;
     private boolean engineArmed;
     private boolean engineAutonomous;
     private boolean serialBusy;
@@ -231,6 +232,7 @@ public final class TunuinoConsole extends Application {
             }
             if(configurationPane!=null)configurationPane.availability(identifiedDevice,connected,
                 engineArmed||serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()));
+            if(auxControlPane!=null)auxControlPane.availability(identifiedDevice,connected,serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()),engineArmed);
             if(engineControlPane!=null)engineControlPane.availability(identifiedDevice,connected,
                 serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()));
             connect.setText(connected ? "Desligar USB" : "Ligar USB");
@@ -801,12 +803,14 @@ public final class TunuinoConsole extends Application {
             }
         };
         configurationPane=new ConfigurationPane(stage,ecuAccess);
-        engineControlPane=new EngineControlPane(stage,ecuAccess,value->{
+        Consumer<io.tunuino.protocol.EngineOutputClient.State> outputState=value->{
             engineArmed=value.armed();
             engineAutonomous=value.autonomous();
             for(DashboardPane page:new DashboardPane[]{dashboard,fuelTables,ignitionTables})page.showOutputs(value);
             refreshControls.run();
-        });
+        };
+        engineControlPane=new EngineControlPane(stage,ecuAccess,outputState);
+        auxControlPane=new AuxControlPane(stage,ecuAccess,outputState);
         shell.addPage("Data Log", "Datalogs e monitorização", "Gravação CSV e reprodução dos sinais disponíveis.",
             "M3 3H21V21H3ZM6 7H18V9H6ZM6 12H18V14H6ZM6 17H15V19H6Z", root);
         shell.addPage("Inputs / Outputs", "Sensores e entradas", "Roda fónica, sensores e leitura das entradas ADC.",
@@ -836,12 +840,14 @@ public final class TunuinoConsole extends Application {
             "M3 4H19V18H3ZM0 8H3V14H0ZM19 8H22V14H19Z",ConsoleShell.scroll(engineControlPane));
         shell.addPage("Output Tests", "Testes de atuadores", "Testes separados de injetores, ignição, bomba, ventoinha e relé principal.",
             "M12 2L6 13H11L8 22L18 10H13Z",ConsoleShell.scroll(engineControlPane.tests()));
+        shell.addPage("Aux Control","TPS, ralenti e turbo","Calibração TPS, válvulas PWM e controlo de rotação/pressão.","M3 4H19V18H3ZM6 8H16V14H6Z",ConsoleShell.scroll(auxControlPane));
+        shell.label("Aux Control","Ralenti e turbo");
         shell.label("Dashboard","Painel");shell.label("Data Log","Datalogs");shell.label("Tuning","Mapas e cálculos");
         shell.label("Fuel Tables","Combustível · VE");shell.label("Ignition Tables","Ignição · avanço");
         shell.label("Inputs / Outputs","Sensores e entradas");shell.label("Diagnostics","Estado da ECU");
         shell.label("Engine","Motor e saídas");shell.label("Output Tests","Testes de atuadores");shell.label("Settings","Sobre a Console");
         shell.group("Monitorização","Dashboard","Data Log");
-        shell.group("Configuração","Engine","Inputs / Outputs");
+        shell.group("Configuração","Engine","Inputs / Outputs","Aux Control");
         shell.group("Afinação","Fuel Tables","Ignition Tables","Tuning","Autotune");
         shell.group("Diagnóstico","Output Tests","Diagnostics");
         shell.group("Sistema","Firmware","Settings");

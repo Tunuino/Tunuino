@@ -16,16 +16,16 @@ def render():
         '; Persistent engine, sensor and 16x16 map configuration.',
         '; Disabled/unavailable calibrated channels evaluate to NaN, not measurements.',
         'enable2ndByteCanID = false', '', '[TunerStudio]',
-        '    iniSpecVersion = 3.51', '    iniVersion = 7', f'    signature = {json.dumps(SIGNATURE)}',
+        '    iniSpecVersion = 3.51', '    iniVersion = 8', f'    signature = {json.dumps(SIGNATURE)}',
         '    queryCommand = "S"', '    versionInfo = "V"', '    defaultRuntimeRecordPerSec = 5', '',
         '[Constants]', '    messageEnvelopeFormat = msEnvelope_1.0', '    endianness = big',
-        '    nPages = 3', '    pageSize = 256, 576, 576',
-        '    pageIdentifier = "\\x00\\x01", "\\x00\\x02", "\\x00\\x03"',
-        '    pageReadCommand = "r%2i%2o%2c", "r%2i%2o%2c", "r%2i%2o%2c"',
-        '    pageValueWrite = "w%2i%2o%2c%v", "w%2i%2o%2c%v", "w%2i%2o%2c%v"',
-        '    pageChunkWrite = "w%2i%2o%2c%v", "w%2i%2o%2c%v", "w%2i%2o%2c%v"',
-        '    burnCommand = "b%2i", "b%2i", "b%2i"',
-        '    crc32CheckCommand = "k%2i", "k%2i", "k%2i"',
+        '    nPages = 4', '    pageSize = 256, 576, 576, 256',
+        '    pageIdentifier = "\\x00\\x01", "\\x00\\x02", "\\x00\\x03", "\\x00\\x04"',
+        '    pageReadCommand = "r%2i%2o%2c", "r%2i%2o%2c", "r%2i%2o%2c", "r%2i%2o%2c"',
+        '    pageValueWrite = "w%2i%2o%2c%v", "w%2i%2o%2c%v", "w%2i%2o%2c%v", "w%2i%2o%2c%v"',
+        '    pageChunkWrite = "w%2i%2o%2c%v", "w%2i%2o%2c%v", "w%2i%2o%2c%v", "w%2i%2o%2c%v"',
+        '    burnCommand = "b%2i", "b%2i", "b%2i", "b%2i"',
+        '    crc32CheckCommand = "k%2i", "k%2i", "k%2i", "k%2i"',
         '    blockingFactor = 100', '    blockReadTimeout = 6000',
         '    interWriteDelay = 0', '    page = 1',
         '    configLayout = scalar, U16, 0, "", 1, 0, 2, 2, 0',
@@ -80,6 +80,27 @@ def render():
         lines += [f'    page = {page}', f'    {prefix}Rpm = array, U16, 0, [16], "rpm", 1, 0, 0, 20000, 0',
             f'    {prefix}Load = array, U16, 32, [16], "kPa", 0.01, 0, 0, 500, 2',
             f'    {prefix}Cells = array, S16, 64, [16x16], "{unit}", 0.01, 0, {minimum}, {maximum}, 2']
+    lines += ['    page = 4', '    auxFormat = bits, U08, 0, [0:0], "Factory disabled", "Configured"',
+        '    idleMode = bits, U08, 1, [0:1], "Disabled", "Temperature duty", "RPM PI", "INVALID"',
+        '    boostMode = bits, U08, 3, [0:1], "Disabled", "Fixed duty", "MAP PI", "INVALID"']
+    ls='"Disabled", '+', '.join(f'"LS {i}"' for i in range(1,17))
+    lines += [f'    idleOutput = bits, U08, 2, [0:4], {ls}',f'    boostOutput = bits, U08, 4, [0:4], {ls}',
+        '    tpsInput = bits, U08, 5, [0:3], "Disabled", '+', '.join(f'"AV{i}"' for i in range(1,12))]
+    aux_fields=[('tpsClosed','U16',6,'ADC',1,0,4095,0),('tpsOpen','U16',8,'ADC',1,0,4095,0),
+        ('idleFrequency','U16',10,'Hz',1,10,300,0),('boostFrequency','U16',12,'Hz',1,10,100,0),
+        ('idleMinimum','U16',14,'%',0.01,0,100,2),('idleMaximum','U16',16,'%',0.01,0,100,2),
+        ('idleCrankDuty','U16',18,'%',0.01,0,100,2),('idleTpsLimit','U16',20,'%',0.01,0,20,2),('idleRpmLimit','U16',22,'rpm',1,500,3000,0),
+        ('idleP','U16',24,'%/100rpm',0.01,0,50,2),('idleI','U16',26,'%/100rpm/s',0.01,0,50,2),
+        ('auxCrankingRpm','U16',46,'rpm',1,100,1000,0),('boostMinimum','U16',48,'%',0.01,0,95,2),
+        ('boostMaximum','U16',50,'%',0.01,0,95,2),('boostBase','U16',52,'%',0.01,0,95,2),
+        ('boostTarget','U16',54,'kPa absolute',0.01,100,499.99,2),('boostCut','U16',56,'kPa absolute',0.01,100.01,500,2),
+        ('boostRpmMinimum','U16',58,'rpm',1,500,8000,0),('boostTpsMinimum','U16',60,'%',0.01,0,100,2),
+        ('boostP','U16',62,'%/10kPa',0.01,0,50,2),('boostI','U16',64,'%/10kPa/s',0.01,0,50,2),('tpsTolerance','U16',66,'% ADC span',0.01,0,10,2)]
+    for i in range(3):
+        aux_fields += [(f'idleTemperature{i+1}','S16',28+2*i,'C',0.01,-40,150,2),
+            (f'idleTarget{i+1}','U16',34+2*i,'rpm',1,500,2000,0),(f'idleDuty{i+1}','U16',40+2*i,'%',0.01,0,100,2)]
+    for name,kind,offset,unit,scale,minimum,maximum,decimals in aux_fields:
+        lines.append(f'    {name} = scalar, {kind}, {offset}, "{unit}", {scale}, 0, {minimum}, {maximum}, {decimals}')
     lines += ['', '[ConstantExtensions]', '    readOnly = configLayout', '    readOnly = coolantCount', '',
         '[OutputChannels]', '    ochGetCommand = "O%2o%2c"', '    ochBlockSize = 100']
     channels=[('engineState','U08',31,'',1),('protocolRevision','U08',7,'',1),('boardFamily','U08',8,'',1),('mcuSeries','U08',9,'',1),
@@ -105,6 +126,10 @@ def render():
         lines.append(f'    {name} = {{ (validMask & {mask}) != 0 ? {name}Value : (0.0 / 0.0) }}, "{unit}"')
     for i in range(16):
         lines.append(f'    adc{i+1} = {{ (ioStatus & 1) != 0 ? raw{i+1} * adcReferenceMv / 4095000.0 : (0.0 / 0.0) }}, "V"')
+    tps_raw='(0.0 / 0.0)'
+    for i in range(11,0,-1):tps_raw=f'tpsInput == {i} ? raw{i} : ({tps_raw})'
+    lines += [f'    tpsAdc = {{ {tps_raw} }}, "ADC"',
+        '    tps = { (ioStatus & 1) != 0 && tpsInput > 0 && tpsClosed != tpsOpen && ((tpsClosed < tpsOpen && tpsAdc >= tpsClosed - (tpsOpen - tpsClosed) * tpsTolerance / 100 && tpsAdc <= tpsOpen + (tpsOpen - tpsClosed) * tpsTolerance / 100) || (tpsClosed > tpsOpen && tpsAdc <= tpsClosed + (tpsClosed - tpsOpen) * tpsTolerance / 100 && tpsAdc >= tpsOpen - (tpsClosed - tpsOpen) * tpsTolerance / 100)) ? (((tpsAdc - tpsClosed) * 100.0 / (tpsOpen - tpsClosed)) < 0 ? 0 : (((tpsAdc - tpsClosed) * 100.0 / (tpsOpen - tpsClosed)) > 100 ? 100 : (tpsAdc - tpsClosed) * 100.0 / (tpsOpen - tpsClosed))) : (0.0 / 0.0) }, "%"']
     lines += ['    engineMode = { engineState & 7 }, ""', '    engineAutonomous = { (engineState & 32) != 0 }, ""', '    engineFault = { (engineState & 128) != 0 }, ""']
     lines += ['', '[CurveEditor]', '    curve = coolantCurve, "Coolant calibration: measured ADC / temperature"',
         '        columnLabel = "ADC", "C"', '        xAxis = 0, 4095, 3', '        yAxis = -40, 150, 10',
@@ -116,6 +141,7 @@ def render():
         '    engineStateGauge = engineMode, "Engine state", "", 0, 4, 0, 0, 3, 4, 0, 0',
         '    engineAutonomousGauge = engineAutonomous, "Autonomous mode", "", 0, 1, 0, 0, 1, 1, 0, 0',
         '    engineFaultGauge = engineFault, "Engine fault", "", 0, 1, 0, 0, 1, 1, 0, 0',
+        '    tpsGauge = tps, "TPS calibrated", "%", 0, 100, 0, 0, 100, 100, 2, 2',
         '    rpmGauge = rpm, "RPM", "rpm", 0, 12000, 0, 0, 10000, 12000, 0, 0',
         '    mapGauge = map, "MAP", "kPa", 0, 300, 0, 0, 250, 300, 2, 2',
         '    lambdaGauge = lambda, "Lambda", "lambda", 0.5, 1.5, 0.6, 0.7, 1.3, 1.4, 3, 3',
@@ -132,7 +158,7 @@ def render():
         '        subMenu = cylinderSetup, "Cylinder wiring and firing phases"',
         '        subMenu = fuelSetup, "Injection"', '        subMenu = fuelCorrectionSetup, "Cranking, afterstart and warm-up"', '        subMenu = ignitionSetup, "Ignition"',
         '        subMenu = phaseSetup, "Crank and cam synchronization"',
-        '        subMenu = auxiliarySetup, "Pump, fan and main relay"',
+        '        subMenu = auxiliarySetup, "Pump, fan and main relay"', '        subMenu = idleSetup, "TPS and idle PWM"', '        subMenu = boostSetup, "Boost PWM and overpressure cut"',
         '    menu = "Sensors and tuning"',
         '        subMenu = inputSetup, "Inputs and wheel"', '        subMenu = mapCalibration, "MAP calibration"',
         '        subMenu = lambdaCalibration, "Lambda calibration"', '        subMenu = coolantCurve, "Coolant curve"',
@@ -181,6 +207,15 @@ def render():
     for i in range(12):
         for label,suffix in [('Injector','Injector'),('Ignition','Ignition'),('TDC phase','Tdc')]:
             lines.append(f'        field = "Cylinder {i+1} {label}", cylinder{i+1}{suffix}')
+    for name,title,fields in [('idleSetup','TPS and idle PWM', [('Page initialized','auxFormat'),('TPS input','tpsInput'),('TPS closed ADC','tpsClosed'),('TPS open ADC','tpsOpen'),('TPS endpoint tolerance','tpsTolerance'),('Idle mode','idleMode'),('Idle output','idleOutput'),('Frequency','idleFrequency'),('Minimum duty','idleMinimum'),('Maximum duty','idleMaximum'),('Cranking duty','idleCrankDuty'),('Cranking below RPM','auxCrankingRpm'),('Maximum TPS','idleTpsLimit'),('Maximum RPM','idleRpmLimit'),('P gain','idleP'),('I gain','idleI')]),
+        ('boostSetup','Boost PWM and overpressure cut',[('Mode','boostMode'),('Output','boostOutput'),('Frequency','boostFrequency'),('Minimum duty','boostMinimum'),('Maximum duty','boostMaximum'),('Base duty','boostBase'),('Target MAP absolute','boostTarget'),('Hard cut MAP absolute','boostCut'),('Minimum RPM','boostRpmMinimum'),('Minimum TPS','boostTpsMinimum'),('P gain','boostP'),('I gain','boostI')])]:
+        lines += [f'    dialog = {name}, "{title}"','        field = "STOP outputs before editing. LS outputs cannot overlap injectors, relays or other valves."']
+        if name=='idleSetup':lines.append('        gauge = tpsGauge')
+        if name=='boostSetup':lines.append('        field = "Valve OFF must yield wastegate spring pressure. Aspirated base maps do not calibrate boost."')
+        for label,field in fields:lines.append(f'        field = "{label}", {field}')
+        if name=='idleSetup':
+            for i in range(3):
+                for label,key in [('Temperature','idleTemperature'),('Target RPM','idleTarget'),('Base duty','idleDuty')]:lines.append(f'        field = "{label} {i+1}", {key}{i+1}')
     lines += ['    dialog = engineControl, "Engine activation and status"',
         '        field = "ACTIVATE can energize physical outputs. Confirm wiring, timing and calibration first."',
         '        field = "STOP before editing or burning settings. Writes are rejected while outputs are armed."',

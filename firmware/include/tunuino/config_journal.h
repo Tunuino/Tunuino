@@ -17,6 +17,7 @@ typedef struct {
     unsigned bank;
     size_t offset;
     bool found;
+    bool legacy;
 } tunuino_config_journal;
 bool tunuino_journal_init(tunuino_config_journal *journal,const tunuino_journal_io *io,uint8_t settings[TUNUINO_IO_SETTINGS_SIZE]);
 bool tunuino_journal_save(tunuino_config_journal *journal,const uint8_t settings[TUNUINO_IO_SETTINGS_SIZE]);

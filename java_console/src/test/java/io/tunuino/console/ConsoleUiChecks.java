@@ -298,6 +298,12 @@ public final class ConsoleUiChecks {
             try{fuelPane.candidate();throw new AssertionError("Fractional ms duration rounded silently");}catch(IllegalArgumentException expected){}
             aseTime.setText("10000");snapshot(scene,"console-start-warmup");
             correctionsEnabled.fire();check(!fuelPane.candidate().enabled()&&fuelPane.candidate().configured(),"Disabling retains valid values");
+            ((ToggleButton)scene.lookup("#navigate-12")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
+            AuxControlPane auxPane=(AuxControlPane)scene.lookup("#aux-control-pane");
+            check(((Button)scene.lookup("#aux-read")).isDisabled()&&((Button)scene.lookup("#aux-save")).isDisabled(),"Offline auxiliary writes are blocked");
+            ((Button)scene.lookup("#aux-reference")).fire();check(auxPane.candidate().idleMode()==0&&auxPane.candidate().boostMode()==0,"Auxiliary reference leaves valves disabled");
+            var auxTabs=(javafx.scene.control.TabPane)scene.lookup("#aux-tabs");check(auxTabs.getTabs().size()==3,"Dedicated TPS, idle and boost settings");
+            for(int tab=0;tab<3;tab++){auxTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();snapshot(scene,"console-idle-boost-"+tab);}
             ((ToggleButton)scene.lookup("#navigate-11")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
             var outputTabs=(javafx.scene.control.TabPane)scene.lookup("#output-test-tabs");
             check(outputTabs.getTabs().size()==3,"Separate injector, ignition and relay test tabs");

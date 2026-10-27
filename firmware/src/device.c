@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Tunuino. IO/calibration protocol and explicit board output hook. */
 #include "tunuino/device.h"
 #include "tunuino/engine_control.h"
+#include "tunuino/aux_control.h"
 #include <string.h>
 
 uint16_t tunuino_device_u16(const uint8_t *p) { return (uint16_t)((uint16_t)p[0] << 8 | p[1]); }
@@ -12,10 +13,10 @@ static int32_t signed16(const uint8_t *p) {
 }
 static size_t page_offset(unsigned page) {
     return page==1 ? 0u : page==2 ? TUNUINO_IO_CONFIG_SIZE
-        : TUNUINO_IO_CONFIG_SIZE+TUNUINO_IO_MAP_SIZE;
+        : page==3 ? TUNUINO_IO_CONFIG_SIZE+TUNUINO_IO_MAP_SIZE : TUNUINO_IO_AUX_OFFSET;
 }
 static size_t page_size(unsigned page) {
-    return page==1 ? TUNUINO_IO_CONFIG_SIZE : TUNUINO_IO_MAP_SIZE;
+    return page==1||page==4 ? TUNUINO_IO_CONFIG_SIZE : TUNUINO_IO_MAP_SIZE;
 }
 /* Only active format: 16x16, axes U16, cells signed S16. */
 static bool map_decode(tunuino_map *map, const uint8_t *bytes, tunuino_map_kind kind) {
@@ -32,7 +33,7 @@ static bool map_decode(tunuino_map *map, const uint8_t *bytes, tunuino_map_kind 
 }
 
 uint32_t tunuino_device_validation_errors(const uint8_t *p, size_t length) {
-    if (p==NULL || length!=TUNUINO_IO_SETTINGS_SIZE) return TUNUINO_CONFIG_SCHEMA;
+    if (p==NULL || (length!=TUNUINO_IO_SETTINGS_SIZE&&length!=TUNUINO_IO_LEGACY_SIZE)) return TUNUINO_CONFIG_SCHEMA;
     uint32_t errors=0;
     if(tunuino_device_u16(p)!=TUNUINO_IO_SCHEMA || p[5]!=0 || p[9]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
     for(unsigned i=27;i<32;++i) if(p[i]!=0) errors|=TUNUINO_CONFIG_SCHEMA;
@@ -43,6 +44,18 @@ uint32_t tunuino_device_validation_errors(const uint8_t *p, size_t length) {
     for(unsigned i=128;i<256;++i)if(p[i])has_profile=true;
     tunuino_engine_profile profile;
     if(has_profile&&!tunuino_engine_profile_decode(p+128,p[3],p[4],&profile))errors|=TUNUINO_CONFIG_ENGINE;
+    if(length==TUNUINO_IO_SETTINGS_SIZE){
+        uint32_t used=0;bool have=has_profile&&!(errors&TUNUINO_CONFIG_ENGINE);
+        if(have){
+            for(unsigned i=0;i<profile.cylinders;++i)used|=UINT32_C(1)<<profile.cylinder[i].injector;
+            const uint8_t aux[3]={profile.pump,profile.fan,profile.relay};
+            for(unsigned i=0;i<3;++i)if(aux[i])used|=UINT32_C(1)<<(aux[i]-1);
+        }
+        tunuino_aux_config c;
+        if(!tunuino_aux_decode(p+TUNUINO_IO_AUX_OFFSET,used,have,&c))errors|=TUNUINO_CONFIG_AUX;
+        else if((c.idle_mode&&!p[8])||(c.boost_mode&&(!p[6]||(uint32_t)tunuino_device_u16(p+16)<c.boost_cut))
+            ||(c.tps_channel&&(c.tps_channel==p[6]||c.tps_channel==p[7])))errors|=TUNUINO_CONFIG_AUX;
+    }
     if(p[102]>1 || (p[102] && (!has_profile||!p[2]||!p[6]||!p[8])))errors|=TUNUINO_CONFIG_AUTONOMOUS;
     if(p[2]>1 || p[3]<4 || p[3]>120 || p[4]<1 || p[4]>=p[3]/2
         || tunuino_device_u16(p+96)<1000 || tunuino_device_u16(p+96)>20000) errors|=TUNUINO_CONFIG_TRIGGER;
@@ -117,6 +130,7 @@ void tunuino_device_init(tunuino_device *d, tunuino_device_save save, tunuino_de
 bool tunuino_device_restore(tunuino_device *d, const uint8_t *bytes, size_t length) {
     if(d==NULL || !tunuino_device_validate(bytes,length))return false;
     memmove(d->active,bytes,length);memcpy(d->staged,d->active,length);d->dirty=false;d->persisted=true;
+    if(length==TUNUINO_IO_LEGACY_SIZE){memset(d->active+length,0,TUNUINO_IO_SETTINGS_SIZE-length);memcpy(d->staged,d->active,sizeof(d->active));}
     return publish(d);
 }
 
@@ -268,7 +282,7 @@ tunuino_dispatch_status tunuino_device_reply(tunuino_device *d,const tunuino_ide
     const uint8_t *q,size_t length,uint8_t *response,size_t capacity,size_t *written) {
     uint8_t body[257]={0};size_t size=1;
     if(length>=10 && memcmp(q,"TUNUINO:X",9)==0 && d->output_command){
-        if(capacity<(q[9]==0?30u:7u))return TUNUINO_DISPATCH_CAPACITY;
+        if(capacity<(q[9]==0?30u:q[9]==7?38u:7u))return TUNUINO_DISPATCH_CAPACITY;
         if(!d->output_command(d->output_user,q+9,length-9,body,sizeof(body),&size)){body[0]=0x84;size=1;}
     }
     else if(length==1 && q[0]=='D') {memcpy(d->staged,d->active,sizeof(d->staged));d->dirty=false;}
@@ -319,7 +333,7 @@ tunuino_dispatch_status tunuino_device_reply(tunuino_device *d,const tunuino_ide
         body[1]=2;put16(body+2,100);put16(body+4,64);size=6;
     } else if(length>=3 && (q[0]=='r'||q[0]=='w'||q[0]=='b'||q[0]=='k')) {
         unsigned page=tunuino_device_u16(q+1);
-        if(page<1||page>3)body[0]=0x83;
+        if(page<1||page>4)body[0]=0x83;
         else if((q[0]=='w'||q[0]=='b')&&d->configuration_writable&&!d->configuration_writable())body[0]=0x84;
         else if(q[0]=='b' && length==3) {
             if(!tunuino_device_validate(d->staged,sizeof(d->staged)))body[0]=0x84;

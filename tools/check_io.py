@@ -27,20 +27,20 @@ def main():
     text=content.decode('ascii')
     section=text.split('\n[Constants]\n',1)[1].split('\n[',1)[0]
     assert 'baudRate =' not in section
-    assert section.index('nPages = 3') < section.index('blockingFactor = 100')
+    assert section.index('nPages = 4') < section.index('blockingFactor = 100')
     assert '[UiDialogs]' in text and '[UserDefined]' not in text
     ini=configparser.ConfigParser(interpolation=None,strict=False);ini.read_string('[General]\n'+text)
-    assert ini['TunerStudio'].getint('iniVersion')==7
+    assert ini['TunerStudio'].getint('iniVersion')==8
     assert ini['OutputChannels']['ochGetCommand']=='"O%2o%2c"'
     assert ini['OutputChannels']['engineState']=='scalar, U08, 31, "", 1, 0'
     for name in ('engineMode','engineAutonomous','engineFault'):
         assert 'engineState' in ini['OutputChannels'][name]
     assert 'engineProfileFormat' in ini['Constants'] and 'enginePolicy' in ini['Constants']
-    assert ini['Constants'].getint('nPages')==3 and ini['Constants']['pageSize']=='256, 576, 576'
+    assert ini['Constants'].getint('nPages')==4 and ini['Constants']['pageSize']=='256, 576, 576, 256'
     assert ini['Constants'].getint('blockingFactor')>=ini['OutputChannels'].getint('ochBlockSize')
     assert ini['Constants']['endianness']=='big' and ini['OutputChannels'].getint('ochBlockSize')==100
     for field,prefix in [('pageReadCommand','r'),('pageChunkWrite','w'),('burnCommand','b'),('crc32CheckCommand','k')]:
-        assert ini['Constants'][field].count('"'+prefix)==3
+        assert ini['Constants'][field].count('"'+prefix)==4
     with tempfile.TemporaryDirectory(prefix='tunuino-io-') as directory:
         work=Path(directory);exe=work/('io.exe' if os.name=='nt' else 'io')
         sources=sorted((ROOT/'firmware/src').glob('*.c'))
