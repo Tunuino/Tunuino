@@ -67,7 +67,7 @@ def main():
     installer = validate_installer(Path("build/installer"), commit, run_id)
     shutil.copy2(installer, output / SETUP_NAME)
     repo = os.environ["GITHUB_REPOSITORY"]
-    notes = f"""## Tunuino — ralenti PWM, turbo e calibração TPS
+    notes = f"""## Tunuino — combustível, lambda e proteções
 
 Console Windows x64, firmware **Proteus v0.7 / STM32F427** e **INI TunerStudio**, produzidos a partir do mesmo commit.
 
@@ -83,6 +83,8 @@ Esta imagem usa o startup, kernel e USB CDC do repositório **Tunuino/ChibiOS**,
 **Atualizações:** fechar a Console e instalar o MSI mais recente. Mapas, configurações e datalogs são guardados por predefinição em `%LOCALAPPDATA%\\TunuinoConsole` e ficam preservados na atualização e desinstalação. As definições antigas de ferramentas em `%USERPROFILE%\\.tunuino` continuam legíveis. A atualização exige descarregar e executar o novo instalador; ainda não existe atualização automática. O instalador ainda não tem assinatura digital de editor.
 
 O ZIP portátil mantém `console/`, `firmware/`, `kit-manifest.json`, `START-HERE.txt` e `SHA256SUMS.txt`. Só será retirado dos novos lançamentos após confirmação de que os testes passaram. Os dois formatos contêm os componentes do mesmo commit. O firmware inclui `corresponding-source.tar.gz` e as licenças ChibiOS.
+
+**Combustível e proteções:** nova página da Console com referências aspiradas/sobrealimentadas, configuração no INI e todas as novas funções desativadas na atualização. Acrescenta compensação IAT, tempo morto/dwell por tensão em ms, alvo lambda por MAP e PI de correção, enriquecimento de aceleração por TPS, DFCO, limitador por corte de combustível, launch com entrada analógica condicionada, flex fuel por controlador analógico, corte retido por CLT/tensão e ajustes individuais por cilindro. As definições TPS/ralenti/turbo são preservadas e o backup `.tnaux` inclui toda a página. Alvo lambda é uma curva de três pontos por MAP, sem aprendizagem VE/Autotune. Flex fuel não lê diretamente sensores de frequência. VVT, detonação e borboleta eletrónica continuam pendentes. Firmware antigo rejeita esta extensão; exportar todas as configurações antes de atualizar ou voltar a versões anteriores. [Guia](https://github.com/Tunuino/Tunuino_documents/blob/main/combustivel-protecoes.md).
 
 **Ralenti e turbo:** nova página TPS/ralenti/turbo na Console e no INI. TPS crescente ou decrescente; ralenti por curva de temperatura ou correção PI de RPM; turbo por duty fixo ou correção PI de MAP absoluto; limite de sobrepressão com corte. PWM executado pelo temporizador de saídas, com recusa de canais usados por injetores/relés. Controlos desativados por predefinição. Exigem configuração das válvulas, afinação e validação elétrica. Configuração guardada na página 4 e backup separado `.tnaux`. Os registos anteriores de flash são lidos e migrados para o novo formato sem apagar o último registo válido antes da confirmação. Voltar a firmware antigo depois de gravar este formato pode recuperar valores antigos do banco legado; exportar perfil, mapas e auxiliares antes de atualizar.
 

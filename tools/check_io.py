@@ -30,7 +30,21 @@ def main():
     assert section.index('nPages = 4') < section.index('blockingFactor = 100')
     assert '[UiDialogs]' in text and '[UserDefined]' not in text
     ini=configparser.ConfigParser(interpolation=None,strict=False);ini.read_string('[General]\n'+text)
-    assert ini['TunerStudio'].getint('iniVersion')==8
+    assert ini['TunerStudio'].getint('iniVersion')==9
+    import re
+    feature_fields=json.loads((ROOT/'firmware/tunerstudio/feature_fields.json').read_text())
+    java=(ROOT/'java_console/src/main/java/io/tunuino/calibration/FeatureConfiguration.java').read_text()
+    declarations={m[0]:tuple(map(int,m[1:])) for m in re.findall(r'(\w+)\("[^"\n]+","[^"\n]+",(-?\d+),(-?\d+),(-?\d+),(-?\d+),(-?\d+)\)',java)}
+    assert set(declarations)=={f['name'] for f in feature_fields}
+    occupied=set()
+    for f in feature_fields:
+        assert declarations[f['name']]==tuple(f[k] for k in ('offset','decimals','min','max','reference'))
+        width=1 if f['offset']<76 else 2
+        for offset in range(f['offset'],f['offset']+width):
+            assert 72<=offset<240 and offset not in occupied
+            occupied.add(offset)
+        assert f'feature{f["name"]}' in ini['Constants']
+        if '(ms)' in f['label']:assert '\"ms\"' in ini['Constants'][f'feature{f["name"]}']
     assert ini['OutputChannels']['ochGetCommand']=='"O%2o%2c"'
     assert ini['OutputChannels']['engineState']=='scalar, U08, 31, "", 1, 0'
     for name in ('engineMode','engineAutonomous','engineFault'):

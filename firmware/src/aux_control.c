@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Tunuino. */
 #include "tunuino/aux_control.h"
+#include "tunuino/engine_features.h"
 #include <string.h>
 static uint16_t u16(const uint8_t *p){return (uint16_t)((uint16_t)p[0]<<8|p[1]);}
 static int16_t s16(const uint8_t *p){uint16_t n=u16(p);return (int16_t)(n<32768?(int32_t)n:(int32_t)n-65536);}
@@ -7,7 +8,7 @@ bool tunuino_aux_decode(const uint8_t p[256],uint32_t used,bool have_profile,tun
     if(!p||!out||p[0]>1)return false;
     tunuino_aux_config c={0};
     if(!p[0]){for(unsigned i=1;i<256;++i)if(p[i])return false;*out=c;return true;}
-    for(unsigned i=68;i<256;++i)if(p[i])return false;
+    tunuino_feature_config features;if(!tunuino_features_decode(p,&features))return false;
     c.idle_mode=p[1];c.idle_channel=p[2];c.boost_mode=p[3];c.boost_channel=p[4];c.tps_channel=p[5];
     c.tps_closed=u16(p+6);c.tps_open=u16(p+8);c.idle_hz=u16(p+10);c.boost_hz=u16(p+12);
     c.idle_min=u16(p+14);c.idle_max=u16(p+16);c.cranking_duty=u16(p+18);c.idle_tps=u16(p+20);c.idle_max_rpm=u16(p+22);

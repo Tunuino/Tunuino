@@ -44,7 +44,7 @@ public final class AuxConfiguration {
         var errors=new ArrayList<String>();
         if(bytes[0]==0){for(byte value:bytes)if(value!=0){errors.add("Formato de ralenti/turbo inválido");break;}return errors;}
         if(bytes[0]!=1||idleMode()>2||boostMode()>2||idleChannel()>16||boostChannel()>16||tpsChannel()>11)errors.add("Modo ou canal de ralenti/turbo inválido");
-        for(int i=68;i<256;i++)if(bytes[i]!=0){errors.add("Reservas de ralenti/turbo alteradas");break;}
+        errors.addAll(new FeatureConfiguration(bytes).errors());
         for(var f:Field.values())if(raw(f)<f.min||raw(f)>f.max)errors.add(f.label+": fora dos limites");
         if(raw(Field.TPS_CLOSED)==raw(Field.TPS_OPEN))errors.add("Calibrações TPS fechado/aberto devem ser diferentes");
         if(raw(Field.IDLE_MIN)>raw(Field.IDLE_MAX)||raw(Field.BOOST_MIN)>raw(Field.BOOST_MAX)||raw(Field.BOOST_BASE)<raw(Field.BOOST_MIN)||raw(Field.BOOST_BASE)>raw(Field.BOOST_MAX))errors.add("Limites de duty incompatíveis");

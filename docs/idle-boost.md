@@ -28,7 +28,8 @@ requirements and LS ownership. Writes/Burn remain refused while outputs are arme
 | 58 / 60 | U16 | Boost minimum RPM / TPS centi-% |
 | 62 / 64 | U16 | Boost P/I, centi-% per 10 kPa / per second |
 | 66 | U16 | TPS endpoint tolerance, centi-percent of ADC span, 0–10% |
-| 68–255 | bytes | Zero reserves |
+| 68–239 | bytes | Optional engine-feature extension, see `engine-features.md` |
+| 240–255 | bytes | Zero reserves |
 
 Modes enabled require a valid motor profile, calibrated TPS and distinct LS
 channels. Idle additionally requires the coolant input; boost requires MAP

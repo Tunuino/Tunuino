@@ -51,6 +51,19 @@ static bool arm(uint32_t now,uint32_t generation){
 static bool command(void *user,const uint8_t *q,size_t length,uint8_t *out,size_t capacity,size_t *written){
     tunuino_device *d=user;bool okay=false;
     if(loaded_generation!=d->generation)board_outputs_restore(d,false);
+    if(length==1&&q[0]==8&&capacity>=40){
+        uint16_t tps=0;bool valid=tunuino_aux_tps(&auxiliary.config,d->adc_valid,d->raw,&tps);
+        tunuino_feature_inputs in;tunuino_features_sample(&engine.features,d->adc_valid,d->raw,valid,tps,
+            (d->live.valid_mask&TUNUINO_LIVE_LAMBDA_VALID)!=0,d->live.lambda_million,&in);
+        const tunuino_feature_state *f=&engine.feature_state;
+        memset(out,0,40);out[1]=1;out[2]=d->active[TUNUINO_IO_AUX_OFFSET+68]!=0;
+        out[3]=(uint8_t)((in.tps_valid?1:0)|(in.iat_valid?2:0)|(in.voltage_valid?4:0)|(in.flex_valid?8:0)|(in.launch_valid?16:0)|(in.lambda_valid?32:0));
+        put16(out+4,engine.features.flags);put16(out+6,in.tps);put16(out+8,(uint16_t)(int16_t)in.iat);put16(out+10,in.voltage);put16(out+12,in.ethanol);
+        put16(out+14,f->target);put32(out+16,f->multiplier);put16(out+20,(uint16_t)(int16_t)f->lambda_trim);
+        put16(out+22,f->extra_us);put16(out+24,f->dead_us);put16(out+26,f->dwell_us);
+        out[28]=(uint8_t)((f->dfco?1:0)|(f->limited?2:0)|(f->launch_limited?4:0)|(f->closed_loop?8:0)|(f->accel_active?16:0)|((engine.outputs.fault&TUNUINO_OUTPUT_PROTECTION)?32:0));
+        put16(out+30,(uint16_t)f->advance_delta);put32(out+32,d->generation);*written=40;return true;
+    }
     if(length==1&&q[0]==7&&capacity>=32){
         uint16_t tps=0;bool valid=tunuino_aux_tps(&auxiliary.config,d->adc_valid,d->raw,&tps);
         memset(out,0,32);out[1]=1;out[2]=auxiliary.config.idle_mode;out[3]=auxiliary.config.boost_mode;
@@ -73,7 +86,7 @@ static bool command(void *user,const uint8_t *q,size_t length,uint8_t *out,size_
         put32(out+16,engine.generation);put32(out+20,engine.last_injection_us);
         chSysUnlock();*written=24;return true;
     }
-    if(length==129&&q[0]==1&&!d->dirty&&!auxiliary.config.idle_mode&&!auxiliary.config.boost_mode){
+    if(length==129&&q[0]==1&&!d->dirty&&!auxiliary.config.idle_mode&&!auxiliary.config.boost_mode&&!engine.features.flags){
         chSysLock();okay=tunuino_engine_control_configure(&engine,q+1,d->active[3],d->active[4],d->generation);chSysUnlock();
         if(okay){
             (void)tunuino_fuel_corrections_decode(d->active+103,&engine.fueling);
@@ -120,6 +133,7 @@ void board_outputs_start(tunuino_device *d){
     for(unsigned i=0;i<28;++i){palClearPad(pins[i].port,pins[i].pad);palSetPadMode(pins[i].port,pins[i].pad,PAL_MODE_OUTPUT_PUSHPULL);}
     tunuino_engine_control_init(&engine,write_pin,NULL);
     memset(&auxiliary,0,sizeof(auxiliary));
+    memset(&engine.features,0,sizeof(engine.features));memset(&engine.feature_inputs,0,sizeof(engine.feature_inputs));
     autonomous=persisted_profile=boot_pending=false;loaded_generation=d->generation;
     timer_ready=gptStart(&GPTD5,&timer_config)==MSG_OK;
     d->output_command=command;d->output_user=d;
@@ -128,9 +142,11 @@ void board_outputs_start(tunuino_device *d){
 void board_outputs_restore(tunuino_device *d,bool boot){
     board_outputs_stop();loaded_generation=d->generation;
     memset(&auxiliary,0,sizeof(auxiliary));
+    memset(&engine.features,0,sizeof(engine.features));memset(&engine.feature_inputs,0,sizeof(engine.feature_inputs));
     autonomous=persisted_profile=false;engine.configured=0;
     if(!d->persisted||d->dirty||!tunuino_device_validate(d->active,sizeof(d->active)))return;
     (void)tunuino_aux_decode(d->active+TUNUINO_IO_AUX_OFFSET,0,true,&auxiliary.config);
+    (void)tunuino_features_decode(d->active+TUNUINO_IO_AUX_OFFSET,&engine.features);
     chSysLock();
     bool okay=tunuino_engine_control_configure(&engine,d->active+TUNUINO_ENGINE_PROFILE_OFFSET,
         d->active[3],d->active[4],d->generation);
@@ -154,6 +170,9 @@ void board_outputs_update(tunuino_device *d,const tunuino_position_reading *posi
     uint16_t ve=0;int16_t advance=0;
     bool valid=!d->dirty&&d->adc_valid&&d->trigger_valid;
     if(valid)valid=tunuino_device_engine_values(d,&ve,&advance);
+    uint16_t tps=0;bool tps_valid=tunuino_aux_tps(&auxiliary.config,d->adc_valid,d->raw,&tps);
+    tunuino_features_sample(&engine.features,d->adc_valid,d->raw,tps_valid,tps,
+        (d->live.valid_mask&TUNUINO_LIVE_LAMBDA_VALID)!=0,d->live.lambda_million,&engine.feature_inputs);
     chSysLock();
     if(boot_pending){
         boot_pending=false;
@@ -172,7 +191,6 @@ void board_outputs_update(tunuino_device *d,const tunuino_position_reading *posi
         else tunuino_engine_control_update(&engine,now,edge,position,d->active[3],d->generation,
             valid,ve,advance,d->live.map_milli_kpa,(d->live.valid_mask&TUNUINO_LIVE_COOLANT_VALID)!=0,d->live.coolant_milli_c);
     }
-    uint16_t tps=0;bool tps_valid=tunuino_aux_tps(&auxiliary.config,d->adc_valid,d->raw,&tps);
     bool active=engine.outputs.armed&&(engine.mode==1||engine.mode==2);
     if(!tunuino_aux_update(&auxiliary,now,active,engine.mode==2,d->live.rpm_milli,tps_valid,tps,
         (d->live.valid_mask&TUNUINO_LIVE_COOLANT_VALID)!=0,d->live.coolant_milli_c,

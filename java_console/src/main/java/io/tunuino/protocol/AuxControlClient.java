@@ -50,6 +50,17 @@ public final class AuxControlClient {
         return new State(b[2],b[3],b[4]!=0,b[5]!=0,tps,idle,boost,u(p,12),u(p,14),gen,u(p,20),b[22]!=0,b[23]!=0,mask);
     }
     private static int u(ByteBuffer p,int at){return Short.toUnsignedInt(p.getShort(at));}
+    public record FeatureState(int flags,int valid,int tps,int iat,int voltage,int ethanol,int target,long multiplier,int trim,int extra,int dead,int dwell,int state,int advance,long generation){
+        public String description(){return String.format(java.util.Locale.forLanguageTag("pt-PT"),"IAT %s · tensão %s · etanol %s · alvo λ %.3f · correção lambda %.2f %% · adicional %.3f ms · tempo morto %.3f ms · dwell %.3f ms · estados 0x%02X",
+            (valid&2)!=0?String.format(java.util.Locale.ROOT,"%.2f °C",iat/100.0):"indisponível",(valid&4)!=0?String.format(java.util.Locale.ROOT,"%.2f V",voltage/100.0):"indisponível",(valid&8)!=0?String.format(java.util.Locale.ROOT,"%.2f %%",ethanol/100.0):"indisponível",target/1000.0,trim/100.0,extra/1000.0,dead/1000.0,dwell/1000.0,state);}
+    }
+    public static FeatureState decodeFeatures(byte[] b)throws IOException{
+        if(b==null||b.length!=40||b[0]!=0||b[1]!=1||(b[2]&255)>1||(b[3]&192)!=0||b[29]!=0||(b[28]&192)!=0)throw new IOException("Estado de funções inválido; instala o Bundle correspondente");
+        ByteBuffer p=ByteBuffer.wrap(b);long multiplier=Integer.toUnsignedLong(p.getInt(16)),gen=Integer.toUnsignedLong(p.getInt(32));
+        if(u(p,4)>2047||u(p,6)>10000||p.getShort(8)<-4000||p.getShort(8)>15000||u(p,10)>2400||u(p,12)>10000||u(p,14)>1300||multiplier>100000||Math.abs((int)p.getShort(20))>2500||u(p,22)>5000||u(p,24)>5000||u(p,26)>5000||gen==0||p.getInt(36)!=0)throw new IOException("Valores de funções inválidos");
+        return new FeatureState(u(p,4),b[3],u(p,6),p.getShort(8),u(p,10),u(p,12),u(p,14),multiplier,p.getShort(20),u(p,22),u(p,24),u(p,26),b[28],p.getShort(30),gen);
+    }
+    public static FeatureState features(PacketSession s)throws IOException{return decodeFeatures(s.exchange("TUNUINO:X\u0008".getBytes(StandardCharsets.US_ASCII),Duration.ofSeconds(3)));}
     public static State state(PacketSession s)throws IOException{
         byte[] b=s.exchange("TUNUINO:X\u0007".getBytes(StandardCharsets.US_ASCII),Duration.ofSeconds(3));
         if(b.length==1&&b[0]!=0)throw new IOException("Estado indisponível: instala o Bundle com ralenti/turbo");return decode(b);

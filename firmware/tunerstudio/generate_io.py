@@ -16,7 +16,7 @@ def render():
         '; Persistent engine, sensor and 16x16 map configuration.',
         '; Disabled/unavailable calibrated channels evaluate to NaN, not measurements.',
         'enable2ndByteCanID = false', '', '[TunerStudio]',
-        '    iniSpecVersion = 3.51', '    iniVersion = 8', f'    signature = {json.dumps(SIGNATURE)}',
+        '    iniSpecVersion = 3.51', '    iniVersion = 9', f'    signature = {json.dumps(SIGNATURE)}',
         '    queryCommand = "S"', '    versionInfo = "V"', '    defaultRuntimeRecordPerSec = 5', '',
         '[Constants]', '    messageEnvelopeFormat = msEnvelope_1.0', '    endianness = big',
         '    nPages = 4', '    pageSize = 256, 576, 576, 256',
@@ -101,6 +101,16 @@ def render():
             (f'idleTarget{i+1}','U16',34+2*i,'rpm',1,500,2000,0),(f'idleDuty{i+1}','U16',40+2*i,'%',0.01,0,100,2)]
     for name,kind,offset,unit,scale,minimum,maximum,decimals in aux_fields:
         lines.append(f'    {name} = scalar, {kind}, {offset}, "{unit}", {scale}, 0, {minimum}, {maximum}, {decimals}')
+    # Wire fields are checked against the Java form and C decoder by core tests.
+    feature_fields=json.loads((HERE/'feature_fields.json').read_text(encoding='utf-8'))
+    feature_options=[('IAT','Sensores'),('VOLTAGE','Tensão'),('TARGET','Lambda'),('LAMBDA','Lambda'),('ACCEL','Transientes'),('DFCO','Transientes'),('LIMIT','Limites'),('LAUNCH','Limites'),('FLEX','Flex fuel'),('PROTECTION','Limites'),('TRIMS','Cilindros')]
+    lines.append('    featureFormat = bits, U08, 68, [0:0], "Legacy disabled", "Configured"')
+    for bit,(name,group) in enumerate(feature_options):
+        lines.append(f'    feature{name} = bits, U16, 70, [{bit}:{bit}], "Disabled", "Enabled"')
+    for f in feature_fields:
+        kind='U08' if f['offset']<76 else 'S16' if f['min']<0 else 'U16'
+        scale=10**(-f['decimals'])
+        lines.append(f'    feature{f["name"]} = scalar, {kind}, {f["offset"]}, "{f["unit"]}", {scale:g}, 0, {f["min"]*scale:g}, {f["max"]*scale:g}, {f["decimals"]}')
     lines += ['', '[ConstantExtensions]', '    readOnly = configLayout', '    readOnly = coolantCount', '',
         '[OutputChannels]', '    ochGetCommand = "O%2o%2c"', '    ochBlockSize = 100']
     channels=[('engineState','U08',31,'',1),('protocolRevision','U08',7,'',1),('boardFamily','U08',8,'',1),('mcuSeries','U08',9,'',1),
@@ -159,6 +169,7 @@ def render():
         '        subMenu = fuelSetup, "Injection"', '        subMenu = fuelCorrectionSetup, "Cranking, afterstart and warm-up"', '        subMenu = ignitionSetup, "Ignition"',
         '        subMenu = phaseSetup, "Crank and cam synchronization"',
         '        subMenu = auxiliarySetup, "Pump, fan and main relay"', '        subMenu = idleSetup, "TPS and idle PWM"', '        subMenu = boostSetup, "Boost PWM and overpressure cut"',
+        '        subMenu = featureSetup, "Fuel corrections and limits"',
         '    menu = "Sensors and tuning"',
         '        subMenu = inputSetup, "Inputs and wheel"', '        subMenu = mapCalibration, "MAP calibration"',
         '        subMenu = lambdaCalibration, "Lambda calibration"', '        subMenu = coolantCurve, "Coolant curve"',
@@ -216,6 +227,20 @@ def render():
         if name=='idleSetup':
             for i in range(3):
                 for label,key in [('Temperature','idleTemperature'),('Target RPM','idleTarget'),('Base duty','idleDuty')]:lines.append(f'        field = "{label} {i+1}", {key}{i+1}')
+    import unicodedata
+    ascii_label=lambda text: unicodedata.normalize('NFKD',text).encode('ascii','ignore').decode()
+    lines += ['    dialog = featureSetup, "Fuel corrections and limits"',
+        '        field = "Use Console references to initialize this page. All new functions start disabled."',
+        '        field = "Read current settings before editing. Sensor ADC references must be measured."',
+        '        field = "Lambda target is a three-point MAP curve; base fuel must reference lambda 1."',
+        '        field = "Flex and launch require conditioned ANALOG inputs, not raw frequency or battery voltage."',
+        '        field = "Feature format", featureFormat']
+    for group in dict.fromkeys(f['group'] for f in feature_fields):
+        lines.append(f'        field = "--- {ascii_label(group)} ---"')
+        for name,option_group in feature_options:
+            if option_group==group:lines.append(f'        field = "Enable {name}", feature{name}')
+        for f in feature_fields:
+            if f['group']==group:lines.append(f'        field = "{ascii_label(f["label"])}", feature{f["name"]}')
     lines += ['    dialog = engineControl, "Engine activation and status"',
         '        field = "ACTIVATE can energize physical outputs. Confirm wiring, timing and calibration first."',
         '        field = "STOP before editing or burning settings. Writes are rejected while outputs are armed."',

@@ -9,6 +9,7 @@
 #define TUNUINO_OUTPUT_SYNC 4u
 #define TUNUINO_OUTPUT_CALIBRATION 8u
 #define TUNUINO_OUTPUT_OVERBOOST 16u
+#define TUNUINO_OUTPUT_PROTECTION 32u
 typedef void (*tunuino_output_write)(void *user,unsigned channel,bool high);
 typedef struct { uint32_t start,end; uint8_t state; } tunuino_output_pulse;
 typedef struct {uint32_t period,next,cycle,high,requested;uint8_t enabled,phase;} tunuino_output_pwm;
@@ -30,6 +31,8 @@ bool tunuino_outputs_pulse(tunuino_outputs *o,unsigned channel,uint32_t now,uint
 /* Dedicated disarmed relay test; callers must validate the assigned auxiliary channel. */
 bool tunuino_outputs_aux_test(tunuino_outputs *o,unsigned channel,uint32_t now,uint32_t duration_us);
 bool tunuino_outputs_level(tunuino_outputs *o,unsigned channel,bool high);
+/* Cancel only an injector pulse. Ignition charge is never truncated by fuel cuts. */
+void tunuino_outputs_cancel_injector(tunuino_outputs *o,unsigned channel);
 /* PWM shares the edge/lease IRQ, LS channels only. 10000 = 100% duty.
  * Frequency is fixed while enabled; duty changes latch at the next period,
  * except a zero request which de-energizes immediately. */

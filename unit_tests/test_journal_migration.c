@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Tunuino. Legacy 1408-byte records migrate transactionally. */
 #include "tunuino/config_journal.h"
 #include "aux_fixture.h"
+#include "feature_fixture.h"
 #include <assert.h>
 #include <stdio.h>
 static uint8_t flash[2][TUNUINO_JOURNAL_BANK_BYTES],baseline[2][TUNUINO_JOURNAL_BANK_BYTES];
@@ -16,6 +17,7 @@ int main(void){
     static tunuino_device d;tunuino_device_init(&d,NULL,NULL,NULL);memset(flash,255,sizeof(flash));
     legacy_record(0,d.active,8);d.active[101]=0xda; /* reference 3290mV */legacy_record(1440,d.active,9);
     uint8_t desired[TUNUINO_IO_SETTINGS_SIZE],loaded[TUNUINO_IO_SETTINGS_SIZE];memcpy(desired,d.active,sizeof(desired));aux_fixture(desired+1408);
+    feature_fixture(desired+1408);desired[1408+193]=100; /* signed cylinder correction survives migration */
     const tunuino_journal_io io={read_bank,write_bank,erase_bank,NULL};tunuino_config_journal j;
     assert(tunuino_journal_init(&j,&io,loaded)&&j.legacy&&j.sequence==9&&j.bank==0);
     assert(memcmp(loaded,d.active,1408)==0);for(unsigned i=1408;i<1664;++i)assert(!loaded[i]);

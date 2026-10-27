@@ -9,6 +9,7 @@ void tunuino_engine_control_init(tunuino_engine_control *e,tunuino_output_write 
 void tunuino_engine_control_stop(tunuino_engine_control *e,uint8_t fault){
     tunuino_outputs_stop(&e->outputs,fault);e->mode=fault?3:0;e->have_phase=0;e->fan_on=0;e->last_injection_us=0;
     memset(&e->fuel_state,0,sizeof(e->fuel_state));
+    memset(&e->feature_state,0,sizeof(e->feature_state));
 }
 bool tunuino_engine_control_configure(tunuino_engine_control *e,const uint8_t p[128],uint16_t slots,uint8_t missing,uint32_t generation){
     tunuino_engine_profile profile;
@@ -20,6 +21,7 @@ bool tunuino_engine_control_arm(tunuino_engine_control *e,uint32_t now,uint32_t 
     tunuino_outputs_arm(&e->outputs,now,20000);e->mode=1;e->armed_at=e->last_now=now;
     e->cycle=0;e->have_phase=0;e->fan_on=0;e->last_injection_us=0;
     memset(&e->fuel_state,0,sizeof(e->fuel_state));
+    memset(&e->feature_state,0,sizeof(e->feature_state));
     for(unsigned i=0;i<28;++i)e->scheduled_cycle[i]=UINT32_MAX;
     return e->outputs.armed!=0;
 }
@@ -85,16 +87,31 @@ void tunuino_engine_control_update(tunuino_engine_control *e,uint32_t now,uint32
         clt_valid,clt,&multiplier,&advance)){
         tunuino_engine_control_stop(e,TUNUINO_OUTPUT_CALIBRATION);return;
     }
+    if(!tunuino_features_update(&e->features,&e->feature_state,&e->feature_inputs,now,(uint32_t)(r->rpm*1000+0.5),map,
+        clt_valid,clt,e->fueling.enabled?e->fueling.cranking_rpm:400,e->profile.dead_us,e->profile.dwell_us)){
+        uint8_t fault=e->feature_state.protection?TUNUINO_OUTPUT_PROTECTION:TUNUINO_OUTPUT_CALIBRATION;
+        tunuino_engine_control_stop(e,fault);return;
+    }
+    const tunuino_feature_state *f=&e->feature_state;
+    int32_t adjusted=(int32_t)advance+f->advance_delta;
+    if((e->features.flags&TUNUINO_FEATURE_LAUNCH)&&e->feature_inputs.launch&&adjusted>e->features.launch_advance)adjusted=e->features.launch_advance;
     uint64_t base=(fuel+500000000u)/1000000000u;
-    uint32_t injection=(uint32_t)((base*multiplier+5000u)/10000u)+e->profile.dead_us;
-    if(injection==0||injection>e->profile.maximum_injection_us
-        ||injection>(uint64_t)revolution*16u/10u||e->profile.dwell_us>(uint64_t)revolution*16u/10u){
+    uint64_t corrected=((base*multiplier+5000u)/10000u*f->multiplier+5000u)/10000u+f->extra_us;
+    uint32_t injection=(uint32_t)corrected+f->dead_us;
+    if((!f->fuel_cut&&(injection==0||injection>e->profile.maximum_injection_us
+        ||injection>(uint64_t)revolution*16u/10u))||f->dwell_us>(uint64_t)revolution*16u/10u){
         tunuino_engine_control_stop(e,TUNUINO_OUTPUT_CALIBRATION);return;
     }
-    e->last_injection_us=injection;
+    e->last_injection_us=f->fuel_cut?0:injection;
     for(unsigned i=0;i<e->profile.cylinders;++i){const tunuino_cylinder *c=&e->profile.cylinder[i];
-        if(!schedule(e,c->injector,angle((int64_t)c->tdc_centi+e->profile.injection_end_centi),injection,current,revolution,now,first)
-            ||!schedule(e,16+c->coil,angle((int64_t)c->tdc_centi-advance),e->profile.dwell_us,current,revolution,now,first)){
+        uint32_t cylinder_fuel=(uint32_t)corrected;
+        int32_t spark=adjusted;
+        if(e->features.flags&TUNUINO_FEATURE_TRIMS){cylinder_fuel=(uint32_t)((corrected*(uint32_t)(10000+e->features.fuel_trim[i])+5000)/10000);spark+=e->features.spark_trim[i];}
+        cylinder_fuel+=f->dead_us;
+        if(spark< -9000||spark>9000||(!f->fuel_cut&&(cylinder_fuel>e->profile.maximum_injection_us||cylinder_fuel>(uint64_t)revolution*16u/10u))){tunuino_engine_control_stop(e,TUNUINO_OUTPUT_CALIBRATION);return;}
+        if(f->fuel_cut)tunuino_outputs_cancel_injector(&e->outputs,c->injector);
+        if((!f->fuel_cut&&!schedule(e,c->injector,angle((int64_t)c->tdc_centi+e->profile.injection_end_centi),cylinder_fuel,current,revolution,now,first))
+            ||!schedule(e,16+c->coil,angle((int64_t)c->tdc_centi-spark),f->dwell_us,current,revolution,now,first)){
             tunuino_engine_control_stop(e,TUNUINO_OUTPUT_LATE);return;
         }
     }

@@ -51,10 +51,23 @@ uint32_t tunuino_device_validation_errors(const uint8_t *p, size_t length) {
             const uint8_t aux[3]={profile.pump,profile.fan,profile.relay};
             for(unsigned i=0;i<3;++i)if(aux[i])used|=UINT32_C(1)<<(aux[i]-1);
         }
-        tunuino_aux_config c;
+        tunuino_aux_config c={0};
         if(!tunuino_aux_decode(p+TUNUINO_IO_AUX_OFFSET,used,have,&c))errors|=TUNUINO_CONFIG_AUX;
         else if((c.idle_mode&&!p[8])||(c.boost_mode&&(!p[6]||(uint32_t)tunuino_device_u16(p+16)<c.boost_cut))
             ||(c.tps_channel&&(c.tps_channel==p[6]||c.tps_channel==p[7])))errors|=TUNUINO_CONFIG_AUX;
+        tunuino_feature_config f;
+        if(!tunuino_features_decode(p+TUNUINO_IO_AUX_OFFSET,&f))errors|=TUNUINO_CONFIG_AUX;
+        else if(f.flags){
+            if(!have||!p[6]||!p[8]||((f.flags&(TUNUINO_FEATURE_ACCEL|TUNUINO_FEATURE_DFCO|TUNUINO_FEATURE_LAMBDA))&&!c.tps_channel)
+                ||((f.flags&TUNUINO_FEATURE_LAMBDA)&&!p[7])
+                ||((f.flags&TUNUINO_FEATURE_LIMIT)&&f.limit_cut>=tunuino_device_u16(p+96))
+                ||((f.flags&TUNUINO_FEATURE_IAT)&&f.iat_channel==p[8]))errors|=TUNUINO_CONFIG_AUX;
+            uint32_t analog=0;const uint8_t existing[3]={p[6],p[7],c.tps_channel};
+            for(unsigned i=0;i<3;++i)if(existing[i])analog|=UINT32_C(1)<<(existing[i]-1);
+            const uint8_t channels[3]={f.voltage_channel,f.launch_channel,f.flex_channel};
+            const uint16_t flags[3]={TUNUINO_FEATURE_VOLTAGE|TUNUINO_FEATURE_PROTECTION,TUNUINO_FEATURE_LAUNCH,TUNUINO_FEATURE_FLEX};
+            for(unsigned i=0;i<3;++i)if(f.flags&flags[i]){uint32_t bit=UINT32_C(1)<<(channels[i]-1);if(analog&bit)errors|=TUNUINO_CONFIG_AUX;analog|=bit;}
+        }
     }
     if(p[102]>1 || (p[102] && (!has_profile||!p[2]||!p[6]||!p[8])))errors|=TUNUINO_CONFIG_AUTONOMOUS;
     if(p[2]>1 || p[3]<4 || p[3]>120 || p[4]<1 || p[4]>=p[3]/2
@@ -282,7 +295,7 @@ tunuino_dispatch_status tunuino_device_reply(tunuino_device *d,const tunuino_ide
     const uint8_t *q,size_t length,uint8_t *response,size_t capacity,size_t *written) {
     uint8_t body[257]={0};size_t size=1;
     if(length>=10 && memcmp(q,"TUNUINO:X",9)==0 && d->output_command){
-        if(capacity<(q[9]==0?30u:q[9]==7?38u:7u))return TUNUINO_DISPATCH_CAPACITY;
+        if(capacity<(q[9]==0?30u:q[9]==7?38u:q[9]==8?46u:7u))return TUNUINO_DISPATCH_CAPACITY;
         if(!d->output_command(d->output_user,q+9,length-9,body,sizeof(body),&size)){body[0]=0x84;size=1;}
     }
     else if(length==1 && q[0]=='D') {memcpy(d->staged,d->active,sizeof(d->staged));d->dirty=false;}

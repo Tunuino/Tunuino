@@ -16,6 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def run(args, timeout=None):
+    if any(p in args for p in ("firmware/src/engine_control.c","firmware/src/aux_control.c","firmware/src/device.c","firmware/src/dispatch.c")):
+        args=list(args)
+        if "firmware/src/engine_features.c" not in args: args.append("firmware/src/engine_features.c")
     if "firmware/src/dispatch.c" in args:
         args = list(args)
         for source in ("firmware/src/device.c", "firmware/src/config_journal.c", "firmware/src/analog.c",
@@ -52,6 +55,9 @@ def main():
         output_exe=work / ("outputs-check.exe" if os.name=="nt" else "outputs-check")
         run(flags+["firmware/src/outputs.c","firmware/src/engine_control.c","firmware/src/engine_profile.c","firmware/src/fuel_corrections.c","unit_tests/test_outputs.c","-lm","-o",str(output_exe)])
         print(run([str(output_exe)]))
+        features_exe=work / ("features-check.exe" if os.name=="nt" else "features-check")
+        run(flags+["firmware/src/engine_features.c","unit_tests/test_engine_features.c","-o",str(features_exe)])
+        print(run([str(features_exe)]))
         for name,sources in [("aux-control",["firmware/src/aux_control.c","unit_tests/test_aux_control.c"]),("pwm",["firmware/src/outputs.c","unit_tests/test_pwm.c"])]:
             extra=work / (name+(".exe" if os.name=="nt" else ""));run(flags+sources+["-o",str(extra)]);print(run([str(extra)]))
         fuel_exe=work / ("fuel-corrections.exe" if os.name=="nt" else "fuel-corrections")
@@ -296,6 +302,7 @@ def main():
         sources.append(java_root / "calibration/FuelCorrections.java")
         sources.append(java_root / "calibration/AuxConfiguration.java")
         sources.append(java_root / "protocol/AuxControlClient.java")
+        sources.append(java_root / "calibration/FeatureConfiguration.java")
         sources.append(ROOT / "java_console/src/test/java/io/tunuino/AuxControlChecks.java")
         sources.append(java_root / "calibration/BaseMaps.java")
         sources.append(ROOT / "java_console/src/test/java/io/tunuino/BaseConfigurationChecks.java")

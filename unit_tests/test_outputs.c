@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include "feature_fixture.h"
 static uint32_t clock_us,mask,rises[28],falls[28],on_time[28],last_width[28];
 static void gpio(void *user,unsigned ch,bool high){
     (void)user;assert(ch<28);
@@ -35,6 +36,11 @@ int main(void){
     clock_us=20;tunuino_outputs_poll(&o,20);assert(mask==1);
     clock_us=520;tunuino_outputs_poll(&o,520);assert(!mask);
     tunuino_outputs_stop(&o,0);
+    tunuino_outputs_arm(&o,0,10000);assert(tunuino_outputs_pulse(&o,0,0,100,2000)&&tunuino_outputs_pulse(&o,16,0,100,2000));
+    clock_us=100;tunuino_outputs_poll(&o,clock_us);assert(mask==((1u<<16)|1u));
+    tunuino_outputs_cancel_injector(&o,0);assert(mask==(1u<<16)&&!o.pulse[0].state&&o.pulse[16].state==2);
+    tunuino_outputs_cancel_injector(&o,16);assert(mask==(1u<<16)); /* fuel cut cannot truncate ignition dwell */
+    clock_us=2100;tunuino_outputs_poll(&o,clock_us);assert(!mask&&last_width[16]==2000);tunuino_outputs_stop(&o,0);
     assert(!tunuino_outputs_aux_test(&o,16,0,500000));
     assert(!tunuino_outputs_aux_test(&o,15,0,800001));
     assert(tunuino_outputs_aux_test(&o,15,UINT32_MAX-500,800000));
@@ -138,6 +144,31 @@ int main(void){
     tunuino_position_reading start_position={1,1,0,0,600.0};
     tunuino_engine_control_update(&e,clock_us,clock_us,&start_position,60,1,true,10000,2000,100000,true,20000);
     assert(e.outputs.fault==TUNUINO_OUTPUT_CALIBRATION&&!mask); /* rich pulse is cut, never silently clipped */
-    puts("Outputs: reset-low, bounded dwell/injection, overlap, late IRQ, independent watchdog, timer wrap, profile validation, sequential 720-degree fuel/spark and synchronization cut passed. Synthetic GPIO only.");
+    uint8_t features[256]={0};feature_fixture(features);tunuino_feature_config fc;assert(tunuino_features_decode(features,&fc));
+    for(unsigned scenario=0;scenario<2;++scenario){
+        profile(p);clock_us=0;tunuino_engine_control_init(&e,gpio,NULL);
+        assert(tunuino_engine_control_configure(&e,p,60,2,1));
+        e.features=fc;e.features.flags=scenario?TUNUINO_FEATURE_LIMIT:TUNUINO_FEATURE_IAT|TUNUINO_FEATURE_VOLTAGE|TUNUINO_FEATURE_TARGET|TUNUINO_FEATURE_FLEX|TUNUINO_FEATURE_TRIMS;
+        e.features.fuel_trim[0]=1000;e.features.spark_trim[0]=200;e.features.limit_cut=900;e.features.limit_resume=800;
+        e.feature_inputs=(tunuino_feature_inputs){.iat_valid=true,.voltage_valid=true,.flex_valid=true,.iat=2000,.voltage=1000,.ethanol=5000};
+        assert(tunuino_engine_control_arm(&e,0,1));memset(rises,0,sizeof(rises));
+        for(clock_us=0;clock_us<=360000;clock_us+=10){
+            tunuino_outputs_poll(&e.outputs,clock_us);
+            if(clock_us%250==0){unsigned slot=clock_us/1000u,rev=slot/60u,tooth=slot%60u;if(tooth>57)tooth=57;
+                tunuino_position_reading r={1,1,(uint8_t)(rev%2),(uint16_t)tooth,1000};
+                tunuino_engine_control_update(&e,clock_us,(rev*60u+tooth)*1000u,&r,60,1,true,10000,1000,100000,true,90000);
+                assert(e.outputs.armed&&!e.outputs.fault);
+            }
+        }
+        if(scenario)assert(rises[0]==0&&rises[16]>=2&&e.last_injection_us==0&&e.feature_state.fuel_cut);
+        else assert(rises[0]>=2&&e.outputs.pulse[0].end-e.outputs.pulse[0].start==6016
+            &&last_width[0]>=6006&&last_width[0]<=6026&&last_width[16]==3500&&e.last_injection_us==5583); /* 10us host polling grid */
+        tunuino_engine_control_stop(&e,0);assert(!mask);
+    }
+    assert(tunuino_engine_control_arm(&e,clock_us,1));e.features.flags=TUNUINO_FEATURE_PROTECTION;e.feature_inputs.voltage=899;
+    tunuino_position_reading protected_position={1,1,0,0,1000};
+    tunuino_engine_control_update(&e,clock_us,clock_us,&protected_position,60,1,true,10000,1000,100000,true,90000);
+    assert(!e.outputs.armed&&!mask&&e.outputs.fault==TUNUINO_OUTPUT_PROTECTION);
+    puts("Outputs: reset-low, pulse bounds, overlap, watchdog/wrap, sequential timing, integrated IAT/voltage/target/ethanol/cylinder corrections, injector-only RPM cuts and latched thermal/voltage protection passed. Synthetic GPIO only.");
     return 0;
 }

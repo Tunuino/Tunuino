@@ -304,6 +304,14 @@ public final class ConsoleUiChecks {
             ((Button)scene.lookup("#aux-reference")).fire();check(auxPane.candidate().idleMode()==0&&auxPane.candidate().boostMode()==0,"Auxiliary reference leaves valves disabled");
             var auxTabs=(javafx.scene.control.TabPane)scene.lookup("#aux-tabs");check(auxTabs.getTabs().size()==3,"Dedicated TPS, idle and boost settings");
             for(int tab=0;tab<3;tab++){auxTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();snapshot(scene,"console-idle-boost-"+tab);}
+            ((ToggleButton)scene.lookup("#navigate-13")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
+            var featuresPane=(FeatureControlPane)scene.lookup("#feature-control-pane");
+            check(((Button)scene.lookup("#features-read")).isDisabled()&&((Button)scene.lookup("#features-save")).isDisabled(),"Offline feature writes blocked");
+            ((Button)scene.lookup("#features-reference")).fire();check(new io.tunuino.calibration.FeatureConfiguration(featuresPane.candidate().bytes()).flags()==0,"Reference disables optional strategies");
+            var featuresTabs=(javafx.scene.control.TabPane)scene.lookup("#features-tabs");check(featuresTabs.getTabs().size()==7,"Dedicated sensor, voltage, lambda, transient, limit, flex and cylinder groups");
+            featuresTabs.getSelectionModel().select(1);scene.getRoot().applyCss();scene.getRoot().layout();
+            var dead=(javafx.scene.control.TextField)scene.lookup("#feature-field-DEAD1");dead.setText("1,234");check(new io.tunuino.calibration.FeatureConfiguration(featuresPane.candidate().bytes()).raw(io.tunuino.calibration.FeatureConfiguration.Field.DEAD1)==1234,"GUI latency stored in exact ms");
+            for(int tab=0;tab<7;tab++){featuresTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();snapshot(scene,"console-features-"+tab);}
             ((ToggleButton)scene.lookup("#navigate-11")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
             var outputTabs=(javafx.scene.control.TabPane)scene.lookup("#output-test-tabs");
             check(outputTabs.getTabs().size()==3,"Separate injector, ignition and relay test tabs");

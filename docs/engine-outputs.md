@@ -51,7 +51,7 @@ Runtime IO permanece com 100 bytes. Byte 31 antes reservado: modo nos bits 0–2
 
 ## Limites atuais
 
-Não há controlo VVT, knock, flex fuel, launch control, Lua, compensação IAT/barométrica, deadtime por tensão, enriquecimento de aceleração nem lambda em malha fechada. Também não há calibração OEM específica ou suporte a rodas compostas fora do descodificador missing-tooth. Não apresentar estas funções como prontas.
+A extensão documentada em `engine-features.md` acrescenta IAT, curvas por tensão, alvo/correção lambda, aceleração, DFCO, limitador, launch, flex fuel analógico, proteções e ajustes por cilindro. Não há controlo VVT, knock, Lua nem compensação barométrica. Também não há calibração OEM específica ou suporte a rodas compostas fora do descodificador missing-tooth. Não apresentar estas funções como prontas.
 
 Testes de registos/flash simulados exercitam comandos, temporizadores, corte, persistência e perda de USB. Precisão física, polaridades, alimentação, carga, PMS e funcionamento real continuam por validar. [Utilização e estado](https://github.com/Tunuino/Tunuino_documents/blob/main/configuracao-persistente-mapas-base.md).
 

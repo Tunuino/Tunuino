@@ -78,6 +78,8 @@ def main():
         "Engine profile is saved atomically with sensors/maps. Verify pin mapping, TDC, dwell and injector calibration.\n"
         "Autonomous mode runs without USB. Manual mode retains a 2-second host supervision timeout.\n"
         "TPS/idle/boost: separate page 4, reserved LS outputs, PWM tables or PI and overboost cut. All start disabled.\n"
+        "Fuel features: IAT/voltage compensation, lambda target/PI, TPS acceleration, DFCO, RPM/launch cuts, analog ethanol, protections and cylinder trims.\n"
+        "New features start disabled; initialize references in Console, then calibrate sensors and settings. Times are milliseconds.\n"
         "Save separate .tnaux backups; old calibration records migrate with the original bank preserved until commit.\n"
         "Engine start/warm-up tab: optional cranking fuel, afterstart decay in ms, coolant curve and fixed cranking timing.\n"
         "Base VE/ignition maps are local editable references, not a validated calibration. Console times use milliseconds.\n"

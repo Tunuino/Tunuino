@@ -11,6 +11,9 @@ public final class AuxControlChecks {
     private static void check(boolean value,String reason){if(!value)throw new AssertionError(reason);}
     public static void main(String[] args)throws Exception{
         var ref=AuxConfiguration.reference();check(ref.errors(null).isEmpty()&&ref.idleMode()==0&&ref.boostMode()==0,"Reference does not activate valves");
+        var features=FeatureConfiguration.reference(ref.bytes());check(features.flags()==0&&features.errors().isEmpty(),"Feature reference stays disabled");
+        var precise=features.edited(Map.of(FeatureConfiguration.Field.DEAD1,"1,234"),Set.of());check(precise.raw(FeatureConfiguration.Field.DEAD1)==1234,"Latency uses exact milliseconds");
+        try{features.edited(Map.of(FeatureConfiguration.Field.DEAD1,"1.2345"),Set.of());throw new AssertionError("Latency rounded silently");}catch(IllegalArgumentException expected){}
         try{ref.edited(Map.of(AuxConfiguration.Field.IDLE_P,"1.001"),0,0,0,0,0);throw new AssertionError("PI gain rounded silently");}catch(IllegalArgumentException expected){}
         var decimal=ref.edited(Map.of(AuxConfiguration.Field.IDLE_P,"1,25"),0,0,0,0,0);check(decimal.raw(AuxConfiguration.Field.IDLE_P)==125,"Exact decimal percentage");
         Path dir=Files.createTempDirectory("tunuino-aux-");Path file=dir.resolve("settings.tnaux");
@@ -33,6 +36,19 @@ public final class AuxControlChecks {
             var collision=desired.edited(Map.of(),1,1,2,9,3);check(!collision.errors(profile).isEmpty(),"Client detects injector collision with profile");
             try{AuxControlClient.apply(session,d,saved,collision,timeout);throw new AssertionError("Firmware accepted injector collision");}catch(java.io.IOException expected){}
             check(!AuxControlClient.read(session,d,timeout).validation().dirty(),"Rejected collision is discarded before flash");
+            var lambdaCore=ConfigurationClient.read(session,d,timeout);
+            ConfigurationClient.apply(session,d,lambdaCore,lambdaCore.configuration().edited(Map.of(IoConfiguration.Field.LAMBDA_LOW,"0.5",IoConfiguration.Field.LAMBDA_HIGH,"1.5"),true,1,2,1),timeout);
+            var beforeFeatures=AuxControlClient.read(session,d,timeout);
+            var full=new FeatureConfiguration(FeatureConfiguration.reference(beforeFeatures.configuration().bytes()).bytes()).edited(
+                Map.of(FeatureConfiguration.Field.IAT_INPUT,"2",FeatureConfiguration.Field.VOLT_INPUT,"4",FeatureConfiguration.Field.LAUNCH_INPUT,"5",FeatureConfiguration.Field.FLEX_INPUT,"6"),
+                EnumSet.allOf(FeatureConfiguration.Option.class));
+            var withFeatures=AuxControlClient.apply(session,d,beforeFeatures,new AuxConfiguration(full.bytes()),timeout);
+            check(withFeatures.configuration().idleMode()==1&&withFeatures.configuration().boostMode()==2,"Feature edit preserves valves and TPS");
+            var fs=AuxControlClient.features(session);check(fs.flags()==2047&&fs.multiplier()==0&&!EngineOutputClient.read(session).armed(),"Actual board loads eleven strategies without auto-arm");
+            var invalid=full.edited(Map.of(FeatureConfiguration.Field.VOLT_INPUT,"1"),EnumSet.allOf(FeatureConfiguration.Option.class));
+            try{AuxControlClient.apply(session,d,withFeatures,new AuxConfiguration(invalid.bytes()),timeout);throw new AssertionError("MAP/battery input collision accepted");}catch(java.io.IOException expected){}
+            check(!AuxControlClient.read(session,d,timeout).validation().dirty(),"Rejected sensor collision is discarded");
+            outputs=EngineOutputClient.read(session);saved=withFeatures;desired=withFeatures.configuration();
             EngineOutputClient.arm(session,outputs.generation());
             try{AuxControlClient.apply(session,d,saved,desired.edited(Map.of(AuxConfiguration.Field.IDLE_P,"6"),1,8,2,9,3),timeout);throw new AssertionError("Running write accepted");}catch(java.io.IOException expected){}
             check(!AuxControlClient.read(session,d,timeout).validation().dirty(),"Running write changes no staged bytes");EngineOutputClient.stop(session);

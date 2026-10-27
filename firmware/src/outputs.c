@@ -39,6 +39,9 @@ bool tunuino_outputs_level(tunuino_outputs *o,unsigned ch,bool high){
     if(!o->armed||ch>=16||o->pulse[ch].state||o->pwm[ch].enabled)return false;
     level(o,ch,high);return true;
 }
+void tunuino_outputs_cancel_injector(tunuino_outputs *o,unsigned ch){
+    if(ch<16&&o->pulse[ch].state){o->pulse[ch].state=0;level(o,ch,false);}
+}
 bool tunuino_outputs_pwm(tunuino_outputs *o,unsigned ch,uint32_t now,uint16_t hz,uint16_t duty){
     if(!o->armed||ch>=16||o->pulse[ch].state||hz<10||hz>300||duty>10000)return false;
     if(due(now,o->lease)){tunuino_outputs_stop(o,TUNUINO_OUTPUT_WATCHDOG);return false;}

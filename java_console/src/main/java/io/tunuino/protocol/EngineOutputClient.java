@@ -27,6 +27,7 @@ public final class EngineOutputClient {
             if((faults&4)!=0)reasons.add("perda de sincronização ou sinal inválido");
             if((faults&8)!=0)reasons.add("calibração inválida ou alterada");
             if((faults&16)!=0)reasons.add("pressão de turbo acima do limite");
+            if((faults&32)!=0)reasons.add("proteção de temperatura ou tensão");
             return String.join(", ",reasons);
         }
         public String activeChannels(){
@@ -40,7 +41,7 @@ public final class EngineOutputClient {
             default->throw new IllegalStateException();};}
     }
     public static State decode(byte[] b)throws IOException {
-        if(b==null||b.length!=24||b[0]!=0||b[1]!=1||(b[2]&255)>4||(b[3]&224)!=0
+        if(b==null||b.length!=24||b[0]!=0||b[1]!=1||(b[2]&255)>4||(b[3]&192)!=0
             ||(b[12]&255)>1||(b[13]&255)>12||(b[14]&255)>1||(b[15]&252)!=0)
             throw new IOException("Estado de saídas inválido");
         ByteBuffer p=ByteBuffer.wrap(b);long active=Integer.toUnsignedLong(p.getInt(4));
