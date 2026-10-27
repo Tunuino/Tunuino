@@ -72,7 +72,7 @@ public final class ConsoleUiChecks {
             check(scene.getStylesheets().size() == 1, "Shared theme loaded");
             check(((Label)scene.lookup("#console-active-build")).getText().contains(io.tunuino.maintenance.BuildInfo.label()),
                 "Active source revision is visible beside the product name");
-            check(scene.getRoot().lookupAll(".navigation-group").size()==5,"Navigation groups configuration, tuning, diagnostics, monitoring and system");
+            check(scene.getRoot().lookupAll(".navigation-group").size()==1,"Flat reference navigation with one secondary motor group");
             check(((Button) scene.lookup("#dashboard-read-ve")).isDisabled(), "Offline dashboard blocks map read");
             check(((Button) scene.lookup("#dashboard-edit-map")).isDisabled(), "Offline dashboard blocks ECU map editing");
             DashboardPane cockpit=(DashboardPane)scene.lookup("#dashboard");
@@ -81,7 +81,7 @@ public final class ConsoleUiChecks {
             check(gaugeNodes.size()==6,"Dashboard contains all six gauges");
             var gaugeRows=new java.util.HashSet<Long>();
             for(var gauge:gaugeNodes)gaugeRows.add(Math.round(gauge.localToScene(gauge.getBoundsInLocal()).getMinY()));
-            boolean wide=((javafx.scene.layout.FlowPane)gaugeNodes.get(0).getParent()).getWidth()>=900;
+            boolean wide=((javafx.scene.layout.FlowPane)gaugeNodes.get(0).getParent()).getWidth()>=760;
             check(gaugeRows.size()==(wide?1:2),"Gauges fit one desktop row or two compact rows");
             check(scene.lookup("#dashboard-table-host")==null||scene.lookup("#dashboard")!=null,
                 "Dashboard is real rather than a screenshot");
@@ -108,6 +108,16 @@ public final class ConsoleUiChecks {
                 "Offline map read remains disabled even with offline UI fixture");
             snapshot(scene,"console-dashboard-16x16");
             checkMapEditing(stage,cockpit,new CalibrationMap(CalibrationMap.Kind.VE,erpm,loads,values));
+            cockpit.showMap(io.tunuino.calibration.BaseMaps.create(io.tunuino.calibration.BaseMaps.Template.NATURALLY_ASPIRATED,CalibrationMap.Kind.VE));
+            cockpit.showMap(io.tunuino.calibration.BaseMaps.create(io.tunuino.calibration.BaseMaps.Template.NATURALLY_ASPIRATED,CalibrationMap.Kind.IGNITION));
+            cockpit.selectKind(CalibrationMap.Kind.VE);
+            cockpit.showSample(Optional.of(new LogSample(1000,3250,62,1,92)));
+            cockpit.showAuxiliary(new io.tunuino.protocol.AuxControlClient.FeatureState(0,7,3700,3800,1380,0,1000,10000,0,0,1000,3000,0,0,1));
+            byte[] statusProfile=new byte[128];statusProfile[0]=1;statusProfile[22]=5;statusProfile[23]=6;statusProfile[24]=7;
+            cockpit.showOutputs(new io.tunuino.protocol.EngineOutputClient.State(0,0,1L<<4,0,true,4,true,1,0,true,false),statusProfile);
+            check(((Label)scene.lookup("#dashboard-output-pump")).getText().contains("ON")&&((Label)scene.lookup("#dashboard-output-fan")).getText().contains("OFF"),"Dashboard uses the actual configured relay channels, not fixed contacts");
+            cockpit.event("Dados sintéticos de teste da interface · sem ECU física");
+            snapshot(scene,"console-reference-layout");
             stage.setWidth(1510);stage.setHeight(1010);
             snapshot(scene,"console-dashboard-wide");
             stage.setWidth(980);stage.setHeight(720);
@@ -186,7 +196,7 @@ public final class ConsoleUiChecks {
             double y=38+15.5*(canvas.getHeight()-46)/16;
             doubleClick(canvas,x,y);
             check(chosen.get()!=null&&chosen.get().row()==15&&chosen.get().column()==15,
-                "Double click selects the last of all 256 real cells without writing");
+                "Double click selects the last of all 256 real cells without writing: "+chosen.get()+" canvas "+canvas.getWidth()+"x"+canvas.getHeight());
             chosen.set(null);doubleClick(canvas,71,37);
             check(chosen.get()==null,"Axis padding does not select a map cell");
             cockpit.setConnection(identity,true,false);
@@ -220,7 +230,7 @@ public final class ConsoleUiChecks {
             javafx.event.Event.fireEvent(canvas,new javafx.scene.input.MouseEvent(canvas,canvas,
                 javafx.scene.input.MouseEvent.MOUSE_CLICKED,point.getX(),point.getY(),point.getX(),point.getY(),
                 javafx.scene.input.MouseButton.PRIMARY,2,false,false,false,false,
-                false,false,false,false,false,true,new javafx.scene.input.PickResult(canvas,x,y)));
+                false,false,false,false,false,true,new javafx.scene.input.PickResult(canvas,new javafx.geometry.Point3D(x,y,0),1)));
         }
 
         private void checkCompact(Stage stage, String name) throws Exception {
@@ -265,8 +275,8 @@ public final class ConsoleUiChecks {
                     rows.add(choice.getId() + "\t" + String.join(" | ", labels));
                 }
             }
-            int expected = switch (page) { case "sensors", "tps-idle-boost" -> 3; case "engine" -> 27;
-                case "fuel-protections" -> 4; case "io-functions" -> 13; default -> throw new IllegalArgumentException(page); };
+            int expected = switch (page) { case "sensors" -> 6; case "tps-idle-boost" -> 2; case "engine" -> 27;
+                case "fuel-protections" -> 2; case "io-functions" -> 13; default -> throw new IllegalArgumentException(page); };
             check(rows.size() == expected, page + ": every routing selector was inspected: " + rows.size() + "/" + expected);
             if (snapshots != null) Files.write(snapshots.resolve("routing-audit-" + page + ".tsv"), rows);
             System.out.println("Routing audit " + page + ": " + rows.size() + " selectors passed");
@@ -296,6 +306,20 @@ public final class ConsoleUiChecks {
             wheelPreset.setValue("60-2");((Button)scene.lookup("#config-preset-apply-Aquisição")).fire();
             check(configEditor.candidate().value(io.tunuino.calibration.IoConfiguration.Field.WHEEL).equals("60")
                 &&!configEditor.candidate().triggerEnabled(),"Wheel preset edits local values without enabling capture");
+            var sensorTabs=(javafx.scene.control.TabPane)scene.lookup("#config-form-tabs");
+            check(sensorTabs.getTabs().size()==8,"All six sensor calibrations and trigger/ADC diagnostics share one workspace");
+            sensorTabs.getSelectionModel().select(3);scene.getRoot().applyCss();scene.getRoot().layout();
+            var ntc=(javafx.scene.control.TitledPane)scene.lookup("#clt-ntc");ntc.setExpanded(true);scene.getRoot().applyCss();scene.getRoot().layout();
+            ((Button)scene.lookup("#clt-ntc-apply")).fire();
+            check(configEditor.candidate().coolantChannel()==0&&Double.parseDouble(configEditor.candidate().value(io.tunuino.calibration.IoConfiguration.Field.TEMP_1))==120,
+                "NTC assistant prepares a sorted curve without assigning or enabling a sensor");
+            check(((Button)scene.lookup("#config-measure-TEMP_RAW_1")).isDisabled(),"Offline temperature capture cannot read invented ADC data");
+            snapshot(scene,"console-sensor-ntc");ntc.setExpanded(false);
+            for(int tab=4;tab<=6;tab++){sensorTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();snapshot(scene,"console-sensor-calibration-"+tab);}
+            // Restore the core draft before later close/preservation checks.
+            for(var f:java.util.List.of(io.tunuino.calibration.IoConfiguration.Field.TEMP_RAW_1,io.tunuino.calibration.IoConfiguration.Field.TEMP_RAW_2,io.tunuino.calibration.IoConfiguration.Field.TEMP_RAW_3,io.tunuino.calibration.IoConfiguration.Field.TEMP_1,io.tunuino.calibration.IoConfiguration.Field.TEMP_2,io.tunuino.calibration.IoConfiguration.Field.TEMP_3)){
+                var field=(javafx.scene.control.TextField)sensorTabs.getTabs().get(3).getContent().lookup("#config-field-"+f.name());field.setText(io.tunuino.calibration.IoConfiguration.localDefaults().value(f));
+            }
             auditRouting(configEditor,"sensors");
             for (String key : List.of("map","lambda","coolant")) {
                 @SuppressWarnings("unchecked") var route = (ComboBox<Integer>)configEditor.lookup("#config-" + key + "-channel");
@@ -374,9 +398,9 @@ public final class ConsoleUiChecks {
             AuxControlPane auxPane=(AuxControlPane)scene.lookup("#aux-control-pane");
             check(((Button)scene.lookup("#aux-read")).isDisabled()&&((Button)scene.lookup("#aux-save")).isDisabled(),"Offline auxiliary writes are blocked");
             ((Button)scene.lookup("#aux-reference")).fire();check(auxPane.candidate().idleMode()==0&&auxPane.candidate().boostMode()==0,"Auxiliary reference leaves valves disabled");
-            var auxTabs=(javafx.scene.control.TabPane)scene.lookup("#aux-tabs");check(auxTabs.getTabs().size()==3,"Dedicated TPS, idle and boost settings");
+            var auxTabs=(javafx.scene.control.TabPane)scene.lookup("#aux-tabs");check(auxTabs.getTabs().size()==2,"TPS calibration is centralized; this page contains idle and boost");
             auditRouting(auxPane,"tps-idle-boost");
-            for(int tab=0;tab<3;tab++){auxTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();snapshot(scene,"console-idle-boost-"+tab);}
+            for(int tab=0;tab<2;tab++){auxTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();snapshot(scene,"console-idle-boost-"+tab);}
             ((ToggleButton)scene.lookup("#navigate-13")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
             var featuresPane=(FeatureControlPane)scene.lookup("#feature-control-pane");
             check(((Button)scene.lookup("#features-read")).isDisabled()&&((Button)scene.lookup("#features-save")).isDisabled(),"Offline feature writes blocked");
@@ -449,7 +473,7 @@ public final class ConsoleUiChecks {
             check(table.getItems().stream().allMatch(row->row.raw().equals("—")),"Unavailable ADC is not displayed as zero");
             ((Label)scene.lookup("#config-feedback")).setText("Dados sintéticos de teste da interface · sem ECU física");
             snapshot(scene,"console-calibration");
-            check(inputTabs.getTabs().size()==5,"Inputs are divided into trigger, MAP, lambda, temperature and ADC pages");
+            check(inputTabs.getTabs().size()==8,"Inputs are divided into trigger, MAP, lambda, temperature and ADC pages");
             configEditor.availability(null,false,false);
             check(reference.getText().equals("3290")&&((Button)scene.lookup("#config-apply")).isDisabled(),"Disconnect preserves local edits while blocking ECU writes");
             reference.setText("3300");check(configEditor.canClose(),"Unchanged configuration closes without prompting");
@@ -507,6 +531,37 @@ public final class ConsoleUiChecks {
             }
             check(expanded,"8x8 to 16x16 conversion opens a new offline editor");
             check(CalibrationViewer.closeAll(),"Offline converted map editor closes cleanly");
+            checkFirmwareStability(stage);
+        }
+
+        private void checkFirmwareStability(Stage main) {
+            var portA=new io.tunuino.maintenance.WindowsDfu.UsbPort("USB1","TEST-A");
+            var portB=new io.tunuino.maintenance.WindowsDfu.UsbPort("USB2","TEST-B");
+            var found=new FirmwarePanel.Discovery(List.of(new io.tunuino.maintenance.WindowsDfu.Device("TEST",0,"Synthetic DFU")),List.of(portA,portB),"");
+            var available=new java.util.concurrent.atomic.AtomicBoolean(true);
+            var scans=new java.util.concurrent.atomic.AtomicInteger();
+            Stage probe=new Stage();
+            FirmwarePanel panel=new FirmwarePanel(probe,available::get,()->null,()->true,true,tool->{scans.incrementAndGet();Thread.sleep(100);return found;});
+            probe.setScene(new Scene(panel,900,600));ConsoleBranding.applyTheme(probe.getScene());probe.show();
+            @SuppressWarnings("unchecked") var choices=(ComboBox<io.tunuino.maintenance.WindowsDfu.UsbPort>)probe.getScene().lookup("#firmware-dfu-devices");
+            var select=(Button)probe.getScene().lookup("#firmware-select-image");
+            panel.scan();check(!select.isDisabled()&&!choices.isDisabled(),"Background DFU discovery must not disable configuration controls");
+            later(()->finishFirmwareProbe(main,probe,panel,choices,found,available,scans,0));
+        }
+        private void finishFirmwareProbe(Stage main,Stage probe,FirmwarePanel panel,
+                ComboBox<io.tunuino.maintenance.WindowsDfu.UsbPort> choices,FirmwarePanel.Discovery found,
+                java.util.concurrent.atomic.AtomicBoolean available,java.util.concurrent.atomic.AtomicInteger scans,int attempt) throws Exception {
+            if(choices.getItems().size()!=2&&attempt<12){later(()->finishFirmwareProbe(main,probe,panel,choices,found,available,scans,attempt+1));return;}
+            check(choices.getItems().size()==2,"Synthetic DFU discovery completed");choices.setValue(found.ports().get(1));
+            var changes=new java.util.concurrent.atomic.AtomicInteger();choices.getItems().addListener((javafx.collections.ListChangeListener<io.tunuino.maintenance.WindowsDfu.UsbPort>)c->changes.incrementAndGet());
+            choices.show();for(int i=0;i<10;i++)panel.showDiscovery(found,null);
+            check(changes.get()==0&&choices.getValue().equals(found.ports().get(1))&&choices.isShowing(),"Unchanged DFU polls preserve choices, selection and open popup");
+            choices.hide();available.set(false);int before=scans.get();panel.scan();check(scans.get()==before,"DFU discovery pauses while COM is in use");
+            System.out.println("Firmware UI: background discovery, unchanged device lists, selected serial, open popup and COM exclusion passed. Synthetic discovery.");
+            snapshot(probe.getScene(),"console-firmware-stability");panel.close();probe.close();finish(main);
+        }
+
+        private void finish(Stage stage) {
             console.stop(); stage.close();
             System.out.println("Console UI: actual shell, shared theme, all workspaces, channel selection, cursor, playback, missing data, compact layouts and map editor passed. Synthetic data; no USB devices.");
             Platform.exit();

@@ -22,3 +22,10 @@
 - Preservar configurações existentes ao ler ou atualizar a Console. Nunca alterar a cablagem guardada, ativar um controlo ou armar saídas só por mostrar uma referência.
 - As escolhas rápidas não podem retirar uma ligação ocupada por outra função. Conflitos exigem escolha explícita.
 - Não mostrar GPIO do MCU como escolhas normais. Mostrar tempos de injeção, dwell e tempo morto em milissegundos.
+
+## Painel e calibrações
+
+- Seguir o painel compacto aprovado pelo utilizador: seis mostradores numa fila, oito indicadores, tabelas 16×16, estado e registos laterais, ignição e superfície 3D em baixo. Navegação principal plana; configurações adicionais no grupo secundário.
+- Reunir calibrações em Sensores e calibrações. Assistentes preparam a edição; pontos medidos vêm do ADC real da ligação selecionada. Preservar modos, proteções e restantes calibrações ao guardar apenas um sensor.
+- Modelos NTC indicam R25, Beta e pull-up; não os apresentar como calibrações universais de um motor ou sensor sem identificação.
+- Pesquisas automáticas de portas/dispositivos são tarefas de descoberta, não operações exclusivas: não alternar os controlos entre ativo/inativo nem reconstruir listas inalteradas. Suspender DFU com COM ocupada ou página não apresentada.

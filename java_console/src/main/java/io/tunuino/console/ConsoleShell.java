@@ -36,6 +36,8 @@ final class ConsoleShell extends BorderPane {
     private final VBox sidebar = new VBox(8);
     private final VBox navItems = new VBox(5);
     private final ToggleGroup section = new ToggleGroup();
+    private DeviceIdentity shownIdentity;
+    private Boolean shownConnected;
 
     void group(String title, String... keys) {
         VBox entries=new VBox(3);
@@ -49,23 +51,28 @@ final class ConsoleShell extends BorderPane {
 
     ConsoleShell(Node hardware, Node connectionControls, Label status, Label identity) {
         getStyleClass().add("console-shell");
-        ImageView logo = new ImageView(new Image(ConsoleShell.class.getResource("tunuino.png").toExternalForm()));
-        logo.setId("console-logo");
-        logo.setFitWidth(270); logo.setFitHeight(90); logo.setPreserveRatio(true);
-        StackPane logoBox = new StackPane(logo); logoBox.getStyleClass().add("brand-logo");
-        Label product = new Label("Tunuino"); product.getStyleClass().add("wordmark");
-        Label subtype = new Label("Console · " + BuildInfo.label());
-        subtype.setId("console-active-build"); subtype.getStyleClass().add("wordmark-subtitle");
-        VBox productName = new VBox(0, product, subtype, device);
-        device.getStyleClass().add("muted");
-        Region gap = new Region(); HBox.setHgrow(gap, Priority.ALWAYS);
-        connection.getStyleClass().addAll("connection-badge", "offline");
-        HBox masthead = new HBox(14, logoBox, productName, gap, new Label("Centralina"), hardware, connection);
-        masthead.setAlignment(Pos.CENTER_LEFT); masthead.getStyleClass().add("masthead");
-        VBox header = new VBox(masthead, connectionControls); header.getStyleClass().add("app-header");
-        setTop(header);
+        SVGPath chip=new SVGPath();chip.setContent("M12 8H60V56H12ZM0 14H9V20H0ZM0 29H9V35H0ZM0 44H9V50H0ZM63 14H72V20H63ZM63 29H72V35H63ZM63 44H72V50H63ZM19 0H25V6H19ZM34 0H40V6H34ZM49 0H55V6H49ZM19 59H25V65H19ZM34 59H40V65H34ZM49 59H55V65H49Z");
+        chip.setFill(javafx.scene.paint.Color.web("#0085ff"));
+        Label glyph=new Label("T");glyph.setStyle("-fx-text-fill:#071019;-fx-font-size:48;-fx-font-weight:900;-fx-font-style:italic;");
+        StackPane logoBox=new StackPane(chip,glyph);logoBox.setId("console-logo");logoBox.setMinSize(78,70);
+        Label product=new Label("Tunuino");product.getStyleClass().add("wordmark");
+        Label subtype=new Label("Console");subtype.getStyleClass().add("wordmark-subtitle");
+        Label build=new Label(BuildInfo.label());build.setId("console-active-build");build.getStyleClass().add("build-label");
+        VBox productName=new VBox(-3,product,subtype,build);
+        device.getStyleClass().add("muted");device.setWrapText(true);device.setMaxWidth(210);
+        connection.getStyleClass().addAll("connection-badge","offline");
+        VBox state=new VBox(3,connection,device);state.setMinWidth(180);state.setMaxWidth(215);
+        VBox controls=new VBox(2,connectionControls);controls.setMinWidth(280);controls.setPrefWidth(640);HBox.setHgrow(controls,Priority.ALWAYS);
+        HBox masthead=new HBox(12,logoBox,productName,state,controls);masthead.setAlignment(Pos.CENTER_LEFT);masthead.getStyleClass().add("masthead");
+        // Hardware selection stays available beside the USB controls.
+        if(connectionControls instanceof FlowPane bar)bar.getChildren().add(0,hardware);
+        javafx.scene.control.MenuBar menus=new javafx.scene.control.MenuBar();menus.setId("console-menu-bar");
+        String[][] entries={{"Ficheiro","Tuning","Data Log"},{"ECU","Inputs / Outputs","Engine","Output Tests"},
+            {"Ver","Dashboard","Fuel Tables","Ignition Tables"},{"Ferramentas","Firmware","Diagnostics"},{"Ajuda","Settings"}};
+        for(String[] entry:entries){var menuEntry=new javafx.scene.control.Menu(entry[0]);for(int i=1;i<entry.length;i++){String key=entry[i];var item=new javafx.scene.control.MenuItem(key);item.setOnAction(e->select(key));menuEntry.getItems().add(item);}menus.getMenus().add(menuEntry);}
+        VBox header=new VBox(menus,masthead);header.getStyleClass().add("app-header");setTop(header);
         sidebar.getStyleClass().add("sidebar");
-        sidebar.setPrefWidth(245); sidebar.setMinWidth(245); sidebar.setMinHeight(0);
+        sidebar.setPrefWidth(205); sidebar.setMinWidth(205); sidebar.setMinHeight(0);
         Label menu = new Label("ÁREA DE TRABALHO"); menu.getStyleClass().add("sidebar-caption");
         ScrollPane navigationScroll=new ScrollPane(navItems);
         navigationScroll.setFitToWidth(true);
@@ -74,9 +81,9 @@ final class ConsoleShell extends BorderPane {
         navigationScroll.setMinHeight(0);
         navigationScroll.getStyleClass().add("sidebar-scroll");
         VBox.setVgrow(navigationScroll, Priority.ALWAYS);
-        Label build = new Label(BuildInfo.label()); build.getStyleClass().add("build-label"); build.setWrapText(true);
+        Label sidebarBuild = new Label(BuildInfo.label()); sidebarBuild.getStyleClass().add("build-label");
         Label local = new Label("TUNUINO\nFerramentas locais · USB"); local.getStyleClass().add("sidebar-footer");
-        sidebar.getChildren().addAll(menu,navigationScroll,local,build);
+        sidebar.getChildren().addAll(navigationScroll,sidebarBuild);
         setLeft(sidebar);
         heading.getStyleClass().add("page-heading"); description.getStyleClass().add("page-description");
         description.setWrapText(true);
@@ -88,7 +95,7 @@ final class ConsoleShell extends BorderPane {
         setCenter(workspace);
         status.getStyleClass().add("status-message"); identity.getStyleClass().add("identity-message");
         status.setWrapText(true); identity.setWrapText(true);
-        VBox footer = new VBox(3, status, identity); footer.getStyleClass().add("status-bar");
+        VBox footer = new VBox(3, status); footer.getStyleClass().add("status-bar");
         status.setId("console-status");
         setBottom(footer);
         sceneProperty().addListener((property, before, scene) -> {
@@ -98,8 +105,7 @@ final class ConsoleShell extends BorderPane {
                 boolean shortWindow = height < 700;
                 pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("compact"), compact);
                 pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("short"), shortWindow);
-                logo.setFitWidth(shortWindow ? 228 : compact ? 246 : 270);
-                logo.setFitHeight(shortWindow ? 76 : compact ? 82 : 90);
+
             };
             scene.heightProperty().addListener((observable, oldHeight, height) -> resize.accept(height.doubleValue()));
             resize.accept(scene.getHeight());
@@ -118,13 +124,24 @@ final class ConsoleShell extends BorderPane {
         if (pages.size() == 1) select(key);
     }
 
+    void finishNavigation(){
+        for(var button:navigation.values())if(button.getParent() instanceof javafx.scene.layout.Pane parent)parent.getChildren().remove(button);
+        navItems.getChildren().clear();
+        for(String key:java.util.List.of("Dashboard","Tuning","Fuel Tables","Ignition Tables","Autotune","Data Log","Inputs / Outputs","Diagnostics","Firmware","Settings"))navItems.getChildren().add(navigation.get(key));
+        VBox extra=new VBox(2);for(String key:java.util.List.of("Engine","IO Functions","Aux Control","Fuel Features","Output Tests"))extra.getChildren().add(navigation.get(key));
+        var group=new javafx.scene.control.TitledPane("Configuração do motor",extra);group.getStyleClass().add("navigation-group");group.setExpanded(false);navItems.getChildren().add(group);
+    }
     void select(String key) {
         Page page = pages.get(key);
         heading.setText(page.title()); description.setText(page.description());
         workspace.setCenter(page.content()); navigation.get(key).setSelected(true);
+        boolean cockpit=key.equals("Dashboard");workspace.getTop().setVisible(!cockpit);workspace.getTop().setManaged(!cockpit);
+        pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("cockpit"),cockpit);
     }
 
     void connectionState(DeviceIdentity identity, boolean connected) {
+        if(shownConnected!=null&&shownConnected==connected&&java.util.Objects.equals(shownIdentity,identity))return;
+        shownConnected=connected;shownIdentity=identity;
         connection.setText(identity != null ? "●  ECU IDENTIFICADA" : connected ? "●  USB LIGADO" : "●  OFFLINE");
         connection.getStyleClass().removeAll("online", "offline");
         connection.getStyleClass().add(identity != null ? "online" : "offline");

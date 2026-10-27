@@ -63,6 +63,11 @@ public final class AuxControlClient {
         if(u(p,4)>2047||u(p,6)>10000||p.getShort(8)<-4000||p.getShort(8)>15000||u(p,10)>2400||u(p,12)>10000||u(p,14)>1300||multiplier>100000||Math.abs((int)p.getShort(20))>2500||u(p,22)>5000||u(p,24)>5000||u(p,26)>5000||gen==0||p.getInt(36)!=0)throw new IOException("Valores de funções inválidos");
         return new FeatureState(u(p,4),b[3],u(p,6),p.getShort(8),u(p,10),u(p,12),u(p,14),multiplier,p.getShort(20),u(p,22),u(p,24),u(p,26),b[28],p.getShort(30),gen);
     }
+    public static java.util.Optional<FeatureState> optionalFeatures(PacketSession s)throws IOException{
+        byte[] b=s.exchange("TUNUINO:X\u0008".getBytes(StandardCharsets.US_ASCII),Duration.ofMillis(500));
+        if(b.length==1&&b[0]==(byte)0x83)return java.util.Optional.empty();
+        return java.util.Optional.of(decodeFeatures(b));
+    }
     public static FeatureState features(PacketSession s)throws IOException{return decodeFeatures(s.exchange("TUNUINO:X\u0008".getBytes(StandardCharsets.US_ASCII),Duration.ofSeconds(3)));}
     public static State state(PacketSession s)throws IOException{
         byte[] b=s.exchange("TUNUINO:X\u0007".getBytes(StandardCharsets.US_ASCII),Duration.ofSeconds(3));

@@ -18,6 +18,10 @@ import java.util.function.Consumer;
 /** One polling worker owns the serial session and all recording file operations. */
 public final class LiveDataMonitor {
     public record Recording(Path path, long samples) {}
+    public record Extras(io.tunuino.protocol.AuxControlClient.FeatureState sensors,io.tunuino.protocol.EngineOutputClient.State outputs,byte[] profile) {
+        public Extras {profile=profile==null?null:profile.clone();}
+        @Override public byte[] profile(){return profile==null?null:profile.clone();}
+    }
     private record Request(Path destination, CompletableFuture<Recording> completion) {}
     private final PacketSession session;
     private final DeviceIdentity identity;
@@ -88,6 +92,10 @@ public final class LiveDataMonitor {
     /** Empty samples mean unavailable data, never zero-valued measurements. */
     public long run(BooleanSupplier running, Consumer<Optional<LogSample>> samples,
             Consumer<IOException> recordingErrors) throws IOException {
+        return run(running,samples,recordingErrors,null);
+    }
+    public long run(BooleanSupplier running, Consumer<Optional<LogSample>> samples,
+            Consumer<IOException> recordingErrors, Consumer<Extras> extras) throws IOException {
         Objects.requireNonNull(running, "running");
         Objects.requireNonNull(samples, "samples");
         Objects.requireNonNull(recordingErrors, "recordingErrors");
@@ -97,6 +105,8 @@ public final class LiveDataMonitor {
         }
         long count = 0;
         long previousTime = -1;
+        long nextExtras=0;long profileGeneration=-1;byte[] outputProfile=null;
+        boolean extraSupported=extras!=null&&identity.capabilities()==15&&identity.firmwareVersion().equals("0.2.0");
         try {
             while (running.getAsBoolean()) {
                 processRequests();
@@ -121,6 +131,20 @@ public final class LiveDataMonitor {
                     }
                 }
                 samples.accept(result);
+                if(extraSupported&&running.getAsBoolean()&&System.nanoTime()>=nextExtras){
+                    var sensors=io.tunuino.protocol.AuxControlClient.optionalFeatures(session);
+                    if(sensors.isEmpty())extraSupported=false;
+                    else {
+                        var state=io.tunuino.protocol.EngineOutputClient.read(session);
+                        if(profileGeneration!=state.generation()){
+                            var configuration=io.tunuino.protocol.ConfigurationClient.read(session,identity,Duration.ofSeconds(3));
+                            outputProfile=!configuration.validation().dirty()&&configuration.validation().generation()==state.generation()?configuration.configuration().engineProfile():null;
+                            profileGeneration=outputProfile==null?-1:state.generation();
+                        }
+                        extras.accept(new Extras(sensors.get(),state,outputProfile));
+                    }
+                    nextExtras=System.nanoTime()+Duration.ofMillis(500).toNanos();
+                }
                 if (running.getAsBoolean()) {
                     try {
                         long nanos = interval.toNanos();

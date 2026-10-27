@@ -50,6 +50,9 @@ public final class ConfigurationPane extends VBox {
     private final Label feedback=new Label("Liga e identifica a ECU para ler a configuração."),
         validation=new Label("Sem validação recebida do firmware."),inputState=new Label("Sem leitura das entradas.");
     private final TableView<AdcRow> adc=new TableView<>();
+    private final TabPane forms=new TabPane();
+    private final java.util.List<Button> pointButtons=new java.util.ArrayList<>();
+    private Consumer<ConfigurationClient.Validation> onSaved=v->{};
     private ConfigurationClient.Snapshot snapshot;
     private IoConfiguration base=IoConfiguration.localDefaults(),baseline=base;
     private DeviceIdentity device;
@@ -65,8 +68,9 @@ public final class ConfigurationPane extends VBox {
         for(Label label:List.of(feedback,validation,inputState))label.setWrapText(true);
         getChildren().add(ConsoleShell.card("CONFIGURAÇÃO DA CENTRALINA",
             "Prepara a configuração offline ou lê a ECU. Guardar na ECU exige uma leitura desta centralina e confirma a persistência; os mapas são preservados.",
-            ConsoleShell.actions(read,apply,newLocal,reset,openFile,saveFile),feedback,validation,discard));
-        TabPane forms=new TabPane();forms.setId("config-form-tabs");forms.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+            ConsoleShell.actions(read,apply),feedback,validation,
+            editorActions(newLocal,reset,openFile,saveFile,discard)));
+        forms.setId("config-form-tabs");forms.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         for(String group:List.of("Aquisição","MAP","Lambda","Temperatura")) {
             GridPane grid=new GridPane();grid.setHgap(16);grid.setVgap(10);int row=0;
             if(group.equals("Aquisição"))grid.add(trigger,0,row++,2,1);
@@ -75,7 +79,15 @@ public final class ConfigurationPane extends VBox {
             for(IoConfiguration.Field field:IoConfiguration.Field.values())if(field.group.equals(group)) {
                 TextField editor=new TextField();editor.setPrefColumnCount(10);editor.setMaxWidth(160);
                 editor.setId("config-field-"+field.name());fields.put(field,editor);
-                grid.add(new Label(field.label),0,row);grid.add(editor,1,row++);
+                grid.add(new Label(field.label),0,row);grid.add(editor,1,row);
+                if(field.name().contains("RAW")) {
+                    Button measure=new Button("Medir ponto");measure.setId("config-measure-"+field.name());pointButtons.add(measure);
+                    measure.setOnAction(e->{int ch=group.equals("MAP")?map.getValue():group.equals("Lambda")?lambda.getValue():coolant.getValue();
+                        if(ch==0){feedback.setText("Escolhe primeiro a ligação do sensor");return;}
+                        access.run((session,device)->IoClient.read(session,device,Duration.ofSeconds(2)),v->{try{editor.setText(Integer.toString(io.tunuino.calibration.SensorCalibration.measured(v,ch,group.equals("Temperatura"))));showInputs(v);feedback.setText("Ponto medido na edição. Indica o valor físico conhecido e guarda para aplicar.");}catch(IllegalArgumentException x){failed(x);}},this::failed);
+                    });grid.add(measure,2,row);
+                }
+                row++;
                 editor.textProperty().addListener((p,old,value)->{if(!loading)refresh();});
             }
             String subtitle=group.equals("Aquisição")?"Configuração de aquisição; não ativa injetores, bobinas ou outras saídas."
@@ -83,7 +95,12 @@ public final class ConfigurationPane extends VBox {
                 :"Dois pontos ADC/valor físico. Usa ponto decimal e a calibração real do sensor.";
             VBox card=ConsoleShell.card(group.toUpperCase(Locale.ROOT),subtitle,grid);
             if(!group.equals("Temperatura"))card.getChildren().add(2,preset(group));
-            forms.getTabs().add(new Tab(group.equals("Aquisição")?"Roda fónica":group,card));
+            else card.getChildren().add(2,SensorCalibrationControls.ntc("clt-ntc",p->{
+                IoConfiguration.Field[] raw={IoConfiguration.Field.TEMP_RAW_1,IoConfiguration.Field.TEMP_RAW_2,IoConfiguration.Field.TEMP_RAW_3};
+                IoConfiguration.Field[] temp={IoConfiguration.Field.TEMP_1,IoConfiguration.Field.TEMP_2,IoConfiguration.Field.TEMP_3};
+                for(int i=0;i<3;i++){fields.get(raw[i]).setText(Integer.toString(p[i].adc()));fields.get(temp[i]).setText(Double.toString(p[i].temperature()));}
+            },newLocal.disabledProperty()));
+            forms.getTabs().add(new Tab(group.equals("Aquisição")?"Roda fónica":group.equals("Temperatura")?"CLT · motor":group,card));
         }
         getChildren().add(forms);
         TableColumn<AdcRow,String> name=new TableColumn<>("Entrada"),raw=new TableColumn<>("ADC"),volts=new TableColumn<>("Tensão de diagnóstico (V)");
@@ -136,6 +153,16 @@ public final class ConfigurationPane extends VBox {
         choices.disableProperty().bind(newLocal.disableProperty());use.disableProperty().bind(newLocal.disableProperty());
         return ConsoleShell.actions(choices,use);
     }
+    private javafx.scene.Node editorActions(Button... buttons){
+        var pane=new javafx.scene.control.TitledPane("Ficheiros e edição",ConsoleShell.actions(buttons));pane.setExpanded(false);pane.setAnimated(false);return pane;
+    }
+    void onSaved(Consumer<ConfigurationClient.Validation> action){onSaved=action;}
+    void auxiliarySaved(io.tunuino.protocol.AuxControlClient.Snapshot value){
+        if(snapshot!=null&&!value.validation().dirty()&&snapshot.validation().pageCrc()==value.validation().pageCrc())
+            snapshot=new ConfigurationClient.Snapshot(snapshot.configuration(),value.validation());
+        refresh();
+    }
+    void addSensorPage(String name, javafx.scene.Node content){forms.getTabs().add(forms.getTabs().size()-1,new Tab(name,content));}
     private static ComboBox<Integer> channels(io.tunuino.calibration.IoAssignments.Group group,int function) {
         ComboBox<Integer> choice=new ComboBox<>();for(int i=0;i<=group.count;i++)choice.getItems().add(i);choice.setValue(0);FunctionChoices.integers(choice,group,function);return choice;
     }
@@ -175,7 +202,7 @@ public final class ConfigurationPane extends VBox {
         boolean valid=false,changed=false;
         try{IoConfiguration value=candidate();valid=true;changed=snapshot!=null&&!Arrays.equals(value.bytes(),snapshot.configuration().bytes());}
         catch(IllegalArgumentException error){if(editable)feedback.setText(error.getMessage());}
-        read.setDisable(!supported||busy);readInputs.setDisable(!supported||busy);
+        read.setDisable(!supported||busy);readInputs.setDisable(!supported||busy);pointButtons.forEach(b->b.setDisable(!supported||busy));
         apply.setDisable(!editable||!sameDevice||!valid||!changed||snapshot.validation().dirty());
         discard.setDisable(!editable||!sameDevice||!snapshot.validation().dirty());
         newLocal.setDisable(!editable);reset.setDisable(!editable);saveFile.setDisable(!editable||!valid);openFile.setDisable(!editable);
@@ -190,7 +217,7 @@ public final class ConfigurationPane extends VBox {
         try {
             IoConfiguration updated=candidate();ConfigurationClient.Snapshot expected=snapshot;
             if(confirm("Guardar configuração na ECU?","Os sensores e a captura passam a usar estes valores. Os mapas permanecem na ECU; nenhuma saída de motor é ativada."))
-                access.run((s,id)->ConfigurationClient.apply(s,id,expected,updated,Duration.ofSeconds(20)),value->{loaded(value);feedback.setText("Configuração guardada e confirmada por leitura da ECU.");},this::failed);
+                access.run((s,id)->ConfigurationClient.apply(s,id,expected,updated,Duration.ofSeconds(20)),value->{loaded(value);onSaved.accept(value.validation());feedback.setText("Configuração guardada e confirmada por leitura da ECU.");},this::failed);
         }catch(IllegalArgumentException error){failed(error);}
     }
     void showInputs(IoClient.Inputs value) {

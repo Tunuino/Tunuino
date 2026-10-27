@@ -67,7 +67,7 @@ def main():
     installer = validate_installer(Path("build/installer"), commit, run_id)
     shutil.copy2(installer, output / SETUP_NAME)
     repo = os.environ["GITHUB_REPOSITORY"]
-    notes = f"""## Tunuino — ligações rápidas da Proteus
+    notes = f"""## Tunuino — calibrações de sensores e painel de afinação
 
 Console Windows x64, firmware **Proteus v0.7 / STM32F427** e **INI TunerStudio**, produzidos a partir do mesmo commit.
 
@@ -83,6 +83,8 @@ Esta imagem usa o startup, kernel e USB CDC do repositório **Tunuino/ChibiOS**,
 **Atualizações:** fechar a Console e instalar o MSI mais recente. Mapas, configurações e datalogs são guardados por predefinição em `%LOCALAPPDATA%\\TunuinoConsole` e ficam preservados na atualização e desinstalação. As definições antigas de ferramentas em `%USERPROFILE%\\.tunuino` continuam legíveis. A atualização exige descarregar e executar o novo instalador; ainda não existe atualização automática. O instalador ainda não tem assinatura digital de editor.
 
 O ZIP portátil mantém `console/`, `firmware/`, `kit-manifest.json`, `START-HERE.txt` e `SHA256SUMS.txt`. Só será retirado dos novos lançamentos após confirmação de que os testes passaram. Os dois formatos contêm os componentes do mesmo commit. O firmware inclui `corresponding-source.tar.gz` e as licenças ChibiOS.
+
+**Console e calibrações:** painel compacto com seis mostradores, duas tabelas 16×16, estado/registos laterais e superfície 3D; calibrações MAP, lambda, CLT, TPS, IAT e tensão reunidas em Sensores e calibrações. Medir ponto usa o ADC real da ligação escolhida; TPS tem captura fechado/aberto e CLT/IAT têm assistente NTC com R25, Beta e pull-up explícitos. Guardar TPS/IAT/tensão preserva os restantes controlos e modos, com validação e releitura. As pesquisas automáticas COM/DFU deixam de bloquear os controlos; a DFU pausa fora da página ou com a COM ocupada e mantém listas/seleção quando nada mudou. A monitorização lê TPS, IAT, tensão e estado das saídas pelo protocolo nativo, sem alterar o formato CSV existente. [Guia e imagens](https://github.com/Tunuino/Tunuino_documents/blob/main/console-calibracoes-estabilidade.md).
 
 **Ligações rápidas:** listas curtas com Desativada, Recomendada/Proposta e Atual quando diferente. As alternativas completas ficam em Personalizar e a matriz manual fica fechada em Avançado. As recomendações identificam conector e contacto: bomba Preto35/20, ventoinha Preto35/9, relé Preto35/21, MAP Branco35/13, TPS Branco35/24, CLT Branco35/20 e IAT Branco35/30. Configurações anteriores são preservadas; escolher uma recomendação não ocupa uma ligação usada por outra função. [Guia](https://github.com/Tunuino/Tunuino_documents/blob/main/ligacoes-rapidas-proteus.md).
 

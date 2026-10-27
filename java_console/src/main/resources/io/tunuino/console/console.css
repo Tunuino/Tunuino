@@ -170,3 +170,35 @@
 .tab-pane > .tab-content-area { -fx-padding: 14 0 0 0; }
 .navigation-group .navigation-button { -fx-padding: 5 6; -fx-graphic-text-gap: 9; }
 .navigation-group > .title { -fx-padding: 6 5 4 5; }
+
+/* Compact tuning cockpit, matching the approved reference layout. */
+.root { -fx-base:#11171d; -fx-background:#070c10; -fx-control-inner-background:#0b1218; }
+.console-shell, .workspace { -fx-background-color:#070c10; }
+.menu-bar { -fx-background-color:#10171e; -fx-padding:0 8; }
+.menu-bar .label { -fx-font-size:12px; }
+.masthead, .console-shell:compact .masthead { -fx-padding:5 10; -fx-background-color:linear-gradient(to bottom,#0b1116,#070c10); }
+.wordmark { -fx-font-size:42px; -fx-font-weight:900; -fx-font-style:italic; -fx-text-fill:#0085ff; }
+.wordmark-subtitle { -fx-font-size:22px; -fx-font-style:italic; -fx-font-weight:bold; -fx-text-fill:#b9e4ff; }
+.build-label { -fx-padding:0; -fx-font-size:9px; -fx-text-fill:#8093a4; }
+.connection-badge { -fx-padding:1 0; -fx-background-radius:0; -fx-font-size:12px; }
+.connection-badge.offline, .connection-badge.online { -fx-background-color:transparent; }
+.connection-controls, .actions.connection-controls, .console-shell:short .actions.connection-controls { -fx-padding:0; -fx-background-color:transparent; -fx-hgap:5; -fx-vgap:4; }
+.sidebar, .console-shell:short .sidebar { -fx-padding:5 5; -fx-background-color:#0c131a; -fx-border-color:transparent #26333e transparent transparent; }
+.sidebar-scroll, .sidebar-scroll > .viewport { -fx-background-color:#0c131a; }
+.navigation-button { -fx-padding:11 10; -fx-font-size:13px; -fx-text-fill:#e1e7ed; -fx-font-weight:normal; }
+.navigation-button:selected { -fx-background-color:#0069d9; -fx-text-fill:white; }
+.navigation-button:selected .navigation-icon { -fx-fill:white; }
+.ecu-dashboard { -fx-background-color:#070c10; }
+.dashboard-gauge { -fx-background-color:linear-gradient(to bottom,#080c10,#05090c); -fx-padding:1; -fx-border-color:#24313c; -fx-border-radius:3; -fx-background-radius:3; }
+.dashboard-small-card { -fx-padding:5 8; -fx-background-color:linear-gradient(to bottom,#111b23,#0b141c); -fx-border-color:#1b2c3a; -fx-border-radius:3; -fx-background-radius:3; }
+.dashboard-small-title { -fx-text-fill:#e0e7ee; -fx-font-weight:normal; -fx-font-size:10px; }
+.dashboard-small-value { -fx-font-size:18px; }
+.dashboard-card { -fx-padding:6; -fx-background-color:#080e13; -fx-border-color:#26333e; -fx-border-radius:3; -fx-background-radius:3; }
+.dashboard-table-actions { -fx-padding:0; -fx-hgap:4; -fx-vgap:3; }
+.dashboard-table-actions .button, .dashboard-table-actions .toggle-button { -fx-padding:4 7; -fx-font-size:10px; }
+.dashboard-table-actions .check-box { -fx-font-size:9px; }
+.dashboard-event { -fx-font-size:10px; -fx-text-fill:#d0d8df; -fx-padding:0; }
+.dashboard-output-status { -fx-font-size:10px; -fx-line-spacing:3; }
+.status-bar, .console-shell:short .status-bar { -fx-padding:3 10; -fx-background-color:#0b131b; }
+.page-header { -fx-padding:10 18; }
+.panel { -fx-background-color:#111b24; -fx-padding:14; -fx-background-radius:4; -fx-border-radius:4; }

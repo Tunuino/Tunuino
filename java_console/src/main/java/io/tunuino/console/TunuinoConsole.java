@@ -73,6 +73,8 @@ public final class TunuinoConsole extends Application {
     private boolean engineArmed;
     private boolean engineAutonomous;
     private boolean serialBusy;
+    private boolean portScanning;
+    private final ExecutorService discoveryWorker=Executors.newSingleThreadExecutor(r->{Thread t=new Thread(r,"tunuino-port-discovery");t.setDaemon(true);return t;});
     private boolean configurationBusy;
     private Runnable refreshControls = () -> {};
     private long monitorGeneration;
@@ -205,11 +207,12 @@ public final class TunuinoConsole extends Application {
         Label identityDetails = new Label("Identificação da ECU pendente");
         ComboBox<UsbSerialPorts.Port> ports = new ComboBox<>();
         ports.setPromptText("Selecionar porta USB");
-        ports.setPrefWidth(290);
+        ports.setPrefWidth(210);
         Button scan = new Button("Atualizar portas");
         Button connect = new Button("Ligar USB");
         Button identify = new Button("Identificar ECU");
         Button monitor = new Button("Ver dados em tempo real");
+        Button topMonitor = new Button("Tempo real");topMonitor.setId("monitor-header");topMonitor.disableProperty().bind(monitor.disabledProperty());topMonitor.setOnAction(e->monitor.fire());
         Button capture = new Button("Gravar datalog");
         connect.getStyleClass().add("primary"); monitor.getStyleClass().add("primary");
         open.setId("open-datalog"); openMap.setId("open-map");
@@ -252,6 +255,7 @@ public final class TunuinoConsole extends Application {
             LiveDataMonitor.Recording recording = liveMonitor == null ? null : liveMonitor.recording();
             capture.setText(recording != null ? "Parar gravação CSV" : "Gravar datalog CSV");
             monitor.setText(monitoringActive ? "Parar monitorização" : "Ver dados em tempo real");
+            topMonitor.setText(monitoringActive?"Parar dados":"Tempo real");
             boolean liveAvailable = identifiedDevice != null
                 && (identifiedDevice.capabilities() & LiveDataClient.CAPABILITY) != 0;
             monitor.setDisable((engineArmed&&!engineAutonomous)||programming || (monitoringActive ? !keepMonitoring.get()
@@ -402,14 +406,21 @@ public final class TunuinoConsole extends Application {
             () -> hardware.getValue() == DeviceIdentity.Family.PROTEUS, !preview);
         portRefresh = new javafx.animation.Timeline(new javafx.animation.KeyFrame(
             javafx.util.Duration.seconds(3), event -> {
-                if (serialBusy || monitoringActive || connection.get() != null || firmwarePanel.isBusy()) return;
-                UsbSerialPorts.Port previous = ports.getValue();
-                serialTask(UsbSerialPorts::list, found -> {
-                    ports.getItems().setAll(found);
-                    ports.setValue(previous == null ? null : found.stream()
-                        .filter(p -> p.path().equals(previous.path())).findFirst().orElse(null));
-                    refreshConnection.run();
-                }, usbFailure);
+                if(portScanning||serialBusy||monitoringActive||connection.get()!=null||firmwarePanel.isBusy())return;
+                portScanning=true;
+                discoveryWorker.submit(()->{
+                    try{
+                        var found=UsbSerialPorts.list();
+                        Platform.runLater(()->{
+                            portScanning=false;if(stopping.get()||connection.get()!=null||serialBusy)return;
+                            if(!ports.getItems().equals(found)){
+                                UsbSerialPorts.Port previous=ports.getValue();ports.getItems().setAll(found);
+                                ports.setValue(previous==null?null:found.stream().filter(p->p.path().equals(previous.path())).findFirst().orElse(null));
+                                refreshConnection.run();
+                            }
+                        });
+                    }catch(Exception error){Platform.runLater(()->{portScanning=false;if(!stopping.get()&&connection.get()==null)status.setText("Pesquisa de portas: "+error.getMessage());});}
+                });
             }));
         portRefresh.setCycleCount(javafx.animation.Animation.INDEFINITE);
         if (!preview) portRefresh.play();
@@ -578,6 +589,9 @@ public final class TunuinoConsole extends Application {
                 if (stopping.get() || liveMonitor != reading) return;
                 status.setText("Gravação interrompida: " + error.getMessage());
                 refreshConnection.run();
+            }), extra -> Platform.runLater(()->{
+                if(stopping.get()||!monitoringActive||monitorGeneration!=generation)return;
+                dashboard.showAuxiliary(extra.sensors());dashboard.showOutputs(extra.outputs(),extra.profile());
             })), count -> {
                 monitoringActive = false;
                 keepMonitoring.set(false);
@@ -745,7 +759,7 @@ public final class TunuinoConsole extends Application {
                 });
         });
         javafx.scene.layout.FlowPane connectionControls = ConsoleShell.actions(
-            new Label("PORTA USB"), ports, scan, connect, identify);
+            new Label("USB"), ports, scan, connect, identify,topMonitor);
         connectionControls.getStyleClass().add("connection-controls");
         shell = new ConsoleShell(hardware, connectionControls, status, identityDetails);
         shell.addPage("Dashboard", "Dashboard da ECU", "Sensores reais e tabelas VE/ignição 16×16.",
@@ -782,11 +796,11 @@ public final class TunuinoConsole extends Application {
             "M12 2L6 13H11L8 22L18 10H13Z",ConsoleShell.scroll(ignitionTables));
         Button autotuneUnavailable=new Button("Autotune indisponível neste firmware");
         autotuneUnavailable.setId("autotune-start");autotuneUnavailable.setDisable(true);
-        shell.addPage("Autotune", "Autotune", "Modo desativado até existir gestão de combustível e validação física.",
+        shell.addPage("Autotune", "Autotune", "Afinação assistida de VE ainda não implementada.",
             "M12 3L21 12L12 21L3 12ZM11 7H13V13H11ZM11 16H13V18H11Z",
             ConsoleShell.scroll(new VBox(14,
-                ConsoleShell.card("AUTOTUNE", "Não existem ainda modelos de AFR-alvo nem "
-                    +"correção em malha fechada que permitam uma afinação automática segura.",
+                ConsoleShell.card("AUTOTUNE", "O alvo lambda e a correção em malha fechada estão em Combustível e proteções. "
+                    +"A aprendizagem e alteração automática do mapa VE ainda não estão implementadas.",
                     autotuneUnavailable),
                 ConsoleShell.card("DADOS REAIS", "Para analisar a mistura, podes gravar os canais reais "
                     +"disponíveis em Data Log e editar manualmente os mapas 16×16 em Tuning.",
@@ -816,10 +830,16 @@ public final class TunuinoConsole extends Application {
         engineControlPane=new EngineControlPane(stage,ecuAccess,outputState);
         auxControlPane=new AuxControlPane(stage,ecuAccess,outputState);
         featureControlPane=new FeatureControlPane(stage,ecuAccess,outputState);
+        auxControlPane.onSnapshot(saved->{featureControlPane.sensorSaved(saved);configurationPane.auxiliarySaved(saved);engineControlPane.externalConfiguration(saved.validation().generation());});
+        featureControlPane.onSnapshot(saved->{auxControlPane.sensorSaved(saved);configurationPane.auxiliarySaved(saved);engineControlPane.externalConfiguration(saved.validation().generation());});
+        configurationPane.onSaved(validation->{auxControlPane.coreSaved(validation);featureControlPane.coreSaved(validation);engineControlPane.externalConfiguration(validation.generation());});
+        configurationPane.addSensorPage("TPS",auxControlPane.sensorCalibration());
+        configurationPane.addSensorPage("IAT · ar",featureControlPane.sensorCalibration("IAT"));
+        configurationPane.addSensorPage("Tensão",featureControlPane.sensorCalibration("VOLT"));
         ioAssignmentsPane=new IoAssignmentsPane(stage,ecuAccess,value->{engineControlPane.externalState(value);outputState.accept(value);});
         shell.addPage("Data Log", "Datalogs e monitorização", "Gravação CSV e reprodução dos sinais disponíveis.",
             "M3 3H21V21H3ZM6 7H18V9H6ZM6 12H18V14H6ZM6 17H15V19H6Z", root);
-        shell.addPage("Inputs / Outputs", "Sensores e entradas", "Roda fónica, sensores e leitura das entradas ADC.",
+        shell.addPage("Inputs / Outputs", "Sensores e calibrações", "Roda fónica, sensores e leitura das entradas ADC.",
             "M2 3H20V7H2ZM2 10H20V14H2ZM2 17H20V21H2Z", ConsoleShell.scroll(configurationPane));
 
         shell.addPage("Diagnostics", "Diagnósticos", "Validação e análise de sinais verdadeiros.",
@@ -854,16 +874,17 @@ public final class TunuinoConsole extends Application {
         shell.label("IO Functions","Funções de I/O");
         shell.label("Dashboard","Painel");shell.label("Data Log","Datalogs");shell.label("Tuning","Mapas e cálculos");
         shell.label("Fuel Tables","Combustível · VE");shell.label("Ignition Tables","Ignição · avanço");
-        shell.label("Inputs / Outputs","Sensores e entradas");shell.label("Diagnostics","Estado da ECU");
+        shell.label("Inputs / Outputs","Calibração sensores");shell.label("Diagnostics","Estado da ECU");
         shell.label("Engine","Motor e saídas");shell.label("Output Tests","Testes de atuadores");shell.label("Settings","Sobre a Console");
         shell.group("Monitorização","Dashboard","Data Log");
         shell.group("Configuração","Engine","Inputs / Outputs","IO Functions","Aux Control","Fuel Features");
         shell.group("Afinação","Fuel Tables","Ignition Tables","Tuning","Autotune");
         shell.group("Diagnóstico","Output Tests","Diagnostics");
         shell.group("Sistema","Firmware","Settings");
+        shell.finishNavigation();
         javafx.geometry.Rectangle2D screen = javafx.stage.Screen.getPrimary().getVisualBounds();
-        stage.setScene(new Scene(shell, Math.min(1340, screen.getWidth() - 40),
-            Math.min(880, screen.getHeight() - 60)));
+        stage.setScene(new Scene(shell, Math.min(1536, screen.getWidth() - 40),
+            Math.min(1000, screen.getHeight() - 60)));
         ConsoleBranding.applyTheme(stage.getScene());
         stage.getScene().heightProperty().addListener((property, before, height) ->
             root.setBottom(height.doubleValue() < 800 ? null : summary));
@@ -904,7 +925,7 @@ public final class TunuinoConsole extends Application {
         if (activeRead != null) {
             activeRead.cancel(true);
         }
-        fileWorker.shutdownNow();
+        fileWorker.shutdownNow();discoveryWorker.shutdownNow();
         serialWorker.execute(() -> {
             PacketSession current = connection.getAndSet(null);
             if (current != null) {

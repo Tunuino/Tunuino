@@ -13,7 +13,9 @@ final class FeatureControlPane extends VBox {
     private final EnumMap<FeatureConfiguration.Option,CheckBox> options=new EnumMap<>(FeatureConfiguration.Option.class);
     private final Button read=new Button("Ler configuração e estado"),save=new Button("Guardar funções na ECU"),base=new Button("Aplicar referência desativada"),backup=new Button("Guardar cópia .tnaux"),open=new Button("Abrir cópia .tnaux");
     private final ComboBox<String> reference=new ComboBox<>();
+    private final Map<String,GridPane> sensorGrids=new LinkedHashMap<>();
     private final Label result=new Label("Sem configuração recebida da ECU.");
+    private Consumer<AuxControlClient.Snapshot> onSnapshot=v->{};
     private AuxControlClient.Snapshot snapshot;private byte[] baseline=AuxConfiguration.reference().bytes();
     private DeviceIdentity identity;private boolean available,busy,armed;
     FeatureControlPane(Stage owner,ConfigurationPane.Access access,Consumer<EngineOutputClient.State> onState){
@@ -34,9 +36,12 @@ final class FeatureControlPane extends VBox {
         for(String group:List.of("Sensores","Tensão","Lambda","Transientes","Limites","Flex fuel","Cilindros")){
             GridPane grid=new GridPane();grid.setHgap(18);grid.setVgap(9);grids.put(group,grid);
             var column=new ColumnConstraints();column.setPercentWidth(50);grid.getColumnConstraints().addAll(column,new ColumnConstraints());
-            var scroll=new ScrollPane(ConsoleShell.card(group.toUpperCase(Locale.ROOT),help.get(group),grid));scroll.setFitToWidth(true);scroll.setPrefViewportHeight(560);tabs.getTabs().add(new Tab(group,scroll));
+            var scroll=new ScrollPane(ConsoleShell.card(group.toUpperCase(Locale.ROOT),help.get(group),grid));scroll.setFitToWidth(true);scroll.setPrefViewportHeight(560);tabs.getTabs().add(new Tab(group.equals("Sensores")?"Compensações":group,scroll));
         }
         for(var option:FeatureConfiguration.Option.values()){var c=new CheckBox(option.label);c.setId("feature-option-"+option.name());c.setWrapText(true);options.put(option,c);GridPane g=grids.get(option.group);g.add(c,0,g.getRowCount(),2,1);}
+        sensorGrids.put("IAT",new GridPane());sensorGrids.put("VOLT",new GridPane());
+        sensorGrids.values().forEach(g->{g.setHgap(16);g.setVgap(9);});
+        grids.get("Sensores").addRow(grids.get("Sensores").getRowCount(),new Label("Calibra IAT e tensão em Sensores e calibrações."));
         for(var f:FeatureConfiguration.Field.values()){
             var c=new ComboBox<String>();c.setEditable(true);c.setPrefWidth(165);c.setId("feature-choice-"+f.name());c.getEditor().setId("feature-field-"+f.name());
             if(f.offset<76){for(int i=f.min;i<=f.max;i++)c.getItems().add(Integer.toString(i));
@@ -45,7 +50,7 @@ final class FeatureControlPane extends VBox {
             }
             else if(f.decimals==3&&f.name().contains("TARGET"))c.getItems().addAll("0.85","0.9","0.95","1");
             else c.getItems().add(java.math.BigDecimal.valueOf(f.reference,f.decimals).stripTrailingZeros().toPlainString());
-            fields.put(f,c);GridPane g=grids.get(f.group);var l=new Label(f.label);l.setWrapText(true);g.addRow(g.getRowCount(),l,f.offset<76?FunctionChoices.control(c):c);
+            fields.put(f,c);GridPane g=f.group.equals("Sensores")?sensorGrids.get(f.name().startsWith("IAT_")?"IAT":"VOLT"):grids.get(f.group);var l=new Label(f.label);l.setWrapText(true);g.addRow(g.getRowCount(),l,f.offset<76?FunctionChoices.control(c):c);
         }
         getChildren().addAll(tabs,ConsoleShell.card("REFERÊNCIAS E CÓPIAS","O ficheiro .tnaux inclui TPS, ralenti, turbo e todas estas funções. Abrir uma cópia prepara a edição; só Guardar envia à ECU. Guarda também o perfil .tncfg e os mapas .tnmap.",ConsoleShell.actions(reference,base,backup,open)));
         fill(baseline);
@@ -58,11 +63,57 @@ final class FeatureControlPane extends VBox {
         backup.setOnAction(e->{try{var c=candidate();var f=chooser("Guardar auxiliares e funções");f.setInitialFileName("auxiliares-funcoes.tnaux");var file=f.showSaveDialog(owner);if(file!=null){c.writeNew(file.toPath());result.setText("Cópia guardada: "+file.getName());}}catch(Exception x){result.setText(x.getMessage());}});
         open.setOnAction(e->{var file=chooser("Abrir auxiliares e funções").showOpenDialog(owner);if(file!=null)try{fill(AuxConfiguration.read(file.toPath()).bytes());result.setText("Cópia aberta apenas na edição.");}catch(Exception x){result.setText(x.getMessage());}});controls();
     }
+    javafx.scene.Node sensorCalibration(String kind){
+        var grid=sensorGrids.get(kind);Button loadSensor=new Button("Ler calibração da ECU"),saveSensor=new Button("Guardar calibração "+(kind.equals("IAT")?"IAT":"da tensão"));
+        loadSensor.disableProperty().bind(read.disabledProperty());saveSensor.disableProperty().bind(save.disabledProperty());
+        loadSensor.setOnAction(e->read.fire());saveSensor.setId("sensor-"+kind.toLowerCase(Locale.ROOT)+"-save");
+        saveSensor.setOnAction(e->{try{
+            var expected=snapshot;if(expected==null||!available||busy||armed)return;
+            var values=new EnumMap<FeatureConfiguration.Field,String>(FeatureConfiguration.Field.class);
+            fields.forEach((f,c)->{if(f.group.equals("Sensores")&&f.name().startsWith(kind+"_"))values.put(f,c.getEditor().getText());});
+            var candidate=SensorCalibration.sensor(new AuxConfiguration(baseline),kind,values);
+            busy=true;controls();access.run((session,device)->new Loaded(AuxControlClient.apply(session,device,expected,candidate,java.time.Duration.ofSeconds(25)),AuxControlClient.features(session),EngineOutputClient.read(session)),v->{
+                busy=false;snapshot=v.snapshot();baseline=v.snapshot().configuration().bytes();armed=v.engine().armed();
+                result.setText("Calibração guardada e confirmada por leitura. Modos e compensações mantêm o estado anterior.");onSnapshot.accept(v.snapshot());onState.accept(v.engine());controls();
+            },x->{busy=false;result.setText(x.getMessage());controls();});
+        }catch(IllegalArgumentException x){result.setText(x.getMessage());}});
+        VBox box=new VBox(10,ConsoleShell.actions(loadSensor,saveSensor));
+        if(kind.equals("IAT"))box.getChildren().add(SensorCalibrationControls.ntc("iat-ntc",points->{
+            var raw=java.util.List.of(FeatureConfiguration.Field.IAT_RAW1,FeatureConfiguration.Field.IAT_RAW2,FeatureConfiguration.Field.IAT_RAW3);
+            var temp=java.util.List.of(FeatureConfiguration.Field.IAT_TEMP1,FeatureConfiguration.Field.IAT_TEMP2,FeatureConfiguration.Field.IAT_TEMP3);
+            for(int i=0;i<3;i++){fields.get(raw.get(i)).setValue(Integer.toString(points[i].adc()));fields.get(temp.get(i)).setValue(Double.toString(points[i].temperature()));}
+        },base.disabledProperty()));
+        int row=0;for(var f:FeatureConfiguration.Field.values())if(f.group.equals("Sensores")&&f.name().startsWith(kind+"_")){
+            if(f.name().contains("RAW")){
+                Button measure=new Button("Medir ponto");measure.setId("sensor-measure-"+f.name());measure.disableProperty().bind(read.disabledProperty().or(base.disabledProperty()));
+                measure.setOnAction(e->{int channel=Integer.parseInt(fields.get(kind.equals("IAT")?FeatureConfiguration.Field.IAT_INPUT:FeatureConfiguration.Field.VOLT_INPUT).getValue());if(channel==0){result.setText("Escolhe primeiro a ligação do sensor");return;}
+                    access.run((session,device)->io.tunuino.protocol.IoClient.read(session,device,java.time.Duration.ofSeconds(2)),v->{try{fields.get(f).setValue(Integer.toString(SensorCalibration.measured(v,channel,kind.equals("IAT"))));result.setText("Ponto medido na edição. Indica a temperatura ou tensão conhecida e guarda para aplicar.");}catch(IllegalArgumentException x){result.setText(x.getMessage());}},x->result.setText(x.getMessage()));
+                });grid.add(measure,2,row);
+            }row++;
+        }
+        Label note=new Label(kind.equals("IAT")?"Curva de três pontos da temperatura do ar. Calibrar não ativa a compensação de combustível.":"Dois pontos medidos com multímetro, em volts da bateria. A entrada AV exige condicionamento/divisor adequado; não ligar 12 V diretamente ao ADC.");note.setWrapText(true);
+        Label message=new Label();message.textProperty().bind(result.textProperty());message.setWrapText(true);box.getChildren().addAll(note,grid,message);return box;
+    }
     private static FileChooser chooser(String title){var f=new FileChooser();f.setTitle(title);f.getExtensionFilters().add(new FileChooser.ExtensionFilter("Tunuino auxiliares e funções","*.tnaux"));return f;}
     private record Loaded(AuxControlClient.Snapshot snapshot,AuxControlClient.FeatureState features,EngineOutputClient.State engine){}
-    private void run(ConfigurationPane.Operation<Loaded> operation){if(!available||busy)return;busy=true;controls();access.run(operation,v->{busy=false;snapshot=v.snapshot();armed=v.engine().armed();fill(v.snapshot().configuration().bytes());var f=v.features();result.setText(f.description()+" · "+v.engine().description());onState.accept(v.engine());controls();},x->{busy=false;result.setText(x.getMessage());controls();});}
+    private void run(ConfigurationPane.Operation<Loaded> operation){if(!available||busy)return;busy=true;controls();access.run(operation,v->{busy=false;snapshot=v.snapshot();armed=v.engine().armed();fill(v.snapshot().configuration().bytes());var f=v.features();result.setText(f.description()+" · "+v.engine().description());onSnapshot.accept(v.snapshot());onState.accept(v.engine());controls();},x->{busy=false;result.setText(x.getMessage());controls();});}
     private void fill(byte[] page){baseline=(page[0]==1?page:AuxConfiguration.reference().bytes()).clone();var f=new FeatureConfiguration(baseline);if(!f.configured())f=FeatureConfiguration.reference(baseline);for(var field:fields.keySet()){String text=f.value(field);fields.get(field).setValue(text);fields.get(field).getEditor().setText(text);}for(var o:options.keySet())options.get(o).setSelected(f.enabled(o));}
     AuxConfiguration candidate(){var values=new EnumMap<FeatureConfiguration.Field,String>(FeatureConfiguration.Field.class);fields.forEach((f,c)->values.put(f,c.getEditor().getText()));var enabled=EnumSet.noneOf(FeatureConfiguration.Option.class);options.forEach((o,c)->{if(c.isSelected())enabled.add(o);});return new AuxConfiguration(new FeatureConfiguration(baseline).edited(values,enabled).bytes());}
+    void onSnapshot(Consumer<AuxControlClient.Snapshot> action){onSnapshot=action;}
+    void sensorSaved(AuxControlClient.Snapshot value){
+        if(snapshot==null)return;
+        byte[] expected=snapshot.configuration().bytes(),received=value.configuration().bytes();
+        if(java.util.Arrays.equals(java.util.Arrays.copyOfRange(expected,68,256),java.util.Arrays.copyOfRange(received,68,256))){
+            snapshot=value;baseline=value.configuration().bytes();
+        }else{snapshot=null;result.setText("A calibração desta secção mudou. Lê a ECU antes de guardar; a edição local foi mantida.");}
+        controls();
+    }
+    void coreSaved(io.tunuino.protocol.ConfigurationClient.Validation validation){
+        if(snapshot!=null&&!validation.dirty()&&!snapshot.validation().dirty()){
+            long next=(snapshot.validation().generation()+1)&0xffffffffL;if(next==0)next=1;
+            if(validation.generation()==next)snapshot=new AuxControlClient.Snapshot(snapshot.configuration(),validation,snapshot.pageCrc());
+        }controls();
+    }
     void availability(DeviceIdentity d,boolean connected,boolean blocked,boolean engineArmed){if(!Objects.equals(identity,d)||!connected){identity=d;snapshot=null;}available=connected&&d!=null&&!blocked;armed=engineArmed;controls();}
     private void controls(){boolean edit=!busy&&!armed;read.setDisable(!available||busy);save.setDisable(!available||busy||armed||snapshot==null);base.setDisable(!edit);reference.setDisable(!edit);open.setDisable(!edit);backup.setDisable(busy);fields.values().forEach(c->c.setDisable(!edit));options.values().forEach(c->c.setDisable(!edit));}
 }

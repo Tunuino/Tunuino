@@ -110,7 +110,7 @@ public final class IoConfiguration {
         if(map<0||map>11||lambda<0||lambda>11||coolant<0||coolant>4)throw new IllegalArgumentException("Canal de entrada inválido");
         byte[] updated=bytes.clone();updated[2]=(byte)(trigger?1:0);updated[6]=(byte)map;updated[7]=(byte)lambda;updated[8]=(byte)coolant;
         for(var entry:values.entrySet()) {
-            Field field=entry.getKey();String text=entry.getValue().trim();
+            Field field=entry.getKey();String text=entry.getValue().trim().replace(',','.');
             try {
                 if(text.length()>32||!text.matches("[+-]?[0-9]+(?:\\.[0-9]+)?"))throw new NumberFormatException();
                 int value=new BigDecimal(text).movePointRight(field.decimals).intValueExact();

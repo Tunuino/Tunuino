@@ -35,6 +35,8 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
     private final java.util.concurrent.atomic.AtomicInteger pendingLog = new java.util.concurrent.atomic.AtomicInteger();
     private volatile boolean busy;
     private volatile boolean closed;
+    private boolean scanning;
+    private final DeviceSearch deviceSearch;
     private boolean exclusive;
     private FirmwareImage image;
     private Path stTool;
@@ -48,12 +50,17 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
 
     FirmwarePanel(Stage stage, BooleanSupplier serialFree, Supplier<String> comPort,
             BooleanSupplier proteusSelected, boolean discoveryEnabled) {
+        this(stage, serialFree, comPort, proteusSelected, discoveryEnabled, FirmwarePanel::findDevices);
+    }
+    FirmwarePanel(Stage stage, BooleanSupplier serialFree, Supplier<String> comPort,
+            BooleanSupplier proteusSelected, boolean discoveryEnabled, DeviceSearch deviceSearch) {
+        this.deviceSearch = deviceSearch;
         this.stage = stage; this.serialFree = serialFree; this.comPort = comPort; this.proteusSelected = proteusSelected;
         this.discoveryEnabled = discoveryEnabled;
         setPadding(new Insets(0, 24, 24, 24)); setSpacing(14);
         stTool = tools.find("STM32_Programmer_CLI.exe");
         bltTool = tools.find("BootCommander.exe");
-        Button selectImage = button("Selecionar firmware", this::chooseImage);
+        Button selectImage = button("Selecionar firmware", this::chooseImage); selectImage.setId("firmware-select-image");
         Button chooseSt = button("Ferramenta ST…", () -> chooseTool("STM32_Programmer_CLI.exe"));
         Button chooseBlt = button("Ferramenta OpenBLT…", () -> chooseTool("BootCommander.exe"));
         Button drivers = button("Instalar drivers…", this::installDrivers);
@@ -72,6 +79,7 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
             ConsoleShell.actions(usbPorts, refresh), state, ConsoleShell.actions(flashDfu, flashBlt));
         deviceCard.getStyleClass().add("panel");
         getChildren().addAll(imageCard, deviceCard, advanced, ConsoleShell.caption("REGISTO DA OPERAÇÃO"), log);
+        usbPorts.setId("firmware-dfu-devices"); state.setId("firmware-discovery-state");
         usbPorts.setPromptText("Dispositivo USB DFU"); usbPorts.setPrefWidth(320);
         usbPorts.setOnAction(e -> refreshControls());
         javafx.animation.Timeline timer = new javafx.animation.Timeline(
@@ -120,29 +128,47 @@ final class FirmwarePanel extends VBox implements AutoCloseable {
             }
         });
     }
-    private record Discovery(List<WindowsDfu.Device> devices, List<WindowsDfu.UsbPort> ports, String problem) {}
-    private void scan() {
-        if (busy || closed || !discoveryEnabled) return;
-        Path tool = stTool;
-        execute(() -> {
-            List<WindowsDfu.Device> devices = WindowsDfu.scan();
-            if (devices.isEmpty() || tool == null || devices.stream().noneMatch(d -> d.driverError() == 0))
-                return new Discovery(devices, List.of(), "");
-            try { return new Discovery(devices, WindowsDfu.listPorts(tool), ""); }
-            catch (IOException e) { return new Discovery(devices, List.of(), e.getMessage()); }
-        }, result -> {
-            WindowsDfu.UsbPort previous = usbPorts.getValue();
-            usbPorts.getItems().setAll(result.ports());
-            if (previous != null) result.ports().stream().filter(p -> p.serial().equals(previous.serial())).findFirst().ifPresent(usbPorts::setValue);
-            if (usbPorts.getValue() == null && result.ports().size() == 1) usbPorts.setValue(result.ports().get(0));
-            String description;
-            if (result.devices().isEmpty()) description = "DFU não encontrado. Em arranque normal a ECU aparece nas portas COM; para DFU usa BOOT0 e reset.";
-            else if (result.devices().stream().anyMatch(d -> d.driverError() != 0)) description = "USB DFU detetado com erro de driver. Usa Instalar drivers. " + result.devices();
-            else if (tool == null) description = "USB DFU detetado. Seleciona STM32_Programmer_CLI.exe da instalação STM32CubeProgrammer.";
-            else if (!result.problem().isEmpty()) description = "USB DFU detetado. " + result.problem();
-            else description = "DFU: " + result.ports().size() + " dispositivo(s) disponível(is) na ferramenta ST. Desliga a sessão COM antes de gravar.";
-            if (!description.equals(lastDiscovery)) { state.setText(description); lastDiscovery = description; }
+    record Discovery(List<WindowsDfu.Device> devices, List<WindowsDfu.UsbPort> ports, String problem) {
+        Discovery { devices=List.copyOf(devices); ports=List.copyOf(ports); }
+    }
+    @FunctionalInterface interface DeviceSearch { Discovery scan(Path tool) throws Exception; }
+    private static Discovery findDevices(Path tool) throws IOException {
+        List<WindowsDfu.Device> devices=WindowsDfu.scan();
+        if(devices.isEmpty()||tool==null||devices.stream().noneMatch(d->d.driverError()==0))
+            return new Discovery(devices,List.of(),"");
+        try{return new Discovery(devices,WindowsDfu.listPorts(tool),"");}
+        catch(IOException e){return new Discovery(devices,List.of(),e.getMessage());}
+    }
+    void scan() {
+        // Discovery is read-only background work, never an exclusive UI operation.
+        // A hidden page or an open COM session must not launch periodic tool processes.
+        if(busy||scanning||closed||!discoveryEnabled||getScene()==null||!serialFree.getAsBoolean())return;
+        scanning=true; Path tool=stTool;
+        worker.submit(()->{
+            Discovery found;
+            try{found=deviceSearch.scan(tool);}
+            catch(Exception e){found=new Discovery(List.of(),List.of(),e.getMessage()==null?e.toString():e.getMessage());}
+            Discovery result=found;
+            Platform.runLater(()->{scanning=false;if(!closed&&!busy&&getScene()!=null)showDiscovery(result,tool);});
         });
+    }
+    void showDiscovery(Discovery result, Path tool) {
+        if(!usbPorts.getItems().equals(result.ports())) {
+            WindowsDfu.UsbPort previous=usbPorts.getValue();
+            usbPorts.getItems().setAll(result.ports());
+            WindowsDfu.UsbPort selected=previous==null?null:result.ports().stream()
+                .filter(p->p.serial().equals(previous.serial())).findFirst().orElse(null);
+            if(selected==null&&result.ports().size()==1)selected=result.ports().get(0);
+            usbPorts.setValue(selected);
+        }
+        String description;
+        if(!result.problem().isEmpty())description="Pesquisa DFU: "+result.problem();
+        else if(result.devices().isEmpty())description="DFU não encontrado. A ECU em funcionamento usa a porta COM; para DFU usa BOOT0 e reset.";
+        else if(result.devices().stream().anyMatch(d->d.driverError()!=0))description="USB DFU detetado com erro de driver. Usa Instalar drivers. "+result.devices();
+        else if(tool==null)description="USB DFU detetado. Seleciona STM32_Programmer_CLI.exe da instalação STM32CubeProgrammer.";
+        else description="DFU: "+result.ports().size()+" dispositivo(s) disponível(is). Desliga a sessão COM antes de gravar.";
+        if(!description.equals(lastDiscovery)){state.setText(description);lastDiscovery=description;}
+        refreshControls();
     }
     private File chooseExe(String title, String name) {
         FileChooser chooser = new FileChooser(); chooser.setTitle(title);

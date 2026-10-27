@@ -64,6 +64,14 @@ public final class AuxControlChecks {
             try{IoAssignmentClient.apply(session,d,routed,moved.withFunction(IoAssignments.Group.POWER,10,1),timeout);throw new AssertionError("Armed assignment write accepted");}catch(java.io.IOException expected){}
             try{AuxControlClient.apply(session,d,saved,desired.edited(Map.of(AuxConfiguration.Field.IDLE_P,"6"),1,8,2,9,3),timeout);throw new AssertionError("Running write accepted");}catch(java.io.IOException expected){}
             check(!AuxControlClient.read(session,d,timeout).validation().dirty(),"Running write changes no staged bytes");EngineOutputClient.stop(session);
+            var running=new java.util.concurrent.atomic.AtomicBoolean(true);
+            var samples=new java.util.concurrent.atomic.AtomicInteger();var extraCount=new java.util.concurrent.atomic.AtomicInteger();
+            var monitor=new io.tunuino.datalog.LiveDataMonitor(session,d,Duration.ofMillis(10));
+            long count=monitor.run(running::get,sample->{if(samples.incrementAndGet()==3)running.set(false);},error->{throw new AssertionError(error);},extra->{
+                check(extra.sensors().flags()==2047&&extra.outputs().configured()&&extra.profile()[0]==1,"Native extended sensors and saved output routing reach the monitor");
+                byte[] copy=extra.profile();copy[0]=99;check(extra.profile()[0]==1,"Monitor profile snapshot is immutable");extraCount.incrementAndGet();
+            });
+            check(count==3&&extraCount.get()>0&&session.isOpen(),"Extended telemetry shares the serial worker and preserves the session");
         }
         byte[] fault=new byte[24];fault[1]=1;fault[2]=3;fault[3]=16;fault[14]=1;
         check(EngineOutputClient.decode(fault).faultsDescription().contains("turbo"),"Overboost fault decodes explicitly");

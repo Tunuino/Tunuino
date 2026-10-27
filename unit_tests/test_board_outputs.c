@@ -2,6 +2,7 @@
 #include "hal.h"
 #include "board_outputs.h"
 #include "tunuino/frame.h"
+#include "tunuino/live_data.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -153,7 +154,11 @@ int main(void){
         frame[0]=(uint8_t)hi;frame[1]=(uint8_t)lo;if(fread(frame+2,1,total-2,stdin)!=total-2)return 3;
         const uint8_t *q;size_t bytes;if(tunuino_frame_decode(frame,total,&q,&bytes)!=TUNUINO_FRAME_OK)return 4;
         TIM2->CNT+=100;
-        if(tunuino_device_reply(&d,&id,q,bytes,response,sizeof(response),&response_size)!=TUNUINO_DISPATCH_OK)return 5;
+        /* Match the production dispatcher: partial telemetry and native output commands share one stream. */
+        if(bytes==9&&memcmp(q,"TUNUINO:P",9)==0){
+            ++d.live.time_ms;
+            if(tunuino_live_partial_reply(&d.live,response,sizeof(response),&response_size)!=TUNUINO_LIVE_OK)return 5;
+        }else if(tunuino_device_reply(&d,&id,q,bytes,response,sizeof(response),&response_size)!=TUNUINO_DISPATCH_OK)return 5;
         if(fwrite(response,1,response_size,stdout)!=response_size||fflush(stdout))return 6;
     }
     return 0;

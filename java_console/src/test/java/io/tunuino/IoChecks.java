@@ -120,7 +120,12 @@ public final class IoChecks {
             check(partial.validMask()==14&&partial.rpm()==0&&!LogChannel.RPM.available(partial)&&LogChannel.RPM.format(partial).equals("—"),"Partial data is unavailable, not zero RPM");
             Path csv=directory.resolve("simulated-partial.csv");LiveDataMonitor monitor=new LiveDataMonitor(session,identity,Duration.ofMillis(10));
             var started=monitor.startRecording(csv);AtomicBoolean running=new AtomicBoolean(true);AtomicInteger samples=new AtomicInteger();
-            long count=monitor.run(running::get,value->{check(value.orElseThrow().validMask()==14,"Monitor partial mask");if(samples.incrementAndGet()==3)running.set(false);},error->{throw new AssertionError(error);});
+            AtomicInteger extraCount=new AtomicInteger();
+            long count=monitor.run(running::get,value->{check(value.orElseThrow().validMask()==14,"Monitor partial mask");if(samples.incrementAndGet()==3)running.set(false);},error->{throw new AssertionError(error);},extra->{
+                check(extra.sensors().generation()>0&&extra.outputs().generation()>0&&extra.profile().length==128,"Native TPS/IAT/voltage, outputs and profile share the same serial polling worker");
+                byte[] copy=extra.profile();copy[0]=99;check(extra.profile()[0]!=99,"Auxiliary telemetry does not expose a mutable wiring profile");extraCount.incrementAndGet();
+            });
+            check(extraCount.get()==0,"Legacy IO peer does not advertise native auxiliary telemetry; polling falls back without closing the session");
             check(started.isDone()&&count==3&&session.isOpen(),"Independent IO monitoring/CSV");
             List<LogSample> read=CsvLogReader.read(csv);check(read.size()==3&&read.get(0).validMask()==14&&Files.readString(csv).startsWith(CsvLogReader.PARTIAL_HEADER),"Partial CSV roundtrip");
             check(Files.readString(csv).contains(",,100.0,1.0,50.0,14"),"Missing RPM is an empty CSV field");
