@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 import java.util.*;
 public final class FeatureConfiguration {
     public enum Option {
-        IAT("Compensação IAT e atraso por ar quente","Sensores",1),VOLTAGE("Curvas de tempo morto e dwell por tensão","Tensão",2),
+        IAT("Compensação IAT e atraso por ar quente","Sensores",1),VOLTAGE("Curvas de dead time e dwell por tensão","Tensão",2),
         TARGET("Aplicar alvo lambda por MAP","Lambda",4),LAMBDA("Correção lambda em malha fechada","Lambda",8),ACCEL("Enriquecimento por velocidade TPS","Transientes",16),
         DFCO("Corte de combustível em desaceleração","Transientes",32),LIMIT("Limitador de RPM por corte de combustível","Limites",64),
         LAUNCH("Launch por entrada analógica condicionada","Limites",128),FLEX("Flex fuel por controlador analógico","Flex fuel",256),
@@ -31,9 +31,9 @@ public final class FeatureConfiguration {
         VOLT_AXIS1("Tensão da curva 1 (V)","Tensão",96,2,500,2000,800),
         VOLT_AXIS2("Tensão da curva 2 (V)","Tensão",98,2,500,2000,1200),
         VOLT_AXIS3("Tensão da curva 3 (V)","Tensão",100,2,500,2000,1600),
-        DEAD1("Tempo morto 1 (ms)","Tensão",102,3,0,5000,1500),
-        DEAD2("Tempo morto 2 (ms)","Tensão",104,3,0,5000,1000),
-        DEAD3("Tempo morto 3 (ms)","Tensão",106,3,0,5000,700),
+        DEAD1("Dead time 1 (ms)","Tensão",102,3,0,5000,1500),
+        DEAD2("Dead time 2 (ms)","Tensão",104,3,0,5000,1000),
+        DEAD3("Dead time 3 (ms)","Tensão",106,3,0,5000,700),
         DWELL1("Dwell 1 (ms)","Tensão",108,3,100,5000,4000),
         DWELL2("Dwell 2 (ms)","Tensão",110,3,100,5000,3000),
         DWELL3("Dwell 3 (ms)","Tensão",112,3,100,5000,2500),

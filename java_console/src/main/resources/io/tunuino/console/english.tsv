@@ -1,0 +1,973 @@
+# Tunuino interface: Portuguese source<TAB>English display
+01  IMAGEM DE FIRMWARE	01  FIRMWARE IMAGE
+02  DISPOSITIVO USB	02  USB DEVICE
+100% mantém o combustível base. Durante arranque usa a percentagem de arranque; acima do limite RPM usa a curva de aquecimento e o enriquecimento após arranque, que decresce até 100%. O dead time é adicionado no fim. Afina estes valores para o motor real.	100% retains base fuelling. Cranking uses the cranking percentage; above the RPM threshold, the warm-up curve and after-start enrichment apply, decaying to 100%. Dead time is added last. Tune for the actual engine.
+A ECU tem de estar no bootloader OpenBLT. Não existe ainda mudança automática de modo.	The ECU must be in the OpenBLT bootloader. Automatic mode switching is not implemented.
+A ECU, ligação ou configuração mudou. Repete a captura.	The ECU, connection or configuration changed. Repeat the capture.
+A ECU, ligação ou geração mudou durante a captura. Repete a calibração.	The ECU, connection or generation changed during capture. Repeat the calibration.
+A calibração desta secção mudou. Lê a ECU antes de guardar; a edição local foi mantida.	This section's calibration changed. Read the ECU before saving; local edits were preserved.
+A configuração IO requer 256 bytes	IO configuration requires 256 bytes
+A configuração ou o relógio mudou durante a captura; repete a medição	Configuration or clock changed during capture; repeat the measurement
+A consultar cálculo da ECU…	Reading ECU calculation…
+A consultar mapas VE e ignição sem comandar saídas…	Reading VE and ignition maps without activating outputs…
+A conversão exige um mapa 8 × 8	Conversion requires an 8 × 8 map
+A curva medida deve ser monotónica	The measured curve must be monotonic
+A edição atual será substituída; os dados da ECU não são alterados.	Current local edits will be replaced; ECU data will not change.
+A gravar CSV · monitorização continua ativa	Recording CSV · live data remains active
+A guardar e verificar o mapa na ECU…	Writing and verifying map on ECU…
+A guardar…	Saving…
+A identificar a ECU…	Identifying ECU…
+A leitura substituirá a edição local pelos valores da ECU.	Reading will replace local edits with ECU values.
+A ler mapa da ECU…	Reading ECU map…
+A ler o estado real dos sensores e da configuração…	Reading actual sensor and configuration status…
+A ligação ou configuração mudou. Recomeça pelo primeiro ponto.	The connection or configuration changed. Restart at the first point.
+A ligação recomendada é mostrada por contacto do conector. Proposta identifica uma escolha Tunuino para funções sem ligação habitual fixa.	Recommended connections use connector and pin names. Proposed identifies a Tunuino choice for functions without a fixed conventional connection.
+A pesquisar dispositivos DFU…	Scanning DFU devices…
+A procurar portas…	Scanning ports…
+A página de ralenti/turbo requer 256 bytes	The idle/boost page requires 256 bytes
+A receber dados da ECU…	Receiving ECU data…
+A recolher oito amostras; mantém o sensor estável…	Collecting eight samples; keep the sensor steady…
+A referência começa com os dois controlos desativados e duty de turbo zero. Mede o TPS, escolhe saídas livres e afina os valores para as válvulas instaladas. O ficheiro .tnaux guarda esta página; guarda também o perfil .tncfg e os mapas .tnmap.	The reference starts with both controls disabled and zero boost duty. Measure TPS, choose unused outputs and tune for installed valves. A .tnaux file stores this page; also save the .tncfg profile and .tnmap maps.
+A tensão mostrada é no pino MCU; os divisores externos não são inferidos.	Voltage shown is at the MCU pin; external dividers are not inferred.
+A terminar a monitorização e a fechar o datalog…	Stopping live data and closing the datalog…
+ADC com 0% etanol	ADC at 0% ethanol
+ADC com 100% etanol	ADC at 100% ethanol
+ADC inferior	Low ADC
+ADC no limite da escala; verifica a ligação do sensor	ADC at full-scale limit; check sensor wiring
+ADC ponto	ADC point
+ADC superior	High ADC
+ARRANQUE E AQUECIMENTO	CRANKING AND WARM-UP
+ATRIBUIÇÕES POR CILINDRO	CYLINDER ASSIGNMENTS
+AUTOTUNE VE · DADOS REAIS	VE AUTOTUNE · REAL DATA
+Abre completamente a borboleta e mantém a posição.	Fully open the throttle and hold it steady.
+Abre um mapa VE ou de ignição para consultar a tabela, editar valores e guardar uma cópia .tnmap.	Open a VE or ignition map to inspect the table, edit values and save a .tnmap copy.
+Abrir	Open
+Abrir auxiliares e funções	Open auxiliary settings and features
+Abrir configuração	Open configuration
+Abrir datalog	Open datalog
+Abrir e guardar ficheiros não altera a centralina. Restaurar exige saídas desarmadas, uma leitura atual da mesma ECU e confirmação do projeto.	Opening and saving files does not change the ECU. Restoration requires disarmed outputs, a fresh snapshot from the same ECU and explicit project confirmation.
+Abrir ficheiro	Open file
+Abrir mapa	Open map
+Abrir projeto	Open project
+Aceleração: combustível adicional por velocidade de abertura TPS, com decaimento linear. DFCO: corte com temperatura mínima, atraso e histerese de RPM. A malha fechada suspende a correção durante estes eventos.	Acceleration: extra fuel based on TPS opening rate, with linear decay. DFCO: fuel cut with minimum temperature, delay and RPM hysteresis. Closed-loop correction pauses during these events.
+Afinação	Tuning
+Aguarda 1500 ms em carga estável	Waiting for 1500 ms of stable load
+Aguarda a conclusão da gravação.	Wait for saving to finish.
+Aguarda motor ativo, calibração guardada e ausência de falhas	Waiting for active engine control, saved calibration and no faults
+Aguarda temperatura e fim das correções de arranque/aquecimento	Waiting for temperature and end of cranking/warm-up corrections
+Aguarda um ponto próximo do centro de uma célula	Waiting for a point near a cell centre
+Ainda não existe um perfil de motor guardado. Escolhe um modelo e completa a calibração.	No engine profile is saved. Choose a preset and complete calibration.
+Ajuda	Help
+Ajustes individuais sobre o combustível efetivo, antes do dead time, e sobre o avanço. Confirmar medição por cilindro antes de ativar. Os limites de pulso e duty continuam a aplicar-se.	Per-cylinder corrections to effective fuel before dead time, and to ignition advance. Verify per-cylinder measurements before enabling. Pulse and duty limits still apply.
+Alteração (%)	Change (%)
+Alteração desfeita.	Change undone.
+Alteração refeita.	Change redone.
+Alterações pendentes	Pending changes
+Alterações por guardar	Unsaved changes
+Alvo MAP absoluto (kPa)	Absolute MAP target (kPa)
+Alvo lambda inválido	Invalid lambda target
+Alvo ralenti	Idle target
+Amostra	Sample
+Amostra inválida ou indisponível.	Invalid or unavailable sample.
+Amostras	Samples
+Amostras mínimas	Minimum samples
+Anterior	Previous
+Ao voltar a alimentar a ECU, este perfil poderá ligar bomba, relé e ventoinha e comandar injeção/ignição com sincronismo válido, mesmo sem computador. Confirmas a calibração e as ligações?	At the next ECU power-on, this profile may activate the pump, relay and fan, and control injection/ignition with valid synchronisation even without a computer. Confirm calibration and wiring?
+Apenas cálculo matemático, sem fase PMS nem saídas.	Calculation only; no TDC phase or outputs.
+Aplica a primeira pressão absoluta conhecida (kPa).	Apply the first known absolute pressure (kPa).
+Aplica a primeira referência lambda do controlador.	Apply the controller's first known lambda reference.
+Aplica a segunda pressão absoluta conhecida (kPa).	Apply the second known absolute pressure (kPa).
+Aplica a segunda referência lambda do controlador.	Apply the controller's second known lambda reference.
+Aplicar ajustes individuais dos cilindros	Apply individual cylinder trims
+Aplicar alvo lambda por MAP	Apply MAP-based lambda target
+Aplicar correções de arranque e aquecimento	Enable cranking and warm-up correction
+Aplicar modelo à edição	Apply preset to editor
+Aplicar referência desativada	Apply disabled reference
+Aplicar referência à edição	Apply reference to editor
+Aplicar à edição	Apply to editor
+Aprende propostas com RPM, MAP, TPS, CLT e lambda wideband da ECU. Não arma saídas nem altera a tabela durante a recolha. O alvo segue a curva lambda ativa; sem curva, usa o valor abaixo.	Build proposals from actual ECU RPM, MAP, TPS, CLT and wideband lambda. Does not arm outputs or change the table during collection. The target follows the active lambda curve, or the value below if no curve is enabled.
+Aquisição	Acquisition
+Armado	Armed
+Armar controlo do motor	Arm engine control
+Armar permite pulsos reais de injeção/ignição e pode ligar bomba, relé e ventoinha. Confirmas o perfil e as ligações?	Arming enables actual injection/ignition pulses and may activate the pump, relay and fan. Confirm the profile and wiring?
+Armar saídas físicas	Arm physical outputs
+Arranque abaixo de (rpm)	Cranking below (rpm)
+Arranque e aquecimento	Cranking and warm-up
+Arranque/aquecimento: temperaturas devem crescer; enriquecimento após arranque exige duração em ms	Cranking/warm-up: temperatures must increase; after-start enrichment requires a duration in ms
+Arranque/aquecimento: valor inválido em	Cranking/warm-up: invalid value in
+As alterações pendentes de configuração e mapas serão substituídas pelos valores ativos.	Pending configuration and map changes will be replaced with active values.
+As bobinas partilhadas aparecem pelo par de cilindros. Confirma os contactos com a cablagem; a ordem de ignição mantém-se no perfil.	Shared coils are identified by cylinder pair. Verify connector pins against actual wiring; firing order remains in the profile.
+As células aparecem após carga estável e amostras suficientes.	Cells appear after stable load and sufficient samples.
+As duas tabelas do projeto têm de ser 16×16	Both project tables must be 16×16
+As funções ativas exigem perfil, MAP e CLT	Active features require an engine profile, MAP and CLT
+As funções por cilindro seguem o perfil guardado em Motor e saídas. Todas as funções necessárias têm de continuar atribuídas. Confirma a cablagem antes de guardar.	Per-cylinder functions follow the saved engine profile. All required functions must remain assigned. Verify wiring before saving.
+As funções serão guardadas para a próxima ativação do motor. Confirma as ligações físicas.	Functions will be saved for the next engine activation. Verify physical wiring.
+As ligações habituais da Proteus aparecem primeiro. Selecionar não substitui a calibração do sensor.	Conventional Proteus connections appear first. Selecting one does not replace sensor calibration.
+As ligações recomendadas entram em conflito em	Recommended connections conflict at
+As saídas devem ser independentes dos injetores, bomba, ventoinha e relé. O firmware recusa conflitos. Guardar exige motor desarmado.	Outputs must be separate from injectors, pump, fan and main relay. Firmware rejects conflicts. Disarm the engine before saving.
+As tabelas abrem preenchidas com a base genérica aspirada. Estes controlos permitem criar outras cópias locais: 200–7000 rpm e 20–105 kPa absolutos. A base aspirada não cobre pressão de turbo. Confirma mistura e avanço para o teu motor antes de utilizar. Guardar na ECU é uma ação separada.	Tables open with the generic naturally aspirated base already loaded. These controls create other local copies: 200–7000 rpm and 20–105 kPa absolute. This base does not cover boost pressure. Verify fuelling and ignition for your engine before use. Writing to the ECU is a separate action.
+Ativar	Enable
+Ativar acima de TPS (% / s)	Activate above TPS rate (% / s)
+Ativar captura de cambota/cames	Enable crank/cam capture
+Ativar turbo acima de (rpm)	Enable boost above (rpm)
+Ativação	Activation
+Ativação temporizada de 100 a 800 ms, apenas nas saídas auxiliares atribuídas no perfil enviado à ECU.	Timed activation from 100 to 800 ms, only on auxiliary outputs assigned in the ECU profile.
+Atraso antes do corte (ms)	Delay before cut (ms)
+Atraso após arranque (ms)	After-start delay (ms)
+Atraso de ignição (° / 10 °C)	Ignition retard (° / 10 °C)
+Atribuições alteradas apenas na edição. Ao mover uma função, a ligação anterior fica sem essa função.	Assignments changed locally only. Moving a function removes it from its previous connection.
+Atual	Current
+Atualizar DFU	Refresh DFU
+Atualizar portas	Refresh ports
+Autocalibração assistida	Guided calibration
+Auxiliares	Auxiliary outputs
+Avançado — atribuição manual por terminal	Advanced — manual pin assignment
+Avanço adicional com 100% etanol (°)	Extra advance at 100% ethanol (°)
+Avanço durante arranque (° APMS)	Cranking advance (° BTDC)
+Avanço máximo durante launch (°)	Maximum launch advance (°)
+BASE GENÉRICA · POR AFINAR	GENERIC BASE · REQUIRES TUNING
+BATERIA	BATTERY
+BOMBA, VENTOINHA E AUXILIARES	PUMP, FAN AND AUXILIARY OUTPUTS
+Base VE recebida da ECU. Inicia Tempo real no cabeçalho e depois Iniciar recolha.	VE baseline received from the ECU. Start Live data in the header, then Start collection.
+Base VE, alvo ou limite de correção inválido	Invalid VE baseline, target or correction limit
+Base fixa	Fixed base
+Base fixa usada sem compensação por tensão. A curva de três tensões está em Combustível e proteções → Tensão.	Fixed base used without voltage compensation. The three-voltage curve is under Fuel and protection → Voltage.
+Base genérica	Generic base
+Base genérica aspirado · por afinar	Generic naturally aspirated base · requires tuning
+Base genérica de 256 células ao abrir; a leitura da ECU mostra o mapa real. O comando físico exige perfil e armação explícita em Configuração do motor.	A generic 256-cell base is shown at startup; reading the ECU displays its actual map. Physical output control requires a configured profile and explicit arming in Engine configuration.
+Base genérica de avanço em graus ao abrir; a leitura da ECU mostra o mapa real. Configura PMS, canais e dwell em Configuração do motor antes de armar.	A generic ignition base in degrees is shown at startup; reading the ECU displays its actual map. Configure TDC, channels and dwell in Engine configuration before arming.
+Base local para motor aspirado · não lida nem gravada na ECU · 20–105 kPa absolutos.	Local naturally aspirated base · not read from or written to the ECU · 20–105 kPa absolute.
+Base local preenchida. ReqFuel estimado para gasolina AFR 14,7, ar 1,184 g/L e combustível 0,745 g/mL. Confirma caudal à pressão usada, dwell e dead time. Mede dente zero e janela de fase antes de guardar. Os mapas base estão em Afinação.	Local base filled. ReqFuel is estimated using petrol AFR 14.7, air density 1.184 g/L and fuel density 0.745 g/mL. Verify flow at installed pressure, dwell and dead time. Measure tooth zero and cam window before saving. Base maps are under Tuning.
+Batch simultâneo 360° + bobinas duplas	360° simultaneous batch + paired coils
+Batch simultâneo 360° + wasted COP · só cambota	360° simultaneous batch + wasted COP · crank only
+Beta do sensor (K)	Sensor beta (K)
+Bobinas duplas	Paired coils
+Bobinas duplas exigem pares de cilindros separados por 360°. Escolhe um modelo com número par.	Paired coils require cylinder pairs 360° apart. Select an even-cylinder preset.
+Bobinas duplas exigem uma saída por par e PMS separados exatamente por 360°	Paired coils require one output per pair and TDCs exactly 360° apart
+Bomba	Pump
+Bomba de combustível	Fuel pump
+Branco	White
+CALIBRAÇÃO TPS	TPS CALIBRATION
+CLT · motor	CLT · coolant
+COMBUSTÍVEL E PROTEÇÕES	FUEL AND PROTECTION
+COMUNICAÇÃO	CONNECTION
+CONFIGURAÇÃO	CONFIGURATION
+CONFIGURAÇÃO DA CENTRALINA	ECU CONFIGURATION
+CRC da configuração incorreto	Incorrect configuration CRC
+CRC do projeto inválido	Invalid project CRC
+Calcula o tempo de uma volta, ciclo e dente.	Calculate revolution, cycle and tooth times.
+Calcular ponto	Calculate point
+Calcular tempos e carga teórica	Calculate theoretical timing and load
+Calibra IAT e tensão em Sensores e calibrações.	Calibrate IAT and battery voltage in Sensors and calibration.
+Calibra a saída analógica do controlador wideband com dois valores lambda conhecidos. Segue o procedimento do fabricante; a Console não calibra a célula da sonda.	Calibrate the wideband controller's analogue output using two known lambda values. Follow its manufacturer's procedure; the Console does not calibrate the sensor cell.
+Calibrar sensor NTC por modelo / resistência	Calibrate NTC sensor by model / resistance
+Calibração	Calibration
+Calibração TPS guardada e confirmada por leitura. As definições de ralenti, turbo e proteções foram preservadas.	TPS calibration saved and verified by readback. Idle, boost and protection settings were preserved.
+Calibração TPS, válvulas PWM e controlo de rotação/pressão.	TPS calibration, PWM valves and RPM/pressure control.
+Calibração guardada e confirmada por leitura. Modos e compensações mantêm o estado anterior.	Calibration saved and verified by readback. Modes and compensation retain their previous state.
+Calibração preparada na edição. Revê e usa Guardar calibração para gravar na ECU.	Calibration prepared in the editor. Review it and use Save calibration to write it to the ECU.
+Calibração sensores	Sensor calibration
+Calibrações TPS fechado/aberto devem ser diferentes	Closed/open TPS calibration values must differ
+Cambota → sensor de rotação e roda fónica	Crankshaft → crank sensor and trigger wheel
+Cames: dados atuais indisponíveis	Cam phase: current data unavailable
+Cames: leitura indisponível neste firmware	Cam phase: unavailable in this firmware
+Cames: por consultar	Cam phase: not read
+Canal	Channel
+Canal de entrada inválido	Invalid input channel
+Canal do gráfico	Graph channel
+Cancelar	Cancel
+Captura recusada	Capture rejected
+Capturar e avançar	Capture and continue
+Cilindrada (cm³)	Displacement (cm³)
+Cilindro	Cylinder
+Cilindros	Cylinders
+Cinza	Grey
+Combustível adicional inicial (ms)	Initial extra fuel (ms)
+Combustível após arranque (%)	After-start fuel (%)
+Combustível com 100% etanol (%)	Fuel at 100% ethanol (%)
+Combustível durante arranque (%)	Cranking fuel (%)
+Combustível e proteções	Fuel and protection
+Combustível · VE	Fuel · VE
+Combustível à temperatura	Fuel at temperature
+Compensação IAT e atraso por ar quente	IAT compensation and hot-air ignition retard
+Compensações	Compensation
+Compensações, alvo lambda, transientes, limites e ajustes por cilindro.	Compensation, lambda targets, transients, limits and cylinder trims.
+Configura e guarda o perfil em Motor e saídas para apresentar os cilindros.	Configure and save the engine profile to display cylinders.
+Configurar	Configure
+Configuração	Configuration
+Configuração Tunuino	Tunuino configuration
+Configuração alterada: lê uma nova base VE	Configuration changed: read a new VE baseline
+Configuração com alterações locais	Configuration has local changes
+Configuração de aquisição; não ativa injetores, bobinas ou outras saídas.	Input acquisition settings; does not activate injectors, coils or other outputs.
+Configuração do motor	Engine configuration
+Configuração lida	Configuration read
+Configuração local	Local configuration
+Configuração local disponível. Escolhe a roda fónica e as calibrações; os sensores começam desativados.	Local settings are available. Select a trigger wheel and sensor calibrations; sensors start disabled.
+Configurações	Settings
+Configurações da Console	Console settings
+Confirma R25, Beta e resistência de pull-up do circuito	Check R25, beta and circuit pull-up resistance
+Confirma a célula com Enter ou cancela com Esc antes de fechar.	Confirm the cell with Enter or cancel with Esc before closing.
+Confirma ou cancela a célula em edição antes de converter.	Confirm or cancel the cell edit before converting.
+Confirma ou cancela a célula em edição antes de enviar.	Confirm or cancel the cell edit before sending.
+Confirmar	Confirm
+Confirmo cablagem, polaridade, PMS e limites das cargas ligadas	I confirm wiring, polarity, TDC and load limits
+Consulta de temporização	Timing query
+Consulta os valores interpolados pelo firmware.	Inspect values interpolated by the firmware.
+Consultar diagnóstico	Read diagnostics
+Contactos	Connector pins
+Controlo PI de pressão MAP	MAP pressure PI control
+Converter ficheiro antigo para 16×16	Convert legacy file to 16×16
+Cores por valor	Colour by value
+Correção lambda em malha fechada	Closed-loop lambda correction
+Correção máxima (%)	Maximum correction (%)
+Correção máxima ± (%)	Maximum correction ± (%)
+Correção por sessão	Correction per session
+Correções de arranque/aquecimento inválidas	Invalid cranking/warm-up corrections
+Correções de combustível requerem 25 bytes	Fuel corrections require 25 bytes
+Cortar acima de (rpm)	Cut above (rpm)
+Cortar por temperatura CLT (°C)	Cut above CLT (°C)
+Corte MAP absoluto (kPa)	Absolute MAP cut (kPa)
+Corte de combustível em desaceleração	Deceleration fuel cut
+Corte de pressão deve ser superior ao alvo	Pressure cut must be above the target
+Corte retido por CLT ou tensão	Latched CLT or voltage cut
+Corte, enriquecimento transitório ou proteção ativa	Cut, transient enrichment or protection is active
+Cria e guarda o perfil em Motor e saídas antes de atribuir funções aos atuadores	Create and save the engine profile before assigning actuator functions
+Criar	Create
+Criar base VE 16×16	Create 16×16 VE base
+Criar base ignição 16×16	Create 16×16 ignition base
+Criar mapa base	Create base map
+Curva alterada apenas na edição; guarda para aplicar à ECU.	Curve changed locally only; save to apply it to the ECU.
+Curva alvo de três pontos MAP absolutos. O combustível base deve referir-se a lambda 1; ativar o alvo enriquece por 1 / lambda alvo. A malha fechada é PI com correção limitada e condições de temperatura, RPM, TPS e atraso. Não altera o mapa VE nem faz Autotune.	Three-point target curve using absolute MAP. Base fuelling must refer to lambda 1; enabling the target enriches by 1 / target lambda. Closed loop uses bounded PI correction with temperature, RPM, TPS and delay conditions. It does not edit the VE map or perform Autotune.
+Curva de três pontos da temperatura do ar. Calibrar não ativa a compensação de combustível.	Three-point intake air temperature curve. Calibration does not enable fuel compensation.
+Curva linear aplicada à edição. Confirma os pontos ADC reais do sensor/controlador e seleciona o canal antes de guardar.	Linear curve applied locally. Verify actual sensor/controller ADC points and select a channel before saving.
+Curva/canal MAP inválido	Invalid MAP curve/channel
+Curva/canal de temperatura inválido	Invalid temperature curve/channel
+Curva/canal lambda inválido	Invalid lambda curve/channel
+Curvas de dead time e dwell por tensão	Voltage-based dead time and dwell curves
+Curvas de três temperaturas para alvo RPM e duty base. Durante arranque usa o duty de arranque. Fora dos limites TPS/RPM ou com sinal inválido a válvula desliga. Esta revisão suporta válvulas PWM de dois fios.	Three-temperature target RPM and base-duty curves. Cranking uses cranking duty. The valve switches off outside TPS/RPM limits or with invalid signals. This version supports two-wire PWM valves.
+Curvas de três tensões para o dead time dos injetores e dwell das bobinas. Todos os tempos são apresentados em milissegundos. Usa os dados do fabricante dos componentes instalados.	Three-voltage curves for injector dead time and ignition coil dwell. All times are in milliseconds. Use manufacturer data for the installed components.
+Cálculo bloqueado por condições de validade	Calculation blocked by validity conditions
+Cálculo indisponível	Calculation unavailable
+Cálculo temporal teórico recebido	Theoretical timing calculation received
+Célula confirmada. Usa Guardar cópia para guardar o mapa.	Cell confirmed. Use Save copy to save the map.
+Cópia aberta apenas na edição.	Backup opened locally only.
+Cópia aberta apenas na edição; confirma e guarda para aplicar à ECU.	Backup opened locally only; verify and save to apply to the ECU.
+Cópia de ralenti/turbo incompatível	Incompatible idle/boost backup
+Cópia guardada	Backup saved
+Cópia guardada em	Backup saved to
+Cópia lida da ECU · 256 células.	Snapshot read from the ECU · 256 cells.
+Cópia local de outra ECU · lê a configuração desta centralina antes de aplicar.	Local copy from another ECU · read this ECU's settings before applying.
+DADOS DA ECU	ECU DATA
+DIAGNÓSTICO USB	USB DIAGNOSTICS
+Dados dos instrumentos apenas quando recebidos da ECU.	Instrument values are shown only when received from the ECU.
+Dados e datalogs	Data and datalogs
+Dashboard da ECU	ECU dashboard
+Datalog inválido	Invalid datalog
+Datalogs e monitorização	Datalogs and monitoring
+Dead time entre 0 e 5 ms; usa os dados do injetor.	Dead time must be between 0 and 5 ms; use injector specifications.
+Decaimento de aceleração (ms)	Acceleration decay (ms)
+Definições	Settings
+Dentes em falta	Missing teeth
+Dentes nominais	Nominal teeth
+Desarmado	Disarmed
+Desativada	Disabled
+Desativado	Disabled
+Desativar	Disable
+Desativar ralenti acima de (rpm)	Disable idle above (rpm)
+Descartar	Discard
+Descartar pendentes da ECU	Discard ECU pending changes
+Desfazer	Undo
+Desliga a sessão COM antes de gravar	Disconnect the COM session before flashing
+Desligar USB	Disconnect USB
+Destino	Target
+Desvio de combustível excessivo: verificar calibração e pressão	Excessive fuel deviation: check calibration and pressure
+Diagnóstico	Diagnostics
+Diagnóstico de leitura concluído	Diagnostics read completed
+Diagnósticos	Diagnostics
+Dimensões do mapa inválidas	Invalid map dimensions
+Dispositivo USB DFU	USB DFU device
+Dois pontos ADC/valor físico. Usa ponto decimal e a calibração real do sensor.	Two ADC/physical-value points. Use decimal values and the actual sensor calibration.
+Dois pontos medidos com multímetro, em volts da bateria. A entrada AV exige condicionamento/divisor adequado; não ligar 12 V diretamente ao ADC.	Two battery-voltage points measured with a multimeter. The AV input requires appropriate conditioning/division; do not connect 12 V directly to the ADC.
+Duplo clique numa célula para editar; a gravação na ECU é explícita no editor.	Double-click a cell to edit; writing to the ECU requires an explicit action in the editor.
+Duplo clique para editar; Enter confirma e Esc cancela.	Double-click to edit; Enter confirms and Esc cancels.
+Dur. pulso (ms)	Pulse duration (ms)
+Duração (ms)	Duration (ms)
+Duração após arranque (ms)	After-start duration (ms)
+Duty base	Base duty
+Duty de arranque (%)	Cranking duty (%)
+Duty fixo	Fixed duty
+Duty máximo (%)	Maximum duty (%)
+Duty máximo turbo (%)	Maximum boost duty (%)
+Duty mínimo (%)	Minimum duty (%)
+Duty mínimo turbo (%)	Minimum boost duty (%)
+Dwell (ms, máximo 5)	Dwell (ms, maximum 5)
+ECU IDENTIFICADA	ECU IDENTIFIED
+ECU Project	ECU Project
+ECU desligada · aguarda ligação USB	ECU disconnected · waiting for USB
+ECU desligada · cópia local mantida para edição ou ficheiro.	ECU disconnected · local copy preserved for editing or saving.
+ECU identificada · dados em tempo real disponíveis	ECU identified · live data available
+ECU identificada · firmware sem dados em tempo real	ECU identified · firmware has no live data support
+ECU ligada · monitorização parada	ECU connected · live data stopped
+ENTRADAS E ESTADO	INPUTS AND STATUS
+ESTADO DA ECU	ECU STATUS
+ESTADO DO MOTOR	ENGINE STATUS
+Editar	Edit
+Editar tabela	Edit table
+Edição de mapas e pré-visualização matemática.	Map editing and calculation preview.
+Edição local reposta; a ECU não foi alterada.	Local edits reset; ECU unchanged.
+Edição local · sem validação de ECU associada.	Local editing · no ECU validation associated.
+Edição reposta para a configuração lida. A ECU não foi alterada.	Edits reset to the configuration read. ECU unchanged.
+Eficiência volumétrica (%)	Volumetric efficiency (%)
+Eixo deve ter 2 a 32 posições	An axis must have 2 to 32 positions
+Eixos ADC, tensão e MAP devem crescer	ADC, voltage and MAP axes must increase
+Em Tuning estão disponíveis os cálculos VE/ignição e os motivos de bloqueio.	VE/ignition calculations and blocking reasons are available under Tuning.
+Enriquecimento por velocidade TPS	TPS-rate acceleration enrichment
+Entrada	Input
+Entrada analógica partilhada entre funções ativas	Analogue input shared between active functions
+Entrada para a função TPS	TPS input connection
+Entrada para comando de launch	Launch request input
+Entrada para temperatura do ar (IAT)	Intake air temperature input (IAT)
+Entrada para tensão da bateria	Battery voltage input
+Entrada para teor de etanol	Ethanol content input
+Entradas ADC	ADC inputs
+Entrar em DFU	Enter DFU
+Envia o perfil do motor para obter as saídas auxiliares atribuídas.	Send the engine profile to obtain assigned auxiliary outputs.
+Escolhe a ligação recomendada ou Personalizar para outra cablagem. Os contactos aparecem por conector.	Use the recommended connection or Customise for other wiring. Pins are identified by connector.
+Escolhe as funções compatíveis pelo nome, sem códigos de pinos do microcontrolador.	Select compatible functions by name, without MCU pin codes.
+Escolhe cilindros e ordem de ignição. O modelo propõe as ligações habituais de injeção/ignição e PMS relativos ao cilindro 1. Confirma as ligações e completa a calibração real.	Choose cylinders and firing order. The preset proposes conventional injection/ignition connections and TDCs relative to cylinder 1. Verify wiring and complete actual calibration.
+Escolhe o contacto que corresponde à cablagem instalada	Select the connector pin matching installed wiring
+Escolhe primeiro a ligação TPS	Select the TPS connection first
+Escolhe primeiro a ligação do sensor	Select the sensor connection first
+Escolhe primeiro a ligação do sensor.	Select the sensor connection first.
+Escolhe um valor da lista ou escreve a calibração da carga instalada. ReqFuel usa VE 100% e MAP 100 kPa, antes do dead time.	Choose a value or enter calibration for the installed component. ReqFuel refers to 100% VE and 100 kPa MAP before dead time.
+Escolhe uma ligação da lista	Select a connection from the list
+Escolher firmware	Choose firmware
+Escolher ligação	Choose connection
+Escorva da bomba (ms, até 3000)	Fuel pump prime (ms, up to 3000)
+Espera que a operação de configuração termine antes de fechar.	Wait for the configuration operation to finish before closing.
+Espera que a operação de firmware termine antes de fechar.	Wait for the firmware operation to finish before closing.
+Esquema/reservas incompatíveis	Incompatible schema/reserved values
+Esta imagem experimental SUBSTITUI o bootloader na flash. Guarda primeiro a instalação atual. Não está validada para utilização num motor.	This experimental image REPLACES the flash bootloader. Back up the current installation first. It is not validated for running an engine.
+Estabiliza na primeira temperatura conhecida (°C).	Stabilise at the first known temperature (°C).
+Estabiliza na primeira tensão medida com multímetro (V).	Stabilise at the first voltage measured with a multimeter (V).
+Estabiliza na segunda temperatura conhecida (°C).	Stabilise at the second known temperature (°C).
+Estabiliza na segunda tensão medida com multímetro (V).	Stabilise at the second voltage measured with a multimeter (V).
+Estabiliza na terceira temperatura conhecida (°C).	Stabilise at the third known temperature (°C).
+Estado da ECU	ECU status
+Estado das saídas indisponível	Output status unavailable
+Estado das saídas por consultar	Output status not read
+Estado do motor	Engine status
+Estado do motor não confirmou a configuração guardada; lê novamente	Engine status did not confirm saved settings; read again
+Estado físico por confirmar.	Physical state requires verification.
+Este assistente altera apenas a calibração TPS	This assistant changes TPS calibration only
+Este assistente altera apenas a calibração do sensor selecionado	This assistant changes only the selected sensor's calibration
+Exemplo inicial: 2000 cm³ / 250 cm³/min. Substitui pelos dados reais do motor.	Starting example: 2000 cm³ / 250 cm³/min. Replace with actual engine data.
+Existem valores pendentes na ECU. Não serão substituídos automaticamente.	The ECU has pending values. They will not be replaced automatically.
+Extensão de funções inválida	Invalid feature extension
+FICHEIRO LOCAL	LOCAL FILE
+Falha ao guardar mapa	Map write failed
+Falha de monitorização	Live data failure
+Falta saída de ignição do cilindro	Missing ignition output for cylinder
+Falta saída para o injetor do cilindro	Missing injector output for cylinder
+Fechar	Close
+Ferramenta	Tool
+Ferramentas	Tools
+Ferramentas locais	Local tools
+Ficheiro	File
+Ficheiro carregado para edição local; guardar na ECU continua a exigir confirmação.	File loaded for local editing; writing to the ECU still requires confirmation.
+Ficheiro de configuração Tunuino incompatível	Incompatible Tunuino configuration file
+Ficheiros e edição	Files and local editing
+Fim de injeção relativo ao PMS (°)	Injection end relative to TDC (°)
+Firmware IO 0.2.0 e mapas VE/ignição nativos 16×16.	IO 0.2.0 firmware and native 16×16 VE/ignition maps.
+Firmware e USB	Firmware and USB
+Firmware e ligação USB	Firmware and USB connection
+Flex fuel exige controlador com saída analógica	Flex fuel requires a controller with an analogue output
+Flex fuel por controlador analógico	Flex fuel using an analogue controller
+Formato de funções inválido	Invalid feature format
+Formato de mapa inválido	Invalid map format
+Formato de ralenti/turbo inválido	Invalid idle/boost format
+Frequência ralenti (Hz)	Idle PWM frequency (Hz)
+Frequência turbo (Hz)	Boost PWM frequency (Hz)
+Funcionamento autónomo exige perfil, aquisição, MAP e temperatura configurados	Standalone operation requires a configured profile, acquisition, MAP and temperature
+Funcionamento autónomo: ativar o perfil guardado ao ligar a ECU	Standalone operation: activate saved profile at ECU power-on
+Função	Function
+Função de ignição	Ignition function
+Função de injeção	Injection function
+Função incompatível	Incompatible function
+Função incompatível com esta entrada ou saída	Function incompatible with this input or output
+Funções	Functions
+Funções de entradas e saídas	Input/output functions
+Funções guardadas e confirmadas por leitura da ECU. As saídas continuam desarmadas.	Functions saved and verified by ECU readback. Outputs remain disarmed.
+GUARDAR E ATIVAR	SAVE AND ACTIVATE
+Gasolina · aspirado	Petrol · naturally aspirated
+Gasolina · sobrealimentado	Petrol · boosted
+Gerar curva na edição	Generate curve in editor
+Geração	Generation
+Gravar datalog	Record datalog
+Gravar firmware	Flash firmware
+Gravar por DFU	Flash using DFU
+Gravação	Flashing
+Gravação CSV e reprodução dos sinais disponíveis.	CSV recording and playback of available signals.
+Gravação DFU verificada. Repõe BOOT0 e reinicia a ECU.	DFU flash verified. Restore BOOT0 and restart the ECU.
+Gravação em curso. Não desligues a alimentação nem feches a Console.	Flashing in progress. Do not disconnect power or close the Console.
+Gravação interrompida	Flashing interrupted
+Guarda e valida a calibração antes de armar	Save and validate calibration before arming
+Guardar	Save
+Guardar alterações antes de fechar?	Save changes before closing?
+Guardar as funções selecionadas para a próxima ativação do motor? Confirma sensores, curvas e limites para o motor e componentes instalados.	Save selected features for the next engine activation? Verify sensors, curves and limits for the actual engine and components.
+Guardar atribuições de funções	Save function assignments
+Guardar atribuições na ECU	Save assignments to ECU
+Guardar auxiliares e funções	Save auxiliary settings and features
+Guardar calibração	Save calibration
+Guardar calibração IAT	Save IAT calibration
+Guardar calibração TPS	Save TPS calibration
+Guardar calibração da tensão	Save voltage calibration
+Guardar combustível e proteções	Save fuel and protection
+Guardar configuração na ECU?	Write configuration to ECU?
+Guardar cópia	Save copy
+Guardar cópia .tnproj	Save .tnproj backup
+Guardar e verificar na ECU	Write and verify on ECU
+Guardar estas configurações	Save these settings
+Guardar estas configurações para a próxima ativação do motor? As válvulas podem comandar ar e pressão de turbo quando o motor for ativado.	Save these settings for the next engine activation? Valves may control airflow and boost when the engine is activated.
+Guardar ficheiro	Save file
+Guardar funcionamento autónomo	Save standalone operation
+Guardar funções	Save features
+Guardar funções na ECU	Save features to ECU
+Guardar motor na ECU	Save engine settings to ECU
+Guardar na ECU	Write to ECU
+Guardar nova configuração	Save new configuration
+Guardar nova cópia do mapa	Save new map copy
+Guardar nova cópia do projeto	Save new project copy
+Guardar novo datalog	Save new datalog
+Guardar não ativa as saídas nesta sessão. O modo autónomo ativa o perfil no próximo arranque elétrico e mantém o motor independente da USB. PARAR mantém as saídas desligadas até nova ativação explícita ou reinício da ECU.	Saving does not activate outputs in this session. Standalone mode activates the profile on the next power-on and operates independently of USB. STOP holds outputs off until explicitly reactivated or the ECU restarts.
+Guardar projeto	Save project
+Guardar proposta .tnmap	Save .tnmap proposal
+Guardar proposta na ECU	Save proposal to ECU
+Guardar ralenti e turbo	Save idle and boost
+Guardar ralenti/turbo na ECU	Save idle/boost to ECU
+Guardar uma cópia da configuração editada antes de fechar?	Save a copy of edited settings before closing?
+Há alterações pendentes na ECU. Guarda ou descarta antes de carregar o perfil ativo.	The ECU has pending changes. Save or discard them before reading the active profile.
+IAT temperatura	IAT temperature
+IAT usa uma entrada TEMP independente do líquido de refrigeração. A tensão usa uma entrada AV e deve ser calibrada em VOLTS DA BATERIA, incluindo o divisor. Mede os pontos ADC; as referências não são calibrações do sensor.	IAT uses a TEMP input separate from coolant. Battery voltage uses an AV input calibrated in BATTERY VOLTS including its divider. Measure ADC points; references are not sensor-specific calibrations.
+IAT · ar	IAT · air
+IGNIÇÃO	IGNITION
+INJETOR	INJECTOR
+Identificar ECU	Identify ECU
+Identificação da ECU pendente	ECU identification pending
+Ignição	Ignition
+Ignição (graus antes do PMS)	Ignition (degrees BTDC)
+Ignição (°)	Ignition (°)
+Ignição 16×16	Ignition 16×16
+Ignição · avanço	Ignition · advance
+Indica o valor físico conhecido.	Enter the known physical value.
+Iniciar recolha	Start collection
+Injetor (cm³/min)	Injector flow (cm³/min)
+Injeção	Injection
+Injeção e ignição	Injection and ignition
+Instalador dos drivers terminou. A deteção DFU vai verificar o estado do dispositivo.	Driver installer finished. DFU discovery will check device status.
+Instalador sem o script de instalação esperado	Installer is missing the expected installation script
+Instalação dos drivers terminou com erro. Consulta o registo.	Driver installation failed. Check the log.
+Integral	Integral
+Interrupção ou relógio sem avanço	Interrupted operation or stalled clock
+Introduz as contagens ADC medidas com borboleta fechada e totalmente aberta. A calibração pode ter sentido crescente ou decrescente. 0 significa entrada desativada.	Enter ADC counts measured at fully closed and fully open throttle. Calibration supports rising or falling signals. Input 0 means disabled.
+Introduz os valores do sensor e do circuito	Enter sensor and circuit values
+Janela de fase: primeiro dente	Cam window: first tooth
+Janela de fase: último dente	Cam window: last tooth
+Lambda	Lambda
+Lambda alvo	Target lambda
+Lambda inferior	Low lambda
+Lambda superior	High lambda
+Lambda — mistura de combustível	Lambda — fuel mixture
+Launch ativo acima de ADC	Launch active above ADC
+Launch por entrada analógica condicionada	Launch using a conditioned analogue input
+Launch: corte (rpm)	Launch: cut (rpm)
+Launch: retoma (rpm)	Launch: resume (rpm)
+Leitura ADC fora dos limites	ADC reading out of range
+Leitura ADC indisponível; nenhum ponto foi alterado	ADC reading unavailable; no point was changed
+Ler	Read
+Ler VE da ECU	Read VE from ECU
+Ler base VE da ECU	Read VE baseline from ECU
+Ler calibração da ECU	Read calibration from ECU
+Ler configuração	Read configuration
+Ler configuração do motor	Read engine configuration
+Ler configuração e estado	Read configuration and status
+Ler diagnóstico da ECU	Read ECU diagnostics
+Ler entradas ADC	Read ADC inputs
+Ler estado	Read status
+Ler estado das saídas	Read output status
+Ler funções da ECU	Read ECU functions
+Ler ignição da ECU	Read ignition from ECU
+Ler mapa da ECU	Read ECU map
+Ler projeto completo da ECU	Read complete ECU project
+Ler projeto da ECU	Read project from ECU
+Liga e identifica a ECU para ler a configuração.	Connect and identify the ECU to read settings.
+Ligar USB	Connect USB
+Ligação	Connection
+Ligação do sensor	Sensor connection
+Ligação preparada na edição. Guarda para aplicar à ECU.	Connection prepared locally. Save to apply to the ECU.
+Ligações compatíveis.	Compatible connections.
+Ligações dedicadas nesta versão.	Dedicated connections in this version.
+Ligações recomendadas preparadas para as funções já atribuídas. A ECU não foi alterada.	Recommended connections prepared for assigned functions. ECU unchanged.
+Ligações rápidas	Quick connections
+Limitador de RPM por corte de combustível	Fuel-cut rev limiter
+Limitador deve ficar abaixo do máximo de aquisição	Rev limiter must be below the acquisition maximum
+Limitador e launch cortam combustível com histerese; a ignição mantém o dwell programado. Launch exige uma entrada AV condicionada, com níveis válidos de 100 a 3995 ADC. Um sinal fora dessa faixa causa corte retido. Proteções CLT/tensão também exigem reativação explícita.	Rev limiter and launch cut fuel with hysteresis; ignition retains configured dwell. Launch requires a conditioned AV input with valid levels of 100–3995 ADC. An out-of-range signal causes a latched cut. CLT/voltage protection also requires explicit reactivation.
+Limitador: corte (rpm)	Rev limiter: cut (rpm)
+Limitador: retoma (rpm)	Rev limiter: resume (rpm)
+Limite de RPM	RPM limit
+Limites	Limits
+Limites de duty incompatíveis	Incompatible duty limits
+Limites de temperatura, injeção ou janela de fase incoerentes	Inconsistent temperature, injection or cam-window limits
+Limites incompatíveis	Incompatible limits
+Lê a ECU e confirma os sinais antes de qualquer afinação.	Read the ECU and verify signals before tuning.
+Lê a ECU para obter as funções guardadas e o perfil de cilindros.	Read the ECU to obtain saved functions and cylinder profile.
+Lê a configuração antes de guardar	Read configuration before saving
+Lê a configuração da ECU antes de guardar	Read ECU configuration before saving
+Lê a configuração da ECU e escolhe a ligação antes de medir. A captura não grava nem ativa saídas.	Read the ECU configuration and select the connection before measuring. Capturing does not write settings or activate outputs.
+Lê o perfil do motor	Read engine profile
+Lê o perfil do motor para obter a ligação atribuída.	Read the engine profile to obtain the assigned connection.
+Lê o perfil em Motor e saídas antes de armar.	Read the profile in Engine configuration before arming.
+Lê primeiro a tabela VE e a configuração da ECU.	Read the VE table and ECU configuration first.
+Lê primeiro o estado atual da ECU antes de restaurar.	Read current ECU state before restoring.
+Lê um mapa 16×16 da ECU para visualizar a superfície.	Read a 16×16 ECU map to view the surface.
+Lê uma cópia do mapa quando esta função está disponível no firmware.	Read a map snapshot when supported by the firmware.
+Lê uma nova base para a próxima sessão.	Read a new baseline for the next session.
+Lê uma tabela da ECU para consultar e editar células.	Read an ECU table to inspect and edit cells.
+MAP alvo	Target MAP
+MAP em kPa ABSOLUTOS. A válvula deve produzir pressão de mola quando desligada. Confirma ligações e afina frequência, duty, alvo e ganhos. O corte de pressão desativa injeção, ignição e auxiliares até nova ativação. Os mapas base aspirados não cobrem turbo.	MAP is in ABSOLUTE kPa. With the valve off, boost must return to wastegate spring pressure. Verify wiring and tune frequency, duty, target and gains. Overboost cuts injection, ignition and auxiliaries until reactivated. Naturally aspirated base maps do not cover boost.
+MAP — pressão do coletor	MAP — manifold pressure
+MAPA 3D  ·  VISUALIZAÇÃO DAS CÉLULAS	3D MAP  ·  CELL VIEW
+MAPA DA CENTRALINA	ECU MAP
+MAPAS BASE PRÉ-DEFINIDOS	BASE MAP PRESETS
+MODELO TEMPORAL · SEM SAÍDAS	TIMING MODEL · NO OUTPUTS
+Mantive as ligações anteriores.	Previous connections were preserved.
+Mapa 3D	3D map
+Mapa Tunuino	Tunuino map
+Mapa guardado e verificado na ECU	Map written and verified on ECU
+Mapa inválido	Invalid map
+Mapas e cálculos	Maps & calculations
+Mede dois pontos de pressão ABSOLUTA conhecidos. A pressão atmosférica deve ser medida, não inferida da altitude. Os valores iniciais são exemplos editáveis.	Measure two known ABSOLUTE pressure points. Measure atmospheric pressure rather than estimating it from altitude. Initial values are editable examples.
+Mede duas tensões distintas com multímetro, em volts da bateria. As referências são editáveis; o divisor da entrada faz parte da calibração.	Measure two distinct battery voltages with a multimeter. References are editable; the input divider is included in the calibration.
+Mede todos os pontos da calibração	Measure all calibration points
+Mede três temperaturas conhecidas com termómetro; ou escolhe abaixo um modelo NTC com R25, Beta e pull-up identificados.	Measure three known temperatures with a thermometer, or select an NTC model below with known R25, beta and pull-up.
+Mede três temperaturas conhecidas com um termómetro. Os valores iniciais são referências editáveis; a Console captura o ADC real.	Measure three known temperatures with a thermometer. Initial values are editable references; the Console captures actual ADC readings.
+Medir borboleta aberta	Capture open throttle
+Medir borboleta fechada	Capture closed throttle
+Medir ponto	Measure point
+Modelo NTC para sensor à massa e pull-up à referência ADC. Confirma a curva e o pull-up da instalação. O firmware interpola os três pontos gerados.	NTC model for a sensor connected to ground with a pull-up to the ADC reference. Verify the sensor curve and installed pull-up. Firmware interpolates the three generated points.
+Modelo aplicado apenas à edição. Completa ReqFuel, dwell, dead time e sincronização; confirma LS/IGN antes de enviar à ECU.	Preset applied locally only. Complete ReqFuel, dwell, dead time and synchronisation; verify LS/IGN before sending to the ECU.
+Modelo do sensor	Sensor model
+Modelo estrutural	Engine layout preset
+Modelo indisponível	Model unavailable
+Modelo temporal	Timing model
+Modelo temporal de bancada	Bench timing model
+Modelo temporal indisponível: ligação USB encerrada.	Timing model unavailable: USB connection closed.
+Modelo temporal por consultar; saídas do motor desativadas.	Timing model not read; engine outputs disabled.
+Modelos de cilindros e ordem de ignição, injeção, dwell, sincronização e saídas auxiliares.	Cylinder layouts, firing order, injection, dwell, synchronisation and auxiliary outputs.
+Modo	Mode
+Modo de funcionamento	Operating mode
+Modo ou canal de ralenti/turbo inválido	Invalid idle/boost mode or channel
+Modo/canal inválido	Invalid mode/channel
+Monitorização	Live data
+Monitorização USB ativa · aguarda sensores válidos	USB live data active · waiting for valid sensors
+Monitorização USB · dados recebidos	USB live data · data received
+Monitorização USB · sem dados válidos	USB live data · no valid data
+Monitorização USB · à espera de amostras válidas	USB live data · waiting for valid samples
+Monitorização ativa · CSV desligado	Live data active · CSV off
+Monitorização da alimentação	Power supply monitoring
+Monitorização interrompida	Live data interrupted
+Monitorização interrompida · dados atuais indisponíveis.	Live data interrupted · current data unavailable.
+Monitorização terminada · dados atuais indisponíveis.	Live data stopped · current data unavailable.
+Monitorização terminada · histórico do gráfico mantido	Live data stopped · graph history preserved
+Monitorização terminada. Revê a proposta antes de guardar.	Live data stopped. Review the proposal before saving.
+Motor	Engine
+Motor e saídas	Engine configuration
+Motor parado e controlo desarmado. Cada comando termina automaticamente; escolher uma opção não liga nenhuma saída.	Engine stopped and control disarmed. Each command ends automatically; selecting an option does not activate an output.
+Motor, sensores, mapas e auxiliares num ficheiro, com restauração e releitura das quatro páginas.	Engine, sensors, maps and auxiliaries in one file, with four-page restoration and readback.
+Motor, sensores, rodas, mapas VE/ignição, ralenti, turbo e proteções num único ficheiro .tnproj.	Engine, sensors, trigger wheels, VE/ignition maps, idle, boost and protection in a single .tnproj file.
+Mín. %.3f · máx. %.3f	Min. %.3f · max. %.3f
+Nenhum tempo de atuação foi calculado.	No output actuation time was calculated.
+Nenhum valor de sensor disponível	No sensor values available
+Nenhuma ECU identificada	No ECU identified
+Nenhuma saída de motor foi acionada.	No engine outputs were activated.
+Normal · máximo ±5%	Normal · maximum ±5%
+Nova configuração local	New local configuration
+Nova configuração local. As entradas estão desativadas; lê a ECU antes de aplicar valores ao dispositivo.	New local configuration. Inputs are disabled; read the ECU before applying values to the device.
+Nova configuração local?	New local configuration?
+Novo	New
+Não	No
+Não foi possível abrir o datalog. O gráfico anterior foi mantido.	Could not open datalog. Previous graph preserved.
+Não foi possível consultar a ECU	Could not query ECU
+Não foi possível converter	Could not convert
+Não foi possível guardar	Could not save
+Não foi possível guardar a língua escolhida	Could not save language preference
+Não foi possível ler	Could not read
+Número de colunas inválido	Invalid column count
+Número de linhas inválido	Invalid row count
+O Windows pode pedir autorização de administrador.	Windows may request administrator permission.
+O eixo não tem espaço entre pontos para criar 16 posições únicas	The axis has insufficient spacing for 16 unique positions
+O ficheiro .tnaux inclui TPS, ralenti, turbo e todas estas funções. Abrir uma cópia prepara a edição; só Guardar envia à ECU. Guarda também o perfil .tncfg e os mapas .tnmap.	The .tnaux file includes TPS, idle, boost and all these features. Opening a copy prepares local edits; only Save writes to the ECU. Also save the .tncfg profile and .tnmap maps.
+O ficheiro já existe. Escolhe outro nome.	The file already exists. Choose another name.
+O mapa tem alterações por guardar.	The map has unsaved changes.
+O perfil mudou durante a leitura; lê novamente antes de ativar ou testar saídas.	The profile changed while reading; read again before activating or testing outputs.
+O perfil mudou: lê uma nova base antes de recolher.	The profile changed: read a new baseline before collecting.
+O projeto exige VE e ignição, sem trocar as tabelas	The project requires VE and ignition maps in their correct positions
+O registo da ferramenta de gravação aparece aqui.	Programmer tool output appears here.
+O índice de carga é relativo; não determina combustível nem ponto de ignição físico.	The load index is relative; it does not determine actual fuelling or ignition timing.
+Offline · ligação encerrada	Offline · connection closed
+Ordem inválida	Invalid firing order
+Os cilindros da mesma bobina dupla exigem o mesmo ajuste de avanço	Cylinders sharing a coil require the same ignition trim
+Os contactos aparecem por conector.	Pins are identified by connector.
+Os extremos são medidos na ligação selecionada. Fechado corresponde a 0% e aberto a 100%; não se pressupõe um sinal de exatamente 0 a 5 V.	Endpoints are measured on the selected input. Closed is 0% and open is 100%; an exact 0–5 V signal is not assumed.
+Os pontos devem ter valores diferentes e pelo menos 32 contagens ADC de separação	Points must have different values and be separated by at least 32 ADC counts
+Os resultados exigem sensores válidos e mapas calibrados; esta função não ativa injetores nem bobinas.	Results require valid sensors and calibrated maps; this function does not activate injectors or ignition coils.
+Os sensores e a captura passam a usar estes valores. Os mapas permanecem na ECU; nenhuma saída de motor é ativada.	Sensors and acquisition will use these values. ECU maps remain unchanged; no engine outputs are activated.
+Os três pontos devem produzir leituras ADC distintas, dentro da escala	The three points must produce distinct in-range ADC readings
+PARAR TODAS AS SAÍDAS	STOP ALL OUTPUTS
+PMS relativo	Relative TDC
+PMS, dente zero e janela de fase dependem do motor. Configura a roda fónica em Sensores e entradas.	TDC, tooth zero and cam window are engine-specific. Configure the trigger wheel in Sensors and calibration.
+PORTA	PORT
+PRESSÃO COMB.	FUEL PRESSURE
+PRESSÃO DE ÓLEO	OIL PRESSURE
+PROJETO COMPLETO DA ECU	COMPLETE ECU PROJECT
+PRÉ-VISUALIZAÇÃO DE CÁLCULO	CALCULATION PREVIEW
+PWM com controlo PI de RPM	PWM with RPM PI control
+PWM por temperatura	Temperature-based PWM
+Painel	Dashboard
+Para a monitorização e identifica a ECU antes de configurar	Stop live data and identify the ECU before configuring
+Para as outras operações e mantém a mesma sessão e identificação da ECU para guardar o mapa	Stop other operations and keep the same ECU session and identity to save the map
+Para consultar o diagnóstico, identifica a ECU e pára a monitorização.	Identify the ECU and stop live data to read diagnostics.
+Para editar uma tabela da ECU, mantém a ligação identificada e pára as outras operações.	Keep an identified ECU connection and stop other operations to edit an ECU table.
+Para guardar: termina a recolha, pára o motor/saídas e a monitorização. A base anterior é guardada em ficheiro e a gravação confirmada por releitura.	To save: finish collection and stop the engine, outputs and live data. The previous baseline is backed up to file and writing is verified by readback.
+Para ler mapas, liga e identifica a ECU e pára a monitorização.	Connect and identify the ECU and stop live data to read maps.
+Parar gravação	Stop recording
+Parar monitorização	Stop live data
+Parar recolha	Stop collection
+Passo	Step
+Pausa lambda após transiente (ms)	Lambda pause after transient (ms)
+Pausar	Pause
+Pedido A/C	A/C request
+Perfil de motor inválido	Invalid engine profile
+Perfil de motor inválido: verifica saídas, PMS, fase e limites	Invalid engine profile: check outputs, TDC, phase and limits
+Perfil de quatro tempos guardado na ECU. Em modo autónomo, o motor funciona sem USB. Os testes individuais estão no menu Testes de atuadores.	Four-stroke profile saved to ECU. Standalone mode operates without USB. Individual tests are under Output tests.
+Perfil e armação explícita em Motor e saídas.	Configure and explicitly arm outputs in Engine configuration.
+Personalizado	Custom
+Personalizar	Customise
+Ponto	Point
+Ponto TPS medido na edição. Mede o outro extremo e guarda a calibração.	TPS point captured in the editor. Capture the other endpoint and save calibration.
+Ponto de calibração inválido	Invalid calibration point
+Ponto medido na edição. Indica a temperatura ou tensão conhecida e guarda para aplicar.	Point captured in the editor. Enter the known temperature or voltage and save to apply.
+Ponto medido na edição. Indica o valor físico conhecido e guarda para aplicar.	Point captured in the editor. Enter the known physical value and save to apply.
+Preencher configuração base	Fill base configuration
+Prepara a configuração offline ou lê a ECU. Guardar na ECU exige uma leitura desta centralina e confirma a persistência; os mapas são preservados.	Prepare settings offline or read the ECU. Saving requires a snapshot from this ECU and verifies persistence; maps are preserved.
+Prepara e guarda a calibração em Ralenti e turbo antes de atribuir TPS ou válvulas	Prepare and save calibration under Idle and boost before assigning TPS or valves
+Prepara e guarda a referência em Combustível e proteções antes de atribuir IAT, tensão, etanol ou launch	Prepare and save settings under Fuel and protection before assigning IAT, voltage, ethanol or launch
+Prepara o próximo ponto.	Prepare the next point.
+Pressão inferior (kPa)	Low pressure (kPa)
+Pressão superior (kPa)	High pressure (kPa)
+Preto	Black
+Procurar DFU	Scan for DFU
+Projeto aberto apenas localmente. Revê os valores e usa Restaurar para enviar.	Project opened locally only. Review values and use Restore to send it.
+Projeto incompatível: requer Proteus v0.7 F427 e formato 1	Incompatible project: requires Proteus v0.7 F427 and format 1
+Projeto restaurado. Lê novamente as funções antes de alterar ligações.	Project restored. Read functions again before changing connections.
+Projeto restaurado. Lê novamente esta secção antes de guardar; a edição local foi mantida.	Project restored. Read this section again before saving; local edits preserved.
+Projeto restaurado. Lê uma nova base VE para recolher.	Project restored. Read a new VE baseline before collecting.
+Proporcional	Proportional
+Proposta	Proposed
+Pré-visualizar VE e ignição	Preview VE and ignition
+Pré-visualização apenas, sem atuação.	Preview only; no outputs activated.
+Pré-visualização da ECU recebida	ECU preview received
+Pré-visualização da interface · pesquisa de dispositivos desativada	Interface preview · device discovery disabled
+Pré-visualização por consultar; saídas do motor desativadas.	Preview not read; engine outputs disabled.
+Pull-up real da entrada (Ω)	Actual input pull-up (Ω)
+Pulso máximo injetor (ms, até 20)	Maximum injector pulse (ms, up to 20)
+Página de funções deve ter 256 bytes	Feature page must contain 256 bytes
+Página de fábrica desativada; campos mostram uma referência local	Factory page disabled; fields show a local reference
+Página inválida	Invalid page
+Pára as saídas em Motor e saídas ou Testes de atuadores antes de fechar a Console.	Stop outputs under Engine configuration or Output tests before closing the Console.
+RALENTI E TURBO	IDLE AND BOOST
+REFERÊNCIAS E CÓPIAS	REFERENCES AND BACKUPS
+RPM e MAP inválidos. Usa números não negativos com ponto decimal.	Invalid RPM/MAP. Enter non-negative decimal numbers.
+RPM máximo	Maximum RPM
+RPM mínimo	Minimum RPM
+RPM, MAP, lambda, CLT e TPS têm de ser válidos	RPM, MAP, lambda, CLT and TPS must be valid
+Ralenti	Idle
+Ralenti PWM	PWM idle
+Ralenti/turbo ativos exigem TPS e saída LS atribuída	Active idle/boost requires TPS and an assigned LS output
+Realçar célula ativa	Highlight active cell
+Recolha USB iniciada. Aguarda motor quente e carga estável.	USB collection started. Wait for a warm engine and stable load.
+Recolha terminada. Revê as células propostas.	Collection finished. Review proposed cells.
+Recomendada	Recommended
+Recomeçar	Restart
+Refazer	Redo
+Referência	Reference
+Referência ADC (mV)	ADC reference (mV)
+Referência aplicada apenas à edição. Ralenti e turbo continuam desativados até configurares e guardares os modos.	Reference applied locally only. Idle and boost remain disabled until modes are configured and saved.
+Referência aplicada à edição, com todas as novas funções desativadas. As definições TPS/ralenti/turbo foram preservadas.	Reference applied locally, with all new features disabled. TPS/idle/boost settings preserved.
+Referência fora dos limites	Reference outside limits
+Referência genérica preparada na edição. Confirma a curva do fabricante para o injetor e pressão diferencial usados.	Generic reference prepared in the editor. Check manufacturer data for your injector and differential pressure.
+Referência inicial: 8 V → 1,500 ms; 12 V → 1,000 ms; 16 V → 0,700 ms. Não identifica um injetor. Usa a curva do fabricante à pressão diferencial instalada. Duplo clique para editar; a mesma coluna de tensão define os três pontos de dwell.	Starting reference: 8 V → 1.500 ms; 12 V → 1.000 ms; 16 V → 0.700 ms. This is not an injector-specific calibration. Use manufacturer data at the installed differential pressure. Double-click to edit; the same voltage axis defines the three dwell points.
+Referência plana · VE 80% / ignição 10°	Flat reference · VE 80% / ignition 10°
+Relé principal	Main relay
+Relés e válvulas	Relays and valves
+Repor edição	Reset local edits
+Repor edição local?	Reset local edits?
+Reproduzir	Play
+ReqFuel de referência (ms)	Reference ReqFuel (ms)
+Requer controlador de etanol com saída analógica calibrada entre 0 e 100%. Esta entrada não aceita diretamente sensores de frequência. O firmware interpola a correção de combustível e avanço; afina para o combustível e motor usados.	Requires an ethanol controller with an analogue output calibrated from 0 to 100%. This input does not directly support frequency-output sensors. Firmware interpolates fuel and ignition corrections; tune for the actual fuel and engine.
+Reservas de aquisição alteradas	Acquisition reserved bytes changed
+Reservas de calibração alteradas	Calibration reserved bytes changed
+Reservas de funções alteradas	Feature reserved bytes changed
+Resistência a 25 °C (Ω)	Resistance at 25 °C (Ω)
+Restaurar as quatro páginas da configuração?	Restore all four configuration pages?
+Restaurar projeto na ECU	Restore project to ECU
+Restauro confirmado por releitura completa. Cópia anterior	Restore verified by complete readback. Previous backup
+Retirar avanço acima de IAT (°C)	Retard ignition above IAT (°C)
+Retomar abaixo de (rpm)	Resume below (rpm)
+Rever proposta	Review proposal
+Roda aplicada à edição; a captura não é ativada automaticamente.	Trigger wheel applied locally; acquisition is not enabled automatically.
+Roda fónica	Trigger wheel
+Roda/dentes em falta incompatíveis	Incompatible trigger wheel/missing teeth
+Saída LS partilhada com injetor, relé ou outra válvula	LS output shared with an injector, relay or another valve
+Saída auxiliar repetida	Duplicate auxiliary output
+Saída de ignição	Ignition output
+Saída de potência	Power output
+Saída para a válvula de ralenti	Idle valve output
+Saída para a válvula de turbo	Boost valve output
+Saídas	Outputs
+Saídas ativas	Active outputs
+Saídas de potência	Power outputs
+Saídas ou ângulos PMS repetidos	Duplicate outputs or TDC angles
+Seguinte	Next
+Seleciona a imagem, verifica o dispositivo e acompanha a gravação.	Select the image, verify the device and follow flash progress.
+Seleciona a porta da centralina	Select the ECU port
+Seleciona a saída de injetor, a saída lógica de ignição e o PMS relativo ao cilindro 1. Ajusta a referência absoluta em Sincronização.	Choose injector output, logic ignition output and TDC relative to cylinder 1. Set the absolute reference under Synchronisation.
+Seleciona as funções necessárias e calibra as entradas. Os valores de referência começam com todas as novas funções desativadas. Guardar exige saídas desarmadas.	Select required features and calibrate inputs. References start with all new features disabled. Outputs must be disarmed before saving.
+Seleciona cilindros	Select cylinders
+Seleciona firmware .bin/.srec com o respetivo manifesto .properties	Select .bin/.srec firmware with its .properties manifest
+Seleciona o número de cilindros	Select the cylinder count
+Seleciona o número de cilindros ou aplica um modelo.	Select cylinder count or apply a preset.
+Seleciona um modelo estrutural ou configura os cilindros manualmente.	Select an engine layout preset or configure cylinders manually.
+Seleciona uma célula do mapa para consultar o valor.	Select a map cell to inspect its value.
+Selecionar firmware	Select firmware
+Selecionar porta USB	Select USB port
+Selecionar uma função não calibra o sensor. Configura os pontos medidos em Sensores e entradas, Ralenti e turbo ou Combustível e proteções.	Assigning a function does not calibrate its sensor. Configure measured points under Sensors and calibration, Idle and boost, or Fuel and protection.
+Sem alteração	No change
+Sem alterações pendentes	No unsaved changes
+Sem amostra	No sample
+Sem amostra atual	No current sample
+Sem atribuição	Unassigned
+Sem configuração recebida da ECU.	No configuration received from ECU.
+Sem dados	No data
+Sem diagnóstico · liga e identifica a ECU.	No diagnostics · connect and identify the ECU.
+Sem dispositivos DFU	No DFU devices
+Sem estado	No status
+Sem estado de saídas recebido da ECU.	No output status received from ECU.
+Sem firmware selecionado	No firmware selected
+Sem função no perfil	No function in profile
+Sem ignição atribuída	No ignition output assigned
+Sem injetor atribuído	No injector assigned
+Sem leitura das entradas.	Inputs not read.
+Sem ligação a uma ECU identificada	No identified ECU connected
+Sem monitorização ativa.	Live data is not active.
+Sem perfil	No profile
+Sem projeto aberto.	No project open.
+Sem proposta	No proposal
+Sem propostas.	No proposals.
+Sem pré-visualização	No preview
+Sem pré-visualização; ligação USB indisponível.	No preview; USB unavailable.
+Sem pré-visualização; saídas do motor desativadas.	No preview; engine outputs disabled.
+Sem validação recebida do firmware.	No validation received from firmware.
+Sem valores de sensores disponíveis	No sensor values available
+Semi-sequencial 360° + bobinas duplas	360° semi-sequential + paired coils
+Semi-sequencial 360° + wasted COP · só cambota	360° semi-sequential + wasted COP · crank only
+Sensores	Sensors
+Sensores e calibrações	Sensors and calibration
+Sensores reais e tabelas VE/ignição 16×16.	Real sensors and 16×16 VE/ignition tables.
+Sequencial 720° + COP	720° sequential + COP
+Será criada uma cópia completa do estado atual. Guardar não arma saídas nesta sessão.	A complete backup of the current state will be created. Saving does not arm outputs in this session.
+Sim	Yes
+Sinal instável; mantém o sensor no ponto indicado e repete	Unstable signal; keep the sensor at the specified point and repeat
+Sincronizada	Synchronised
+Sincronização	Synchronisation
+Sobre	About
+Sobre a Console	About the Console
+Solta o acelerador e mantém a borboleta totalmente fechada.	Release the accelerator and keep the throttle fully closed.
+Suave · máximo ±2%	Gentle · maximum ±2%
+São necessárias oito amostras ADC	Eight ADC samples are required
+TABELA	TABLE
+TABELA DE IGNIÇÃO	IGNITION TABLE
+TABELAS NATIVAS 16×16	NATIVE 16×16 TABLES
+TEMP. COMBUSTÍVEL	FUEL TEMP.
+TEMP. MOTOR	COOLANT TEMP.
+TEMP. ÓLEO	OIL TEMP.
+TPS aberto (ADC)	TPS open (ADC)
+TPS fechado (ADC)	TPS closed (ADC)
+TPS máximo (%)	Maximum TPS (%)
+TPS máximo de ralenti (%)	Maximum idle TPS (%)
+TPS máximo em desaceleração (%)	Maximum DFCO TPS (%)
+TPS máximo para ralenti (%)	Maximum idle TPS (%)
+TPS máximo ralenti (%)	Maximum idle TPS (%)
+TPS mínimo turbo (%)	Minimum boost TPS (%)
+TPS — posição da borboleta	TPS — throttle position
+TURBO PWM	PWM BOOST
+Tabela de combustível · VE 16×16	Fuel table · VE 16×16
+Tabela de ignição · 16×16	Ignition table · 16×16
+Telemetria USB real · relógio da ECU	Real USB telemetry · ECU clock
+Temperatura	Temperature
+Temperatura 1 (°C)	Temperature 1 (°C)
+Temperatura 2 (°C)	Temperature 2 (°C)
+Temperatura 3 (°C)	Temperature 3 (°C)
+Temperatura de referência VE (°C)	VE reference temperature (°C)
+Temperatura entre −40 e 150 °C	Temperature must be between −40 and 150 °C
+Temperatura mínima (°C)	Minimum temperature (°C)
+Temperatura mínima DFCO (°C)	Minimum DFCO temperature (°C)
+Temperaturas dos três pontos (°C)	Three calibration temperatures (°C)
+Tempo real	Live data
+Temporização indisponível por falta de condições	Timing unavailable: requirements not met
+Tensão	Voltage
+Tensão ADC máximo	Voltage high ADC
+Tensão ADC mínimo	Voltage low ADC
+Tensão da bateria	Battery voltage
+Tensão da bateria (V)	Battery voltage (V)
+Tensão da curva	Curve voltage
+Tensão de diagnóstico (V)	Diagnostic voltage (V)
+Tensão máxima (V)	Maximum voltage (V)
+Tensão mínima (V)	Minimum voltage (V)
+Tensão no máximo (V)	Voltage at high point (V)
+Tensão no mínimo (V)	Voltage at low point (V)
+Terminal	Pin
+Testar ignição	Test ignition
+Testar injetor	Test injector
+Teste de ignição	Ignition test
+Teste de injetor	Injector test
+Teste físico da carga ligada	Physical test of connected load
+Testes de saídas	Output tests
+Testes separados de injetores, ignição, bomba, ventoinha e relé principal.	Separate tests for injectors, ignition, pump, fan and main relay.
+Todos os pontos foram medidos. Revê e prepara a calibração.	All points captured. Review and prepare the calibration.
+Tolerância fora dos extremos (% do curso ADC)	Out-of-range tolerance (% of ADC span)
+Transientes	Transients
+Três pontos ADC/temperatura. Usa a curva medida do teu sensor.	Three ADC/temperature points. Use your sensor's measured curve.
+Três pontos preparados. Revê a curva e guarda na ECU para aplicar.	Three points prepared. Review the curve and save to the ECU to apply it.
+Tuning e calibração	Tuning and calibration
+Tunuino auxiliares e funções	Tunuino auxiliary settings and features
+Turbo	Boost
+Turbo exige MAP e faixa de calibração adequada ao corte	Boost requires MAP with a calibration range covering the cut pressure
+USB ABERTO	USB OPEN
+USB DESLIGADO	USB DISCONNECTED
+USB DFU detetado. Seleciona STM32_Programmer_CLI.exe da instalação STM32CubeProgrammer.	USB DFU detected. Select STM32_Programmer_CLI.exe from your STM32CubeProgrammer installation.
+USB LIGADO	USB CONNECTED
+Um pulso de carga até 5 ms numa saída IGN. A saída comanda a etapa externa de ignição.	One charging pulse of up to 5 ms on an IGN output. This output drives an external ignition stage.
+Uma função, uma ligação recomendada. Mantém a ligação atual ou escolhe Personalizar se a tua cablagem for diferente. Alterações só são enviadas ao guardar.	One function, one recommended connection. Keep the current connection or choose Customise for different wiring. Changes are sent only when saved.
+Usa Guardar cópia para criar um ficheiro. Para restaurar outro projeto, abre-o mantendo esta leitura como referência.	Use Save copy to create a file. To restore another project, open it while retaining this snapshot as reference.
+Usa a calibração na edição antes de guardar.	Apply the calibration to the editor before saving.
+Usa ponto decimal e até três casas decimais	Use decimal values with up to three decimal places
+Usar avanço fixo durante o arranque	Use fixed cranking advance
+Usar calibração na edição	Use calibration in editor
+Usar ligações recomendadas	Use recommended connections
+Usar referência inicial · 8 / 12 / 16 V	Use starting reference · 8 / 12 / 16 V
+VE %.2f %% · ignição %.2f ° · RPM %.1f · MAP %.1f kPa · revisão %d.	VE %.2f %% · ignition %.2f ° · RPM %.1f · MAP %.1f kPa · revision %d.
+VE e ignição 16×16 · sensores e auxiliares incluídos	16×16 VE and ignition · sensors and auxiliary settings included
+VELOCIDADE	SPEED
+Validar firmware	Validate firmware
+Validar projeto	Validate project
+Validação e análise de sinais verdadeiros.	Validation and real-signal analysis.
+Valor inválido. Usa volts e milissegundos dentro dos limites da curva.	Invalid value. Enter volts and milliseconds within the curve limits.
+Ventoinha 1	Fan 1
+Ventoinha 2	Fan 2
+Ventoinha de refrigeração	Cooling fan
+Ventoinha desliga (°C)	Fan off (°C)
+Ventoinha liga (°C)	Fan on (°C)
+Ver	View
+Ver dados em tempo real	View live data
+Verifica a configuração persistida, erros de captura e validade das entradas da ECU	Check saved configuration, capture errors and ECU input validity
+Verifica as leituras e os parâmetros na área Sensores e entradas.	Check readings and parameters under Sensors and calibration.
+Verificar	Verify
+Verificar firmware	Verify firmware
+Vista 3D	3D view
+Volta de referência da fase (0 ou 1)	Cam reference revolution (0 or 1)
+Válvula de controlo do turbo	Boost control valve
+Válvula de ralenti PWM	PWM idle valve
+amostras	samples
+amostras aceites	accepted samples
+amostras gravadas	recorded samples
+amostras válidas recebidas	valid samples received
+ativação manual	manual activation
+ativação manual com supervisão USB	manual activation with USB supervision
+através de dois pedidos binários só de leitura. A consulta exige USB exclusivo.	through two read-only binary requests. The query requires exclusive USB access.
+autónoma ao ligar a alimentação	standalone activation at power-on
+avanço	advance
+cambota	crankshaft
+cilindros	cylinders
+configura primeiro o perfil do motor para atribuir injetores e ignição	configure the engine profile before assigning injectors and ignition
+correção de avanço (°)	ignition trim (°)
+correção de combustível (%)	fuel trim (%)
+células	cells
+cópia lida da ECU	snapshot read from ECU
+da tensão	of voltage
+edição offline	offline editing
+entrada	input
+erros de captura	capture errors
+excluídas	excluded
+ficheiros CSV encerrados	CSV files closed
+fora dos eixos, valor limitado à borda	outside the axes; value clamped to the edge
+funções sobrepostas	overlapping functions
+geração	generation
+gravada	saved
+há funções sobrepostas na configuração lida; escolhe explicitamente uma função ou Sem atribuição	the configuration has overlapping functions; explicitly select a function or Unassigned
+indisponível	unavailable
+injeção	injection
+injeção/ignição pelas ligações habituais do pinout	injection/ignition using conventional pinout connections
+inválido	invalid
+já está atribuído a	is already assigned to
+kPa absolutos	absolute kPa
+local, por afinar	local, requires tuning
+modelo local	local template
+nenhuma célula alterada	no cells changed
+não	no
+não gravada	not saved
+não lido da ECU	not read from ECU
+preserva a área do bootloader	preserves the bootloader area
+pressão	pressure
+ralenti	idle
+revisão	revision
+saída	output
+sem sincronismo	no synchronisation
+sem sincronização válida	no valid synchronisation
+sensor à massa	sensor to ground
+sim	yes
+sincronização válida	valid synchronisation
+valor inválido ou precisão excessiva	invalid value or excessive precision
+verifica a ordem e as atribuições no separador Cilindros.	verify firing order and assignments in the Cylinders tab.
+válido	valid
+válidos	valid
+Ângulo da aresta selecionada em graus de cambota desde o primeiro dente após a falha e a paridade configurada. Não é avanço VVT nem referência PMS. VVT ainda não comandado.	Selected edge angle in crankshaft degrees from the first tooth after the gap and the configured parity. This is neither VVT advance nor a TDC reference. VVT actuation is not implemented.
+Ângulo do dente zero, ciclo 720° (°)	Tooth-zero angle, 720° cycle (°)
+Última amostra válida	Last valid sample
+índice relativo de carga %.2f %% · avanço relativo %+.3f ms.	relative load index %.2f %% · relative advance %+.3f ms.
+ARMADO · aguarda sincronização	ARMED · waiting for synchronisation
+CONTROLO DO MOTOR ATIVO	ENGINE CONTROL ACTIVE
+CORTE POR FALHA	FAULT CUT
+PULSO DE BANCADA	BENCH PULSE
+sem falhas	no faults
+nenhuma	none
+atraso de temporização	timing delay
+watchdog/comunicação expirada	watchdog/communication timeout
+perda de sincronização ou sinal inválido	lost synchronisation or invalid signal
+calibração inválida ou alterada	invalid or changed calibration
+pressão de turbo acima do limite	boost pressure above limit
+proteção de temperatura ou tensão	temperature or voltage protection
+Cames: sem sincronismo de cambota	Cam phase: no crankshaft synchronisation
+Cames: aguarda confirmação de fase	Cam phase: waiting for phase confirmation
+Cames	Cam phase
+idade	age
+Configuração validada pelo firmware	Configuration validated by firmware
+esquema/reservas	schema/reserved bytes
+cambota/limite RPM	crankshaft/RPM limit
+referência ADC	ADC reference
+mapa VE	VE map
+mapa de ignição	ignition map
+perfil de motor	engine profile
+modo autónomo: perfil, sensores e mapa VE completo	standalone mode: profile, sensors and complete VE map
+correções de arranque/aquecimento	cranking/warm-up corrections
+TPS, ralenti/turbo, combustível/proteções ou conflito de entradas/saídas	TPS, idle/boost, fuel/protection or input/output conflict

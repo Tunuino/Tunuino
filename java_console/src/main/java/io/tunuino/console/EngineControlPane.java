@@ -70,7 +70,7 @@ final class EngineControlPane extends VBox {
         applyPreset.setOnAction(event->applyPreset());
         String[][] definitions={
             {"fuel","ReqFuel de referência (ms)",""},{"dwell","Dwell (ms, máximo 5)",""},
-            {"dead","Tempo morto injetor (ms)",""},{"maximum","Pulso máximo injetor (ms, até 20)",""},
+            {"dead","Injector dead time (ms)","1"},{"maximum","Pulso máximo injetor (ms, até 20)",""},
             {"prime","Escorva da bomba (ms, até 3000)","0"},
             {"fanOn","Ventoinha liga (°C)","95"},{"fanOff","Ventoinha desliga (°C)","90"},
             {"injectionEnd","Fim de injeção relativo ao PMS (°)",""},
@@ -100,7 +100,23 @@ final class EngineControlPane extends VBox {
             }
             selectors.put(d[0],choices);TextField field=choices.getEditor();choices.setValue(d[2]);field.setPrefColumnCount(10);
             field.setId("engine-field-"+d[0]);fields.put(d[0],field);
-            grid.add(new Label(d[1]),0,row);grid.add(java.util.Set.of("pump","fan","relay").contains(d[0])?FunctionChoices.control(choices):choices,1,row);
+            if(d[0].equals("dead")) {
+                var table=new TableView<String>();table.setId("engine-dead-time-table");table.setEditable(true);
+                table.getItems().add("Base fixa");table.setFixedCellSize(32);table.setPrefHeight(65);table.setMaxHeight(65);
+                TableColumn<String,String> condition=new TableColumn<>("Referência"),deadTime=new TableColumn<>("Dead time (ms)");
+                condition.setCellValueFactory(v->new javafx.beans.property.ReadOnlyStringWrapper(v.getValue()));
+                deadTime.setCellValueFactory(v->field.textProperty());deadTime.setCellFactory(javafx.scene.control.cell.TextFieldTableCell.forTableColumn());
+                condition.setSortable(false);deadTime.setSortable(false);
+                deadTime.setOnEditCommit(e->{try{
+                    var value=new BigDecimal(e.getNewValue().trim().replace(',','.'));int us=value.movePointRight(3).intValueExact();
+                    if(us<0||us>5000)throw new IllegalArgumentException();setting("dead",value.stripTrailingZeros().toPlainString());
+                }catch(RuntimeException error){result.setText("Dead time entre 0 e 5 ms; usa os dados do injetor.");table.refresh();}});
+                table.getColumns().addAll(java.util.List.of(condition,deadTime));table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+                table.disableProperty().bind(choices.disabledProperty());grid.add(table,0,row,2,1);
+                Label help=new Label("Base fixa usada sem compensação por tensão. A curva de três tensões está em Combustível e proteções → Tensão.");help.setWrapText(true);grid.add(help,0,row+1,2,1);
+            }else{
+                grid.add(new Label(d[1]),0,row);grid.add(java.util.Set.of("pump","fan","relay").contains(d[0])?FunctionChoices.control(choices):choices,1,row);
+            }
         }
         wiring.setHgap(12);wiring.setVgap(7);
         wiring.addRow(0,new Label("Cilindro"),new Label("Função de injeção"),new Label("Função de ignição"),new Label("PMS no ciclo (°)"));
@@ -140,7 +156,7 @@ final class EngineControlPane extends VBox {
             setting("injectionEnd","0");
             autonomous.setSelected(false);
             fueling.set(new io.tunuino.calibration.FuelCorrections(new byte[25]));
-            result.setText("Base local preenchida. ReqFuel estimado para gasolina AFR 14,7, ar 1,184 g/L e combustível 0,745 g/mL. Confirma caudal à pressão usada, dwell e tempo morto. Mede dente zero e janela de fase antes de guardar. Os mapas base estão em Afinação.");
+            result.setText("Base local preenchida. ReqFuel estimado para gasolina AFR 14,7, ar 1,184 g/L e combustível 0,745 g/mL. Confirma caudal à pressão usada, dwell e dead time. Mede dente zero e janela de fase antes de guardar. Os mapas base estão em Afinação.");
         }catch(IllegalArgumentException error){result.setText("Base: "+error.getMessage());}});
         VBox motorContent=(VBox)tabs.getTabs().get(0).getContent();
         motorContent.getChildren().addAll(ConsoleShell.actions(new Label("Cilindrada (cm³)"),displacement,new Label("Injetor (cm³/min)"),injectorFlow),generic,
@@ -151,7 +167,7 @@ final class EngineControlPane extends VBox {
             tabs.getTabs().add(new Tab(group,ConsoleShell.card(group.toUpperCase(java.util.Locale.ROOT),
                 group.equals("Sincronização")?"PMS, dente zero e janela de fase dependem do motor. Configura a roda fónica em Sensores e entradas."
                 :group.equals("Auxiliares")?"Escolhe a ligação recomendada ou Personalizar para outra cablagem. Os contactos aparecem por conector."
-                :"Escolhe um valor da lista ou escreve a calibração da carga instalada. ReqFuel usa VE 100% e MAP 100 kPa, antes do tempo morto.",grids.get(group))));
+                :"Escolhe um valor da lista ou escreve a calibração da carga instalada. ReqFuel usa VE 100% e MAP 100 kPa, antes do dead time.",grids.get(group))));
         tabs.getTabs().add(new Tab("Arranque e aquecimento",fueling));
         fueling.onChanged(()->{acknowledge.setSelected(false);controls();});
         getChildren().addAll(tabs,ConsoleShell.card("GUARDAR E ATIVAR", "Guardar não ativa as saídas nesta sessão. O modo autónomo ativa o perfil no próximo arranque elétrico e mantém o motor independente da USB. PARAR mantém as saídas desligadas até nova ativação explícita ou reinício da ECU.",
@@ -214,7 +230,7 @@ final class EngineControlPane extends VBox {
         presetSummary.setText(preset.name()+" · injeção/ignição pelas ligações habituais do pinout"
             +" · bomba: Preto 35/20 · ventoinha: Preto 35/9 · relé: Preto 35/21");
         acknowledge.setSelected(false);
-        result.setText("Modelo aplicado apenas à edição. Completa ReqFuel, dwell, tempo morto e sincronização; confirma LS/IGN antes de enviar à ECU.");controls();
+        result.setText("Modelo aplicado apenas à edição. Completa ReqFuel, dwell, dead time e sincronização; confirma LS/IGN antes de enviar à ECU.");controls();
     }
     private void modeRecommendations(){
         boolean paired=operation.getSelectionModel().getSelectedIndex()>=3;

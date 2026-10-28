@@ -2,9 +2,11 @@
 package io.tunuino.console;
 
 import io.tunuino.calibration.CalibrationMap;
+import io.tunuino.calibration.BaseMaps;
 import io.tunuino.datalog.LogSample;
 import io.tunuino.protocol.DeviceIdentity;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -28,7 +30,7 @@ import javafx.scene.shape.ArcType;
 import javafx.scene.text.Font;
 import javafx.scene.text.TextAlignment;
 
-/** Real-data-only 16×16 dashboard. A blank value means unavailable, never zero. */
+/** Real sensors and 16×16 maps with explicitly identified local starting references. */
 final class DashboardPane extends VBox {
     private enum Channel { RPM, MAP, LAMBDA, COOLANT }
     private static final Color GRID=Color.web("#273c52");
@@ -39,6 +41,7 @@ final class DashboardPane extends VBox {
     private final Label source=new Label("Sem valores de sensores disponíveis");
     private final Label mapSource=new Label("Liga e identifica a ECU para ler as tabelas.");
     private final Label viewCaption=new Label("Mapas da ECU · a aguardar leitura real");
+    private final Label ignitionCaption=new Label();
     private final Label connection=new Label("●  USB DESLIGADO");
     private final Canvas tableCanvas=new Canvas(840,315);
     private final Canvas surfaceCanvas=new Canvas(470,285);
@@ -55,11 +58,12 @@ final class DashboardPane extends VBox {
     private final CheckBox liveHighlight=new CheckBox("Realçar célula ativa");
     private final Label cellDetails=new Label("Seleciona uma célula do mapa para consultar o valor.");
     private final EnumMap<CalibrationMap.Kind,CalibrationMap> maps=new EnumMap<>(CalibrationMap.Kind.class);
+    private final EnumSet<CalibrationMap.Kind> ecuMaps=EnumSet.noneOf(CalibrationMap.Kind.class);
     private final FlowPane gaugeRow=new FlowPane(10,8);
     private final FlowPane smallRow=new FlowPane(9,9);
     private Consumer<CalibrationMap.Kind> onRead=kind->{};
     private Consumer<CalibrationMap.Kind> onBase=kind->{};
-    record MapSelection(CalibrationMap map,int row,int column) {}
+    record MapSelection(CalibrationMap map,int row,int column,boolean fromEcu) {}
     private Consumer<MapSelection> onEdit=selection->{};
     private DeviceIdentity mapOwner;
     private CalibrationMap.Kind selected=CalibrationMap.Kind.VE;
@@ -81,7 +85,7 @@ final class DashboardPane extends VBox {
 
     DashboardPane() { this(false); }
 
-    /** Maps-only cockpit reuses precisely the same real 16x16 rendering logic. */
+    /** Maps-only cockpit reuses the same 16x16 maps and source labels. */
     DashboardPane(boolean mapsOnly) {
         setId(mapsOnly?"dashboard-map-workspace":"dashboard");
         getStyleClass().add("ecu-dashboard");
@@ -153,6 +157,8 @@ final class DashboardPane extends VBox {
             readVe,readSpark,editMap,base,liveHighlight,show3d);
         controls.getStyleClass().add("dashboard-table-actions");
         mapSource.getStyleClass().add("dashboard-subtext");mapSource.setWrapText(true);
+        mapSource.setId("dashboard-map-source");
+        viewCaption.setId("dashboard-map-caption");viewCaption.setWrapText(true);
         tableHost.getStyleClass().add("dashboard-table-host");
         tableHost.setMinHeight(150);tableHost.setPrefHeight(265);
         cellDetails.setWrapText(true);
@@ -181,7 +187,7 @@ final class DashboardPane extends VBox {
         });
         tableCanvas.widthProperty().addListener((a,b,c)->drawHeatmap());
         tableCanvas.heightProperty().addListener((a,b,c)->drawHeatmap());
-        VBox tablePanel=new VBox(4,controls,viewCaption,tableHost,cellDetails);
+        VBox tablePanel=new VBox(4,controls,viewCaption,mapSource,tableHost,cellDetails);
         tablePanel.getStyleClass().add("dashboard-card");
         tablePanel.setMinWidth(0);VBox.setVgrow(tableHost,Priority.ALWAYS);
         tablePanel.setPrefWidth(840);
@@ -221,9 +227,9 @@ final class DashboardPane extends VBox {
         ignitionHost.setMinHeight(120);ignitionHost.setPrefHeight(215);
         ignitionOverview.widthProperty().addListener((a,b,c)->drawIgnition());
         ignitionOverview.heightProperty().addListener((a,b,c)->drawIgnition());
-        Label secondTitle=new Label("TABELA DE IGNIÇÃO · 16×16");
-        secondTitle.getStyleClass().add("dashboard-small-title");
-        VBox ignitionPanel=new VBox(8,secondTitle,ignitionHost);
+        ignitionCaption.setId("dashboard-ignition-caption");ignitionCaption.setWrapText(true);
+        ignitionCaption.getStyleClass().add("dashboard-small-title");
+        VBox ignitionPanel=new VBox(8,ignitionCaption,ignitionHost);
         ignitionPanel.getStyleClass().add("dashboard-card");
         ignitionPanel.setMinWidth(0);VBox.setVgrow(ignitionHost,Priority.ALWAYS);
         SplitPane lower=new SplitPane(ignitionPanel,surfacePanel);lower.setId("dashboard-lower-split");
@@ -233,14 +239,15 @@ final class DashboardPane extends VBox {
         tables.setDividerPositions(.60);tables.setMinSize(0,490);tables.setPrefHeight(640);
         VBox.setVgrow(tables,Priority.ALWAYS);
         if(mapsOnly) {
-            Label heading=new Label("TABELAS NATIVAS 16×16 · ECU");
+            Label heading=new Label("TABELAS NATIVAS 16×16");
             heading.getStyleClass().add("dashboard-kicker");
             getChildren().addAll(heading,tables);
         } else {
             getChildren().addAll(gaugeRow,smallRow,tables);
         }
         setConnection(null,false,false);
-        redrawMaps();
+        clearMaps();
+        ConsoleLanguage.redrawWithLanguage(()->{redrawMaps();for(Gauge gauge:gauges.values())gauge.draw();tpsGauge.draw();iatGauge.draw();});
     }
 
     void setReadAction(Consumer<CalibrationMap.Kind> action) {
@@ -271,7 +278,8 @@ final class DashboardPane extends VBox {
     }
     private void editSelected(int row,int column) {
         CalibrationMap map=maps.get(selected);
-        if(readingAllowed&&map!=null)onEdit.accept(new MapSelection(map,row,column));
+        boolean fromEcu=ecuMaps.contains(selected);
+        if(map!=null&&(!fromEcu||readingAllowed))onEdit.accept(new MapSelection(map,row,column,fromEcu));
     }
     void setConnection(DeviceIdentity identity,boolean connected,boolean available) {
         boolean active=connected&&identity!=null;
@@ -286,7 +294,6 @@ final class DashboardPane extends VBox {
         firmwareLabel.setText(identity==null?"Firmware —":"Firmware "+identity.firmwareVersion());
         readVe.setDisable(!readingAllowed);
         readSpark.setDisable(!readingAllowed);
-        editMap.setDisable(!readingAllowed||!maps.containsKey(selected));
         if(!active) {
             outputs.setText("Estado das saídas indisponível");
             for(String role:outputValues.keySet())indicator(role,null);
@@ -294,8 +301,8 @@ final class DashboardPane extends VBox {
             source.setText("Nenhum valor de sensor disponível");
         } else {
             status.setText("Tunuino · Proteus v0.7 STM32F427");
-            if(!readingAllowed)mapSource.setText("Leitura de mapas indisponível durante outra operação USB.");
         }
+        redrawMaps();
     }
     void setPort(String port) {
         selectedPort=port==null?"USB":port;
@@ -331,14 +338,16 @@ final class DashboardPane extends VBox {
         if(map.columns()!=16||map.rows()!=16)
             throw new IllegalArgumentException("O Dashboard exige mapas nativos 16×16");
         maps.put(map.kind(),map);
+        ecuMaps.add(map.kind());
         selected=map.kind();
         veTab.setSelected(selected==CalibrationMap.Kind.VE);
         sparkTab.setSelected(selected==CalibrationMap.Kind.IGNITION);
-        mapSource.setText("Mapa "+selected+" lido da ECU · 16×16 · 256 células reais");
         redrawMaps();
     }
     void clearMaps() {
-        maps.clear();mapSource.setText("Nenhum mapa recebido da ECU.");
+        ecuMaps.clear();
+        for(CalibrationMap.Kind kind:CalibrationMap.Kind.values())
+            maps.put(kind,BaseMaps.create(BaseMaps.Template.NATURALLY_ASPIRATED,kind));
         redrawMaps();
     }
     private void clearMeasurements() {
@@ -349,10 +358,15 @@ final class DashboardPane extends VBox {
     }
     private void redrawMaps() {
         CalibrationMap map=maps.get(selected);
-        editMap.setDisable(!readingAllowed||map==null);
+        boolean fromEcu=ecuMaps.contains(selected);
+        editMap.setDisable(map==null||(fromEcu&&!readingAllowed));
         cellDetails.setText(map==null?"Lê uma tabela da ECU para consultar e editar células.":
             "Duplo clique numa célula para editar; a gravação na ECU é explícita no editor.");
-        viewCaption.setText(map==null?"TABELA "+selected+" 16×16 · SEM DADOS":"TABELA "+selected+" 16×16 · DADOS DA ECU");
+        viewCaption.setText("TABELA "+selected+" 16×16 · "+(fromEcu?"DADOS DA ECU":"BASE GENÉRICA · POR AFINAR"));
+        mapSource.setText(fromEcu?"Cópia lida da ECU · 256 células."
+            :"Base local para motor aspirado · não lida nem gravada na ECU · 20–105 kPa absolutos.");
+        ignitionCaption.setText("TABELA DE IGNIÇÃO · 16×16 · "+
+            (ecuMaps.contains(CalibrationMap.Kind.IGNITION)?"DADOS DA ECU":"BASE GENÉRICA · POR AFINAR"));
         drawHeatmap();drawIgnition();drawSurface();
     }
     private static double clamp(double v) {return Math.max(0,Math.min(1,v));}
@@ -395,7 +409,7 @@ final class DashboardPane extends VBox {
         }
         // No extra serial read: the current 2×2 interpolation cell follows
         // real RPM/MAP samples while the map remains the last verified snapshot.
-        if(map!=null && latestSample!=null && liveHighlight.isSelected()
+        if(map!=null && ecuMaps.contains(selected) && latestSample!=null && liveHighlight.isSelected()
                 &&(latestSample.validMask()&3)==3
                 &&latestSample.rpm()>=map.rpmAt(0) && latestSample.rpm()<=map.rpmAt(15)
                 &&latestSample.mapKpa()>=map.loadKpaAt(0)
@@ -408,7 +422,7 @@ final class DashboardPane extends VBox {
             g.strokeRect(left+col*cw+1,top+row*ch+1,2*cw-2,2*ch-2);
         }
     }
-    /** Secondary ignition 16x16 panel; no values are fabricated before a map read. */
+    /** Secondary ignition panel shares the explicitly labelled map source. */
     private void drawIgnition() {
         GraphicsContext g=ignitionOverview.getGraphicsContext2D();
         double w=ignitionOverview.getWidth(),h=ignitionOverview.getHeight();
@@ -472,7 +486,7 @@ final class DashboardPane extends VBox {
         }
         g.setFill(DIM);g.setFont(Font.font("Segoe UI",11));g.setTextAlign(TextAlignment.CENTER);
         g.fillText("RPM  →",w*.72,h*.91);g.fillText("←  MAP (kPa)",w*.24,h*.91);
-        g.fillText(selected==CalibrationMap.Kind.VE?"VE (%)":"Ignição (°)",w*.5,18);
+        g.fillText(ConsoleLanguage.text(selected==CalibrationMap.Kind.VE?"VE (%)":"Ignição (°)"),w*.5,18);
     }
     private static final class Gauge extends VBox {
         private final Canvas canvas=new Canvas(160,150);
@@ -538,7 +552,7 @@ final class DashboardPane extends VBox {
             }
             g.setTextAlign(TextAlignment.CENTER);
             g.setFill(Color.web("#c8d9ec"));g.setFont(Font.font("Segoe UI",11));
-            g.fillText(title,cx,h-4);
+            g.fillText(ConsoleLanguage.text(title),cx,h-4);
             g.setFill(WHITE);g.setFont(Font.font("Segoe UI",28));
             String formatted=value==null?"—":unit.equals("λ")?
                 String.format(Locale.ROOT,"%.2f",value):String.format(Locale.ROOT,"%.0f",value);

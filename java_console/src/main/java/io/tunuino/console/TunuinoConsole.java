@@ -713,6 +713,11 @@ public final class TunuinoConsole extends Application {
         fuelTables.setReadAction(readMapForDashboard);
         ignitionTables.setReadAction(readMapForDashboard);
         Consumer<DashboardPane.MapSelection> editMapForDashboard=selection->{
+            if(!selection.fromEcu()) {
+                CalibrationViewer.show(stage,"Base genérica · "+selection.map().kind()+" · local, por afinar",
+                    selection.map(),selection.row(),selection.column(),null);
+                return;
+            }
             PacketSession current=connection.get();DeviceIdentity device=identifiedDevice;
             if(serialBusy||monitoringActive||fileReading||firmwarePanel.isBusy()
                     ||current==null||!current.isOpen()||device==null) {
@@ -779,7 +784,7 @@ public final class TunuinoConsole extends Application {
         for(DashboardPane page:new DashboardPane[]{dashboard,fuelTables,ignitionTables})
             page.onBaseMap(kind->openBaseMap(stage,kind,io.tunuino.calibration.BaseMaps.Template.NATURALLY_ASPIRATED));
         VBox maps = new VBox(16,
-            ConsoleShell.card("MAPAS BASE PRÉ-DEFINIDOS", "Referências editáveis para começar a afinação: 200–7000 rpm e 20–105 kPa absolutos. A base aspirada não cobre pressão de turbo. Confirma mistura e avanço para o teu motor antes de utilizar. Criar abre uma cópia local; guardar na ECU é uma ação separada.",baseTemplate,ConsoleShell.actions(baseVe,baseSpark)),
+            ConsoleShell.card("MAPAS BASE PRÉ-DEFINIDOS", "As tabelas abrem preenchidas com a base genérica aspirada. Estes controlos permitem criar outras cópias locais: 200–7000 rpm e 20–105 kPa absolutos. A base aspirada não cobre pressão de turbo. Confirma mistura e avanço para o teu motor antes de utilizar. Guardar na ECU é uma ação separada.",baseTemplate,ConsoleShell.actions(baseVe,baseSpark)),
             ConsoleShell.card("FICHEIRO LOCAL", "Abre um mapa VE ou de ignição para consultar a tabela, editar valores e guardar uma cópia .tnmap.", openMap),
             ConsoleShell.card("MAPA DA CENTRALINA", "Lê uma cópia do mapa quando esta função está disponível no firmware.",
                 ConsoleShell.actions(mapKind, readMap)),
@@ -793,11 +798,11 @@ public final class TunuinoConsole extends Application {
         shell.addPage("Tuning", "Tuning e calibração", "Edição de mapas e pré-visualização matemática.",
             "M1 2H21V20H1ZM3 4V8H7V4ZM9 4V8H13V4ZM15 4V8H19V4ZM3 10V14H7V10ZM9 10V14H13V10ZM15 10V14H19V10ZM3 16V18H7V16ZM9 16V18H13V16ZM15 16V18H19V16Z", ConsoleShell.scroll(maps));
         shell.addPage("Fuel Tables", "Tabela de combustível · VE 16×16",
-            "Mapa volumétrico real de 256 células. O comando físico exige perfil e armação explícita em Configuração do motor.",
+            "Base genérica de 256 células ao abrir; a leitura da ECU mostra o mapa real. O comando físico exige perfil e armação explícita em Configuração do motor.",
             "M2 2H22V22H2ZM5 5H10V10H5ZM12 5H19V10H12ZM5 12H10V19H5ZM12 12H19V19H12Z",
             ConsoleShell.scroll(fuelTables));
         shell.addPage("Ignition Tables", "Tabela de ignição · 16×16",
-            "Mapa real de avanço em graus. Configura PMS, canais e dwell em Configuração do motor antes de armar.",
+            "Base genérica de avanço em graus ao abrir; a leitura da ECU mostra o mapa real. Configura PMS, canais e dwell em Configuração do motor antes de armar.",
             "M12 2L6 13H11L8 22L18 10H13Z",ConsoleShell.scroll(ignitionTables));
         ConfigurationPane.Access ecuAccess=new ConfigurationPane.Access() {
             @Override public <T> void run(ConfigurationPane.Operation<T> operation,Consumer<T> success,Consumer<Throwable> failure) {

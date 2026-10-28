@@ -27,12 +27,12 @@ final class FeatureControlPane extends VBox {
         Map<String,GridPane> grids=new LinkedHashMap<>();
         Map<String,String> help=Map.of(
             "Sensores","IAT usa uma entrada TEMP independente do líquido de refrigeração. A tensão usa uma entrada AV e deve ser calibrada em VOLTS DA BATERIA, incluindo o divisor. Mede os pontos ADC; as referências não são calibrações do sensor.",
-            "Tensão","Curvas de três tensões para o tempo morto dos injetores e dwell das bobinas. Todos os tempos são apresentados em milissegundos. Usa os dados do fabricante dos componentes instalados.",
+            "Tensão","Curvas de três tensões para o dead time dos injetores e dwell das bobinas. Todos os tempos são apresentados em milissegundos. Usa os dados do fabricante dos componentes instalados.",
             "Lambda","Curva alvo de três pontos MAP absolutos. O combustível base deve referir-se a lambda 1; ativar o alvo enriquece por 1 / lambda alvo. A malha fechada é PI com correção limitada e condições de temperatura, RPM, TPS e atraso. Não altera o mapa VE nem faz Autotune.",
             "Transientes","Aceleração: combustível adicional por velocidade de abertura TPS, com decaimento linear. DFCO: corte com temperatura mínima, atraso e histerese de RPM. A malha fechada suspende a correção durante estes eventos.",
             "Limites","Limitador e launch cortam combustível com histerese; a ignição mantém o dwell programado. Launch exige uma entrada AV condicionada, com níveis válidos de 100 a 3995 ADC. Um sinal fora dessa faixa causa corte retido. Proteções CLT/tensão também exigem reativação explícita.",
             "Flex fuel","Requer controlador de etanol com saída analógica calibrada entre 0 e 100%. Esta entrada não aceita diretamente sensores de frequência. O firmware interpola a correção de combustível e avanço; afina para o combustível e motor usados.",
-            "Cilindros","Ajustes individuais sobre o combustível efetivo, antes do tempo morto, e sobre o avanço. Confirmar medição por cilindro antes de ativar. Os limites de pulso e duty continuam a aplicar-se.");
+            "Cilindros","Ajustes individuais sobre o combustível efetivo, antes do dead time, e sobre o avanço. Confirmar medição por cilindro antes de ativar. Os limites de pulso e duty continuam a aplicar-se.");
         for(String group:List.of("Sensores","Tensão","Lambda","Transientes","Limites","Flex fuel","Cilindros")){
             GridPane grid=new GridPane();grid.setHgap(18);grid.setVgap(9);grids.put(group,grid);
             var column=new ColumnConstraints();column.setPercentWidth(50);grid.getColumnConstraints().addAll(column,new ColumnConstraints());
@@ -50,8 +50,11 @@ final class FeatureControlPane extends VBox {
             }
             else if(f.decimals==3&&f.name().contains("TARGET"))c.getItems().addAll("0.85","0.9","0.95","1");
             else c.getItems().add(java.math.BigDecimal.valueOf(f.reference,f.decimals).stripTrailingZeros().toPlainString());
-            fields.put(f,c);GridPane g=f.group.equals("Sensores")?sensorGrids.get(f.name().startsWith("IAT_")?"IAT":"VOLT"):grids.get(f.group);var l=new Label(f.label);l.setWrapText(true);g.addRow(g.getRowCount(),l,f.offset<76?FunctionChoices.control(c):c);
+            fields.put(f,c);
+            if(f.name().startsWith("DEAD")||f.name().startsWith("VOLT_AXIS"))continue;
+            GridPane g=f.group.equals("Sensores")?sensorGrids.get(f.name().startsWith("IAT_")?"IAT":"VOLT"):grids.get(f.group);var l=new Label(f.label);l.setWrapText(true);g.addRow(g.getRowCount(),l,f.offset<76?FunctionChoices.control(c):c);
         }
+        GridPane voltage=grids.get("Tensão");voltage.add(deadTimeTable(),0,voltage.getRowCount(),2,1);
         getChildren().addAll(tabs,ConsoleShell.card("REFERÊNCIAS E CÓPIAS","O ficheiro .tnaux inclui TPS, ralenti, turbo e todas estas funções. Abrir uma cópia prepara a edição; só Guardar envia à ECU. Guarda também o perfil .tncfg e os mapas .tnmap.",ConsoleShell.actions(reference,base,backup,open)));
         fill(baseline);
         base.setOnAction(e->{byte[] p=FeatureConfiguration.reference(baseline).bytes();if(reference.getSelectionModel().getSelectedIndex()==1){var b=java.nio.ByteBuffer.wrap(p);b.putShort(118,(short)25000).putShort(124,(short)850);}fill(p);result.setText("Referência aplicada à edição, com todas as novas funções desativadas. As definições TPS/ralenti/turbo foram preservadas.");});
@@ -78,6 +81,23 @@ final class FeatureControlPane extends VBox {
             },x->{busy=false;result.setText(x.getMessage());controls();});
         }catch(IllegalArgumentException x){result.setText(x.getMessage());}});
         VBox box=new VBox(10,ConsoleShell.actions(loadSensor,saveSensor));
+        boolean air=kind.equals("IAT");
+        var rawFields=air?List.of(FeatureConfiguration.Field.IAT_RAW1,FeatureConfiguration.Field.IAT_RAW2,FeatureConfiguration.Field.IAT_RAW3)
+            :List.of(FeatureConfiguration.Field.VOLT_RAW_LOW,FeatureConfiguration.Field.VOLT_RAW_HIGH);
+        var physicalFields=air?List.of(FeatureConfiguration.Field.IAT_TEMP1,FeatureConfiguration.Field.IAT_TEMP2,FeatureConfiguration.Field.IAT_TEMP3)
+            :List.of(FeatureConfiguration.Field.VOLT_LOW,FeatureConfiguration.Field.VOLT_HIGH);
+        box.getChildren().add(new MeasuredCalibrationPane("sensor-"+kind.toLowerCase(Locale.ROOT)+"-auto",air?"IAT":"Tensão da bateria",
+            air?"Mede três temperaturas conhecidas com um termómetro. Os valores iniciais são referências editáveis; a Console captura o ADC real."
+                :"Mede duas tensões distintas com multímetro, em volts da bateria. As referências são editáveis; o divisor da entrada faz parte da calibração.",
+            air?new String[]{"Estabiliza na primeira temperatura conhecida (°C).","Estabiliza na segunda temperatura conhecida (°C).","Estabiliza na terceira temperatura conhecida (°C)."}
+                :new String[]{"Estabiliza na primeira tensão medida com multímetro (V).","Estabiliza na segunda tensão medida com multímetro (V)."},
+            air?new double[]{20,60,100}:new double[]{12,14},air?-40:0,air?150:24,air,false,access,
+            ()->Integer.parseInt(fields.get(air?FeatureConfiguration.Field.IAT_INPUT:FeatureConfiguration.Field.VOLT_INPUT).getEditor().getText()),
+            ()->Arrays.asList(identity,fields.get(air?FeatureConfiguration.Field.IAT_INPUT:FeatureConfiguration.Field.VOLT_INPUT).getEditor().getText(),snapshot),
+            save.disabledProperty(),points->{for(int i=0;i<points.length;i++){
+                fields.get(rawFields.get(i)).setValue(Integer.toString(points[i].adc()));
+                fields.get(physicalFields.get(i)).setValue(Double.toString(points[i].value()));
+            }}));
         if(kind.equals("IAT"))box.getChildren().add(SensorCalibrationControls.ntc("iat-ntc",points->{
             var raw=java.util.List.of(FeatureConfiguration.Field.IAT_RAW1,FeatureConfiguration.Field.IAT_RAW2,FeatureConfiguration.Field.IAT_RAW3);
             var temp=java.util.List.of(FeatureConfiguration.Field.IAT_TEMP1,FeatureConfiguration.Field.IAT_TEMP2,FeatureConfiguration.Field.IAT_TEMP3);
@@ -92,8 +112,41 @@ final class FeatureControlPane extends VBox {
             }row++;
         }
         Label note=new Label(kind.equals("IAT")?"Curva de três pontos da temperatura do ar. Calibrar não ativa a compensação de combustível.":"Dois pontos medidos com multímetro, em volts da bateria. A entrada AV exige condicionamento/divisor adequado; não ligar 12 V diretamente ao ADC.");note.setWrapText(true);
-        Label message=new Label();message.textProperty().bind(result.textProperty());message.setWrapText(true);box.getChildren().addAll(note,grid,message);return box;
+        ConsoleLanguage.watch(result.textProperty());Label message=new Label();message.textProperty().bind(result.textProperty());message.setWrapText(true);box.getChildren().addAll(note,grid,message);return box;
     }
+    private javafx.scene.Node deadTimeTable() {
+        var table=new TableView<Integer>();table.setId("injector-dead-time-table");table.setEditable(true);
+        table.getItems().addAll(1,2,3);table.setFixedCellSize(34);table.setPrefHeight(140);table.setMaxHeight(140);
+        TableColumn<Integer,String> volts=new TableColumn<>("Tensão da bateria (V)"),dead=new TableColumn<>("Dead time (ms)");
+        for(var column:List.of(volts,dead)) {
+            boolean voltage=column==volts;
+            column.setCellValueFactory(v->fields.get(FeatureConfiguration.Field.valueOf((voltage?"VOLT_AXIS":"DEAD")+v.getValue())).getEditor().textProperty());
+            column.setCellFactory(javafx.scene.control.cell.TextFieldTableCell.forTableColumn());
+            column.setSortable(false);column.setReorderable(false);
+            column.setOnEditCommit(e->{
+                var field=FeatureConfiguration.Field.valueOf((voltage?"VOLT_AXIS":"DEAD")+e.getRowValue());
+                try {
+                    var number=new java.math.BigDecimal(e.getNewValue().trim().replace(',','.'));
+                    int value=number.movePointRight(field.decimals).intValueExact();
+                    if(value<field.min||value>field.max)throw new IllegalArgumentException();
+                    setting(field,number.stripTrailingZeros().toPlainString());
+                    result.setText("Curva alterada apenas na edição; guarda para aplicar à ECU.");
+                }catch(RuntimeException error){result.setText("Valor inválido. Usa volts e milissegundos dentro dos limites da curva.");table.refresh();}
+            });
+        }
+        table.getColumns().addAll(List.of(volts,dead));table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.disableProperty().bind(base.disabledProperty());
+        Button referenceCurve=new Button("Usar referência inicial · 8 / 12 / 16 V");referenceCurve.setId("injector-dead-time-reference");
+        referenceCurve.disableProperty().bind(base.disabledProperty());referenceCurve.setOnAction(e->{
+            for(int row=1;row<=3;row++)for(String prefix:List.of("VOLT_AXIS","DEAD")){
+                var f=FeatureConfiguration.Field.valueOf(prefix+row);setting(f,java.math.BigDecimal.valueOf(f.reference,f.decimals).stripTrailingZeros().toPlainString());
+            }
+            result.setText("Referência genérica preparada na edição. Confirma a curva do fabricante para o injetor e pressão diferencial usados.");
+        });
+        Label note=new Label("Referência inicial: 8 V → 1,500 ms; 12 V → 1,000 ms; 16 V → 0,700 ms. Não identifica um injetor. Usa a curva do fabricante à pressão diferencial instalada. Duplo clique para editar; a mesma coluna de tensão define os três pontos de dwell.");note.setWrapText(true);
+        return new VBox(8,new Label("INJECTOR DEAD TIME"),table,referenceCurve,note);
+    }
+    private void setting(FeatureConfiguration.Field field,String value){fields.get(field).setValue(value);fields.get(field).getEditor().setText(value);}
     private static FileChooser chooser(String title){var f=new FileChooser();f.setTitle(title);f.getExtensionFilters().add(new FileChooser.ExtensionFilter("Tunuino auxiliares e funções","*.tnaux"));return f;}
     private record Loaded(AuxControlClient.Snapshot snapshot,AuxControlClient.FeatureState features,EngineOutputClient.State engine){}
     private void run(ConfigurationPane.Operation<Loaded> operation){if(!available||busy)return;busy=true;controls();access.run(operation,v->{busy=false;snapshot=v.snapshot();armed=v.engine().armed();fill(v.snapshot().configuration().bytes());var f=v.features();result.setText(f.description()+" · "+v.engine().description());onSnapshot.accept(v.snapshot());onState.accept(v.engine());controls();},x->{busy=false;result.setText(x.getMessage());controls();});}

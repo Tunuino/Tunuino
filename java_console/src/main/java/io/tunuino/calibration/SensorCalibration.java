@@ -5,6 +5,40 @@ import io.tunuino.protocol.IoClient;
 public final class SensorCalibration {
     private SensorCalibration() {}
     public record Point(int adc, double temperature) {}
+    public record Reading(int adc,long generation) {}
+    public record MeasuredPoint(int adc,double value) {}
+    /** A short measured burst, never a guessed 0–5 V endpoint. */
+    public static Reading stable(java.util.List<IoClient.Inputs> samples,int channel,boolean temperature) {
+        if(samples==null||samples.size()!=8||samples.get(0)==null)throw new IllegalArgumentException("São necessárias oito amostras ADC");
+        int[] values=new int[8];long generation=samples.get(0).generation(),previous=-1;
+        for(int i=0;i<8;i++) {
+            var sample=samples.get(i);values[i]=measured(sample,channel,temperature);
+            if(sample.generation()!=generation||sample.sample().timeMs()<=previous)
+                throw new IllegalArgumentException("A configuração ou o relógio mudou durante a captura; repete a medição");
+            previous=sample.sample().timeMs();
+        }
+        java.util.Arrays.sort(values);
+        if(values[0]<=0||values[7]>=4095)throw new IllegalArgumentException("ADC no limite da escala; verifica a ligação do sensor");
+        if(values[7]-values[0]>20)throw new IllegalArgumentException("Sinal instável; mantém o sensor no ponto indicado e repete");
+        return new Reading((values[3]+values[4]+1)/2,generation);
+    }
+    /** TPS retains closed/open order; other curves follow increasing ADC. */
+    public static MeasuredPoint[] curve(int[] adc,double[] values,boolean tps) {
+        if(adc==null||values==null||adc.length!=values.length||adc.length<2||adc.length>3)
+            throw new IllegalArgumentException("Mede todos os pontos da calibração");
+        var points=new MeasuredPoint[adc.length];
+        for(int i=0;i<adc.length;i++) {
+            if(adc[i]<=0||adc[i]>=4095||!Double.isFinite(values[i]))throw new IllegalArgumentException("Ponto de calibração inválido");
+            points[i]=new MeasuredPoint(adc[i],values[i]);
+        }
+        if(!tps)java.util.Arrays.sort(points,java.util.Comparator.comparingInt(MeasuredPoint::adc));
+        for(int i=1;i<points.length;i++)if(Math.abs(points[i].adc()-points[i-1].adc())<32
+                ||points[i].value()==points[i-1].value())
+            throw new IllegalArgumentException("Os pontos devem ter valores diferentes e pelo menos 32 contagens ADC de separação");
+        if(points.length==3&&(points[1].value()-points[0].value())*(points[2].value()-points[1].value())<=0)
+            throw new IllegalArgumentException("A curva medida deve ser monotónica");
+        return points;
+    }
     public static int measured(IoClient.Inputs input, int channel, boolean temperature) {
         if(input==null||(input.status()&1)==0)throw new IllegalArgumentException("Leitura ADC indisponível; nenhum ponto foi alterado");
         if(channel<1||channel>(temperature?4:11))throw new IllegalArgumentException("Escolhe primeiro a ligação do sensor");

@@ -29,7 +29,7 @@ final class FuelCorrectionPane extends VBox {
         }
         add(grid,"advance","Avanço durante arranque (° APMS)",21,2,-1000,2000,"0","5","10","12");
         getChildren().addAll(ConsoleShell.card("ARRANQUE E AQUECIMENTO",
-            "100% mantém o combustível base. Durante arranque usa a percentagem de arranque; acima do limite RPM usa a curva de aquecimento e o enriquecimento após arranque, que decresce até 100%. O tempo morto é adicionado no fim. Afina estes valores para o motor real.",enabled,fixed,grid));
+            "100% mantém o combustível base. Durante arranque usa a percentagem de arranque; acima do limite RPM usa a curva de aquecimento e o enriquecimento após arranque, que decresce até 100%. O dead time é adicionado no fim. Afina estes valores para o motor real.",enabled,fixed,grid));
         set(new FuelCorrections(new byte[25]));
         enabled.setOnAction(e->{configured=true;refresh();changed.run();});fixed.setOnAction(e->changed.run());
     }

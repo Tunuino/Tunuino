@@ -100,6 +100,28 @@ public final class ConfigurationPane extends VBox {
                 IoConfiguration.Field[] temp={IoConfiguration.Field.TEMP_1,IoConfiguration.Field.TEMP_2,IoConfiguration.Field.TEMP_3};
                 for(int i=0;i<3;i++){fields.get(raw[i]).setText(Integer.toString(p[i].adc()));fields.get(temp[i]).setText(Double.toString(p[i].temperature()));}
             },newLocal.disabledProperty()));
+            if(!group.equals("Aquisição")) {
+                boolean temp=group.equals("Temperatura"),pressure=group.equals("MAP");
+                var raw=temp?List.of(IoConfiguration.Field.TEMP_RAW_1,IoConfiguration.Field.TEMP_RAW_2,IoConfiguration.Field.TEMP_RAW_3)
+                    :pressure?List.of(IoConfiguration.Field.MAP_RAW_LOW,IoConfiguration.Field.MAP_RAW_HIGH)
+                    :List.of(IoConfiguration.Field.LAMBDA_RAW_LOW,IoConfiguration.Field.LAMBDA_RAW_HIGH);
+                var physical=temp?List.of(IoConfiguration.Field.TEMP_1,IoConfiguration.Field.TEMP_2,IoConfiguration.Field.TEMP_3)
+                    :pressure?List.of(IoConfiguration.Field.MAP_LOW,IoConfiguration.Field.MAP_HIGH)
+                    :List.of(IoConfiguration.Field.LAMBDA_LOW,IoConfiguration.Field.LAMBDA_HIGH);
+                var selector=temp?coolant:pressure?map:lambda;
+                card.getChildren().add(2,new MeasuredCalibrationPane("sensor-"+(temp?"clt":pressure?"map":"lambda")+"-auto",temp?"CLT":group,
+                    temp?"Mede três temperaturas conhecidas com termómetro; ou escolhe abaixo um modelo NTC com R25, Beta e pull-up identificados."
+                        :pressure?"Mede dois pontos de pressão ABSOLUTA conhecidos. A pressão atmosférica deve ser medida, não inferida da altitude. Os valores iniciais são exemplos editáveis."
+                        :"Calibra a saída analógica do controlador wideband com dois valores lambda conhecidos. Segue o procedimento do fabricante; a Console não calibra a célula da sonda.",
+                    temp?new String[]{"Estabiliza na primeira temperatura conhecida (°C).","Estabiliza na segunda temperatura conhecida (°C).","Estabiliza na terceira temperatura conhecida (°C)."}
+                        :pressure?new String[]{"Aplica a primeira pressão absoluta conhecida (kPa).","Aplica a segunda pressão absoluta conhecida (kPa)."}
+                        :new String[]{"Aplica a primeira referência lambda do controlador.","Aplica a segunda referência lambda do controlador."},
+                    temp?new double[]{20,60,100}:pressure?new double[]{50,100}:new double[]{0.8,1.2},temp?-40:0,temp?150:pressure?500:5,
+                    temp,false,access,()->selector.getValue(),()->Arrays.asList(device,selector.getValue(),snapshot),
+                    read.disabledProperty().or(newLocal.disabledProperty()),points->{for(int i=0;i<points.length;i++){
+                        fields.get(raw.get(i)).setText(Integer.toString(points[i].adc()));fields.get(physical.get(i)).setText(Double.toString(points[i].value()));
+                    }}));
+            }
             forms.getTabs().add(new Tab(group.equals("Aquisição")?"Roda fónica":group.equals("Temperatura")?"CLT · motor":group,card));
         }
         getChildren().add(forms);

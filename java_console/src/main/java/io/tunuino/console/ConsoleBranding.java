@@ -21,17 +21,21 @@ final class ConsoleBranding {
             throw new IllegalStateException("Cannot load Tunuino logo", icon.getException());
         }
         stage.getIcons().setAll(icon);
+        ConsoleLanguage.watch(stage.titleProperty());
     }
 
     static void applyTheme(Scene scene) {
         String stylesheet = Objects.requireNonNull(ConsoleBranding.class.getResource("console.css"),
             "Missing Console stylesheet").toExternalForm();
         if (!scene.getStylesheets().contains(stylesheet)) scene.getStylesheets().add(stylesheet);
+        ConsoleLanguage.install(scene);
     }
 
     static Alert alert(Alert.AlertType type, String content, ButtonType... buttons) {
         Alert alert = new Alert(type, content, buttons);
         alert.getDialogPane().getStylesheets().add(ConsoleBranding.class.getResource("console.css").toExternalForm());
+        ConsoleLanguage.watch(alert.titleProperty());ConsoleLanguage.watch(alert.headerTextProperty());ConsoleLanguage.watch(alert.contentTextProperty());
+        ConsoleLanguage.observe(alert.getDialogPane());
         return alert;
     }
 }

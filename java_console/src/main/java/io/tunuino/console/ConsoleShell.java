@@ -70,7 +70,8 @@ final class ConsoleShell extends BorderPane {
         String[][] entries={{"Ficheiro","ECU Project","Tuning","Data Log"},{"ECU","Inputs / Outputs","Engine","Output Tests"},
             {"Ver","Dashboard","Fuel Tables","Ignition Tables"},{"Ferramentas","Firmware","Diagnostics"},{"Ajuda","Settings"}};
         for(String[] entry:entries){var menuEntry=new javafx.scene.control.Menu(entry[0]);for(int i=1;i<entry.length;i++){String key=entry[i];var item=new javafx.scene.control.MenuItem(key);item.setOnAction(e->select(key));menuEntry.getItems().add(item);}menus.getMenus().add(menuEntry);}
-        VBox header=new VBox(menus,masthead);header.getStyleClass().add("app-header");setTop(header);
+        var language=ConsoleLanguage.selector();HBox menuRow=new HBox(8,menus,language);menuRow.setAlignment(Pos.CENTER_RIGHT);HBox.setHgrow(menus,Priority.ALWAYS);
+        VBox header=new VBox(menuRow,masthead);header.getStyleClass().add("app-header");setTop(header);
         sidebar.getStyleClass().add("sidebar");
         sidebar.setPrefWidth(205); sidebar.setMinWidth(205); sidebar.setMinHeight(0);
         Label menu = new Label("ÁREA DE TRABALHO"); menu.getStyleClass().add("sidebar-caption");
@@ -113,6 +114,7 @@ final class ConsoleShell extends BorderPane {
     }
 
     void addPage(String key, String title, String detail, String iconPath, Node content) {
+        ConsoleLanguage.observe(content);
         pages.put(key, new Page(title, detail, content));
         SVGPath icon = new SVGPath(); icon.setContent(iconPath); icon.getStyleClass().add("navigation-icon");
         StackPane glyph = new StackPane(icon); glyph.setMinSize(22, 22); glyph.setPrefSize(22, 22);

@@ -80,8 +80,16 @@ final class AuxControlPane extends VBox {
                 access.run((session,device)->io.tunuino.protocol.IoClient.read(session,device,java.time.Duration.ofSeconds(2)),v->{try{fields.get(f).setText(Integer.toString(io.tunuino.calibration.SensorCalibration.measured(v,channel,false)));result.setText("Ponto TPS medido na edição. Mede o outro extremo e guarda a calibração.");}catch(IllegalArgumentException x){result.setText(x.getMessage());}},x->result.setText(x.getMessage()));
             });capture.getChildren().add(measure);
         }
-        Label message=new Label();message.textProperty().bind(result.textProperty());message.setWrapText(true);
-        return new VBox(10,ConsoleShell.actions(loadTps,saveTps),capture,tpsForm,message);
+        ConsoleLanguage.watch(result.textProperty());Label message=new Label();message.textProperty().bind(result.textProperty());message.setWrapText(true);
+        var automatic=new MeasuredCalibrationPane("sensor-tps-auto","TPS",
+            "Os extremos são medidos na ligação selecionada. Fechado corresponde a 0% e aberto a 100%; não se pressupõe um sinal de exatamente 0 a 5 V.",
+            new String[]{"Solta o acelerador e mantém a borboleta totalmente fechada.","Abre completamente a borboleta e mantém a posição."},
+            new double[]{0,100},0,100,false,true,access,()->tpsChannel.getValue(),
+            ()->Arrays.asList(identity,tpsChannel.getValue(),snapshot),save.disabledProperty(),points->{
+                fields.get(AuxConfiguration.Field.TPS_CLOSED).setText(Integer.toString(points[0].adc()));
+                fields.get(AuxConfiguration.Field.TPS_OPEN).setText(Integer.toString(points[1].adc()));
+            });
+        return new VBox(10,ConsoleShell.actions(loadTps,saveTps),automatic,capture,tpsForm,message);
     }
     private record Loaded(AuxControlClient.Snapshot snapshot,AuxControlClient.State auxiliary,EngineOutputClient.State engine){}
     private void load(){run((s,d)->new Loaded(AuxControlClient.read(s,d,java.time.Duration.ofSeconds(10)),AuxControlClient.state(s),EngineOutputClient.read(s)));}

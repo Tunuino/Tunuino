@@ -60,6 +60,8 @@ public final class ConsoleUiChecks {
         }
 
         @Override public void start(Stage stage) throws Exception {
+            ConsoleLanguage.use(ConsoleLanguage.Language.PORTUGUESE,false);
+            checkCalibrationAssistant();
             String destination = getParameters().getNamed().get("snapshots");
             if (destination != null) { snapshots = Path.of(destination); Files.createDirectories(snapshots); }
             console = new TunuinoConsole(); console.start(stage, true);
@@ -74,9 +76,11 @@ public final class ConsoleUiChecks {
                 "Active source revision is visible beside the product name");
             check(scene.getRoot().lookupAll(".navigation-group").size()==1,"Flat reference navigation with one secondary motor group");
             check(((Button) scene.lookup("#dashboard-read-ve")).isDisabled(), "Offline dashboard blocks map read");
-            check(((Button) scene.lookup("#dashboard-edit-map")).isDisabled(), "Offline dashboard blocks ECU map editing");
+            check(!((Button) scene.lookup("#dashboard-edit-map")).isDisabled(), "Starting reference can be edited offline without creating a map");
             DashboardPane cockpit=(DashboardPane)scene.lookup("#dashboard");
             check(cockpit!=null,"ECU cockpit is the first page");
+            checkStartingMaps(stage,cockpit);
+            checkLanguage(scene,cockpit);
             cockpit.showCam(new io.tunuino.protocol.CamPhaseClient.Phase(7,421.25,1000000,1001000,1,60,2));
             check(((Label)scene.lookup("#dashboard-cam-phase")).getText().contains("421.25"),"Captured phase is rendered in crank degrees");
             cockpit.showCam(null);
@@ -128,6 +132,70 @@ public final class ConsoleUiChecks {
             snapshot(scene,"console-reference-layout");
             stage.setWidth(1510);stage.setHeight(1010);
             later(()->checkWideDashboard(stage));
+        }
+        private void checkLanguage(Scene scene,DashboardPane cockpit) throws Exception {
+            var language=(ComboBox<?>)scene.lookup("#console-language");
+            check(language!=null&&language.getItems().size()==2,"Compact Portuguese/English selector is available in the header");
+            var selected=new java.util.concurrent.atomic.AtomicReference<DashboardPane.MapSelection>();
+            // A separate pane isolates this fixture from the application's editor action.
+            var maps=new DashboardPane();maps.setEditAction(selected::set);
+            new Scene(maps,1000,700);maps.applyCss();maps.layout();
+            ((Button)maps.lookup("#dashboard-edit-map")).fire();var before=selected.get().map();
+            ConsoleLanguage.use(ConsoleLanguage.Language.ENGLISH,false);
+            check(((Button)scene.lookup("#dashboard-read-ve")).getText().equals("Read VE from ECU"),"English translates controls without restarting");
+            check(((Label)scene.lookup("#dashboard-map-caption")).getText().contains("GENERIC BASE"),"English translates map-source captions");
+            ((Button)maps.lookup("#dashboard-edit-map")).fire();
+            check(selected.get().map()==before&&!selected.get().fromEcu(),"Changing language preserves map objects and provenance");
+            cockpit.showCam(null);
+            check(((Label)scene.lookup("#dashboard-cam-phase")).getText().contains("unavailable"),"New runtime messages follow the current language");
+            snapshot(scene,"console-english-dashboard");
+            ConsoleLanguage.use(ConsoleLanguage.Language.PORTUGUESE,false);
+            check(((Button)scene.lookup("#dashboard-read-ve")).getText().equals("Ler VE da ECU"),"Portuguese is restored from original text");
+            var menu=(javafx.scene.control.MenuBar)scene.lookup("#console-menu-bar");
+            check(menu.getMenus().get(0).getText().equals("Ficheiro")&&menu.getMenus().get(2).getText().equals("Ver"),"Menu labels restore Portuguese without skin text overriding them");
+        }
+        private void checkCalibrationAssistant() {
+            var blocked=new javafx.beans.property.SimpleBooleanProperty(false);
+            var context=new Object[]{"same-ecu-and-input"};int[] index={0};int[] readings={3200,800};
+            ConfigurationPane.Access fake=new ConfigurationPane.Access(){
+                @SuppressWarnings("unchecked") public <T> void run(ConfigurationPane.Operation<T> operation,
+                        java.util.function.Consumer<T> success,java.util.function.Consumer<Throwable> failure){
+                    success.accept((T)new io.tunuino.calibration.SensorCalibration.Reading(readings[index[0]++%2],7));
+                }
+            };
+            var applied=new java.util.concurrent.atomic.AtomicReference<io.tunuino.calibration.SensorCalibration.MeasuredPoint[]>();
+            var wizard=new MeasuredCalibrationPane("test-auto","TPS","Measured endpoints",new String[]{"Closed","Open"},
+                new double[]{0,100},0,100,false,true,fake,()->2,()->context[0],blocked,applied::set);
+            var capture=(Button)wizard.getContent().lookup("#test-auto-capture");
+            var apply=(Button)wizard.getContent().lookup("#test-auto-apply");
+            check(apply.isDisabled(),"No calibration can be applied before both captures");
+            capture.fire();check(applied.get()==null&&apply.isDisabled(),"First capture does not apply or write calibration");
+            capture.fire();apply.fire();
+            check(index[0]==2&&applied.get()[0].adc()==3200&&applied.get()[1].adc()==800,"Guided TPS preserves reverse polarity and captures closed/open independently");
+            applied.set(null);context[0]="different-input";apply.fire();
+            check(applied.get()==null&&apply.isDisabled(),"Changing ECU or input invalidates collected points");
+            blocked.set(true);check(capture.isDisabled(),"Offline, armed or busy states block captures");
+        }
+        private void checkStartingMaps(Stage stage,DashboardPane cockpit) {
+            Scene scene=stage.getScene();
+            for(var kind:CalibrationMap.Kind.values()) {
+                cockpit.selectKind(kind);
+                check(((Label)scene.lookup("#dashboard-map-caption")).getText().contains("BASE GENÉRICA"),
+                    "Both startup tables identify their local reference source");
+                ((Button)scene.lookup("#dashboard-edit-map")).fire();
+                int editors=0;
+                for(Window window:List.copyOf(Window.getWindows()))if(window!=stage&&window instanceof Stage editor&&editor.isShowing()) {
+                    editors++;
+                    var grid=(javafx.scene.control.TableView<?>)editor.getScene().lookup(".table-view");
+                    check(grid.getItems().size()==16&&grid.getColumns().size()==17,"Startup map contains all 256 cells and both axes");
+                    var row=(java.util.List<?>)grid.getItems().get(0);
+                    check(row.get(1).equals(kind==CalibrationMap.Kind.VE?"40.000":"5.000"),"Startup editor uses the existing generic base values");
+                    check(editor.getScene().lookup("#map-write")==null,"An unverified startup reference has no ECU write action");
+                }
+                check(editors==1,"Edit opens the already populated table without generating it manually");
+                check(CalibrationViewer.closeAll(),"Viewing startup maps does not modify them");
+            }
+            cockpit.selectKind(CalibrationMap.Kind.VE);
         }
         private void checkCanvasSizing(Scene scene) {
             var canvas=(javafx.scene.canvas.Canvas)scene.lookup("#dashboard-map-canvas");
@@ -252,12 +320,18 @@ public final class ConsoleUiChecks {
             Button edit=(Button)stage.getScene().lookup("#dashboard-edit-map");
             check(!edit.isDisabled(),"Loaded map in an idle identified session can be edited");
             edit.fire();
-            check(chosen.get().map()==map&&chosen.get().row()==0&&chosen.get().column()==0,
+            check(chosen.get().map()==map&&chosen.get().row()==0&&chosen.get().column()==0&&chosen.get().fromEcu(),
                 "Edit button opens the actual ECU snapshot");
             chosen.set(null);
             cockpit.selectKind(CalibrationMap.Kind.IGNITION);
-            check(edit.isDisabled(),"Unloaded ignition table cannot open a stale VE snapshot");
+            edit.fire();
+            check(chosen.get()!=null&&!chosen.get().fromEcu()&&chosen.get().map().kind()==CalibrationMap.Kind.IGNITION,
+                "Reading VE preserves the independent local ignition reference");
+            chosen.set(null);
             cockpit.selectKind(CalibrationMap.Kind.VE);
+            edit.fire();
+            check(chosen.get().map()==map&&chosen.get().fromEcu(),"Switching tables preserves the actual ECU map");
+            chosen.set(null);
             var canvas=(javafx.scene.canvas.Canvas)stage.getScene().lookup("#dashboard-map-canvas");
             double x=72+15.5*(canvas.getWidth()-80)/16;
             double y=38+15.5*(canvas.getHeight()-46)/16;
@@ -282,12 +356,14 @@ public final class ConsoleUiChecks {
             check(CalibrationViewer.closeAll(),"Opening a cell does not modify or write the map");
             cockpit.setConnection(null,false,false);
             cockpit.setConnection(identity,true,true);
-            check(edit.isDisabled(),"Reconnection requires a fresh map read");
+            edit.fire();
+            check(!chosen.get().fromEcu()&&chosen.get().map()!=map,"Reconnection restores a labelled local base rather than a stale ECU map");
             cockpit.showMap(map);
             var other=new io.tunuino.protocol.DeviceIdentity(identity.family(),identity.mcuSeries(),7,0,2,0,15,
                 "1112131415161718191a1b1c");
             cockpit.setConnection(other,true,true);
-            check(edit.isDisabled(),"A different ECU never inherits the previous maps");
+            edit.fire();
+            check(!chosen.get().fromEcu()&&chosen.get().map()!=map,"A different ECU never inherits the previous maps");
             cockpit.setConnection(null,false,false);
             cockpit.showMap(map); // Restore only the offline screenshot fixture.
         }
@@ -489,7 +565,17 @@ public final class ConsoleUiChecks {
             ((Button)scene.lookup("#features-reference")).fire();check(new io.tunuino.calibration.FeatureConfiguration(featuresPane.candidate().bytes()).flags()==0,"Reference disables optional strategies");
             var featuresTabs=(javafx.scene.control.TabPane)scene.lookup("#features-tabs");check(featuresTabs.getTabs().size()==7,"Dedicated sensor, voltage, lambda, transient, limit, flex and cylinder groups");
             featuresTabs.getSelectionModel().select(1);scene.getRoot().applyCss();scene.getRoot().layout();
-            var dead=(javafx.scene.control.TextField)scene.lookup("#feature-field-DEAD1");dead.setText("1,234");check(new io.tunuino.calibration.FeatureConfiguration(featuresPane.candidate().bytes()).raw(io.tunuino.calibration.FeatureConfiguration.Field.DEAD1)==1234,"GUI latency stored in exact ms");
+            @SuppressWarnings("unchecked") var deadTable=(javafx.scene.control.TableView<Integer>)scene.lookup("#injector-dead-time-table");
+            check(deadTable.getItems().size()==3&&deadTable.getColumns().get(1).getText().equals("Dead time (ms)"),"Dead time is a compact three-voltage table using the common English name");
+            @SuppressWarnings("unchecked") var deadColumn=(javafx.scene.control.TableColumn<Integer,String>)deadTable.getColumns().get(1);
+            check(deadColumn.getCellData(0).equals("1.5")&&deadColumn.getCellData(1).equals("1")&&deadColumn.getCellData(2).equals("0.7"),"The table starts with visible generic reference values in milliseconds");
+            deadColumn.getOnEditCommit().handle(new javafx.scene.control.TableColumn.CellEditEvent<>(deadTable,
+                new javafx.scene.control.TablePosition<>(deadTable,0,deadColumn),javafx.scene.control.TableColumn.editCommitEvent(),"1,234"));
+            check(new io.tunuino.calibration.FeatureConfiguration(featuresPane.candidate().bytes()).raw(io.tunuino.calibration.FeatureConfiguration.Field.DEAD1)==1234,"Dead time table stores exact decimal milliseconds");
+            byte[] beforeLanguage=featuresPane.candidate().bytes();ConsoleLanguage.use(ConsoleLanguage.Language.ENGLISH,false);
+            check(deadTable.getColumns().get(0).getText().equals("Battery voltage (V)"),"English also covers calibration table headers");
+            check(java.util.Arrays.equals(beforeLanguage,featuresPane.candidate().bytes()),"Language changes never edit configuration bytes or enable features");
+            snapshot(scene,"console-english-dead-time");ConsoleLanguage.use(ConsoleLanguage.Language.PORTUGUESE,false);
             auditRouting(featuresPane,"fuel-protections");
             for(int tab=0;tab<7;tab++){featuresTabs.getSelectionModel().select(tab);scene.getRoot().applyCss();scene.getRoot().layout();snapshot(scene,"console-features-"+tab);}
             ((ToggleButton)scene.lookup("#navigate-14")).fire();scene.getRoot().applyCss();scene.getRoot().layout();

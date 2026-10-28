@@ -17,6 +17,21 @@ public final class SensorCalibrationChecks {
         check(SensorCalibration.measured(input,3,true)==114,"CLT uses the selected temperature input, not a voltage input");
         reject(()->SensorCalibration.measured(input,0,false));reject(()->SensorCalibration.measured(input,5,true));
         reject(()->SensorCalibration.measured(new IoClient.Inputs(input.sample(),0,3300,1,0,0,adc),2,false));
+        var burst=new java.util.ArrayList<IoClient.Inputs>();
+        for(int i=0;i<8;i++){int[] raw=adc.clone();raw[1]=1000+i;burst.add(new IoClient.Inputs(new LogSample(i*40,0,0,0,0,0),1,3300,7,0,0,raw));}
+        check(SensorCalibration.stable(burst,2,false).adc()==1004,"Stable capture uses selected channel median, not full-scale voltage");
+        reject(()->SensorCalibration.stable(burst.subList(0,7),2,false));
+        var changed=new java.util.ArrayList<>(burst);var last=burst.get(7);
+        changed.set(7,new IoClient.Inputs(last.sample(),1,3300,8,0,0,last.raw()));reject(()->SensorCalibration.stable(changed,2,false));
+        changed.set(7,burst.get(0));reject(()->SensorCalibration.stable(changed,2,false));
+        int[] noisy=last.raw();noisy[1]=1100;changed.set(7,new IoClient.Inputs(last.sample(),1,3300,7,0,0,noisy));reject(()->SensorCalibration.stable(changed,2,false));
+        noisy[1]=4095;changed.set(7,new IoClient.Inputs(last.sample(),1,3300,7,0,0,noisy));reject(()->SensorCalibration.stable(changed,2,false));
+        var reverse=SensorCalibration.curve(new int[]{3200,800},new double[]{0,100},true);
+        check(reverse[0].adc()==3200&&reverse[1].adc()==800,"Guided TPS retains decreasing sensor polarity");
+        var measuredNtc=SensorCalibration.curve(new int[]{3000,2000,1000},new double[]{20,60,100},false);
+        check(measuredNtc[0].adc()==1000&&measuredNtc[0].value()==100,"Measured NTC points are sorted with their known physical values");
+        reject(()->SensorCalibration.curve(new int[]{1000,1010},new double[]{0,100},true));
+        reject(()->SensorCalibration.curve(new int[]{1000,2000,3000},new double[]{20,60,40},false));
         var curve=SensorCalibration.ntc(10000,3950,10000,-20,25,120);
         check(curve[1].adc()==2048&&curve[1].temperature()==25,"Equal resistors produce half scale at the rated temperature");
         check(curve[0].temperature()==120&&curve[2].temperature()==-20,"NTC curve is sorted by ADC with decreasing temperature");
