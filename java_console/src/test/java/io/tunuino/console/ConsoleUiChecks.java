@@ -149,11 +149,20 @@ public final class ConsoleUiChecks {
             double width=((javafx.scene.layout.Region)center.getItems().get(0)).getWidth();
             double height=((javafx.scene.layout.Region)tables.getItems().get(0)).getHeight();
             center.setDividerPositions(.66);lower.setDividerPositions(.50);tables.setDividerPositions(.70);
-            scene.getRoot().layout();
-            check(((javafx.scene.layout.Region)center.getItems().get(0)).getWidth()<width-40,
-                "Map and engine state divider changes the table width");
-            check(((javafx.scene.layout.Region)tables.getItems().get(0)).getHeight()>height+10,
-                "Table divider changes the allocated height");
+            // SplitPane skins apply divider changes on the next layout pulse.
+            later(()->checkResizedPanes(stage,width,height));
+        }
+        private void checkResizedPanes(Stage stage,double width,double height) throws Exception {
+            Scene scene=stage.getScene();
+            var center=(javafx.scene.control.SplitPane)scene.lookup("#dashboard-center-split");
+            var lower=(javafx.scene.control.SplitPane)scene.lookup("#dashboard-lower-split");
+            var tables=(javafx.scene.control.SplitPane)scene.lookup("#dashboard-tables-split");
+            double resizedWidth=((javafx.scene.layout.Region)center.getItems().get(0)).getWidth();
+            double resizedHeight=((javafx.scene.layout.Region)tables.getItems().get(0)).getHeight();
+            check(resizedWidth<width-40,
+                "Map and engine state divider changes the table width: "+width+" -> "+resizedWidth);
+            check(resizedHeight>height+10,
+                "Table divider changes the allocated height: "+height+" -> "+resizedHeight);
             center.setDividerPositions(.80);lower.setDividerPositions(.63);tables.setDividerPositions(.60);
             stage.setWidth(980);stage.setHeight(720);
             later(()->checkCompactDashboard(stage));
