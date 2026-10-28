@@ -98,6 +98,10 @@ int main(void) {
         }
         tunuino_link_status state = tunuino_link_feed(&link, receive + offset,
             received - offset, now, &consumed);
+        /* Persistence can block while flash is busy. The link starts TX from
+         * the device clock after dispatch; polling with the pre-save time
+         * would be a clock rollback and would reset an otherwise healthy USB. */
+        now = board_millis();
         offset += consumed;
         if (state != TUNUINO_LINK_RECEIVING && state != TUNUINO_LINK_RESPONDING) goto recover;
       }

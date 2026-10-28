@@ -29,3 +29,8 @@
 - Reunir calibrações em Sensores e calibrações. Assistentes preparam a edição; pontos medidos vêm do ADC real da ligação selecionada. Preservar modos, proteções e restantes calibrações ao guardar apenas um sensor.
 - Modelos NTC indicam R25, Beta e pull-up; não os apresentar como calibrações universais de um motor ou sensor sem identificação.
 - Pesquisas automáticas de portas/dispositivos são tarefas de descoberta, não operações exclusivas: não alternar os controlos entre ativo/inativo nem reconstruir listas inalteradas. Suspender DFU com COM ocupada ou página não apresentada.
+
+## Gravação e relógio USB
+
+- Depois de um dispatch que possa gravar na flash, atualizar o instante do ciclo USB antes de consultar/transmitir a resposta. O link começa o prazo de transmissão pelo relógio posterior ao dispatch; reutilizar o instante anterior causa um falso recuo do relógio e reinicia a ligação.
+- Manter os testes do main real com persistência demorada, confirmação física de transmissão, falha de persistência e isolamento da sessão. Não desativar a deteção de relógio ou de prazo para mascarar uma falha.

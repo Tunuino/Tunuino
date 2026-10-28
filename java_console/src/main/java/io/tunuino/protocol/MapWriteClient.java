@@ -38,18 +38,21 @@ public final class MapWriteClient {
         long deadline=System.nanoTime()+timeout.toNanos();
         IoClient.Inputs inputs=IoClient.read(session,identity,remaining(deadline));
         if((inputs.status()&2)!=0)throw new IOException("Existem alterações pendentes na ECU; aplica-as ou descarta-as antes de enviar o mapa");
-        int page=map.kind()==CalibrationMap.Kind.VE?2:3;boolean committed=false;
+        int page=map.kind()==CalibrationMap.Kind.VE?2:3;boolean burnAttempted=false;String phase="envio dos blocos do mapa";
         try {
             for(int offset=0;offset<bytes.length;){int count=Math.min(64,bytes.length-offset);
                 ByteBuffer request=ByteBuffer.allocate(7+count).put((byte)'w').putShort((short)page).putShort((short)offset).putShort((short)count).put(bytes,offset,count);
                 accepted(session.exchange(request.array(),remaining(deadline)));offset+=count;
             }
-            accepted(session.exchange(new byte[]{'b',0,(byte)page},remaining(deadline)));committed=true;
+            phase="confirmação da gravação na flash";burnAttempted=true;
+            accepted(session.exchange(new byte[]{'b',0,(byte)page},remaining(deadline)));
+            phase="releitura do mapa guardado";
             CalibrationMap verified=MapReadClient.read(session,identity,map.kind(),remaining(deadline));
             if(!Arrays.equals(verified.encode(),map.encode()))throw new IOException("O mapa lido após a gravação não corresponde ao enviado");
         } catch(IOException error) {
-            if(!committed&&session.isOpen())try{accepted(session.exchange(new byte[]{'D'},Duration.ofMillis(500)));}catch(IOException reset){error.addSuppressed(reset);}
-            throw error;
+            if(!burnAttempted&&session.isOpen())try{accepted(session.exchange(new byte[]{'D'},Duration.ofMillis(500)));}catch(IOException reset){error.addSuppressed(reset);}
+            throw new IOException("Falha na "+phase+": "+error.getMessage()
+                +(burnAttempted?". Confirma o mapa por nova leitura antes de repetir a gravação.":""),error);
         }
     }
 }

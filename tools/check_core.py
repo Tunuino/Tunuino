@@ -239,7 +239,7 @@ def main():
         chibios_exe = work / ("chibios-bench-check.exe" if os.name == "nt" else "chibios-bench-check")
         run(flags + chibios_include + core_sources + ["unit_tests/test_chibios_bench.c",
             status_source, str(chibios_object), "-lm", "-o", str(chibios_exe)])
-        for mode in ("normal", "tunerstudio", "timeout", "corrupt", "disconnect", "reconfigure", "recover"):
+        for mode in ("normal", "tunerstudio", "timeout", "corrupt", "disconnect", "reconfigure", "recover", "save2", "save250", "save1500", "save4500", "savefail"):
             print(run([str(chibios_exe), mode], timeout=10))
         peer_exe = work / ("link-peer.exe" if os.name == "nt" else "link-peer")
         run(flags + ["firmware/src/frame.c", "firmware/src/identity.c", "firmware/src/live_data.c",

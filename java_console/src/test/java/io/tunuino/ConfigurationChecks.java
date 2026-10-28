@@ -69,6 +69,14 @@ public final class ConfigurationChecks {
             catch(IOException expected){check(expected.getMessage().contains("nova leitura"),"Uncertain burn requires readback before retry");}
             var failed=ConfigurationClient.read(session,identity,TIMEOUT);
             check(failed.validation().dirty()&&!failed.validation().persisted()&&failed.validation().generation()==1,"Failed burn preserves staged data and active generation");
+        }
+        try(var session=new PacketSession(new ProcessSerialChannel(List.of(args[0],"--save-fails")))){
+            var identity=IdentityClient.identify(session,DeviceIdentity.Family.PROTEUS,TIMEOUT);
+            var map=MapReadClient.read(session,identity,io.tunuino.calibration.CalibrationMap.Kind.VE,TIMEOUT).withCell(0,0,"40");
+            try{MapWriteClient.write(session,identity,map,TIMEOUT);throw new AssertionError("Map persistence failure reported as success");}
+            catch(IOException expected){check(expected.getMessage().contains("confirmação da gravação na flash")&&expected.getMessage().contains("nova leitura"),"Map error identifies the failed phase and uncertain commit");}
+            var failed=ConfigurationClient.read(session,identity,TIMEOUT);
+            check(failed.validation().dirty()&&!failed.validation().persisted()&&failed.validation().generation()==1,"Uncertain map burn preserves staged data without discard or automatic retry");
         }finally{try(var files=Files.list(directory)){for(Path p:files.toList())Files.delete(p);}Files.delete(directory);}
         System.out.println("Configuration C/Java: exact units, backups/CRC, field diagnostics, pending/stale protection, stage/burn/readback, map preservation and uncertain persistence failure passed. Host model only.");
     }
