@@ -29,7 +29,7 @@ public final class VeAutotuneClient {
         for(int i=0;i<original.columns();i++)if(original.rpmAt(i)!=proposed.rpmAt(i))throw new IllegalArgumentException("Eixo RPM alterado");
         for(int r=0;r<original.rows();r++){
             if(original.loadKpaAt(r)!=proposed.loadKpaAt(r))throw new IllegalArgumentException("Eixo MAP alterado");
-            for(int c=0;c<original.columns();c++)if(Math.abs(proposed.cell(r,c)-original.cell(r,c))>Math.max(.005,original.cell(r,c)*.05)+.005)
+            for(int c=0;c<original.columns();c++)if(Math.abs(proposed.cell(r,c)-original.cell(r,c))>original.cell(r,c)*.05+1e-9)
                 throw new IllegalArgumentException("Proposta excede o limite de 5% por sessão");
         }
         MapWriteClient.encode(proposed);

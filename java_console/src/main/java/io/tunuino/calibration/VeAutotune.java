@@ -92,6 +92,10 @@ public final class VeAutotune {
             int n=count[row][col];if(n<12||Math.sqrt(m2[row][col]/(n-1))>.03||base.cell(row,col)<=0)continue;
             double correction=Math.max(1-limit,Math.min(1+limit,Math.exp(mean[row][col])));
             double after=Math.round(base.cell(row,col)*correction*100)/100.0;
+            // Quantization may otherwise exceed the percentage on very small cells.
+            double upper=base.cell(row,col)*(1+limit),lower=base.cell(row,col)*(1-limit);
+            if(after>upper)after=Math.floor(upper*100+1e-9)/100.0;
+            if(after<lower)after=Math.ceil(lower*100-1e-9)/100.0;
             if(after<=0||after>300||Math.abs(after-base.cell(row,col))<.005)continue;
             result.add(new Cell(row,col,n,base.cell(row,col),after,(after/base.cell(row,col)-1)*100));
         }

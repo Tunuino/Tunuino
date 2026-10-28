@@ -22,6 +22,12 @@ public final class VeAutotuneChecks {
         for(int r=0;r<16;r++)for(int c=0;c<16;c++)if(BASE.cell(r,c)!=proposed.cell(r,c))changed++;
         check(changed==1&&BASE.cell(cell.row(),cell.column())==80,"Proposals preserve original immutable map and all unvisited cells");
         MapWriteClient.encode(proposed); // Native centipercent precision, no upload-time rounding failure.
+        for(int limit:new int[]{2,5})for(double measured:new double[]{.90,1.10}){
+            CalibrationMap small=BASE.withCell(cell.row(),cell.column(),limit==2?"0.26":"0.14");
+            var quantized=new VeAutotune(small,1,new FuelCorrections(new byte[25]),1,limit);
+            for(int i=1;i<=120;i++)quantized.accept(frame(i*100,measured,0,0,0,1,2,15,10));
+            check(quantized.cells().isEmpty(),"Native rounding never exceeds the selected correction even on very small VE cells");
+        }
         var pi=learner(5);for(int i=1;i<=120;i++)pi.accept(frame(i*100,1,0,8,1000,1,2,15,10));
         check(pi.cells().get(0).after()==84,"Short-term PI correction is included even when measured lambda reaches target");
         var target=learner(5);for(int i=1;i<=120;i++)target.accept(frame(i*100,.99,4,0,0,1,2,15,10));
