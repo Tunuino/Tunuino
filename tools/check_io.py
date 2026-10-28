@@ -30,9 +30,9 @@ def main():
     assert section.index('nPages = 4') < section.index('blockingFactor = 100')
     assert '[UiDialogs]' in text and '[UserDefined]' not in text
     ini=configparser.ConfigParser(interpolation=None,strict=False);ini.read_string('[General]\n'+text)
-    assert ini['TunerStudio'].getint('iniVersion')==11
+    assert ini['TunerStudio'].getint('iniVersion')==12
     assert '128, [0:1]' in ini['Constants']['engineProfileFormat']
-    assert '156, [0:1]' in ini['Constants']['engineOperation']
+    assert '156, [0:2]' in ini['Constants']['engineOperation']
     import re
     feature_fields=json.loads((ROOT/'firmware/tunerstudio/feature_fields.json').read_text())
     java=(ROOT/'java_console/src/main/java/io/tunuino/calibration/FeatureConfiguration.java').read_text()

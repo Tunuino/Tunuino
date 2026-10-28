@@ -67,7 +67,7 @@ def main():
     installer = validate_installer(Path("build/installer"), commit, run_id)
     shutil.copy2(installer, output / SETUP_NAME)
     repo = os.environ["GITHUB_REPOSITORY"]
-    notes = f"""## Tunuino — aquisição da fase de cames
+    notes = f"""## Tunuino — bobinas duplas e projeto completo da ECU
 
 Console Windows x64, firmware **Proteus v0.7 / STM32F427** e **INI TunerStudio**, produzidos a partir do mesmo commit.
 
@@ -88,7 +88,11 @@ O ZIP portátil mantém `console/`, `firmware/`, `kit-manifest.json`, `START-HER
 
 **Correção ao guardar na ECU:** o ciclo USB volta a ler o relógio depois de executar um pedido que pode gravar na flash. A transmissão já iniciava o seu prazo após a gravação; o ciclo principal reutilizava o instante anterior e provocava um erro de relógio, seguido de reinício USB. O teste do ciclo real reproduziu o erro antes da correção e passou com persistência simulada de 2, 250, 1500 e 4500 ms, incluindo falha de persistência sem falsa confirmação. A Console identifica a fase da falha e mantém o estado incerto para releitura, sem repetir automaticamente a gravação. **É necessário gravar na Proteus o firmware incluído neste Bundle para aplicar a correção.** [Detalhes e atualização](https://github.com/Tunuino/Tunuino_documents/blob/main/correcao-gravacao-usb.md).
 
-**Modos reais do motor:** sequencial 720° mantém o perfil antigo; semi-sequencial e batch simultâneo 360° usam perfil formato 2, com wasted COP e uma saída independente por injetor/bobina. Funcionam com referência de cambota sem fase de cames; não há fallback automático do sequencial. O combustível efetivo divide-se pelos dois eventos e o tempo morto é somado a cada pulso, com limites de duty por volta e as mesmas falhas retidas. Novos modos exigem gravar o firmware incluído. Não suportam saídas de bobina partilhadas por pares.
+**Bobinas duplas:** novos modos semi-sequencial e batch com uma saída IGN por par. O perfil formato 3 exige dois cilindros a 360° por bobina e recusa canais/ajustes de avanço incompatíveis. Cada bobina recebe um só dwell por evento. Listas de funções, propostas de contacto e testes mostram o par e mantêm os injetores independentes. Atualizar o firmware incluído antes de usar o formato 3.
+
+**Projeto completo:** ficheiro `.tnproj` com motor, sensores, roda, VE, ignição, ralenti, turbo e proteções, validado por alvo/formato/CRC. Na Console, Ficheiro → ECU Project ou Configuração do motor → Projeto completo. Abrir/guardar ficheiros não envia comandos. Restaurar exige saídas desarmadas, leitura atual da mesma ECU, cópia anterior criada antes de preparar valores, validação/releitura das quatro páginas, uma única gravação na flash e releitura completa. Falha ou confirmação incerta de Burn orienta para nova leitura, sem repetição automática. Não arma saídas na sessão. [Utilização, testes e limites](https://github.com/Tunuino/Tunuino_documents/blob/main/bobinas-projeto-completo.md).
+
+**Modos reais do motor:** sequencial 720° mantém o perfil antigo; semi-sequencial e batch simultâneo 360° usam perfil formato 2, com wasted COP e uma saída independente por injetor/bobina. Funcionam com referência de cambota sem fase de cames; não há fallback automático do sequencial. O combustível efetivo divide-se pelos dois eventos e o tempo morto é somado a cada pulso, com limites de duty por volta e as mesmas falhas retidas. Novos modos exigem gravar o firmware incluído. Modos adicionais de perfil formato 3 suportam bobinas partilhadas por pares a 360°.
 
 **Autotune VE assistido:** lê base/calibração da ECU, recolhe amostras USB com lambda wideband e TPS válidos, exclui arranque/aquecimento/cortes/transientes, considera alvo lambda e correção PI, e propõe alterações limitadas a ±2% ou ±5% por sessão. Não altera VE durante a recolha. Guardar exige terminar monitorização e desarmar, recusa base/geração alterada, guarda cópia anterior e verifica a escrita por releitura. Não aprende com flex fuel ou trims individuais ativos. Os dados de teste continuam apenas nos testes/ferramentas; não há medições fictícias na aplicação. [Funções, utilização e limites](https://github.com/Tunuino/Tunuino_documents/blob/main/modos-360-autotune.md).
 

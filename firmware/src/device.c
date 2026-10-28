@@ -62,6 +62,10 @@ uint32_t tunuino_device_validation_errors(const uint8_t *p, size_t length) {
                 ||((f.flags&TUNUINO_FEATURE_LAMBDA)&&!p[7])
                 ||((f.flags&TUNUINO_FEATURE_LIMIT)&&f.limit_cut>=tunuino_device_u16(p+96))
                 ||((f.flags&TUNUINO_FEATURE_IAT)&&f.iat_channel==p[8]))errors|=TUNUINO_CONFIG_AUX;
+            if(have&&profile.operation>=3&&(f.flags&TUNUINO_FEATURE_TRIMS)){
+                for(unsigned i=0;i<profile.cylinders;++i)for(unsigned j=0;j<i;++j)
+                    if(profile.cylinder[i].coil==profile.cylinder[j].coil&&f.spark_trim[i]!=f.spark_trim[j])errors|=TUNUINO_CONFIG_AUX;
+            }
             uint32_t analog=0;const uint8_t existing[3]={p[6],p[7],c.tps_channel};
             for(unsigned i=0;i<3;++i)if(existing[i])analog|=UINT32_C(1)<<(existing[i]-1);
             const uint8_t channels[3]={f.voltage_channel,f.launch_channel,f.flex_channel};

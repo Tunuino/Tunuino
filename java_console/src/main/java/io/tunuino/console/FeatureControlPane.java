@@ -114,6 +114,7 @@ final class FeatureControlPane extends VBox {
             if(validation.generation()==next)snapshot=new AuxControlClient.Snapshot(snapshot.configuration(),validation,snapshot.pageCrc());
         }controls();
     }
+    void invalidateProject(){snapshot=null;result.setText("Projeto restaurado. Lê novamente esta secção antes de guardar; a edição local foi mantida.");controls();}
     void availability(DeviceIdentity d,boolean connected,boolean blocked,boolean engineArmed){if(!Objects.equals(identity,d)||!connected){identity=d;snapshot=null;}available=connected&&d!=null&&!blocked;armed=engineArmed;controls();}
     private void controls(){boolean edit=!busy&&!armed;read.setDisable(!available||busy);save.setDisable(!available||busy||armed||snapshot==null);base.setDisable(!edit);reference.setDisable(!edit);open.setDisable(!edit);backup.setDisable(busy);fields.values().forEach(c->c.setDisable(!edit));options.values().forEach(c->c.setDisable(!edit));}
 }

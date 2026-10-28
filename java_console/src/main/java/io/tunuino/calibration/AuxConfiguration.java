@@ -45,6 +45,12 @@ public final class AuxConfiguration {
         if(bytes[0]==0){for(byte value:bytes)if(value!=0){errors.add("Formato de ralenti/turbo inválido");break;}return errors;}
         if(bytes[0]!=1||idleMode()>2||boostMode()>2||idleChannel()>16||boostChannel()>16||tpsChannel()>11)errors.add("Modo ou canal de ralenti/turbo inválido");
         errors.addAll(new FeatureConfiguration(bytes).errors());
+        if(EngineProfile.paired(engineProfile)&&(ByteBuffer.wrap(bytes).getShort(70)&1024)!=0){
+            int count=Math.min(12,engineProfile[1]&255);
+            for(int i=0;i<count;i++)for(int j=0;j<i;j++)
+                if(engineProfile[33+8*i]==engineProfile[33+8*j]&&ByteBuffer.wrap(bytes).getShort(216+2*i)!=ByteBuffer.wrap(bytes).getShort(216+2*j))
+                    errors.add("Os cilindros da mesma bobina dupla exigem o mesmo ajuste de avanço");
+        }
         for(var f:Field.values())if(raw(f)<f.min||raw(f)>f.max)errors.add(f.label+": fora dos limites");
         if(raw(Field.TPS_CLOSED)==raw(Field.TPS_OPEN))errors.add("Calibrações TPS fechado/aberto devem ser diferentes");
         if(raw(Field.IDLE_MIN)>raw(Field.IDLE_MAX)||raw(Field.BOOST_MIN)>raw(Field.BOOST_MAX)||raw(Field.BOOST_BASE)<raw(Field.BOOST_MIN)||raw(Field.BOOST_BASE)>raw(Field.BOOST_MAX))errors.add("Limites de duty incompatíveis");
@@ -54,7 +60,7 @@ public final class AuxConfiguration {
         for(int i=0;i<3;i++)if(raw(targets[i])>=raw(Field.IDLE_RPM_MAX)||raw(targets[i])<=raw(Field.CRANK_RPM)||raw(duties[i])<raw(Field.IDLE_MIN)||raw(duties[i])>raw(Field.IDLE_MAX))errors.add("Curva de ralenti fora dos limites");
         if(raw(Field.BOOST_TARGET)>=raw(Field.BOOST_CUT))errors.add("Corte de pressão deve ser superior ao alvo");
         long used=0;
-        if(engineProfile!=null&&engineProfile.length==128&&engineProfile[0]==1){
+        if(engineProfile!=null&&engineProfile.length==128&&engineProfile[0]>=1&&engineProfile[0]<=3){
             for(int i=0;i<(engineProfile[1]&255)&&i<12;i++)used|=1L<<(engineProfile[32+8*i]&255);
             for(int i=22;i<=24;i++)if((engineProfile[i]&255)>0&&(engineProfile[i]&255)<=16)used|=1L<<((engineProfile[i]&255)-1);
         }

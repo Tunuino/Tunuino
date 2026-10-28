@@ -67,7 +67,7 @@ final class ConsoleShell extends BorderPane {
         // Hardware selection stays available beside the USB controls.
         if(connectionControls instanceof FlowPane bar)bar.getChildren().add(0,hardware);
         javafx.scene.control.MenuBar menus=new javafx.scene.control.MenuBar();menus.setId("console-menu-bar");
-        String[][] entries={{"Ficheiro","Tuning","Data Log"},{"ECU","Inputs / Outputs","Engine","Output Tests"},
+        String[][] entries={{"Ficheiro","ECU Project","Tuning","Data Log"},{"ECU","Inputs / Outputs","Engine","Output Tests"},
             {"Ver","Dashboard","Fuel Tables","Ignition Tables"},{"Ferramentas","Firmware","Diagnostics"},{"Ajuda","Settings"}};
         for(String[] entry:entries){var menuEntry=new javafx.scene.control.Menu(entry[0]);for(int i=1;i<entry.length;i++){String key=entry[i];var item=new javafx.scene.control.MenuItem(key);item.setOnAction(e->select(key));menuEntry.getItems().add(item);}menus.getMenus().add(menuEntry);}
         VBox header=new VBox(menus,masthead);header.getStyleClass().add("app-header");setTop(header);
@@ -128,7 +128,7 @@ final class ConsoleShell extends BorderPane {
         for(var button:navigation.values())if(button.getParent() instanceof javafx.scene.layout.Pane parent)parent.getChildren().remove(button);
         navItems.getChildren().clear();
         for(String key:java.util.List.of("Dashboard","Tuning","Fuel Tables","Ignition Tables","Autotune","Data Log","Inputs / Outputs","Diagnostics","Firmware","Settings"))navItems.getChildren().add(navigation.get(key));
-        VBox extra=new VBox(2);for(String key:java.util.List.of("Engine","IO Functions","Aux Control","Fuel Features","Output Tests"))extra.getChildren().add(navigation.get(key));
+        VBox extra=new VBox(2);for(String key:java.util.List.of("Engine","IO Functions","Aux Control","Fuel Features","Output Tests","ECU Project"))extra.getChildren().add(navigation.get(key));
         var group=new javafx.scene.control.TitledPane("Configuração do motor",extra);group.getStyleClass().add("navigation-group");group.setExpanded(false);navItems.getChildren().add(group);
     }
     void select(String key) {

@@ -1,3 +1,5 @@
+> Extensão de bobinas duplas: perfil formato 3 e modos 3/4. Os dois descritores do par partilham IGN e os PMS têm de diferir exatamente 360°. Os formatos 1 e 2 permanecem válidos. Projeto completo das quatro páginas: [engine-projects.md](engine-projects.md).
+
 > Modos adicionais: perfil formato 2, byte relativo 28 = 1 semi-sequencial 360° ou 2 batch simultâneo 360°, ambos wasted COP. O formato 1 mantém todos os bytes 28–31 a zero. No formato 2 os bytes 29–31 continuam a zero. Não há alteração do tamanho da página ou do registo flash.
 
 > Extensão de ralenti/turbo e migração do registo para 1664 bytes: [idle-boost.md](idle-boost.md). As três primeiras páginas conservam os offsets descritos abaixo.
@@ -105,3 +107,11 @@ Cada injetor e cada bobina conserva uma saída independente. Em semi-sequencial,
 O combustível efetivo corrigido por ciclo 720° é dividido por dois, com arredondamento de uma unidade do temporizador; o tempo morto é somado depois, a cada evento. Ajustes de cilindro são aplicados à parte efetiva. O limite de ocupação passa de 80% de duas voltas para 80% de uma volta. O agendador usa o mesmo TIM2/GPT5, relógio e falhas retidas. Ausência/mudança de fase de cames não para estes modos; perda de cambota, relógio atrasado, calibração inválida e prazos continuam a parar.
 
 O modo sequencial não muda automaticamente para 360° após perder cames. Alterar o modo exige guardar e ativar explicitamente o perfil desarmado. O arranque autónomo usa a mesma política anterior. Firmware/Console antigos rejeitam o formato 2; atualizar o Bundle completo antes de o selecionar.
+
+## Bobinas duplas por pares
+
+O formato 3 usa operação 3 para semi-sequencial e 4 para batch simultâneo, ambos com ignição a cada 360°. Apenas estes perfis permitem repetir um canal IGN. Exigem número par de cilindros, exatamente dois descritores por canal partilhado e PMS separados por 36000 centigraus. Injetores continuam independentes e não podem repetir canais. Perfis formato 2 não aceitam os novos modos; firmware antigo não os interpreta como COP.
+
+Os dois alvos de ignição coincidem módulo 360° e o estado de agendamento por canal impede um segundo dwell para o mesmo evento. Correções de avanço de cilindros do mesmo par têm de ser iguais: a validação global recusa diferenças e o controlador verifica novamente antes de agendar. Ajustes de combustível continuam independentes. A perda de cames não altera estes modos configurados para cambota; perda de cambota, limites de pulso/duty, prazo e STOP mantêm os mesmos cortes.
+
+A Console propõe canais pelo ângulo dos pares do modelo escolhido; não altera automaticamente a cablagem guardada ao selecionar um modo. O quadro de I/O apresenta uma função por bobina e mover essa função atualiza os dois descritores. O menu de testes apresenta uma única opção por canal físico, identificada pelos cilindros do par.

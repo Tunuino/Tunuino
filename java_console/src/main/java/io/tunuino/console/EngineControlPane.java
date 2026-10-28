@@ -59,9 +59,11 @@ final class EngineControlPane extends VBox {
         grids.get("Motor").addRow(0,new Label("Cilindros"),count);
         operation.getItems().addAll("Sequencial 720° · com fase de cames",
             "Semi-sequencial 360° + wasted COP · só cambota",
-            "Batch simultâneo 360° + wasted COP · só cambota");
+            "Batch simultâneo 360° + wasted COP · só cambota",
+            "Semi-sequencial 360° + bobinas duplas",
+            "Batch simultâneo 360° + bobinas duplas");
         operation.getSelectionModel().select(0);operation.setId("engine-operation-mode");
-        operation.setOnAction(event->{acknowledge.setSelected(false);controls();});
+        operation.setOnAction(event->{acknowledge.setSelected(false);modeRecommendations();controls();});
         grids.get("Motor").addRow(1,new Label("Modo de funcionamento"),operation);
         presets.getItems().addAll(io.tunuino.calibration.EnginePreset.choices());presets.getSelectionModel().select(3);
         presets.setId("engine-preset");applyPreset.setId("engine-preset-apply");
@@ -197,12 +199,15 @@ final class EngineControlPane extends VBox {
     void setting(String name,String value){selectors.get(name).setValue(value);fields.get(name).setText(value);}
     private void applyPreset(){
         var preset=presets.getValue();if(preset==null)return;
+        if(operation.getSelectionModel().getSelectedIndex()>=3&&preset.cylinders()%2!=0){result.setText("Bobinas duplas exigem pares de cilindros separados por 360°. Escolhe um modelo com número par.");return;}
         count.setValue(preset.cylinders());
         for(int i=0;i<12;i++)for(int j=0;j<3;j++){if(j<2)cylinderSelectors.get(i+"-"+j).setValue("");cylinders[i][j].clear();}
         for(int i=0;i<preset.cylinders();i++){
-            cylinderSelectors.get(i+"-0").setValue(Integer.toString(i+1));cylinderSelectors.get(i+"-1").setValue(Integer.toString(i+1));
+            cylinderSelectors.get(i+"-0").setValue(Integer.toString(i+1));int coil=operation.getSelectionModel().getSelectedIndex()>=3?preset.firingOrder().indexOf(i+1)%(preset.cylinders()/2)+1:i+1;
+            cylinderSelectors.get(i+"-1").setValue(Integer.toString(coil));
             cylinders[i][2].setText(BigDecimal.valueOf(preset.tdcCentidegrees(i+1),2).stripTrailingZeros().toPlainString());
         }
+        modeRecommendations();
         setting("pump","10");
         setting("fan","11");
         setting("relay","12");
@@ -210,6 +215,19 @@ final class EngineControlPane extends VBox {
             +" · bomba: Preto 35/20 · ventoinha: Preto 35/9 · relé: Preto 35/21");
         acknowledge.setSelected(false);
         result.setText("Modelo aplicado apenas à edição. Completa ReqFuel, dwell, tempo morto e sincronização; confirma LS/IGN antes de enviar à ECU.");controls();
+    }
+    private void modeRecommendations(){
+        boolean paired=operation.getSelectionModel().getSelectedIndex()>=3;
+        java.util.List<Integer> phases=new java.util.ArrayList<>();
+        if(paired&&count.getValue()!=null)try{
+            for(int i=0;i<count.getValue();i++){int phase=number(cylinders[i][2].getText(),2,0,71999,"PMS")%36000;if(!phases.contains(phase))phases.add(phase);}
+            phases.sort(Integer::compareTo);
+        }catch(IllegalArgumentException incomplete){phases.clear();}
+        for(int i=0;i<12;i++){
+            var choice=cylinderSelectors.get(i+"-1");if(choice==null)continue;int channel=i+1;
+            if(paired&&!phases.isEmpty()&&count.getValue()!=null&&i<count.getValue())channel=phases.indexOf(number(cylinders[i][2].getText(),2,0,71999,"PMS")%36000)+1;
+            FunctionChoices.recommendation(choice,new io.tunuino.calibration.ProteusRouting.Recommendation(channel,!paired));
+        }
     }
     private static int number(String text,int decimals,int min,int max,String name){
         try {if(text.length()>32||!text.trim().matches("[+-]?[0-9]+(?:[.,][0-9]+)?"))throw new ArithmeticException();
@@ -221,7 +239,7 @@ final class EngineControlPane extends VBox {
     byte[] profile(){
         if(count.getValue()==null)throw new IllegalArgumentException("Seleciona o número de cilindros");
         int mode=operation.getSelectionModel().getSelectedIndex();
-        ByteBuffer p=ByteBuffer.allocate(128);p.put((byte)(mode==0?1:2)).put((byte)(int)count.getValue());
+        ByteBuffer p=ByteBuffer.allocate(128);p.put((byte)(mode==0?1:mode<3?2:3)).put((byte)(int)count.getValue());
         p.put(28,(byte)mode);
         p.putShort((short)n("fuel",3,100,30000)).putShort((short)n("dwell",3,100,5000));
         p.putShort((short)n("dead",3,0,5000)).putShort((short)n("maximum",3,100,20000));
@@ -235,14 +253,16 @@ final class EngineControlPane extends VBox {
             int coil=number(cylinders[i][1].getText(),0,1,12,"Ignição cilindro "+(i+1))-1;
             int tdc=number(cylinders[i][2].getText(),2,0,71999,"PMS cilindro "+(i+1));
             long bits=(1L<<injector)|(1L<<(16+coil));
-            if((used&bits)!=0||!angles.add(tdc))throw new IllegalArgumentException("Saídas ou ângulos PMS repetidos");
+            if((used&(1L<<injector))!=0||(mode<3&&(used&bits)!=0)||!angles.add(tdc))throw new IllegalArgumentException("Saídas ou ângulos PMS repetidos");
             used|=bits;p.put((byte)injector).put((byte)coil).putInt(tdc).putShort((short)0);
         }
         for(String aux:new String[]{"pump","fan","relay"}){int value=n(aux,0,0,16);
             if(value>0){long bit=1L<<(value-1);if((used&bit)!=0)throw new IllegalArgumentException("Saída auxiliar repetida: "+aux);used|=bit;}}
         if(n("fanOff",2,0,12000)>=n("fanOn",2,0,12000)||n("dead",3,0,5000)>=n("maximum",3,100,20000)
             ||n("camFirst",0,0,119)>n("camLast",0,0,119))throw new IllegalArgumentException("Limites de temperatura, injeção ou janela de fase incoerentes");
-        return p.array();
+        byte[] profile=p.array();
+        if(mode>=3&&!io.tunuino.calibration.EngineProfile.valid(profile,120,1))throw new IllegalArgumentException("Bobinas duplas exigem uma saída por par e PMS separados exatamente por 360°");
+        return profile;
     }
     private void run(ConfigurationPane.Operation<EngineOutputClient.State> operation){
         run(operation,null);

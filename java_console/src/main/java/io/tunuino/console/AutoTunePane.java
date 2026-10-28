@@ -77,6 +77,7 @@ final class AutoTunePane extends VBox {
             VeAutotuneClient.write(session,device,expected,proposed,backup);return backup;
         },backup->{working=false;onSaved.accept(proposed);base=null;learner=null;cells.getItems().clear();status.setText("Proposta guardada e verificada na ECU. Base anterior: "+backup);summary.setText("Lê uma nova base para a próxima sessão.");controls();},error->{working=false;status.setText("Gravação: "+error.getMessage());controls();});
     }
+    void invalidateProject(){if(learning)finish("Projeto restaurado");base=null;learner=null;cells.getItems().clear();status.setText("Projeto restaurado. Lê uma nova base VE para recolher.");controls();}
     void availability(DeviceIdentity device,boolean connected,boolean blocked,boolean monitoring,boolean armed){
         if(!connected||!java.util.Objects.equals(identity,device)){
             if(learning)finish("Ligação/ECU alterada. Recolha terminada.");base=null;learner=null;cells.getItems().clear();

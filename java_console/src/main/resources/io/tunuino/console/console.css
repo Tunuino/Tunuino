@@ -210,3 +210,5 @@
 .dashboard-split > .split-pane-divider:hover { -fx-background-color:#0085ff; }
 
 .autotune-pane { -fx-background-color:#070c10; }
+
+.engine-project-pane { -fx-background-color:#070c10; }

@@ -43,3 +43,9 @@
 - Manter o perfil sequencial formato 1 compatível. Modos 360° usam formato 2, byte 28: 1 semi-sequencial, 2 batch simultâneo, ambos wasted COP com uma saída por cilindro. Não aceitar esses modos como formato 1.
 - Nos modos 360°, repartir combustível efetivo por dois eventos e somar tempo morto em cada pulso. Limitar dwell e injeção à ocupação do período real. A falta de cames só é permitida nos modos configurados para cambota; perda de cambota mantém corte retido.
 - Autotune usa exclusivamente amostras USB e base lida da mesma ECU/geração. Não gravar durante recolha nem com saídas armadas. Antes de guardar, confirmar base/geração e criar cópia; usar escrita e releitura existentes. Não remover testes nem transformar resultados sintéticos em validação física.
+
+## Bobinas partilhadas e projeto completo
+
+- Perfil formato 3, modos 3/4: semi-sequencial/batch com bobina partilhada por exatamente dois cilindros a 360°. Só esses perfis permitem repetir uma IGN. Não repetir injetores; não permitir três cilindros numa bobina nem ajustes de avanço diferentes num par.
+- Mostrar uma função e um teste de ignição por bobina partilhada, identificada pelo par. Mover essa função deve atualizar os dois descritores. Propostas de ligação do par não substituem a cablagem lida.
+- O projeto .tnproj inclui as quatro páginas e mapas completos, valida alvo/formato/CRC e não arma saídas ao abrir ou restaurar. Restaurar exige snapshot limpo e atual da mesma ECU, cópia anterior criada primeiro, páginas preparadas e relidas, uma única gravação e releitura completa. Após pedido de Burn incerto, orientar para releitura sem repetição automática.

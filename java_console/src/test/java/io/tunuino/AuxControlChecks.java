@@ -73,9 +73,42 @@ public final class AuxControlChecks {
             try{VeAutotuneClient.write(session,d,tuningBase,tuneProposal,tuneBackup.resolveSibling("stale.tnmap"));throw new AssertionError("Stale VE proposal overwritten");}catch(java.io.IOException expected){}
             try{VeAutotuneClient.write(session,d,tuningBase,tuningBase.map().withCell(0,0,"90"),tuneBackup.resolveSibling("unbounded.tnmap"));throw new AssertionError("Unbounded VE proposal accepted");}catch(IllegalArgumentException expected){}
             java.nio.file.Files.delete(tuneBackup);java.nio.file.Files.delete(tuneBackup.getParent());
+            var fullBefore=EngineProjectClient.read(session,d,Duration.ofSeconds(30));
+            var oldProject=fullBefore.project();byte[] pairProfile=oldProject.core().engineProfile();
+            pairProfile[0]=3;pairProfile[1]=2;pairProfile[28]=3;pairProfile[40]=1;pairProfile[41]=pairProfile[33];ByteBuffer.wrap(pairProfile).putInt(42,36000);
+            var fullDesired=new EngineProject(oldProject.core().withEngine(pairProfile,false).withFuelCorrections(FuelCorrections.reference()),
+                oldProject.auxiliary().edited(Map.of(AuxConfiguration.Field.IDLE_P,"6.25"),1,8,2,9,3),
+                oldProject.ve().withCell(0,1,"83.00"),oldProject.ignition().withCell(0,1,"9.50"));
+            Path fullDir=Files.createTempDirectory("tunuino-full-project-");Path fullBackup=fullDir.resolve("previous.tnproj");
+            Files.writeString(fullBackup,"existing backup");
+            try{EngineProjectClient.apply(session,d,fullBefore,fullDesired,fullBackup,Duration.ofSeconds(30));throw new AssertionError("Project backup overwritten");}catch(FileAlreadyExistsException expected){}
+            check(Files.readString(fullBackup).equals("existing backup")&&ConfigurationClient.validation(session,d,timeout).generation()==fullBefore.validation().generation(),"Full project backup failure changes no ECU bytes");
+            Files.delete(fullBackup);
+            var fullSaved=EngineProjectClient.apply(session,d,fullBefore,fullDesired,fullBackup,Duration.ofSeconds(30));
+            check(Arrays.equals(fullSaved.project().encode(),fullDesired.encode())&&fullSaved.validation().generation()==fullBefore.validation().generation()+1&&!fullSaved.engine().armed(),"All four pages, including paired profile, commit atomically in one generation and read back without arming");
+            check(Arrays.equals(EngineProject.read(fullBackup).encode(),oldProject.encode()),"Complete prior ECU state is recoverable from one CRC-protected file");
+            try{EngineProjectClient.apply(session,d,fullBefore,oldProject,fullDir.resolve("stale.tnproj"),Duration.ofSeconds(30));throw new AssertionError("Stale full restore accepted");}catch(java.io.IOException expected){}
+            var pairRoutes=IoAssignmentClient.read(session,d,timeout);
+            check(pairRoutes.assignments().functions(IoAssignments.Group.IGNITION).size()==2&&pairRoutes.assignments().changes().isEmpty(),"One paired ignition function preserves both cylinder descriptors without false overlap");
+            var pairMoved=pairRoutes.assignments().withFunction(IoAssignments.Group.IGNITION,4,1);
+            check(pairMoved.core().engineProfile()[33]==4&&pairMoved.core().engineProfile()[41]==4,"Moving one coil moves both paired cylinders");
+            byte[] badAux=fullDesired.auxiliary().bytes();ByteBuffer.wrap(badAux).putShort(216,(short)100);
+            check(!new AuxConfiguration(badAux).errors(pairProfile).isEmpty(),"Client rejects conflicting ignition trims on the shared coil");
+            byte[] trimWrite=ByteBuffer.allocate(9).put((byte)'w').putShort((short)4).putShort((short)216).putShort((short)2).putShort((short)100).array();
+            check(session.exchange(trimWrite,timeout)[0]==0,"Staging a trim is not an implicit flash commit");
+            check(ConfigurationClient.validation(session,d,timeout).errors()!=0,"Firmware independently refuses inconsistent paired-coil trims");
+            check(session.exchange(new byte[]{'D'},timeout)[0]==0,"Discard restores only the pending trim");
+            Files.delete(fullBackup);Files.delete(fullDir);
             outputs=EngineOutputClient.read(session);saved=routed.auxiliary();desired=saved.configuration();
+            byte[] pendingProject=ByteBuffer.allocate(9).put((byte)'w').putShort((short)1).putShort((short)96).putShort((short)2).putShort((short)11000).array();
+            check(session.exchange(pendingProject,timeout)[0]==0,"Pending settings remain independent of project restore");
+            try{EngineProjectClient.read(session,d,Duration.ofSeconds(20));throw new AssertionError("Pending project was silently read as active");}catch(java.io.IOException expected){}
+            check(ConfigurationClient.validation(session,d,timeout).dirty(),"Project read does not discard another editor's pending values");
+            check(session.exchange(new byte[]{'D'},timeout)[0]==0,"User discard returns to the saved project");
             var armedTuneBase=VeAutotuneClient.read(session,d);
             EngineOutputClient.arm(session,outputs.generation());
+            try{EngineProjectClient.apply(session,d,fullSaved,oldProject,tuneBackup.resolveSibling("armed-project.tnproj"),Duration.ofSeconds(30));throw new AssertionError("Armed complete restore accepted");}catch(java.io.IOException expected){}
+            check(!Files.exists(tuneBackup.resolveSibling("armed-project.tnproj")),"Armed project restore is rejected before backup/staging");
             try{VeAutotuneClient.write(session,d,armedTuneBase,armedTuneBase.map(),tuneBackup.resolveSibling("armed.tnmap"));throw new AssertionError("Autotune wrote while armed");}catch(java.io.IOException expected){}
             check(!java.nio.file.Files.exists(tuneBackup.resolveSibling("armed.tnmap")),"Armed learning commit is rejected before creating files");
             try{IoAssignmentClient.apply(session,d,routed,moved.withFunction(IoAssignments.Group.POWER,10,1),timeout);throw new AssertionError("Armed assignment write accepted");}catch(java.io.IOException expected){}
@@ -87,13 +120,13 @@ public final class AuxControlChecks {
             var tuningFrames=new java.util.concurrent.atomic.AtomicInteger();
             monitor.tuningObserver(frame->{check(frame.sample().isPresent()&&frame.extras().outputs().generation()==frame.extras().sensors().generation(),"Learning frame pairs actual native samples and matching feature/output generation");tuningFrames.incrementAndGet();});
             long count=monitor.run(running::get,sample->{if(samples.incrementAndGet()==3)running.set(false);},error->{throw new AssertionError(error);},extra->{
-                check(extra.sensors().flags()==2047&&extra.outputs().configured()&&extra.profile()[0]==1,"Native extended sensors and saved output routing reach the monitor");
-                byte[] copy=extra.profile();copy[0]=99;check(extra.profile()[0]==1,"Monitor profile snapshot is immutable");extraCount.incrementAndGet();
+                check(extra.sensors().flags()==2047&&extra.outputs().configured()&&extra.profile()[0]==3,"Native extended sensors and saved output routing reach the monitor");
+                byte[] copy=extra.profile();copy[0]=99;check(extra.profile()[0]==3,"Monitor profile snapshot is immutable");extraCount.incrementAndGet();
             });
             check(count==3&&extraCount.get()>0&&tuningFrames.get()>0&&session.isOpen(),"Extended telemetry shares the serial worker and preserves the session");
         }
         byte[] fault=new byte[24];fault[1]=1;fault[2]=3;fault[3]=16;fault[14]=1;
         check(EngineOutputClient.decode(fault).faultsDescription().contains("turbo"),"Overboost fault decodes explicitly");
-        System.out.println("Aux C/Java: exact settings, backups, page-4 persistence, no auto-arm, ownership rejection, pending/stale protection, real-dispatch VE baseline/backup/commit/readback, learning-frame generation and running-write rejection passed. Register model only.");
+        System.out.println("Aux C/Java: exact settings, backups, page-4 persistence, no auto-arm, ownership rejection, pending/stale protection, real-dispatch VE baseline/backup/commit/readback, learning-frame generation, complete four-page project restore/backup/readback and paired-ignition validation passed. Register model only.");
     }
 }

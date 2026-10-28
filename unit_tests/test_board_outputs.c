@@ -136,6 +136,25 @@ int main(void){
         position.crank_valid=false;board_outputs_update(&d,&position,TIM2->CNT,TIM2->CNT);off();assert(request(&d,status,1)[2]==3);
     }
     request(&d,stop,1);d.active[128]=1;d.active[156]=0;
+    uint8_t original_profile[128];memcpy(original_profile,d.active+128,128);
+    for(unsigned operation=3;operation<=4;++operation){
+        request(&d,stop,1);uint8_t *paired=d.active+128;paired[0]=3;paired[1]=4;paired[28]=(uint8_t)operation;
+        for(unsigned i=0;i<4;++i){paired[32+8*i]=(uint8_t)i;paired[33+8*i]=(uint8_t)(i%2);
+            uint32_t tdc=i*18000u;paired[34+8*i]=(uint8_t)(tdc>>24);paired[35+8*i]=(uint8_t)(tdc>>16);paired[36+8*i]=(uint8_t)(tdc>>8);paired[37+8*i]=(uint8_t)tdc;}
+        assert(tunuino_device_validate(d.active,sizeof(d.active)));assert(tunuino_device_restore(&d,d.active,sizeof(d.active)));board_outputs_restore(&d,true);
+        origin=TIM2->CNT;
+        for(unsigned step=0;step<1100;++step){
+            uint32_t next=origin+step*100u;
+            if(GPTD5.state==GPT_ONESHOT&&(int32_t)(next-alarm_at)>=0)irq();
+            TIM2->CNT=next;uint32_t elapsed=next-origin,phase=elapsed%20000u;
+            position.crank_valid=true;position.cycle_valid=false;position.rpm=3000;
+            position.revolution_phase=(elapsed/20000u)%2;position.tooth_index=(uint16_t)(phase*36u/20000u);if(position.tooth_index>34)position.tooth_index=34;
+            board_outputs_update(&d,&position,next-phase+(uint32_t)position.tooth_index*20000u/36u,next);
+        }
+        r=request(&d,status,1);assert(r[2]==2&&r[3]==0&&r[13]==4&&tunuino_device_u16(r+22)==2000);
+        request(&d,stop,1);off();
+    }
+    memcpy(d.active+128,original_profile,128);
     /* Persisted page 4 drives actual PWM pins and latches overboost cut. */
     uint8_t aux_config[256];aux_fixture(aux_config);aux_config[1]=1;aux_config[2]=8;aux_config[3]=2;aux_config[4]=9;aux_config[5]=3;
     memcpy(d.active+TUNUINO_IO_AUX_OFFSET,aux_config,256);assert(tunuino_device_validate(d.active,sizeof(d.active)));
@@ -151,14 +170,17 @@ int main(void){
     r=request(&d,status,1);assert(r[2]==3&&(r[3]&16));
     d.live.map_milli_kpa=100000;board_outputs_update(&d,&position,TIM2->CNT,TIM2->CNT);off();assert(request(&d,status,1)[2]==3);
     request(&d,stop,1);
-    puts("F427 output adapter: actual framed commands, reset GPIO levels, LS/IGN pin routing, GPT IRQ pulse edges, arm gates, profile phase wiring, persisted crank-only semi/batch operation without cam, main-loop stall and host lease cut passed. Register model only.");
+    puts("F427 output adapter: actual framed commands, reset GPIO levels, LS/IGN pin routing, GPT IRQ pulse edges, arm gates, profile phase wiring, persisted crank-only semi/batch and paired-coil operation without cam, main-loop stall and host lease cut passed. Register model only.");
     return 0;
 }
 #else
+static bool fail_next_save;
 static bool save_profile(void *user,const uint8_t *bytes,size_t length){
-    (void)user;return length==TUNUINO_IO_SETTINGS_SIZE&&tunuino_device_validate(bytes,length)&&board_outputs_idle();
+    (void)user;if(fail_next_save){fail_next_save=false;return false;}return length==TUNUINO_IO_SETTINGS_SIZE&&tunuino_device_validate(bytes,length)&&board_outputs_idle();
 }
-int main(void){
+int main(int argc,char **argv){
+    if(argc==2&&strcmp(argv[1],"--fail-next-save")==0)fail_next_save=true;
+    else if(argc!=1)return 2;
 #ifdef _WIN32
     _setmode(_fileno(stdin),_O_BINARY);_setmode(_fileno(stdout),_O_BINARY);
 #endif

@@ -83,6 +83,12 @@ void tunuino_engine_control_update(tunuino_engine_control *e,uint32_t now,uint32
         if(current<e->last_angle)++e->cycle;
     }
     e->have_phase=1;e->mode=2;e->last_angle=current;e->last_now=now;
+    if(e->profile.operation>=3&&(e->features.flags&TUNUINO_FEATURE_TRIMS)){
+        for(unsigned i=0;i<e->profile.cylinders;++i)for(unsigned j=0;j<i;++j)
+            if(e->profile.cylinder[i].coil==e->profile.cylinder[j].coil&&e->features.spark_trim[i]!=e->features.spark_trim[j]){
+                tunuino_engine_control_stop(e,TUNUINO_OUTPUT_CALIBRATION);return;
+            }
+    }
     uint64_t fuel=(uint64_t)e->profile.required_fuel_us*ve*map;
     uint32_t multiplier;
     if(!tunuino_fuel_corrections_apply(&e->fueling,&e->fuel_state,now,(uint32_t)(r->rpm*1000+0.5),
@@ -116,7 +122,7 @@ void tunuino_engine_control_update(tunuino_engine_control *e,uint32_t now,uint32
         cylinder_fuel+=f->dead_us;
         if(spark< -9000||spark>9000||(!f->fuel_cut&&(cylinder_fuel>e->profile.maximum_injection_us||cylinder_fuel>duty_limit))){tunuino_engine_control_stop(e,TUNUINO_OUTPUT_CALIBRATION);return;}
         if(f->fuel_cut)tunuino_outputs_cancel_injector(&e->outputs,c->injector);
-        if((!f->fuel_cut&&!schedule(e,c->injector,angle((e->profile.operation==2?0:(int64_t)c->tdc_centi)+e->profile.injection_end_centi)%period,cylinder_fuel,current,revolution,now,first,period))
+        if((!f->fuel_cut&&!schedule(e,c->injector,angle(((e->profile.operation==2||e->profile.operation==4)?0:(int64_t)c->tdc_centi)+e->profile.injection_end_centi)%period,cylinder_fuel,current,revolution,now,first,period))
             ||!schedule(e,16+c->coil,angle((int64_t)c->tdc_centi-spark)%period,f->dwell_us,current,revolution,now,first,period)){
             tunuino_engine_control_stop(e,TUNUINO_OUTPUT_LATE);return;
         }

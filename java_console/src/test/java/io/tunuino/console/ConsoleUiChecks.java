@@ -444,6 +444,14 @@ public final class ConsoleUiChecks {
             snapshot(scene,"console-engine-modes");operationMode.getSelectionModel().select(0);
             ((Button)scene.lookup("#engine-generic-base")).fire();
             check(engineCylinders.getValue()==4,"Generic configuration uses selected firing-order preset");
+            operationMode.getSelectionModel().select(3);((Button)scene.lookup("#engine-preset-apply")).fire();
+            byte[] pairedBytes=enginePane.profile();
+            check(pairedBytes[0]==3&&pairedBytes[28]==3&&pairedBytes[33]==pairedBytes[57]&&pairedBytes[41]==pairedBytes[49]
+                &&pairedBytes[33]!=pairedBytes[41]&&io.tunuino.calibration.EngineProfile.valid(pairedBytes,36,1),
+                "Four-cylinder firing order proposes two correctly phased shared coils");
+            operationMode.getSelectionModel().select(4);check(enginePane.profile()[0]==3&&enginePane.profile()[28]==4,
+                "Batch and semi-sequential paired modes use the explicit paired-profile format");
+            snapshot(scene,"console-paired-coils");operationMode.getSelectionModel().select(0);((Button)scene.lookup("#engine-preset-apply")).fire();
             engineTabs.getSelectionModel().select(5);scene.getRoot().applyCss();scene.getRoot().layout();
             @SuppressWarnings("unchecked") var pumpRoute=(ComboBox<String>)scene.lookup("#engine-channel-pump");
             check(pumpRoute.getItems().size()==2&&pumpRoute.getValue().equals("10")&&pumpRoute.getConverter().toString("10").contains("Preto 35/20"),"Pump offers disabled and the conventional connector contact, not sixteen repeated choices");
@@ -551,6 +559,18 @@ public final class ConsoleUiChecks {
             configEditor.availability(null,false,false);
             check(reference.getText().equals("3290")&&((Button)scene.lookup("#config-apply")).isDisabled(),"Disconnect preserves local edits while blocking ECU writes");
             reference.setText("3300");check(configEditor.canClose(),"Unchanged configuration closes without prompting");
+            ((ToggleButton)scene.lookup("#navigate-11")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
+            outputPane.update(false,false,new io.tunuino.protocol.EngineOutputClient.State(0,0,0,0,true,4,true,1,0,true,false),pairedBytes,
+                "Perfil de bobinas duplas sintético · sem ECU física");
+            outputTabs.getSelectionModel().select(1);scene.getRoot().applyCss();scene.getRoot().layout();
+            @SuppressWarnings("unchecked") var pairedTest=(ComboBox<Integer>)scene.lookup("#test-ignition-channel");
+            check(pairedTest.getItems().equals(List.of(1,2))&&pairedTest.getConverter().toString(1).contains("1 + 4")
+                &&pairedTest.getConverter().toString(2).contains("2 + 3"),"Actuator tests show one choice per shared coil, named for both cylinders");
+            snapshot(scene,"console-paired-coil-tests");
+            ((ToggleButton)scene.lookup("#navigate-15")).fire();scene.getRoot().applyCss();scene.getRoot().layout();
+            check(((Button)scene.lookup("#project-read")).isDisabled()&&((Button)scene.lookup("#project-restore")).isDisabled()
+                &&((Button)scene.lookup("#project-copy")).isDisabled(),"Offline project workspace cannot invent or restore an ECU snapshot");
+            snapshot(scene,"console-project-offline");
             ((ToggleButton) scene.lookup("#navigate-7")).fire();
             scene.getRoot().applyCss();scene.getRoot().layout();
             check(((Button)scene.lookup("#diagnostics-read")).isDisabled(),
@@ -664,7 +684,38 @@ public final class ConsoleUiChecks {
             check(!((Button)pane.lookup("#autotune-review")).isDisabled()&&!((Button)pane.lookup("#autotune-save")).isDisabled(),
                 "A disarmed, idle session can review and explicitly commit the bounded proposal");
             ((Label)pane.lookup("#autotune-status")).setText("Dados sintéticos de teste da interface · sem ECU física");
-            snapshot(probe.getScene(),"console-autotune-proposals");probe.close();checkFirmwareStability(main);
+            snapshot(probe.getScene(),"console-autotune-proposals");probe.close();checkCompleteProject(main);
+        }
+
+        private void checkCompleteProject(Stage main) throws Exception {
+            var identity=new io.tunuino.protocol.DeviceIdentity(io.tunuino.protocol.DeviceIdentity.Family.PROTEUS,
+                io.tunuino.protocol.DeviceIdentity.McuSeries.STM32_F4,7,0,2,0,15,"0102030405060708090a0b0c");
+            var project=new io.tunuino.calibration.EngineProject(io.tunuino.calibration.IoConfiguration.localDefaults(),
+                new io.tunuino.calibration.AuxConfiguration(new byte[256]),
+                io.tunuino.calibration.BaseMaps.create(io.tunuino.calibration.BaseMaps.Template.NATURALLY_ASPIRATED,CalibrationMap.Kind.VE),
+                io.tunuino.calibration.BaseMaps.create(io.tunuino.calibration.BaseMaps.Template.NATURALLY_ASPIRATED,CalibrationMap.Kind.IGNITION));
+            var validation=new io.tunuino.protocol.ConfigurationClient.Validation(false,true,0,1,1);
+            var engine=new io.tunuino.protocol.EngineOutputClient.State(0,0,0,0,false,0,true,1,0,true,false);
+            var snapshot=new io.tunuino.protocol.EngineProjectClient.Snapshot(identity,project,validation,engine);
+            var calls=new java.util.concurrent.atomic.AtomicInteger();
+            ConfigurationPane.Access access=new ConfigurationPane.Access(){
+                @SuppressWarnings("unchecked") public <T>void run(ConfigurationPane.Operation<T> operation,
+                    java.util.function.Consumer<T> success,java.util.function.Consumer<Throwable> failure){
+                    check(calls.incrementAndGet()==1,"Displaying a complete project never performs an unsolicited restore");success.accept((T)snapshot);
+                }
+            };
+            Stage probe=new Stage();EngineProjectPane pane=new EngineProjectPane(probe,access,value->{throw new AssertionError("Project restored automatically");});
+            var root=new javafx.scene.layout.BorderPane(ConsoleShell.scroll(pane));root.setStyle("-fx-background-color:#070c10;");
+            probe.setScene(new Scene(root,1040,600));ConsoleBranding.applyTheme(probe.getScene());probe.show();
+            pane.availability(identity,true,false,false);((Button)pane.lookup("#project-read")).fire();
+            check(!((Button)pane.lookup("#project-copy")).isDisabled()&&!((Button)pane.lookup("#project-restore")).isDisabled(),
+                "A real project read unlocks an explicit backup or confirmed restore");
+            pane.availability(identity,true,false,true);check(((Button)pane.lookup("#project-restore")).isDisabled(),"Armed project restoration remains blocked");
+            pane.availability(identity,true,false,false);((Label)pane.lookup("#project-result")).setText("Dados sintéticos de teste da interface · sem ECU física");
+            snapshot(probe.getScene(),"console-complete-project");pane.availability(null,false,false,false);
+            check(((Button)pane.lookup("#project-restore")).isDisabled()&&!((Button)pane.lookup("#project-copy")).isDisabled(),
+                "Disconnect retains the local project while invalidating permission to restore");
+            pane.close();probe.close();checkFirmwareStability(main);
         }
 
         private void checkFirmwareStability(Stage main) {

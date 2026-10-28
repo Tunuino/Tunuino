@@ -15,7 +15,7 @@ final class IoAssignmentsPane extends VBox {
     private final EnumMap<IoAssignments.Group,List<ComboBox<IoAssignments.Function>>> choices=new EnumMap<>(IoAssignments.Group.class);
     private record Quick(IoAssignments.Group group,int function){}
     private final Map<Quick,ComboBox<Integer>> quick=new LinkedHashMap<>();
-    private final TabPane quickTabs=new TabPane();private int quickCylinders=-1;
+    private final TabPane quickTabs=new TabPane();private String quickLayout="";
     private IoAssignments model=new IoAssignments(IoConfiguration.localDefaults(),new AuxConfiguration(new byte[256]));
     private IoAssignmentClient.Snapshot snapshot;private DeviceIdentity identity;private boolean available,busy,armed,filling;
     IoAssignmentsPane(Stage owner,ConfigurationPane.Access access,Consumer<EngineOutputClient.State> onState){
@@ -44,11 +44,12 @@ final class IoAssignmentsPane extends VBox {
             var expected=snapshot;run((s,d)->IoAssignmentClient.apply(s,d,expected,desired,java.time.Duration.ofSeconds(30)),true);
         }catch(IllegalArgumentException x){state.setText(x.getMessage());}});fill();
     }
+    void invalidateProject(){snapshot=null;state.setText("Projeto restaurado. Lê novamente as funções antes de alterar ligações.");controls();}
     private void run(ConfigurationPane.Operation<IoAssignmentClient.Snapshot> operation,boolean saved){if(!available||busy)return;busy=true;controls();access.run(operation,v->{busy=false;snapshot=v;armed=v.engine().armed();model=v.assignments();fill();state.setText(saved?"Funções guardadas e confirmadas por leitura da ECU. As saídas continuam desarmadas.":"Funções lidas da ECU · "+(model.cylinders()>0?model.cylinders()+" cilindros":"configura primeiro o perfil do motor para atribuir injetores e ignição"));onState.accept(v.engine());controls();},x->{busy=false;state.setText(x.getMessage());controls();});}
-    private void fill(){filling=true;try{if(quickCylinders!=model.cylinders())buildQuick();for(var entry:quick.entrySet())entry.getValue().setValue(channel(entry.getKey()));for(var group:choices.keySet())for(int i=0;i<group.count;i++){var c=choices.get(group).get(i);c.getItems().setAll(model.functions(group));int selected=model.function(group,i);c.setValue(c.getItems().stream().filter(f->f.id()==selected).findFirst().orElse(c.getItems().get(0)));}}finally{filling=false;}controls();}
+    private void fill(){filling=true;try{if(!quickLayout.equals(model.cylinders()+":"+model.functions(IoAssignments.Group.IGNITION)))buildQuick();for(var entry:quick.entrySet())entry.getValue().setValue(channel(entry.getKey()));for(var group:choices.keySet())for(int i=0;i<group.count;i++){var c=choices.get(group).get(i);c.getItems().setAll(model.functions(group));int selected=model.function(group,i);c.setValue(c.getItems().stream().filter(f->f.id()==selected).findFirst().orElse(c.getItems().get(0)));}}finally{filling=false;}controls();}
     private int channel(Quick key){for(int i=0;i<key.group().count;i++)if(model.function(key.group(),i)==key.function())return i+1;return 0;}
     private void row(GridPane grid,IoAssignments.Group group,int function){
-        Quick key=new Quick(group,function);ComboBox<Integer> c=new ComboBox<>();c.setId("io-quick-"+group.name()+"-"+function);for(int i=0;i<=group.count;i++)c.getItems().add(i);c.setValue(0);FunctionChoices.integers(c,group,function);quick.put(key,c);
+        Quick key=new Quick(group,function);ComboBox<Integer> c=new ComboBox<>();c.setId("io-quick-"+group.name()+"-"+function);for(int i=0;i<=group.count;i++)c.getItems().add(i);c.setValue(0);FunctionChoices.integers(c,group,function);FunctionChoices.recommendation(c,model.recommendation(group,function));quick.put(key,c);
         c.setOnAction(e->{if(filling||FunctionChoices.updating(c)||c.getValue()==null)return;int chosen=c.getValue(),old=channel(key);
             if(chosen>0){int owner=model.function(group,chosen-1);if(owner!=0&&owner!=function){state.setText(ProteusRouting.connection(group,chosen)+" já está atribuído a "+model.functionName(group,owner)+". Mantive as ligações anteriores.");fill();return;}}
             var next=model;if(old>0)next=next.withFunction(group,old-1,0);if(chosen>0)next=next.withFunction(group,chosen-1,function);model=next;fill();state.setText("Ligação preparada na edição. Guarda para aplicar à ECU.");
@@ -56,20 +57,20 @@ final class IoAssignmentsPane extends VBox {
     }
     private GridPane grid(){GridPane g=new GridPane();g.setHgap(24);g.setVgap(10);return g;}
     private void buildQuick(){
-        quickCylinders=model.cylinders();int selected=quickTabs.getSelectionModel().getSelectedIndex();quick.clear();quickTabs.getTabs().clear();
+        quickLayout=model.cylinders()+":"+model.functions(IoAssignments.Group.IGNITION);int selected=quickTabs.getSelectionModel().getSelectedIndex();quick.clear();quickTabs.getTabs().clear();
         var sensors=grid();for(int f:new int[]{1,3})row(sensors,IoAssignments.Group.ANALOG,f);row(sensors,IoAssignments.Group.TEMPERATURE,1);row(sensors,IoAssignments.Group.TEMPERATURE,2);row(sensors,IoAssignments.Group.ANALOG,2);
         var extra=grid();for(int f:new int[]{4,5,6})row(extra,IoAssignments.Group.ANALOG,f);TitledPane others=new TitledPane("Outros sensores",extra);others.setExpanded(false);
         quickTabs.getTabs().add(new Tab("Sensores",ConsoleShell.card("SENSORES","As ligações habituais da Proteus aparecem primeiro. Selecionar não substitui a calibração do sensor.",sensors,others)));
-        var cylinders=grid();for(int i=1;i<=model.cylinders();i++){row(cylinders,IoAssignments.Group.POWER,i);row(cylinders,IoAssignments.Group.IGNITION,i);}
-        quickTabs.getTabs().add(new Tab("Injeção e ignição",ConsoleShell.card("CILINDROS",model.cylinders()==0?"Configura e guarda o perfil em Motor e saídas para apresentar os cilindros.":"Cada cilindro usa a ligação do mesmo número no pinout. A ordem de ignição mantém-se no perfil do motor.",cylinders)));
+        var cylinders=grid();for(int i=1;i<=model.cylinders();i++)row(cylinders,IoAssignments.Group.POWER,i);for(var function:model.functions(IoAssignments.Group.IGNITION))if(function.id()>0&&model.cylinders()>0)row(cylinders,IoAssignments.Group.IGNITION,function.id());
+        quickTabs.getTabs().add(new Tab("Injeção e ignição",ConsoleShell.card("CILINDROS",model.cylinders()==0?"Configura e guarda o perfil em Motor e saídas para apresentar os cilindros.":"As bobinas partilhadas aparecem pelo par de cilindros. Confirma os contactos com a cablagem; a ordem de ignição mantém-se no perfil.",cylinders)));
         var valves=grid();for(int f:new int[]{13,14,15,16,17})row(valves,IoAssignments.Group.POWER,f);
         quickTabs.getTabs().add(new Tab("Relés e válvulas",ConsoleShell.card("BOMBA, VENTOINHA E AUXILIARES","A ligação recomendada é mostrada por contacto do conector. Proposta identifica uma escolha Tunuino para funções sem ligação habitual fixa.",valves)));
         quickTabs.getSelectionModel().select(Math.max(0,Math.min(2,selected)));
     }
     private void recommend(){if(busy||armed)return;try{
-        var selected=new ArrayList<Quick>();for(var key:quick.keySet())if(channel(key)>0&&ProteusRouting.recommendation(key.group(),key.function()).channel()>0)selected.add(key);
+        var selected=new ArrayList<Quick>();for(var key:quick.keySet())if(channel(key)>0&&model.recommendation(key.group(),key.function()).channel()>0)selected.add(key);
         var next=model;for(var key:selected){int old=channel(key);next=next.withFunction(key.group(),old-1,0);}
-        for(var key:selected){int target=ProteusRouting.recommendation(key.group(),key.function()).channel();int owner=next.function(key.group(),target-1);if(owner!=0)throw new IllegalArgumentException("As ligações recomendadas entram em conflito em "+ProteusRouting.connection(key.group(),target)+". Usa Personalizar para esse caso.");next=next.withFunction(key.group(),target-1,key.function());}
+        for(var key:selected){int target=model.recommendation(key.group(),key.function()).channel();int owner=next.function(key.group(),target-1);if(owner!=0)throw new IllegalArgumentException("As ligações recomendadas entram em conflito em "+ProteusRouting.connection(key.group(),target)+". Usa Personalizar para esse caso.");next=next.withFunction(key.group(),target-1,key.function());}
         model=next;fill();state.setText("Ligações recomendadas preparadas para as funções já atribuídas. A ECU não foi alterada.");
     }catch(IllegalArgumentException x){state.setText(x.getMessage());}}
     IoAssignments candidate(){return model;}

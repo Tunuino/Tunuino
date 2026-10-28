@@ -53,7 +53,7 @@ public final class EngineOutputClient {
     public static State read(PacketSession session)throws IOException {return decode(exchange(session,new byte[]{0}));}
     private static void accepted(byte[] body)throws IOException {if(body.length!=1)throw new IOException("Confirmação de comando inválida");}
     public static State configure(PacketSession s,byte[] profile)throws IOException {
-        if(profile.length!=128||(profile[0]!=1&&profile[0]!=2))throw new IllegalArgumentException("Perfil deve ter 128 bytes, formato 1 ou 2");
+        if(profile.length!=128||(profile[0]<1||profile[0]>3))throw new IllegalArgumentException("Perfil deve ter 128 bytes, formato 1, 2 ou 3");
         accepted(exchange(s,ByteBuffer.allocate(129).put((byte)1).put(profile).array()));return read(s);
     }
     public static State arm(PacketSession s,long generation)throws IOException {

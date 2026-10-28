@@ -258,7 +258,7 @@ final class DashboardPane extends VBox {
     private void indicator(String role,Boolean active){Label value=outputValues.get(role);value.setText(active==null?"—":active?"● ON":"● OFF");value.setStyle("-fx-font-size:10px;-fx-text-fill:"+(active!=null&&active?"#28de45":"#8b9aa7")+";");}
     void showOutputs(io.tunuino.protocol.EngineOutputClient.State state,byte[] profile){
         String[] roles={"pump","fan","relay"};
-        for(int i=0;i<3;i++){int ch=profile!=null&&profile.length==128&&(profile[0]==1||profile[0]==2)?profile[22+i]&255:0;indicator(roles[i],ch>0&&ch<=16?(state.active()&(1L<<(ch-1)))!=0:null);}
+        for(int i=0;i<3;i++){int ch=profile!=null&&profile.length==128&&(profile[0]>=1&&profile[0]<=3)?profile[22+i]&255:0;indicator(roles[i],ch>0&&ch<=16?(state.active()&(1L<<(ch-1)))!=0:null);}
         showOutputs(state);
     }
     void showOutputs(io.tunuino.protocol.EngineOutputClient.State state){

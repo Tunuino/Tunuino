@@ -16,7 +16,7 @@ def render():
         '; Persistent engine, sensor and 16x16 map configuration.',
         '; Disabled/unavailable calibrated channels evaluate to NaN, not measurements.',
         'enable2ndByteCanID = false', '', '[TunerStudio]',
-        '    iniSpecVersion = 3.51', '    iniVersion = 11', f'    signature = {json.dumps(SIGNATURE)}',
+        '    iniSpecVersion = 3.51', '    iniVersion = 12', f'    signature = {json.dumps(SIGNATURE)}',
         '    queryCommand = "S"', '    versionInfo = "V"', '    defaultRuntimeRecordPerSec = 5', '',
         '[Constants]', '    messageEnvelopeFormat = msEnvelope_1.0', '    endianness = big',
         '    nPages = 4', '    pageSize = 256, 576, 576, 256',
@@ -48,8 +48,8 @@ def render():
     lines += ['    coolantRaw = array, U16, 32, [3], "ADC", 1, 0, 0, 4095, 0',
         '    coolantTemp = array, S16, 64, [3], "C", 0.01, 0, -40, 150, 2']
     lines += ['    enginePolicy = bits, U08, 102, [0:0], "Manual activation / USB supervision", "Autonomous at power-up"',
-        '    engineProfileFormat = bits, U08, 128, [0:1], "Unconfigured", "Sequential 720", "Crank-only 360", "INVALID"']
-    lines += ['    engineOperation = bits, U08, 156, [0:1], "Sequential 720", "Semi-sequential + wasted COP", "Simultaneous batch + wasted COP", "INVALID"']
+        '    engineProfileFormat = bits, U08, 128, [0:1], "Unconfigured", "Sequential 720", "Crank-only 360", "Paired-coil 360"']
+    lines += ['    engineOperation = bits, U08, 156, [0:2], "Sequential 720", "Semi-sequential + wasted COP", "Simultaneous batch + wasted COP", "Semi-sequential + paired coils", "Batch + paired coils", "INVALID", "INVALID", "INVALID"']
     engine_fields=[('engineCylinders','U08',129,'',1,1,12,0),
         ('requiredFuel','U16',130,'ms',0.001,0.1,30,3),('ignitionDwell','U16',132,'ms',0.001,0.1,5,3),
         ('injectorDeadTime','U16',134,'ms',0.001,0,5,3),('maximumInjection','U16',136,'ms',0.001,0.1,20,3),

@@ -71,6 +71,7 @@ public final class TunuinoConsole extends Application {
     private FeatureControlPane featureControlPane;
     private IoAssignmentsPane ioAssignmentsPane;
     private AutoTunePane autoTunePane;
+    private EngineProjectPane projectPane;
     private boolean engineArmed;
     private boolean engineAutonomous;
     private boolean serialBusy;
@@ -241,6 +242,8 @@ public final class TunuinoConsole extends Application {
             if(ioAssignmentsPane!=null)ioAssignmentsPane.availability(identifiedDevice,connected,serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()),engineArmed);
             if(engineControlPane!=null)engineControlPane.availability(identifiedDevice,connected,
                 serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()));
+            if(projectPane!=null)projectPane.availability(identifiedDevice,connected,
+                serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()),engineArmed);
             if(autoTunePane!=null)autoTunePane.availability(identifiedDevice,connected,
                 serialBusy||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()),monitoringActive,engineArmed);
             connect.setText(connected ? "Desligar USB" : "Ligar USB");
@@ -870,6 +873,15 @@ public final class TunuinoConsole extends Application {
         shell.label("Fuel Features","Combustível e proteções");
         shell.addPage("IO Functions","Funções de entradas e saídas","Escolhe as funções compatíveis pelo nome, sem códigos de pinos do microcontrolador.","M2 3H20V7H2ZM2 10H20V14H2ZM2 17H20V21H2Z",ConsoleShell.scroll(ioAssignmentsPane));
         shell.label("IO Functions","Funções de I/O");
+        projectPane=new EngineProjectPane(stage,ecuAccess,saved->{
+            updateMapViews(saved.project().ve());updateMapViews(saved.project().ignition());dashboard.selectKind(CalibrationMap.Kind.VE);
+            configurationPane.loaded(new ConfigurationClient.Snapshot(saved.project().core(),saved.validation()));
+            auxControlPane.invalidateProject();featureControlPane.invalidateProject();ioAssignmentsPane.invalidateProject();autoTunePane.invalidateProject();
+            engineControlPane.externalState(saved.engine());engineArmed=saved.engine().armed();engineAutonomous=saved.engine().autonomous();refreshControls.run();
+        });
+        shell.addPage("ECU Project","Projeto completo da ECU","Motor, sensores, mapas e auxiliares num ficheiro, com restauração e releitura das quatro páginas.",
+            "M3 1H14L20 7V21H3ZM14 1V7H20ZM6 11H16V13H6ZM6 16H16V18H6Z",ConsoleShell.scroll(projectPane));
+        shell.label("ECU Project","Projeto completo");
         shell.label("Dashboard","Painel");shell.label("Data Log","Datalogs");shell.label("Tuning","Mapas e cálculos");
         shell.label("Fuel Tables","Combustível · VE");shell.label("Ignition Tables","Ignição · avanço");
         shell.label("Inputs / Outputs","Calibração sensores");shell.label("Diagnostics","Estado da ECU");
@@ -892,7 +904,7 @@ public final class TunuinoConsole extends Application {
         stage.setOnCloseRequest(event -> {
             if(engineArmed&&!engineAutonomous){event.consume();ConsoleBranding.alert(Alert.AlertType.INFORMATION,
                 "Pára as saídas em Motor e saídas ou Testes de atuadores antes de fechar a Console.").show();return;}
-            if(configurationBusy){
+            if(configurationBusy||projectPane!=null&&projectPane.isBusy()){
                 event.consume();
                 ConsoleBranding.alert(Alert.AlertType.INFORMATION,"Espera que a operação de configuração termine antes de fechar.").show();
                 return;
@@ -919,6 +931,7 @@ public final class TunuinoConsole extends Application {
         if (portRefresh != null) portRefresh.stop();
         if (telemetry != null) telemetry.stopPlayback();
         if(engineControlPane!=null)engineControlPane.close();
+        if(projectPane!=null)projectPane.close();
         if (firmwarePanel != null) firmwarePanel.close();
         if (activeRead != null) {
             activeRead.cancel(true);
