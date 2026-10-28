@@ -195,7 +195,10 @@ public final class ConsoleUiChecks {
             ((ToggleButton)scene.lookup("#navigate-4")).fire();
             scene.getRoot().applyCss();scene.getRoot().layout();
             check(((Button)scene.lookup("#autotune-start")).isDisabled(),
-                "Unavailable Autotune must never actuate a bench ECU");
+                "Offline Autotune cannot start a USB collection");
+            check(((Button)scene.lookup("#autotune-read")).isDisabled()&&((Button)scene.lookup("#autotune-save")).isDisabled(),
+                "Autotune cannot invent an ECU baseline or save offline proposals");
+            snapshot(scene,"console-autotune");
             ((ToggleButton)scene.lookup("#navigate-5")).fire();
             scene.getRoot().applyCss();scene.getRoot().layout();
             TelemetryPane telemetry = (TelemetryPane) scene.lookup(".telemetry-pane");
@@ -428,6 +431,13 @@ public final class ConsoleUiChecks {
             try{enginePane.profile();throw new AssertionError("Unsafe dwell must not leave the editor");}catch(IllegalArgumentException expected){}
             enginePane.setting("dwell","2");
             engineTabs.getSelectionModel().selectFirst();scene.getRoot().applyCss();scene.getRoot().layout();
+            @SuppressWarnings("unchecked") var operationMode=(ComboBox<String>)scene.lookup("#engine-operation-mode");
+            for(int mode=1;mode<=2;mode++){
+                operationMode.getSelectionModel().select(mode);byte[] profile=enginePane.profile();
+                check(profile[0]==2&&profile[28]==mode&&io.tunuino.calibration.EngineProfile.valid(profile,60,2),
+                    "Crank-only mode uses an explicitly versioned native profile");
+            }
+            snapshot(scene,"console-engine-modes");operationMode.getSelectionModel().select(0);
             ((Button)scene.lookup("#engine-generic-base")).fire();
             check(engineCylinders.getValue()==4,"Generic configuration uses selected firing-order preset");
             engineTabs.getSelectionModel().select(5);scene.getRoot().applyCss();scene.getRoot().layout();
@@ -608,9 +618,49 @@ public final class ConsoleUiChecks {
                 later(()->{
                     check(editor.getScene().getWidth()>1100,"Native editor grows again after shrinking");
                     check(CalibrationViewer.closeAll(),"Resizing does not modify calibration data");
-                    checkFirmwareStability(stage);
+                    checkAutotuneWorkspace(stage);
                 });
             });
+        }
+
+        private void checkAutotuneWorkspace(Stage main) throws Exception {
+            var identity=new io.tunuino.protocol.DeviceIdentity(io.tunuino.protocol.DeviceIdentity.Family.PROTEUS,
+                io.tunuino.protocol.DeviceIdentity.McuSeries.STM32_F4,7,0,2,0,15,"0102030405060708090a0b0c");
+            var core=io.tunuino.calibration.IoConfiguration.localDefaults();
+            var base=io.tunuino.calibration.BaseMaps.create(io.tunuino.calibration.BaseMaps.Template.FLAT_REFERENCE,CalibrationMap.Kind.VE);
+            var baseline=new io.tunuino.protocol.VeAutotuneClient.Base(identity,1,base,core,
+                io.tunuino.calibration.AuxConfiguration.reference());
+            var operations=new java.util.concurrent.atomic.AtomicInteger();var collecting=new java.util.concurrent.atomic.AtomicBoolean();
+            ConfigurationPane.Access access=new ConfigurationPane.Access(){
+                @SuppressWarnings("unchecked") public <T> void run(ConfigurationPane.Operation<T> operation,
+                    java.util.function.Consumer<T> success,java.util.function.Consumer<Throwable> failure){
+                    check(operations.incrementAndGet()==1,"Learning never invokes a serial write in the UI test");
+                    success.accept((T)baseline);
+                }
+            };
+            Stage probe=new Stage();AutoTunePane pane=new AutoTunePane(probe,access,collecting::set,
+                map->{throw new AssertionError("Learning wrote an ECU map automatically");});
+            probe.setScene(new Scene(ConsoleShell.scroll(pane),1020,740));ConsoleBranding.applyTheme(probe.getScene());probe.show();
+            pane.availability(identity,true,false,false,false);
+            ((Button)pane.lookup("#autotune-read")).fire();
+            pane.availability(identity,true,true,true,true);((Button)pane.lookup("#autotune-start")).fire();
+            check(collecting.get(),"Real Autotune workspace starts its acquisition observer only on request");
+            for(int i=1;i<=120;i++){
+                var f=new io.tunuino.protocol.AuxControlClient.FeatureState(0,33,2500,0,0,0,0,10000,0,0,500,2000,0,0,1);
+                var o=new io.tunuino.protocol.EngineOutputClient.State(2,0,0,0,true,4,true,1,2000,true,true);
+                pane.observe(new io.tunuino.datalog.LiveDataMonitor.TuningFrame(Optional.of(new LogSample(i*100,3000,70,1.1,90)),
+                    new io.tunuino.datalog.LiveDataMonitor.Extras(f,o,core.engineProfile()),10));
+            }
+            check(((Button)pane.lookup("#autotune-save")).isDisabled()&&operations.get()==1,
+                "Collecting in an armed engine creates proposals without a serial commit");
+            ((Button)pane.lookup("#autotune-stop")).fire();check(!collecting.get(),"Stop detaches the acquisition observer");
+            pane.availability(identity,true,false,false,true);
+            check(((Button)pane.lookup("#autotune-save")).isDisabled(),"Stopping acquisition alone never permits armed flash writes");
+            pane.availability(identity,true,false,false,false);
+            check(!((Button)pane.lookup("#autotune-review")).isDisabled()&&!((Button)pane.lookup("#autotune-save")).isDisabled(),
+                "A disarmed, idle session can review and explicitly commit the bounded proposal");
+            ((Label)pane.lookup("#autotune-status")).setText("Dados sintéticos de teste da interface · sem ECU física");
+            snapshot(probe.getScene(),"console-autotune-proposals");probe.close();checkFirmwareStability(main);
         }
 
         private void checkFirmwareStability(Stage main) {

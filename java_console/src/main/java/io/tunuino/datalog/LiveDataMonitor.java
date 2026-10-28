@@ -22,6 +22,10 @@ public final class LiveDataMonitor {
         public Extras {profile=profile==null?null:profile.clone();}
         @Override public byte[] profile(){return profile==null?null:profile.clone();}
     }
+    public record TuningFrame(Optional<LogSample> sample,Extras extras,long responseMs) {}
+    private volatile Consumer<TuningFrame> tuning;
+    /** Observer runs on the serial worker; it may not perform serial operations. */
+    public void tuningObserver(Consumer<TuningFrame> observer){tuning=observer;}
     private record Request(Path destination, CompletableFuture<Recording> completion) {}
     private final PacketSession session;
     private final DeviceIdentity identity;
@@ -111,6 +115,7 @@ public final class LiveDataMonitor {
             while (running.getAsBoolean()) {
                 processRequests();
                 Optional<LogSample> result = LiveDataClient.read(session, identity, Duration.ofMillis(500));
+                long receivedAt=System.nanoTime();
                 if (result.isPresent()) {
                     LogSample sample = result.get();
                     if (sample.timeMs() < previousTime) {
@@ -141,9 +146,12 @@ public final class LiveDataMonitor {
                             outputProfile=!configuration.validation().dirty()&&configuration.validation().generation()==state.generation()?configuration.configuration().engineProfile():null;
                             profileGeneration=outputProfile==null?-1:state.generation();
                         }
-                        extras.accept(new Extras(sensors.get(),state,outputProfile));
+                        var extra=new Extras(sensors.get(),state,outputProfile);
+                        extras.accept(extra);
+                        var observer=tuning;if(observer!=null)observer.accept(new TuningFrame(result,extra,
+                            Duration.ofNanos(System.nanoTime()-receivedAt).toMillis()));
                     }
-                    nextExtras=System.nanoTime()+Duration.ofMillis(500).toNanos();
+                    nextExtras=System.nanoTime()+Duration.ofMillis(tuning==null?500:0).toNanos();
                 }
                 if (running.getAsBoolean()) {
                     try {

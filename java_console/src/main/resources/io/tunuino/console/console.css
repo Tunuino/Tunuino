@@ -208,3 +208,5 @@
 .dashboard-split > .split-pane-divider { -fx-padding:0 3; -fx-background-color:#263b4c; }
 .dashboard-split:vertical > .split-pane-divider { -fx-padding:3 0; }
 .dashboard-split > .split-pane-divider:hover { -fx-background-color:#0085ff; }
+
+.autotune-pane { -fx-background-color:#070c10; }

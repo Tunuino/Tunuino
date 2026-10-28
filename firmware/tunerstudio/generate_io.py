@@ -16,7 +16,7 @@ def render():
         '; Persistent engine, sensor and 16x16 map configuration.',
         '; Disabled/unavailable calibrated channels evaluate to NaN, not measurements.',
         'enable2ndByteCanID = false', '', '[TunerStudio]',
-        '    iniSpecVersion = 3.51', '    iniVersion = 10', f'    signature = {json.dumps(SIGNATURE)}',
+        '    iniSpecVersion = 3.51', '    iniVersion = 11', f'    signature = {json.dumps(SIGNATURE)}',
         '    queryCommand = "S"', '    versionInfo = "V"', '    defaultRuntimeRecordPerSec = 5', '',
         '[Constants]', '    messageEnvelopeFormat = msEnvelope_1.0', '    endianness = big',
         '    nPages = 4', '    pageSize = 256, 576, 576, 256',
@@ -48,7 +48,8 @@ def render():
     lines += ['    coolantRaw = array, U16, 32, [3], "ADC", 1, 0, 0, 4095, 0',
         '    coolantTemp = array, S16, 64, [3], "C", 0.01, 0, -40, 150, 2']
     lines += ['    enginePolicy = bits, U08, 102, [0:0], "Manual activation / USB supervision", "Autonomous at power-up"',
-        '    engineProfileFormat = bits, U08, 128, [0:0], "Unconfigured", "Sequential four stroke"']
+        '    engineProfileFormat = bits, U08, 128, [0:1], "Unconfigured", "Sequential 720", "Crank-only 360", "INVALID"']
+    lines += ['    engineOperation = bits, U08, 156, [0:1], "Sequential 720", "Semi-sequential + wasted COP", "Simultaneous batch + wasted COP", "INVALID"']
     engine_fields=[('engineCylinders','U08',129,'',1,1,12,0),
         ('requiredFuel','U16',130,'ms',0.001,0.1,30,3),('ignitionDwell','U16',132,'ms',0.001,0.1,5,3),
         ('injectorDeadTime','U16',134,'ms',0.001,0,5,3),('maximumInjection','U16',136,'ms',0.001,0.1,20,3),
@@ -196,7 +197,7 @@ def render():
     lines += ['    dialog = rawInputs, "Tunuino ADC inputs"',
         '        field = "Voltages at MCU ADC pins. External divider ratios are not applied."']
     for i in range(16):lines.append(f'        gauge = adc{i+1}Gauge')
-    groups=[('engineSetup','Engine and operation',[('Profile format','engineProfileFormat'),('Cylinders','engineCylinders'),('Activation policy','enginePolicy')]),
+    groups=[('engineSetup','Engine and operation',[('Profile format','engineProfileFormat'),('Cylinders','engineCylinders'),('Operation mode','engineOperation'),('Activation policy','enginePolicy')]),
         ('fuelSetup','Injection',[('Required fuel at VE 100% / MAP 100kPa','requiredFuel'),('Injector dead time','injectorDeadTime'),('Maximum injection pulse','maximumInjection'),('Injection end relative to cylinder TDC','injectionEnd')]),
         ('ignitionSetup','Ignition',[('Coil dwell','ignitionDwell')]),
         ('phaseSetup','Crank and cam synchronization',[('Crank capture','triggerEnabled'),('Wheel slots','triggerTeeth'),('Missing teeth','triggerMissing'),('Tooth-zero angle','toothZero'),('Cam first tooth','camFirst'),('Cam last tooth','camLast'),('Cam revolution','camPhase')]),

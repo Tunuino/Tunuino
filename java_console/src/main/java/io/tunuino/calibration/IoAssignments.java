@@ -24,7 +24,7 @@ public final class IoAssignments {
     }
     private IoAssignments(IoAssignments source){originalCore=source.originalCore;originalAux=source.originalAux;source.assignments.forEach((g,a)->assignments.put(g,a.clone()));source.overlaps.forEach((g,a)->overlaps.put(g,new HashSet<>(a)));}
     private void assign(Group g,int channel,int function){if(channel>0&&channel<=g.count){if(assignments.get(g)[channel-1]!=0)overlaps.get(g).add(channel-1);assignments.get(g)[channel-1]=function;}}
-    public int cylinders(){byte[] p=originalCore.bytes();return p[128]==1&&(p[129]&255)<=12?p[129]&255:0;}
+    public int cylinders(){byte[] p=originalCore.bytes();return (p[128]==1||p[128]==2)&&(p[129]&255)<=12?p[129]&255:0;}
     public List<Function> functions(Group g){
         var f=new ArrayList<Function>();f.add(new Function(0,"Sem atribuição"));
         int count=cylinders()>0?cylinders():12;

@@ -8,7 +8,7 @@
 #define TUNUINO_ENGINE_PROFILE_SIZE 128u
 typedef struct { uint8_t injector,coil; uint32_t tdc_centi; } tunuino_cylinder;
 typedef struct {
-    uint8_t cylinders,pump,fan,relay,cam_first,cam_last,cam_phase;
+    uint8_t cylinders,pump,fan,relay,cam_first,cam_last,cam_phase,operation;
     uint16_t required_fuel_us,dwell_us,dead_us,maximum_injection_us,prime_ms;
     int16_t fan_on_centi,fan_off_centi,injection_end_centi;
     uint32_t tooth_zero_centi;

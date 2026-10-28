@@ -37,3 +37,9 @@
 
 - Depois de um dispatch que possa gravar na flash, atualizar o instante do ciclo USB antes de consultar/transmitir a resposta. O link começa o prazo de transmissão pelo relógio posterior ao dispatch; reutilizar o instante anterior causa um falso recuo do relógio e reinicia a ligação.
 - Manter os testes do main real com persistência demorada, confirmação física de transmissão, falha de persistência e isolamento da sessão. Não desativar a deteção de relógio ou de prazo para mascarar uma falha.
+
+## Modos e aprendizagem VE
+
+- Manter o perfil sequencial formato 1 compatível. Modos 360° usam formato 2, byte 28: 1 semi-sequencial, 2 batch simultâneo, ambos wasted COP com uma saída por cilindro. Não aceitar esses modos como formato 1.
+- Nos modos 360°, repartir combustível efetivo por dois eventos e somar tempo morto em cada pulso. Limitar dwell e injeção à ocupação do período real. A falta de cames só é permitida nos modos configurados para cambota; perda de cambota mantém corte retido.
+- Autotune usa exclusivamente amostras USB e base lida da mesma ECU/geração. Não gravar durante recolha nem com saídas armadas. Antes de guardar, confirmar base/geração e criar cópia; usar escrita e releitura existentes. Não remover testes nem transformar resultados sintéticos em validação física.

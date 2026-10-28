@@ -116,6 +116,26 @@ int main(void){
     assert(request(&d,status,1)[2]==0);
     const uint8_t activate[]={6,'R','U','N','!'};assert(request(&d,activate,5)[0]==0);
     assert(request(&d,status,1)[2]==1);request(&d,stop,1);off();
+    /* Boot the persisted crank-only modes through the actual board/GPT adapter.
+     * No cam phase is ever available; generation, maps and pulse limits stay real. */
+    for(unsigned operation=1;operation<=2;++operation){
+        request(&d,stop,1);d.active[128]=2;d.active[156]=(uint8_t)operation;
+        assert(tunuino_device_validate(d.active,sizeof(d.active)));
+        assert(tunuino_device_restore(&d,d.active,sizeof(d.active)));board_outputs_restore(&d,true);
+        origin=TIM2->CNT;
+        for(unsigned step=0;step<1100;++step){
+            uint32_t next=origin+step*100u;
+            if(GPTD5.state==GPT_ONESHOT&&(int32_t)(next-alarm_at)>=0)irq();
+            TIM2->CNT=next;uint32_t elapsed=next-origin,phase=elapsed%20000u;
+            position.crank_valid=true;position.cycle_valid=false;position.rpm=3000;
+            position.revolution_phase=(elapsed/20000u)%2;position.tooth_index=(uint16_t)(phase*36u/20000u);
+            if(position.tooth_index>34)position.tooth_index=34;
+            board_outputs_update(&d,&position,next-phase+(uint32_t)position.tooth_index*20000u/36u,next);
+        }
+        r=request(&d,status,1);assert(r[2]==2&&r[3]==0&&r[15]==3&&tunuino_device_u16(r+22)==2000);
+        position.crank_valid=false;board_outputs_update(&d,&position,TIM2->CNT,TIM2->CNT);off();assert(request(&d,status,1)[2]==3);
+    }
+    request(&d,stop,1);d.active[128]=1;d.active[156]=0;
     /* Persisted page 4 drives actual PWM pins and latches overboost cut. */
     uint8_t aux_config[256];aux_fixture(aux_config);aux_config[1]=1;aux_config[2]=8;aux_config[3]=2;aux_config[4]=9;aux_config[5]=3;
     memcpy(d.active+TUNUINO_IO_AUX_OFFSET,aux_config,256);assert(tunuino_device_validate(d.active,sizeof(d.active)));
@@ -131,7 +151,7 @@ int main(void){
     r=request(&d,status,1);assert(r[2]==3&&(r[3]&16));
     d.live.map_milli_kpa=100000;board_outputs_update(&d,&position,TIM2->CNT,TIM2->CNT);off();assert(request(&d,status,1)[2]==3);
     request(&d,stop,1);
-    puts("F427 output adapter: actual framed commands, reset GPIO levels, LS/IGN pin routing, GPT IRQ pulse edges, arm gates, profile phase wiring, main-loop stall and host lease cut passed. Register model only.");
+    puts("F427 output adapter: actual framed commands, reset GPIO levels, LS/IGN pin routing, GPT IRQ pulse edges, arm gates, profile phase wiring, persisted crank-only semi/batch operation without cam, main-loop stall and host lease cut passed. Register model only.");
     return 0;
 }
 #else
@@ -154,11 +174,10 @@ int main(void){
         frame[0]=(uint8_t)hi;frame[1]=(uint8_t)lo;if(fread(frame+2,1,total-2,stdin)!=total-2)return 3;
         const uint8_t *q;size_t bytes;if(tunuino_frame_decode(frame,total,&q,&bytes)!=TUNUINO_FRAME_OK)return 4;
         TIM2->CNT+=100;
-        /* Match the production dispatcher: partial telemetry and native output commands share one stream. */
-        if(bytes==9&&memcmp(q,"TUNUINO:P",9)==0){
-            ++d.live.time_ms;
-            if(tunuino_live_partial_reply(&d.live,response,sizeof(response),&response_size)!=TUNUINO_LIVE_OK)return 5;
-        }else if(tunuino_device_reply(&d,&id,q,bytes,response,sizeof(response),&response_size)!=TUNUINO_DISPATCH_OK)return 5;
+        /* Use the production dispatcher for native map, telemetry and I/O commands. */
+        if(bytes==9&&memcmp(q,"TUNUINO:P",9)==0)++d.live.time_ms;
+        const tunuino_dispatch_context context={&id,&d.live,&d.ve,&d.ignition,&d};
+        if(tunuino_dispatch_reply(&context,frame,total,response,sizeof(response),&response_size)!=TUNUINO_DISPATCH_OK)return 5;
         if(fwrite(response,1,response_size,stdout)!=response_size||fflush(stdout))return 6;
     }
     return 0;

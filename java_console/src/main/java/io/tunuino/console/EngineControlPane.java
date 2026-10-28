@@ -24,6 +24,7 @@ final class EngineControlPane extends VBox {
     private final Map<String,ComboBox<String>> cylinderSelectors=new LinkedHashMap<>();
     private final GridPane wiring=new GridPane();
     private final ComboBox<Integer> count=new ComboBox<>();
+    private final ComboBox<String> operation=new ComboBox<>();
     private final ComboBox<io.tunuino.calibration.EnginePreset> presets=new ComboBox<>();
     private final Button applyPreset=new Button("Aplicar modelo à edição");
     private final OutputTestPane tests;
@@ -56,6 +57,12 @@ final class EngineControlPane extends VBox {
             GridPane grid=new GridPane();grid.setHgap(18);grid.setVgap(10);grids.put(group,grid);
         }
         grids.get("Motor").addRow(0,new Label("Cilindros"),count);
+        operation.getItems().addAll("Sequencial 720° · com fase de cames",
+            "Semi-sequencial 360° + wasted COP · só cambota",
+            "Batch simultâneo 360° + wasted COP · só cambota");
+        operation.getSelectionModel().select(0);operation.setId("engine-operation-mode");
+        operation.setOnAction(event->{acknowledge.setSelected(false);controls();});
+        grids.get("Motor").addRow(1,new Label("Modo de funcionamento"),operation);
         presets.getItems().addAll(io.tunuino.calibration.EnginePreset.choices());presets.getSelectionModel().select(3);
         presets.setId("engine-preset");applyPreset.setId("engine-preset-apply");
         applyPreset.setOnAction(event->applyPreset());
@@ -107,7 +114,7 @@ final class EngineControlPane extends VBox {
         count.setOnAction(event->{acknowledge.setSelected(false);presetSummary.setText(count.getValue()==null?"Seleciona o número de cilindros ou aplica um modelo.":"Cilindros: "+count.getValue()+" · verifica a ordem e as atribuições no separador Cilindros.");for(int i=0;i<12;++i)for(var f:cylinders[i])f.setDisable(count.getValue()==null||i>=count.getValue());controls();});
         count.getOnAction().handle(null);
         getChildren().add(ConsoleShell.card("PERFIL E CONTROLO DO MOTOR",
-            "Perfil sequencial de quatro tempos guardado na ECU. Em modo autónomo, o motor funciona sem USB. Os testes individuais estão no menu Testes de atuadores.",
+            "Perfil de quatro tempos guardado na ECU. Em modo autónomo, o motor funciona sem USB. Os testes individuais estão no menu Testes de atuadores.",
             ConsoleShell.actions(load,read,stop),result));
         TabPane tabs=new TabPane();tabs.setId("engine-configuration-tabs");tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         tabs.getTabs().add(new Tab("Motor",ConsoleShell.card("MODELO DE CONFIGURAÇÃO",
@@ -213,7 +220,9 @@ final class EngineControlPane extends VBox {
     private int n(String name,int decimals,int min,int max){return number(fields.get(name).getText(),decimals,min,max,name);}
     byte[] profile(){
         if(count.getValue()==null)throw new IllegalArgumentException("Seleciona o número de cilindros");
-        ByteBuffer p=ByteBuffer.allocate(128);p.put((byte)1).put((byte)(int)count.getValue());
+        int mode=operation.getSelectionModel().getSelectedIndex();
+        ByteBuffer p=ByteBuffer.allocate(128);p.put((byte)(mode==0?1:2)).put((byte)(int)count.getValue());
+        p.put(28,(byte)mode);
         p.putShort((short)n("fuel",3,100,30000)).putShort((short)n("dwell",3,100,5000));
         p.putShort((short)n("dead",3,0,5000)).putShort((short)n("maximum",3,100,20000));
         p.putShort((short)n("prime",0,0,3000)).putShort((short)n("fanOn",2,0,12000)).putShort((short)n("fanOff",2,0,12000));
@@ -267,7 +276,7 @@ final class EngineControlPane extends VBox {
             if(!io.tunuino.calibration.EngineProfile.valid(p,configuration.bytes()[3]&255,configuration.bytes()[4]&255)){
                 uploadedProfile=null;result.setText("Ainda não existe um perfil de motor guardado. Escolhe um modelo e completa a calibração.");
             }else{
-                ByteBuffer b=ByteBuffer.wrap(p);count.setValue((int)p[1]);
+                ByteBuffer b=ByteBuffer.wrap(p);count.setValue((int)p[1]);operation.getSelectionModel().select(p[28]);
                 String[] keys={"fuel","dwell","dead","maximum","prime","fanOn","fanOff","injectionEnd"};
                 for(int i=0;i<keys.length;i++){
                     int raw=i>=5?b.getShort(2+2*i):Short.toUnsignedInt(b.getShort(2+2*i));
@@ -304,7 +313,7 @@ final class EngineControlPane extends VBox {
             Integer row=GridPane.getRowIndex(node);boolean visible=row==null||row==0||count.getValue()!=null&&row<=count.getValue();
             node.setVisible(visible);node.setManaged(visible);
         }
-        count.setDisable(armed||busy);
+        count.setDisable(armed||busy);operation.setDisable(armed||busy);
         for(var field:fields.values())field.setDisable(armed||busy);
         for(int i=0;i<12;++i){
             boolean disabled=armed||busy||count.getValue()==null||i>=count.getValue();

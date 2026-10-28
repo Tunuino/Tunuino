@@ -169,6 +169,55 @@ int main(void){
     tunuino_position_reading protected_position={1,1,0,0,1000};
     tunuino_engine_control_update(&e,clock_us,clock_us,&protected_position,60,1,true,10000,1000,100000,true,90000);
     assert(!e.outputs.armed&&!mask&&e.outputs.fault==TUNUINO_OUTPUT_PROTECTION);
-    puts("Outputs: reset-low, pulse bounds, overlap, watchdog/wrap, sequential timing, integrated IAT/voltage/target/ethanol/cylinder corrections, injector-only RPM cuts and latched thermal/voltage protection passed. Synthetic GPIO only.");
+    /* Real scheduler code: crank-only modes, twice per 720 degrees, independent
+     * of absent/changing cam phase. Separate outputs remain mandatory. */
+    for(unsigned operation=1;operation<=2;++operation){
+        profile(p);p[0]=2;p[28]=(uint8_t)operation;p[1]=4;
+        for(unsigned i=0;i<4;++i){p[32+8*i]=(uint8_t)i;p[33+8*i]=(uint8_t)i;p32(p+34+8*i,i*18000);}
+        clock_us=0;tunuino_engine_control_init(&e,gpio,NULL);
+        assert(tunuino_engine_control_configure(&e,p,60,2,1));
+        assert(e.profile.operation==operation&&tunuino_engine_control_arm(&e,0,1));
+        memset(rises,0,sizeof(rises));memset(falls,0,sizeof(falls));
+        for(clock_us=0;clock_us<360000;clock_us+=10){
+            tunuino_outputs_poll(&e.outputs,clock_us);
+            if(clock_us%250==0){
+                unsigned rev=clock_us/60000,tooth=(clock_us/1000)%60;if(tooth>57)tooth=57;
+                tunuino_position_reading crank_only={1,0,(uint8_t)(rev%2),(uint16_t)tooth,1000};
+                tunuino_engine_control_update(&e,clock_us,(rev*60+tooth)*1000,&crank_only,60,1,true,10000,1000,100000,true,92000);
+                assert(!e.outputs.fault&&e.mode==2&&e.last_injection_us==2000);
+            }
+        }
+        for(unsigned i=0;i<4;++i){assert(rises[i]>=5&&rises[i]<=6&&rises[16+i]>=5&&rises[16+i]<=6);assert(last_width[i]==2000&&last_width[16+i]==2000);}
+        if(operation==2)for(unsigned i=1;i<4;++i)assert(e.outputs.pulse[i].start==e.outputs.pulse[0].start);
+        tunuino_position_reading no_crank={0};
+        tunuino_engine_control_update(&e,clock_us,clock_us,&no_crank,60,1,true,10000,1000,100000,true,92000);
+        assert(!mask&&e.outputs.fault==TUNUINO_OUTPUT_SYNC);
+        tunuino_engine_control_stop(&e,0);
+    }
+    /* Both crank-only strategies across 12 outputs and the complete tested RPM
+     * range, with missing-tooth gaps, timer wrap and 360-degree event rollover. */
+    for(unsigned operation=1;operation<=2;++operation)for(unsigned index=0;index<6;++index){
+        unsigned rpm=speeds[index];profile(p);p[0]=2;p[28]=(uint8_t)operation;p[1]=12;
+        for(unsigned i=0;i<12;++i){p[32+8*i]=(uint8_t)i;p[33+8*i]=(uint8_t)i;p32(p+34+8*i,i*6000);}
+        clock_us=0;tunuino_engine_control_init(&e,gpio,NULL);
+        assert(tunuino_engine_control_configure(&e,p,60,2,1));
+        uint32_t start=UINT32_MAX-60000u;assert(tunuino_engine_control_arm(&e,start,1));
+        memset(rises,0,sizeof(rises));memset(falls,0,sizeof(falls));
+        for(uint32_t elapsed=0;elapsed<600000;elapsed+=10){
+            clock_us=start+elapsed;tunuino_outputs_poll(&e.outputs,clock_us);
+            if(elapsed%250==0){
+                unsigned slot=(unsigned)((uint64_t)elapsed*rpm/1000000u),rev=slot/60,tooth=slot%60;if(tooth>57)tooth=57;
+                uint32_t edge=start+(uint32_t)(((uint64_t)(rev*60+tooth)*1000000u+rpm/2)/rpm);
+                tunuino_position_reading crank_only={1,0,(uint8_t)(rev%2),(uint16_t)tooth,(double)rpm};
+                tunuino_engine_control_update(&e,clock_us,edge,&crank_only,60,1,true,10000,1000,100000,true,92000);
+                assert(!e.outputs.fault&&e.last_injection_us==2000);
+            }
+        }
+        for(unsigned i=0;i<12;++i)assert(rises[i]>0&&rises[16+i]>0);
+        tunuino_engine_control_stop(&e,0);assert(!mask);
+    }
+    profile(p);p[0]=1;p[28]=1;assert(!tunuino_engine_profile_decode(p,60,2,&cfg));
+    p[0]=2;p[28]=3;assert(!tunuino_engine_profile_decode(p,60,2,&cfg));
+    puts("Outputs: reset-low, pulse bounds, overlap, watchdog/wrap, sequential timing, 12-cylinder crank-only 360-degree semi/batch with wasted COP across 400-12000 RPM and timer wrap, integrated IAT/voltage/target/ethanol/cylinder corrections, injector-only RPM cuts and latched thermal/voltage protection passed. Synthetic GPIO only.");
     return 0;
 }

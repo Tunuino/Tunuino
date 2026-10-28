@@ -36,8 +36,8 @@ public final class EngineOutputClient {
             return names.isEmpty()?"nenhuma":String.join(", ",names);
         }
         public String description(){return switch(mode){
-            case 0->"DESARMADO";case 1->"ARMADO · aguarda sincronização 720°";
-            case 2->"CONTROLO SEQUENCIAL ATIVO";case 3->"CORTE POR FALHA";case 4->"PULSO DE BANCADA";
+            case 0->"DESARMADO";case 1->"ARMADO · aguarda sincronização";
+            case 2->"CONTROLO DO MOTOR ATIVO";case 3->"CORTE POR FALHA";case 4->"PULSO DE BANCADA";
             default->throw new IllegalStateException();};}
     }
     public static State decode(byte[] b)throws IOException {
@@ -53,7 +53,7 @@ public final class EngineOutputClient {
     public static State read(PacketSession session)throws IOException {return decode(exchange(session,new byte[]{0}));}
     private static void accepted(byte[] body)throws IOException {if(body.length!=1)throw new IOException("Confirmação de comando inválida");}
     public static State configure(PacketSession s,byte[] profile)throws IOException {
-        if(profile.length!=128||profile[0]!=1)throw new IllegalArgumentException("Perfil deve ter 128 bytes, formato 1");
+        if(profile.length!=128||(profile[0]!=1&&profile[0]!=2))throw new IllegalArgumentException("Perfil deve ter 128 bytes, formato 1 ou 2");
         accepted(exchange(s,ByteBuffer.allocate(129).put((byte)1).put(profile).array()));return read(s);
     }
     public static State arm(PacketSession s,long generation)throws IOException {

@@ -6,14 +6,15 @@ public final class EngineProfile {
     private EngineProfile(){}
     public static boolean empty(byte[] p){for(byte b:p)if(b!=0)return false;return true;}
     public static boolean valid(byte[] p,int slots,int missing){
-        if(p==null||p.length!=128||p[0]!=1||p[1]<1||p[1]>12||slots<4||slots>120||missing<1||missing>=slots/2)return false;
+        if(p==null||p.length!=128||(p[0]!=1&&p[0]!=2)||p[1]<1||p[1]>12||slots<4||slots>120||missing<1||missing>=slots/2)return false;
         ByteBuffer b=ByteBuffer.wrap(p);
         int fuel=u(b,2),dwell=u(b,4),dead=u(b,6),maximum=u(b,8);
         if(fuel<100||fuel>30000||dwell<100||dwell>5000||dead>5000||maximum<100||maximum>20000||dead>=maximum
             ||u(b,10)>3000||b.getShort(14)<0||b.getShort(14)>=b.getShort(12)||b.getShort(12)>12000
             ||b.getShort(16)<-30000||b.getShort(16)>30000||Integer.toUnsignedLong(b.getInt(18))>=72000
             ||(p[25]&255)>(p[26]&255)||(p[26]&255)>=slots-missing||(p[27]&255)>1)return false;
-        for(int i=28;i<32;i++)if(p[i]!=0)return false;
+        if((p[0]==1&&p[28]!=0)||(p[0]==2&&(p[28]<1||p[28]>2)))return false;
+        for(int i=29;i<32;i++)if(p[i]!=0)return false;
         long used=0;var angles=new HashSet<Integer>();
         for(int i=0;i<12;i++){
             int at=32+8*i;

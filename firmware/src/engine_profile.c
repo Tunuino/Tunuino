@@ -4,7 +4,7 @@ static uint16_t u16(const uint8_t *p){return (uint16_t)((uint16_t)p[0]<<8|p[1]);
 static uint32_t u32(const uint8_t *p){return (uint32_t)u16(p)<<16|u16(p+2);}
 static int32_t signed16(const uint8_t *p){uint16_t v=u16(p);return v<32768?v:(int32_t)v-65536;}
 bool tunuino_engine_profile_decode(const uint8_t p[128],uint16_t slots,uint8_t missing,tunuino_engine_profile *out){
-    if(!p||!out||p[0]!=1||p[1]<1||p[1]>12||slots<4||slots>120||missing==0||missing>=slots/2)return false;
+    if(!p||!out||(p[0]!=1&&p[0]!=2)||p[1]<1||p[1]>12||slots<4||slots>120||missing==0||missing>=slots/2)return false;
     tunuino_engine_profile c={0};c.cylinders=p[1];
     c.required_fuel_us=u16(p+2);c.dwell_us=u16(p+4);c.dead_us=u16(p+6);
     c.maximum_injection_us=u16(p+8);c.prime_ms=u16(p+10);
@@ -17,7 +17,9 @@ bool tunuino_engine_profile_decode(const uint8_t p[128],uint16_t slots,uint8_t m
         ||c.injection_end_centi< -30000||c.injection_end_centi>30000
         ||c.fan_off_centi<0||c.fan_off_centi>=c.fan_on_centi||c.fan_on_centi>12000
         ||c.cam_first>c.cam_last||c.cam_last>=slots-missing||c.cam_phase>1)return false;
-    for(unsigned i=28;i<32;++i)if(p[i])return false;
+    c.operation=p[28];
+    if((p[0]==1&&c.operation)||(p[0]==2&&(c.operation<1||c.operation>2)))return false;
+    for(unsigned i=29;i<32;++i)if(p[i])return false;
     uint32_t used=0;
     for(unsigned i=0;i<12;++i){const uint8_t *row=p+32+8*i;
         if(i>=c.cylinders){for(unsigned j=0;j<8;++j)if(row[j])return false;continue;}

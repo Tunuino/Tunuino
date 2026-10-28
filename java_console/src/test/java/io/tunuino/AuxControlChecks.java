@@ -59,22 +59,41 @@ public final class AuxControlChecks {
             check(routed.core().configuration().mapChannel()==7&&(routed.core().configuration().engineProfile()[32]&255)==9&&(routed.auxiliary().configuration().bytes()[72]&255)==3,"Actual board commits MAP, injector and IAT assignments in both pages");
             check(routed.core().validation().generation()==assignments.core().validation().generation()+1&&!routed.engine().armed()&&routed.core().configuration().value(IoConfiguration.Field.MAP_HIGH).equals("250"),"One atomic generation, calibrated values retained, never auto-arm");
             try{IoAssignmentClient.apply(session,d,assignments,routes,timeout);throw new AssertionError("Stale assignment snapshot accepted");}catch(java.io.IOException expected){}
+            MapWriteClient.write(session,d,BaseMaps.create(BaseMaps.Template.FLAT_REFERENCE,CalibrationMap.Kind.VE),timeout);
+            var tuningBase=VeAutotuneClient.read(session,d);
+            var tuneBackup=java.nio.file.Files.createTempDirectory("tunuino-ve-backup").resolve("base.tnmap");
+            var tuneProposal=tuningBase.map().withCell(0,0,"81.60");
+            java.nio.file.Files.writeString(tuneBackup,"preserve existing file");
+            try{VeAutotuneClient.write(session,d,tuningBase,tuneProposal,tuneBackup);throw new AssertionError("Existing VE backup overwritten");}catch(java.nio.file.FileAlreadyExistsException expected){}
+            check(java.nio.file.Files.readString(tuneBackup).equals("preserve existing file")&&ConfigurationClient.validation(session,d,timeout).generation()==tuningBase.generation(),"Backup failure leaves file and ECU generation untouched");
+            java.nio.file.Files.delete(tuneBackup);
+            VeAutotuneClient.write(session,d,tuningBase,tuneProposal,tuneBackup);
+            check(java.util.Arrays.equals(CalibrationMap.read(tuneBackup).encode(),tuningBase.map().encode()),"Autotune preserves the exact previous map before commit");
+            check(java.util.Arrays.equals(MapReadClient.read(session,d,CalibrationMap.Kind.VE,timeout).encode(),tuneProposal.encode())&&!EngineOutputClient.read(session).armed(),"Actual board stores bounded VE proposal and readback without arming");
+            try{VeAutotuneClient.write(session,d,tuningBase,tuneProposal,tuneBackup.resolveSibling("stale.tnmap"));throw new AssertionError("Stale VE proposal overwritten");}catch(java.io.IOException expected){}
+            try{VeAutotuneClient.write(session,d,tuningBase,tuningBase.map().withCell(0,0,"90"),tuneBackup.resolveSibling("unbounded.tnmap"));throw new AssertionError("Unbounded VE proposal accepted");}catch(IllegalArgumentException expected){}
+            java.nio.file.Files.delete(tuneBackup);java.nio.file.Files.delete(tuneBackup.getParent());
             outputs=EngineOutputClient.read(session);saved=routed.auxiliary();desired=saved.configuration();
+            var armedTuneBase=VeAutotuneClient.read(session,d);
             EngineOutputClient.arm(session,outputs.generation());
+            try{VeAutotuneClient.write(session,d,armedTuneBase,armedTuneBase.map(),tuneBackup.resolveSibling("armed.tnmap"));throw new AssertionError("Autotune wrote while armed");}catch(java.io.IOException expected){}
+            check(!java.nio.file.Files.exists(tuneBackup.resolveSibling("armed.tnmap")),"Armed learning commit is rejected before creating files");
             try{IoAssignmentClient.apply(session,d,routed,moved.withFunction(IoAssignments.Group.POWER,10,1),timeout);throw new AssertionError("Armed assignment write accepted");}catch(java.io.IOException expected){}
             try{AuxControlClient.apply(session,d,saved,desired.edited(Map.of(AuxConfiguration.Field.IDLE_P,"6"),1,8,2,9,3),timeout);throw new AssertionError("Running write accepted");}catch(java.io.IOException expected){}
             check(!AuxControlClient.read(session,d,timeout).validation().dirty(),"Running write changes no staged bytes");EngineOutputClient.stop(session);
             var running=new java.util.concurrent.atomic.AtomicBoolean(true);
             var samples=new java.util.concurrent.atomic.AtomicInteger();var extraCount=new java.util.concurrent.atomic.AtomicInteger();
             var monitor=new io.tunuino.datalog.LiveDataMonitor(session,d,Duration.ofMillis(10));
+            var tuningFrames=new java.util.concurrent.atomic.AtomicInteger();
+            monitor.tuningObserver(frame->{check(frame.sample().isPresent()&&frame.extras().outputs().generation()==frame.extras().sensors().generation(),"Learning frame pairs actual native samples and matching feature/output generation");tuningFrames.incrementAndGet();});
             long count=monitor.run(running::get,sample->{if(samples.incrementAndGet()==3)running.set(false);},error->{throw new AssertionError(error);},extra->{
                 check(extra.sensors().flags()==2047&&extra.outputs().configured()&&extra.profile()[0]==1,"Native extended sensors and saved output routing reach the monitor");
                 byte[] copy=extra.profile();copy[0]=99;check(extra.profile()[0]==1,"Monitor profile snapshot is immutable");extraCount.incrementAndGet();
             });
-            check(count==3&&extraCount.get()>0&&session.isOpen(),"Extended telemetry shares the serial worker and preserves the session");
+            check(count==3&&extraCount.get()>0&&tuningFrames.get()>0&&session.isOpen(),"Extended telemetry shares the serial worker and preserves the session");
         }
         byte[] fault=new byte[24];fault[1]=1;fault[2]=3;fault[3]=16;fault[14]=1;
         check(EngineOutputClient.decode(fault).faultsDescription().contains("turbo"),"Overboost fault decodes explicitly");
-        System.out.println("Aux C/Java: exact settings, backups, page-4 persistence, no auto-arm, ownership rejection, pending/stale protection and running-write rejection passed. Register model only.");
+        System.out.println("Aux C/Java: exact settings, backups, page-4 persistence, no auto-arm, ownership rejection, pending/stale protection, real-dispatch VE baseline/backup/commit/readback, learning-frame generation and running-write rejection passed. Register model only.");
     }
 }

@@ -70,6 +70,7 @@ public final class TunuinoConsole extends Application {
     private AuxControlPane auxControlPane;
     private FeatureControlPane featureControlPane;
     private IoAssignmentsPane ioAssignmentsPane;
+    private AutoTunePane autoTunePane;
     private boolean engineArmed;
     private boolean engineAutonomous;
     private boolean serialBusy;
@@ -240,6 +241,8 @@ public final class TunuinoConsole extends Application {
             if(ioAssignmentsPane!=null)ioAssignmentsPane.availability(identifiedDevice,connected,serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()),engineArmed);
             if(engineControlPane!=null)engineControlPane.availability(identifiedDevice,connected,
                 serialBusy||monitoringActive||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()));
+            if(autoTunePane!=null)autoTunePane.availability(identifiedDevice,connected,
+                serialBusy||fileReading||(firmwarePanel!=null&&firmwarePanel.isBusy()),monitoringActive,engineArmed);
             connect.setText(connected ? "Desligar USB" : "Ligar USB");
             boolean programming = firmwarePanel != null && firmwarePanel.isBusy();
             connect.setDisable(programming || serialBusy || monitoringActive || (!connected && ports.getValue() == null));
@@ -589,6 +592,7 @@ public final class TunuinoConsole extends Application {
                 refreshConnection.run();
             }), extra -> Platform.runLater(()->{
                 if(stopping.get()||!monitoringActive||monitorGeneration!=generation)return;
+                engineArmed=extra.outputs().armed();engineAutonomous=extra.outputs().autonomous();
                 dashboard.showAuxiliary(extra.sensors());dashboard.showOutputs(extra.outputs(),extra.profile());
             })), count -> {
                 monitoringActive = false;
@@ -791,17 +795,6 @@ public final class TunuinoConsole extends Application {
         shell.addPage("Ignition Tables", "Tabela de ignição · 16×16",
             "Mapa real de avanço em graus. Configura PMS, canais e dwell em Configuração do motor antes de armar.",
             "M12 2L6 13H11L8 22L18 10H13Z",ConsoleShell.scroll(ignitionTables));
-        Button autotuneUnavailable=new Button("Autotune indisponível neste firmware");
-        autotuneUnavailable.setId("autotune-start");autotuneUnavailable.setDisable(true);
-        shell.addPage("Autotune", "Autotune", "Afinação assistida de VE ainda não implementada.",
-            "M12 3L21 12L12 21L3 12ZM11 7H13V13H11ZM11 16H13V18H11Z",
-            ConsoleShell.scroll(new VBox(14,
-                ConsoleShell.card("AUTOTUNE", "O alvo lambda e a correção em malha fechada estão em Combustível e proteções. "
-                    +"A aprendizagem e alteração automática do mapa VE ainda não estão implementadas.",
-                    autotuneUnavailable),
-                ConsoleShell.card("DADOS REAIS", "Para analisar a mistura, podes gravar os canais reais "
-                    +"disponíveis em Data Log e editar manualmente os mapas 16×16 em Tuning.",
-                    new Label("O Dashboard nunca inventa uma medição de AFR.")))));
         ConfigurationPane.Access ecuAccess=new ConfigurationPane.Access() {
             @Override public <T> void run(ConfigurationPane.Operation<T> operation,Consumer<T> success,Consumer<Throwable> failure) {
                 PacketSession current=connection.get();DeviceIdentity device=identifiedDevice;
@@ -817,6 +810,13 @@ public final class TunuinoConsole extends Application {
                 });
             }
         };
+        autoTunePane=new AutoTunePane(stage,ecuAccess,learning->{
+            LiveDataMonitor tuningMonitor=liveMonitor;if(tuningMonitor!=null)tuningMonitor.tuningObserver(learning?frame->Platform.runLater(()->{
+                if(!stopping.get()&&liveMonitor==tuningMonitor)autoTunePane.observe(frame);
+            }):null);
+        },map->{updateMapViews(map);engineControlPane.externalConfiguration(0);});
+        shell.addPage("Autotune","Autotune VE","Propostas de VE a partir da lambda wideband e das leituras USB reais.",
+            "M12 3L21 12L12 21L3 12ZM11 7H13V13H11ZM11 16H13V18H11Z",ConsoleShell.scroll(autoTunePane));
         configurationPane=new ConfigurationPane(stage,ecuAccess);
         Consumer<io.tunuino.protocol.EngineOutputClient.State> outputState=value->{
             engineArmed=value.armed();

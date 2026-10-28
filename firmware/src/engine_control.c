@@ -35,11 +35,11 @@ static void auxiliary(tunuino_engine_control *e,uint32_t now,bool crank,bool clt
     if(p->fan)(void)tunuino_outputs_level(&e->outputs,p->fan-1,e->fan_on!=0);
 }
 static bool schedule(tunuino_engine_control *e,unsigned ch,uint32_t target,uint32_t duration,
-    uint32_t current,uint32_t revolution,uint32_t now,bool first){
+    uint32_t current,uint32_t revolution,uint32_t now,bool first,uint32_t period){
     uint32_t cycle=e->cycle+(target<=current?1u:0u);
     if(e->scheduled_cycle[ch]==cycle)return true;
-    uint32_t delta=(target+72000u-current)%72000u;
-    if(!delta)delta=72000;
+    uint32_t delta=(target+period-current)%period;
+    if(!delta)delta=period;
     uint32_t until=(uint32_t)(((uint64_t)delta*revolution+18000)/36000u);
     if(until<=duration+10u){
         if(first){e->scheduled_cycle[ch]=cycle;return true;}
@@ -57,24 +57,26 @@ void tunuino_engine_control_update(tunuino_engine_control *e,uint32_t now,uint32
     if(!tunuino_outputs_keepalive(&e->outputs,now,20000)){e->mode=3;return;}
     if(generation!=e->generation){tunuino_engine_control_stop(e,TUNUINO_OUTPUT_CALIBRATION);e->configured=0;return;}
     bool crank=r&&r->crank_valid;
-    if(!r||!r->cycle_valid||!crank||!valid){
+    bool phased=e->profile.operation==0;
+    uint32_t period=phased?72000u:36000u;
+    if(!r||(phased&&!r->cycle_valid)||!crank||!valid){
         if(e->have_phase){tunuino_engine_control_stop(e,TUNUINO_OUTPUT_SYNC);return;}
         auxiliary(e,now,crank,clt_valid,clt);return;
     }
     if(!clt_valid||slots<4||slots>120||!isfinite(r->rpm)||r->rpm<30||r->rpm>20000
-        ||r->revolution_phase>1||r->tooth_index>=slots||ve==0||ve>30000
+        ||(phased&&r->revolution_phase>1)||r->tooth_index>=slots||ve==0||ve>30000
         ||advance< -9000||advance>9000||map==0||map>500000){
         tunuino_engine_control_stop(e,TUNUINO_OUTPUT_CALIBRATION);return;
     }
     uint32_t revolution=(uint32_t)(60000000.0/r->rpm+0.5),age=now-edge;
     uint32_t maximum_age=(uint32_t)((uint64_t)revolution*(e->missing+1u)*2u/slots);
     if(age>maximum_age||age>revolution/2u){tunuino_engine_control_stop(e,TUNUINO_OUTPUT_SYNC);return;}
-    uint32_t current=angle((int64_t)e->profile.tooth_zero_centi+(uint32_t)r->revolution_phase*36000u
-        +(uint32_t)r->tooth_index*36000u/slots+(uint64_t)age*36000u/revolution);
+    uint32_t current=angle((int64_t)e->profile.tooth_zero_centi+(phased?(uint32_t)r->revolution_phase*36000u:0u)
+        +(uint32_t)r->tooth_index*36000u/slots+(uint64_t)age*36000u/revolution)%period;
     bool first=!e->have_phase;
     if(!first){
-        uint32_t delta=(current+72000u-e->last_angle)%72000u;
-        if((uint32_t)(now-e->last_now)>revolution||delta>36000u){
+        uint32_t delta=(current+period-e->last_angle)%period;
+        if((uint32_t)(now-e->last_now)>revolution||delta>period/2u){
             if(current<e->last_angle&&e->last_angle-current<100u)current=e->last_angle;
             else {tunuino_engine_control_stop(e,TUNUINO_OUTPUT_SYNC);return;}
         }
@@ -97,9 +99,13 @@ void tunuino_engine_control_update(tunuino_engine_control *e,uint32_t now,uint32
     if((e->features.flags&TUNUINO_FEATURE_LAUNCH)&&e->feature_inputs.launch&&adjusted>e->features.launch_advance)adjusted=e->features.launch_advance;
     uint64_t base=(fuel+500000000u)/1000000000u;
     uint64_t corrected=((base*multiplier+5000u)/10000u*f->multiplier+5000u)/10000u+f->extra_us;
+    /* ReqFuel and all enrichments represent fuel per four-stroke cycle.
+     * Two events each cycle split effective fuel; dead time belongs to each event. */
+    if(!phased)corrected=(corrected+1u)/2u;
+    uint32_t duty_limit=(uint32_t)((uint64_t)revolution*(phased?16u:8u)/10u);
     uint32_t injection=(uint32_t)corrected+f->dead_us;
     if((!f->fuel_cut&&(injection==0||injection>e->profile.maximum_injection_us
-        ||injection>(uint64_t)revolution*16u/10u))||f->dwell_us>(uint64_t)revolution*16u/10u){
+        ||injection>duty_limit))||f->dwell_us>duty_limit){
         tunuino_engine_control_stop(e,TUNUINO_OUTPUT_CALIBRATION);return;
     }
     e->last_injection_us=f->fuel_cut?0:injection;
@@ -108,10 +114,10 @@ void tunuino_engine_control_update(tunuino_engine_control *e,uint32_t now,uint32
         int32_t spark=adjusted;
         if(e->features.flags&TUNUINO_FEATURE_TRIMS){cylinder_fuel=(uint32_t)((corrected*(uint32_t)(10000+e->features.fuel_trim[i])+5000)/10000);spark+=e->features.spark_trim[i];}
         cylinder_fuel+=f->dead_us;
-        if(spark< -9000||spark>9000||(!f->fuel_cut&&(cylinder_fuel>e->profile.maximum_injection_us||cylinder_fuel>(uint64_t)revolution*16u/10u))){tunuino_engine_control_stop(e,TUNUINO_OUTPUT_CALIBRATION);return;}
+        if(spark< -9000||spark>9000||(!f->fuel_cut&&(cylinder_fuel>e->profile.maximum_injection_us||cylinder_fuel>duty_limit))){tunuino_engine_control_stop(e,TUNUINO_OUTPUT_CALIBRATION);return;}
         if(f->fuel_cut)tunuino_outputs_cancel_injector(&e->outputs,c->injector);
-        if((!f->fuel_cut&&!schedule(e,c->injector,angle((int64_t)c->tdc_centi+e->profile.injection_end_centi),cylinder_fuel,current,revolution,now,first))
-            ||!schedule(e,16+c->coil,angle((int64_t)c->tdc_centi-spark),f->dwell_us,current,revolution,now,first)){
+        if((!f->fuel_cut&&!schedule(e,c->injector,angle((e->profile.operation==2?0:(int64_t)c->tdc_centi)+e->profile.injection_end_centi)%period,cylinder_fuel,current,revolution,now,first,period))
+            ||!schedule(e,16+c->coil,angle((int64_t)c->tdc_centi-spark)%period,f->dwell_us,current,revolution,now,first,period)){
             tunuino_engine_control_stop(e,TUNUINO_OUTPUT_LATE);return;
         }
     }

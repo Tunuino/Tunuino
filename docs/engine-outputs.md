@@ -1,3 +1,5 @@
+> Modos adicionais: perfil formato 2, byte relativo 28 = 1 semi-sequencial 360° ou 2 batch simultâneo 360°, ambos wasted COP. O formato 1 mantém todos os bytes 28–31 a zero. No formato 2 os bytes 29–31 continuam a zero. Não há alteração do tamanho da página ou do registo flash.
+
 > Extensão de ralenti/turbo e migração do registo para 1664 bytes: [idle-boost.md](idle-boost.md). As três primeiras páginas conservam os offsets descritos abaixo.
 
 # Contrato do controlo sequencial e persistência
@@ -95,3 +97,11 @@ A Console apresenta uma referência editável: 400 rpm, combustível de arranque
 150%, após arranque 110% durante 10000 ms, aquecimento −20/20/80 °C com
 160/120/100%. Estas correções começam desativadas. São exemplos de afinação,
 não calibrações verificadas para um motor ou especificações universais.
+
+## Modos com referência de cambota 360°
+
+Cada injetor e cada bobina conserva uma saída independente. Em semi-sequencial, os injetores terminam no PMS do seu cilindro módulo 360° mais o fim de injeção configurado. Em batch simultâneo, todos terminam no mesmo ângulo de fim de injeção relativo ao dente zero; o PMS continua a definir cada ignição. Wasted COP significa uma bobina por cilindro, disparada a cada volta. Não suporta partilhar uma saída entre duas bobinas ou descritores.
+
+O combustível efetivo corrigido por ciclo 720° é dividido por dois, com arredondamento de uma unidade do temporizador; o tempo morto é somado depois, a cada evento. Ajustes de cilindro são aplicados à parte efetiva. O limite de ocupação passa de 80% de duas voltas para 80% de uma volta. O agendador usa o mesmo TIM2/GPT5, relógio e falhas retidas. Ausência/mudança de fase de cames não para estes modos; perda de cambota, relógio atrasado, calibração inválida e prazos continuam a parar.
+
+O modo sequencial não muda automaticamente para 360° após perder cames. Alterar o modo exige guardar e ativar explicitamente o perfil desarmado. O arranque autónomo usa a mesma política anterior. Firmware/Console antigos rejeitam o formato 2; atualizar o Bundle completo antes de o selecionar.
