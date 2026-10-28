@@ -67,9 +67,11 @@ def main():
     installer = validate_installer(Path("build/installer"), commit, run_id)
     shutil.copy2(installer, output / SETUP_NAME)
     repo = os.environ["GITHUB_REPOSITORY"]
-    notes = f"""## Tunuino — modos 360° e Autotune VE com dados reais
+    notes = f"""## Tunuino — aquisição da fase de cames
 
 Console Windows x64, firmware **Proteus v0.7 / STM32F427** e **INI TunerStudio**, produzidos a partir do mesmo commit.
+
+**Fase de cames:** a aquisição da Proteus publica a posição da aresta confirmada e a Console mostra-a em Estado do motor, em graus de cambota desde o primeiro dente após a falha e a paridade configurada, com idade da medida. Perdas e dados inválidos retiram a leitura. Exige atualizar Console e firmware. É aquisição para desenvolver VVT; ainda não comanda a válvula nem define referência PMS. Testes automáticos com capturas sintéticas; ensaio físico pendente. [Utilização e limites](https://github.com/Tunuino/Tunuino_documents/blob/main/fase-cames.md).
 
 Esta imagem usa o startup, kernel e USB CDC do repositório **Tunuino/ChibiOS**, fixado no commit `fd2e59c34878b1ef93ef5358f11fb5cc830027ff`: inicialização ChibiOS, desconexão durante 250 ms e ligação do USB FS em PA11/PA12, sem deteção externa de VBUS. SYSCLK: 168 MHz; USB: 48 MHz. A Console mostra o build no título. A nova comunicação TunerStudio ainda requer ensaio na ECU.
 

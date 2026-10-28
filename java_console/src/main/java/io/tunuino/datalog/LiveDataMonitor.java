@@ -18,7 +18,8 @@ import java.util.function.Consumer;
 /** One polling worker owns the serial session and all recording file operations. */
 public final class LiveDataMonitor {
     public record Recording(Path path, long samples) {}
-    public record Extras(io.tunuino.protocol.AuxControlClient.FeatureState sensors,io.tunuino.protocol.EngineOutputClient.State outputs,byte[] profile) {
+    public record Extras(io.tunuino.protocol.AuxControlClient.FeatureState sensors,io.tunuino.protocol.EngineOutputClient.State outputs,byte[] profile,io.tunuino.protocol.CamPhaseClient.Phase cam) {
+        public Extras(io.tunuino.protocol.AuxControlClient.FeatureState sensors,io.tunuino.protocol.EngineOutputClient.State outputs,byte[] profile){this(sensors,outputs,profile,null);}
         public Extras {profile=profile==null?null:profile.clone();}
         @Override public byte[] profile(){return profile==null?null:profile.clone();}
     }
@@ -111,6 +112,7 @@ public final class LiveDataMonitor {
         long previousTime = -1;
         long nextExtras=0;long profileGeneration=-1;byte[] outputProfile=null;
         boolean extraSupported=extras!=null&&identity.capabilities()==15&&identity.firmwareVersion().equals("0.2.0");
+        boolean camSupported=extraSupported;
         try {
             while (running.getAsBoolean()) {
                 processRequests();
@@ -146,7 +148,13 @@ public final class LiveDataMonitor {
                             outputProfile=!configuration.validation().dirty()&&configuration.validation().generation()==state.generation()?configuration.configuration().engineProfile():null;
                             profileGeneration=outputProfile==null?-1:state.generation();
                         }
-                        var extra=new Extras(sensors.get(),state,outputProfile);
+                        io.tunuino.protocol.CamPhaseClient.Phase cam=null;
+                        if(camSupported){
+                            var phase=io.tunuino.protocol.CamPhaseClient.optional(session);
+                            camSupported=phase.isPresent();
+                            if(phase.isPresent()&&phase.get().generation()==state.generation())cam=phase.get();
+                        }
+                        var extra=new Extras(sensors.get(),state,outputProfile,cam);
                         extras.accept(extra);
                         var observer=tuning;if(observer!=null)observer.accept(new TuningFrame(result,extra,
                             Duration.ofNanos(System.nanoTime()-receivedAt).toMillis()));

@@ -112,6 +112,7 @@ bool tunuino_device_validate(const uint8_t *p, size_t length) {
 }
 
 static bool publish(tunuino_device *d) {
+    memset(&d->cam,0,sizeof(d->cam));d->position_flags=0;d->position_time_us=0;
     if (++d->generation==0) d->generation=1;
     if (!map_decode(&d->scratch,d->active+TUNUINO_IO_CONFIG_SIZE,TUNUINO_MAP_VE)
         || tunuino_map_snapshot_prepare(&d->ve,&d->scratch,d->generation)!=TUNUINO_MAP_OK
@@ -151,6 +152,7 @@ void tunuino_device_sample(tunuino_device *d, uint64_t time_ms, const uint16_t r
     bool adc_valid, uint32_t rpm_milli, bool rpm_valid, uint16_t tooth, uint32_t errors) {
     tunuino_telemetry_sensors sensors={0};tunuino_analog_point points[16];
     const uint8_t *p=d->active;
+    memset(&d->cam,0,sizeof(d->cam));d->position_flags=0;d->position_time_us=0;
     d->adc_valid=adc_valid&&raw!=NULL;
     d->trigger_valid=rpm_valid&&p[2]&&rpm_milli<=(uint32_t)tunuino_device_u16(p+96)*1000u;
     d->tooth=tooth;d->trigger_errors=errors;
@@ -182,6 +184,19 @@ void tunuino_device_sample(tunuino_device *d, uint64_t time_ms, const uint16_t r
     }
     d->live.valid_mask|=sensors.valid_mask;d->live.map_milli_kpa=sensors.map_milli_kpa;
     d->live.lambda_million=sensors.lambda_million;d->live.coolant_milli_c=sensors.coolant_milli_c;
+}
+
+void tunuino_device_position(tunuino_device *d,uint64_t now,
+    const tunuino_position_reading *position,const tunuino_cam_reading *cam) {
+    memset(&d->cam,0,sizeof(d->cam));d->position_flags=0;d->position_time_us=now;
+    if (!d->trigger_valid || !position || !position->crank_valid) return;
+    d->position_flags=1;
+    if (!position->cycle_valid) return;
+    d->position_flags|=2;
+    if (cam && cam->valid && cam->angle_centi<72000 && cam->time_us<=now
+        && now-cam->time_us<UINT64_C(120000000)/30u) {
+        d->cam=*cam;d->position_flags|=4;
+    }
 }
 
 static void runtime(tunuino_device *d, const tunuino_identity *id, uint8_t out[100]) {
@@ -325,6 +340,15 @@ tunuino_dispatch_status tunuino_device_reply(tunuino_device *d,const tunuino_ide
     else if(length==9 && memcmp(q,"TUNUINO:T",9)==0) {
         engine_timing_preview(d,body);
         size=TUNUINO_ENGINE_TIMING_SIZE;
+    }
+    else if(length==9 && memcmp(q,"TUNUINO:H",9)==0) {
+        /* Cam acquisition v1: flags, reserved, phase centidegrees, captured
+         * edge us, snapshot us, generation, wheel slots/missing, reserved. */
+        body[1]=1;body[2]=d->position_flags;
+        put32(body+4,d->cam.angle_centi);
+        put32(body+8,(uint32_t)(d->cam.time_us>>32));put32(body+12,(uint32_t)d->cam.time_us);
+        put32(body+16,(uint32_t)(d->position_time_us>>32));put32(body+20,(uint32_t)d->position_time_us);
+        put32(body+24,d->generation);put16(body+28,d->active[3]);body[30]=d->active[4];size=32;
     }
     else if(length==1 && (q[0]=='S'||q[0]=='Q'||q[0]=='V'||q[0]=='F')) {
         const char *text=q[0]=='V'?TUNUINO_IO_VERSION:q[0]=='F'?TUNUINO_IO_TS_SERIAL_VERSION:TUNUINO_IO_SIGNATURE;

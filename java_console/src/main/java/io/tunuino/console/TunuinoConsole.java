@@ -594,6 +594,7 @@ public final class TunuinoConsole extends Application {
                 if(stopping.get()||!monitoringActive||monitorGeneration!=generation)return;
                 engineArmed=extra.outputs().armed();engineAutonomous=extra.outputs().autonomous();
                 dashboard.showAuxiliary(extra.sensors());dashboard.showOutputs(extra.outputs(),extra.profile());
+                dashboard.showCam(extra.cam());
             })), count -> {
                 monitoringActive = false;
                 keepMonitoring.set(false);

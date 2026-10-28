@@ -5,6 +5,7 @@
 #include "tunuino/dispatch.h"
 #include "tunuino/analog.h"
 #include "tunuino/engine_math.h"
+#include "tunuino/position.h"
 
 #define TUNUINO_IO_SIGNATURE "Tunuino Proteus v0.7 F427 IO v2"
 #define TUNUINO_IO_VERSION "Tunuino 0.2.0 Proteus v0.7 engine configuration"
@@ -69,6 +70,9 @@ typedef struct tunuino_device {
     tunuino_device_output_command output_command;
     void *output_user;
     bool (*configuration_writable)(void);
+    tunuino_cam_reading cam;
+    uint64_t position_time_us;
+    uint8_t position_flags;
 } tunuino_device;
 
 void tunuino_device_init(tunuino_device *device, tunuino_device_save save,
@@ -85,4 +89,7 @@ tunuino_dispatch_status tunuino_device_reply(tunuino_device *device,
     uint8_t *response, size_t capacity, size_t *written);
 uint16_t tunuino_device_u16(const uint8_t *bytes);
 bool tunuino_device_engine_values(tunuino_device *device,uint16_t *ve_centi,int16_t *advance_centi);
+/* Read-only acquisition snapshot. Call after device_sample on each board cycle. */
+void tunuino_device_position(tunuino_device *device,uint64_t now_us,
+    const tunuino_position_reading *position,const tunuino_cam_reading *cam);
 #endif

@@ -176,6 +176,20 @@ int main(void){
     assert((int32_t)((uint32_t)body[24]<<24 | (uint32_t)body[25]<<16
         | (uint32_t)body[26]<<8 | body[27])>0); /* -5 BTDC means after reference */
     vector("engine_timing_valid");
+    /* Read-only cam acquisition: full U64 timestamps survive counter wrap. */
+    tunuino_position_reading position={1,1,1,12,1234.5};
+    tunuino_cam_reading cam={UINT64_C(4294968000),42125,1};
+    tunuino_device_position(&device,UINT64_C(4294969000),&position,&cam);
+    unsigned saves=programmed,erases=erased_banks;uint32_t generation=device.generation;
+    body=query((const uint8_t *)"TUNUINO:H",9,&n);
+    assert(n==32&&body[0]==0&&body[1]==1&&body[2]==7&&body[3]==0);
+    assert(tunuino_device_u16(body+6)==42125&&body[11]==1&&tunuino_device_u16(body+28)==60&&body[30]==2);
+    assert(programmed==saves&&erased_banks==erases&&device.generation==generation&&!device.dirty);
+    vector("cam_phase_valid");
+    cam.time_us=UINT64_C(4294969001); /* Future capture is not a measurement. */
+    tunuino_device_position(&device,UINT64_C(4294969000),&position,&cam);
+    body=query((const uint8_t *)"TUNUINO:H",9,&n);
+    assert(body[2]==3);for(unsigned i=4;i<16;++i)assert(body[i]==0);
     /* Direct ranged read of the high offsets from the same 100-byte block. */
     const uint8_t io_slice[]={'O',0,92,0,8};
     body=query(io_slice,sizeof(io_slice),&n);
@@ -184,6 +198,9 @@ int main(void){
     vector("runtime_slice_configured");
     body=query((const uint8_t *)"TUNUINO:P",9,&n);assert(n==28&&body[1]==2&&body[2]==15);vector("partial_all");
     tunuino_device_sample(&device,1234568,raw,true,0,false,0,3);
+    body=query((const uint8_t *)"TUNUINO:H",9,&n);
+    assert(n==32&&body[2]==0);for(unsigned i=4;i<24;++i)assert(body[i]==0);
+    vector("cam_phase_lost");
     body=query((const uint8_t *)"TUNUINO:E",9,&n);
     assert(n==20&&body[2]==0&&(body[3]&TUNUINO_ENGINE_NO_RPM)
            &&(body[3]&TUNUINO_ENGINE_NO_SYNC)

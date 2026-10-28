@@ -5,6 +5,7 @@
 
 static void clear_cam(tunuino_position *p) {
     p->cam_candidate = p->cycle_valid = p->revolutions_since_cam = 0;
+    memset(&p->cam,0,sizeof(p->cam));
 }
 static tunuino_position_status update(tunuino_position *p, uint64_t now,
     int crank_edge, tunuino_crank_reading *crank) {
@@ -63,7 +64,29 @@ tunuino_position_status tunuino_position_cam_edge(tunuino_position *p, uint64_t 
     p->cycle_valid = p->cam_candidate;
     p->cam_candidate = 1; p->revolutions_since_cam = 0;
     p->state = p->cycle_valid ? TUNUINO_POSITION_SYNCED : TUNUINO_POSITION_CRANK_ONLY;
+    memset(&p->cam,0,sizeof(p->cam));
+    if (p->cycle_valid && p->crank.period_us > 0) {
+        double fraction = (double)(now - p->crank.last_edge_us) / p->crank.period_us;
+        unsigned width = crank.tooth_index + 1u == (unsigned)p->config.crank.slots - p->config.crank.missing
+            ? p->config.crank.missing + 1u : 1u;
+        /* Interpolate only within the expected next physical tooth. Never
+         * extrapolate a late capture across an unobserved crank edge. */
+        if (fraction < width) {
+            double angle = (crank.tooth_index + fraction) * 36000.0 / p->config.crank.slots
+                + p->config.cam_revolution_phase * 36000.0;
+            p->cam = (tunuino_cam_reading){now,(uint32_t)(angle + 0.5) % 72000u,1};
+        }
+    }
     return p->state;
+}
+tunuino_position_status tunuino_position_cam_read(tunuino_position *p, uint64_t now,
+    tunuino_cam_reading *reading) {
+    if (reading == NULL) return TUNUINO_POSITION_ARGUMENT;
+    memset(reading,0,sizeof(*reading));
+    tunuino_position_reading position;
+    tunuino_position_status status = tunuino_position_read(p,now,&position);
+    if (position.cycle_valid) *reading = p->cam;
+    return status;
 }
 tunuino_position_status tunuino_position_read(tunuino_position *p, uint64_t now,
     tunuino_position_reading *reading) {

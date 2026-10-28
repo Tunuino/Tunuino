@@ -19,6 +19,13 @@ typedef struct {
     uint16_t tooth_index;
     double rpm;
 } tunuino_position_reading;
+/* Last confirmed selected cam edge, in crank degrees from the first tooth
+ * after the gap plus configured revolution parity. This is not a TDC offset. */
+typedef struct {
+    uint64_t time_us;
+    uint32_t angle_centi;
+    uint8_t valid;
+} tunuino_cam_reading;
 /* Caller-owned state. Initialize first and serialize all operations, including
  * capture/ISR producers. Arguments must not overlap this object. */
 typedef struct {
@@ -26,6 +33,7 @@ typedef struct {
     tunuino_position_config config;
     uint8_t configured, crank_valid, cam_candidate, cycle_valid, revolutions_since_cam;
     tunuino_position_status state;
+    tunuino_cam_reading cam;
 } tunuino_position;
 tunuino_position_status tunuino_position_init(tunuino_position *position,
     const tunuino_position_config *config, uint64_t now_us);
@@ -34,4 +42,6 @@ tunuino_position_status tunuino_position_cam_edge(tunuino_position *position, ui
 tunuino_position_status tunuino_position_poll(tunuino_position *position, uint64_t now_us);
 tunuino_position_status tunuino_position_read(tunuino_position *position, uint64_t now_us,
     tunuino_position_reading *reading);
+tunuino_position_status tunuino_position_cam_read(tunuino_position *position, uint64_t now_us,
+    tunuino_cam_reading *reading);
 #endif

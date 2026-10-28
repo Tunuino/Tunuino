@@ -57,6 +57,29 @@ static void confirm_cam(void) {
     assert(r.crank_valid && r.cycle_valid && r.revolution_phase == config.cam_revolution_phase);
 }
 int main(void) {
+    /* Measure between captured teeth, in both cycle parities and across the
+     * 32-bit hardware counter boundary using extended timestamps. */
+    for (unsigned slots=36;slots<=60;slots+=24) for (unsigned phase=0;phase<2;++phase) {
+        initialize(slots,slots==60?2:1,phase);
+        now+=UINT64_C(1)<<32;
+        assert(tunuino_position_init(&position,&config,now)==TUNUINO_POSITION_ACQUIRING);
+        tunuino_position_crank_edge(&position,now);establish_crank();confirm_cam();
+        tunuino_cam_reading cam;
+        assert(tunuino_position_cam_read(&position,now,&cam)==TUNUINO_POSITION_SYNCED);
+        assert(cam.valid&&cam.time_us==now&&cam.angle_centi==phase*36000+360000/slots);
+        advance(2u*(config.crank.slots-config.crank.missing));
+        assert(tunuino_position_cam_edge(&position,now+500)==TUNUINO_POSITION_SYNCED);
+        assert(tunuino_position_cam_read(&position,now+500,&cam)==TUNUINO_POSITION_SYNCED);
+        assert(cam.valid&&cam.time_us==now+500&&cam.angle_centi==phase*36000+378000/slots);
+        /* Reading later keeps the captured angle/time, not an advancing angle. */
+        tunuino_cam_reading same;
+        tunuino_position_cam_read(&position,now+750,&same);
+        assert(same.valid&&same.angle_centi==cam.angle_centi&&same.time_us==cam.time_us);
+        /* A duplicate cam must clear the old measurement immediately. */
+        assert(tunuino_position_cam_edge(&position,now+750)==TUNUINO_POSITION_CAM_LOST);
+        tunuino_position_cam_read(&position,now+750,&cam);
+        assert(!cam.valid&&!cam.time_us&&!cam.angle_centi);
+    }
     const unsigned wheels[][2] = {{36,1},{60,2}};
     for (unsigned w = 0; w < 2; ++w) {
         for (unsigned phase = 0; phase <= 1; ++phase) {
@@ -118,7 +141,17 @@ int main(void) {
     tunuino_position_crank_edge(&position,now); establish_crank(); at_tooth(34);
     assert(tunuino_position_cam_edge(&position,now) == TUNUINO_POSITION_CRANK_ONLY);
     advance(70); assert(tunuino_position_cam_edge(&position,now) == TUNUINO_POSITION_SYNCED);
-    advance(71); assert(read_position().crank_valid && !read_position().cycle_valid);
+    tunuino_cam_reading gap_cam;
+    advance(70);assert(tunuino_position_cam_edge(&position,now+1500)==TUNUINO_POSITION_SYNCED);
+    tunuino_position_cam_read(&position,now+1500,&gap_cam);
+    assert(gap_cam.valid&&gap_cam.angle_centi==35500);
+    /* Stay monotonic: the next crank edge lies 2000 us after the last. */
+    now+=1500;crank_edge(500);advance(70);
+    assert(read_position().crank_valid && !read_position().cycle_valid);
+    tunuino_position_cam_read(&position,now,&gap_cam);
+    assert(!gap_cam.valid&&!gap_cam.angle_centi&&!gap_cam.time_us);
+    assert(tunuino_position_cam_read(NULL,now,&gap_cam)==TUNUINO_POSITION_ARGUMENT&&!gap_cam.valid);
+    assert(tunuino_position_cam_read(&position,now,NULL)==TUNUINO_POSITION_ARGUMENT);
     assert(tunuino_position_init(NULL,&config,0) == TUNUINO_POSITION_ARGUMENT);
     assert(tunuino_position_init(&position,NULL,0) == TUNUINO_POSITION_ARGUMENT);
     assert(tunuino_position_cam_edge(&position,0) == TUNUINO_POSITION_ARGUMENT);

@@ -45,12 +45,18 @@ static void zero_read(tunuino_capture_process_status expected, uint64_t time) {
     assert(!reading.crank_valid && !reading.cycle_valid && reading.rpm == 0 && reading.tooth_index == 0 && reading.revolution_phase == 0);
     uint64_t edge=UINT64_MAX;
     assert(tunuino_capture_processor_anchor(&processor,time,&reading,&edge)==expected&&edge==0);
+    tunuino_cam_reading cam={99,99,1};
+    assert(tunuino_capture_processor_cam(&processor,time,&cam)==expected);
+    assert(!cam.valid&&!cam.time_us&&!cam.angle_centi);
 }
 int main(void) {
     initialize(); establish_crank(); establish_cycle();
     uint64_t reference;
     assert(tunuino_capture_processor_anchor(&processor,wall,&reading,&reference)==TUNUINO_PROCESS_READY
         &&reading.cycle_valid&&reference==now);
+    tunuino_cam_reading cam;
+    assert(tunuino_capture_processor_cam(&processor,wall,&cam)==TUNUINO_PROCESS_READY
+        &&cam.valid&&cam.time_us==now&&cam.angle_centi==10000);
     /* A later freshness read cannot move the decoder past a delayed capture. */
     wall += 1500;
     assert(tunuino_capture_processor_read(&processor,wall,&reading) == TUNUINO_PROCESS_READY && reading.cycle_valid);

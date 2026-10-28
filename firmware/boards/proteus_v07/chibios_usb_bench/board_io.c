@@ -112,6 +112,7 @@ static void edge_callback(void *argument){
     __DMB();edge_head=head+1;
 }
 static void configure_capture(tunuino_device *d,uint64_t now){
+    tunuino_device_position(d,now,NULL,NULL);
     palDisablePadEvent(GPIOE,7);palDisablePadEvent(GPIOE,8);
     chSysLock();edge_head=edge_tail=0;edge_overflow=false;chSysUnlock();
     trigger_enabled=d->active[2]!=0;
@@ -160,7 +161,7 @@ void board_io_update(tunuino_device *d){
     if(ADCD1.state==ADC_READY&&(uint32_t)(ms-last_adc_start)>=10){
         adc_failed=false;adc_completed=false;last_adc_start=ms;adcStartConversion(&ADCD1,&group,adc_samples,4);
     }
-    tunuino_position_reading position={0};uint64_t crank_edge=0;
+    tunuino_position_reading position={0};tunuino_cam_reading cam={0};uint64_t crank_edge=0;
     if(trigger_enabled){
         /* Latch the complete pending batch before taking the current timer.
          * Do not mask IRQs while decoding, serializing or touching flash. */
@@ -177,9 +178,11 @@ void board_io_update(tunuino_device *d){
             for(size_t i=0;i<count;++i)if(tunuino_capture_source_push(&capture,pending[i].counter,pending[i].kind)!=TUNUINO_SOURCE_OK){++trigger_errors;trigger_enabled=false;break;}
             size_t processed;(void)tunuino_capture_processor_drain(&capture.processor,observed,64,&processed);
             if(trigger_enabled)(void)tunuino_capture_processor_anchor(&capture.processor,observed,&position,&crank_edge);
+            if(trigger_enabled)(void)tunuino_capture_processor_cam(&capture.processor,observed,&cam);
         }
     }
     tunuino_device_sample(d,now/1000,raw,adc_good&&(uint32_t)(ms-last_adc_good)<100,
         (uint32_t)(position.rpm*1000+0.5),position.crank_valid!=0,position.tooth_index,trigger_errors);
+    tunuino_device_position(d,board_io_time_us(),&position,&cam);
     board_outputs_update(d,&position,(uint32_t)crank_edge,TIM2->CNT);
 }

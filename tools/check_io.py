@@ -64,6 +64,14 @@ def main():
             *map(str,sources),str(ROOT/'unit_tests/test_device_io.c'),'-lm','-o',str(exe)],check=True,timeout=30)
         lines=subprocess.check_output([str(exe)],text=True,timeout=20).splitlines();assert lines[-1]=='OK'
         vectors={name:bytes.fromhex(value) for name,value in (line.split() for line in lines[:-1])}
+        cam=decode(vectors['cam_phase_valid'])
+        assert len(cam)==31 and cam[:3]==bytes((1,7,0))
+        assert int.from_bytes(cam[3:7],'big')==42125
+        assert int.from_bytes(cam[7:15],'big')==4294968000
+        assert int.from_bytes(cam[15:23],'big')==4294969000
+        assert cam[27:]==bytes((0,60,2,0))
+        lost=decode(vectors['cam_phase_lost'])
+        assert lost[:3]==bytes((1,0,0)) and not any(lost[3:23])
         assert decode(vectors['signature'])==json.loads(ini['TunerStudio']['signature']).encode()
         assert decode(vectors['signature_q'])==decode(vectors['signature'])
         assert decode(vectors['version'])==b'Tunuino 0.2.0 Proteus v0.7 engine configuration\0'

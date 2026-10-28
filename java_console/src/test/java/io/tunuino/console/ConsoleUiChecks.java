@@ -77,6 +77,10 @@ public final class ConsoleUiChecks {
             check(((Button) scene.lookup("#dashboard-edit-map")).isDisabled(), "Offline dashboard blocks ECU map editing");
             DashboardPane cockpit=(DashboardPane)scene.lookup("#dashboard");
             check(cockpit!=null,"ECU cockpit is the first page");
+            cockpit.showCam(new io.tunuino.protocol.CamPhaseClient.Phase(7,421.25,1000000,1001000,1,60,2));
+            check(((Label)scene.lookup("#dashboard-cam-phase")).getText().contains("421.25"),"Captured phase is rendered in crank degrees");
+            cockpit.showCam(null);
+            check(((Label)scene.lookup("#dashboard-cam-phase")).getText().contains("indisponível"),"Unavailable cam data clears the old phase");
             var gaugeNodes=new ArrayList<>(scene.getRoot().lookupAll(".dashboard-gauge"));
             check(gaugeNodes.size()==6,"Dashboard contains all six gauges");
             checkCanvasSizing(scene);

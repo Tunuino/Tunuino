@@ -86,6 +86,7 @@ tunuino_capture_process_status tunuino_capture_processor_drain(tunuino_capture_p
         }
         ++*processed;
         p->decoder_status = tunuino_position_read(&p->position,event.time_us,&p->cached);
+        (void)tunuino_position_cam_read(&p->position,event.time_us,&p->cached_cam);
         if (p->decoder_status == TUNUINO_POSITION_CLOCK) { return fail(p,TUNUINO_PROCESS_CLOCK); }
         if (p->decoder_status == TUNUINO_POSITION_ARGUMENT) { return fail(p,TUNUINO_PROCESS_ARGUMENT); }
     }
@@ -110,5 +111,14 @@ tunuino_capture_process_status tunuino_capture_processor_anchor(tunuino_capture_
     *edge=0;
     tunuino_capture_process_status status=tunuino_capture_processor_read(p,now,reading);
     if(status==TUNUINO_PROCESS_READY&&reading->crank_valid)*edge=p->last_crank_us;
+    return status;
+}
+tunuino_capture_process_status tunuino_capture_processor_cam(tunuino_capture_processor *p,
+    uint64_t now,tunuino_cam_reading *reading) {
+    if (!reading) return TUNUINO_PROCESS_ARGUMENT;
+    memset(reading,0,sizeof(*reading));
+    tunuino_position_reading position;
+    tunuino_capture_process_status status=tunuino_capture_processor_read(p,now,&position);
+    if (status==TUNUINO_PROCESS_READY && position.cycle_valid) *reading=p->cached_cam;
     return status;
 }

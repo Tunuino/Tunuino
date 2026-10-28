@@ -75,6 +75,7 @@ final class DashboardPane extends VBox {
     private final Label lambdaValue=new Label("— λ");
     private final java.util.Map<String,Label> outputValues=new java.util.HashMap<>();
     private final Label outputs=new Label("Estado das saídas por consultar");
+    private final Label camPhase=new Label("Cames: por consultar");
 
     void onBaseMap(Consumer<CalibrationMap.Kind> action){onBase=java.util.Objects.requireNonNull(action);}
 
@@ -195,7 +196,9 @@ final class DashboardPane extends VBox {
             Label name=new Label(role[1]),value=new Label("—");value.setId("dashboard-output-"+role[0]);outputValues.put(role[0],value);value.setStyle("-fx-text-fill:#8b9aa7;-fx-font-size:10px;");
             name.setStyle("-fx-font-size:10px;");javafx.scene.layout.Region gap=new javafx.scene.layout.Region();HBox.setHgrow(gap,Priority.ALWAYS);signalRows.getChildren().add(new HBox(3,name,gap,value));
         }
-        VBox side=new VBox(8,new Label("ESTADO DO MOTOR"),signalRows,outputs,new Label("COMUNICAÇÃO"),connection,portLabel,firmwareLabel);
+        camPhase.setId("dashboard-cam-phase");camPhase.setWrapText(true);
+        camPhase.setTooltip(new javafx.scene.control.Tooltip("Ângulo da aresta selecionada em graus de cambota desde o primeiro dente após a falha e a paridade configurada. Não é avanço VVT nem referência PMS. VVT ainda não comandado."));
+        VBox side=new VBox(8,new Label("ESTADO DO MOTOR"),signalRows,outputs,camPhase,new Label("COMUNICAÇÃO"),connection,portLabel,firmwareLabel);
         side.getStyleClass().add("dashboard-card");side.setMinWidth(0);
         var sideScroll=ConsoleShell.scroll(side);sideScroll.setMinWidth(165);
         SplitPane center=new SplitPane(tablePanel,sideScroll);center.setId("dashboard-center-split");
@@ -248,6 +251,9 @@ final class DashboardPane extends VBox {
         iatGauge.value=(value.valid()&2)!=0?value.iat()/100.0:null;iatGauge.draw();
         smallValues.get("BATERIA").setText((value.valid()&4)!=0?String.format(Locale.ROOT,"%.2f V",value.voltage()/100.0):"— V");
         indicator("launch",(value.flags()&128)!=0?(value.state()&4)!=0:null);
+    }
+    void showCam(io.tunuino.protocol.CamPhaseClient.Phase phase){
+        camPhase.setText(phase==null?"Cames: leitura indisponível neste firmware":phase.description());
     }
     private void indicator(String role,Boolean active){Label value=outputValues.get(role);value.setText(active==null?"—":active?"● ON":"● OFF");value.setStyle("-fx-font-size:10px;-fx-text-fill:"+(active!=null&&active?"#28de45":"#8b9aa7")+";");}
     void showOutputs(io.tunuino.protocol.EngineOutputClient.State state,byte[] profile){
@@ -336,6 +342,7 @@ final class DashboardPane extends VBox {
         redrawMaps();
     }
     private void clearMeasurements() {
+        camPhase.setText("Cames: dados atuais indisponíveis");
         latestSample=null;lambdaValue.setText("— λ");tpsGauge.clear();iatGauge.clear();smallValues.get("BATERIA").setText("— V");
         for(Gauge gauge:gauges.values())gauge.clear();
         drawHeatmap();
