@@ -148,7 +148,10 @@ public final class ConsoleUiChecks {
             var tables=(javafx.scene.control.SplitPane)scene.lookup("#dashboard-tables-split");
             double width=((javafx.scene.layout.Region)center.getItems().get(0)).getWidth();
             double height=((javafx.scene.layout.Region)tables.getItems().get(0)).getHeight();
-            center.setDividerPositions(.66);lower.setDividerPositions(.50);tables.setDividerPositions(.70);
+            // The Windows runner starts on a smaller desktop, then the test expands
+            // the window. SplitPane distributes that extra width across both sides,
+            // so the baseline is not necessarily the initial 80/20 proportion.
+            center.setDividerPositions(.50);lower.setDividerPositions(.50);tables.setDividerPositions(.70);
             // SplitPane skins apply divider changes on the next layout pulse.
             later(()->checkResizedPanes(stage,width,height));
         }
