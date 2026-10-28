@@ -89,7 +89,6 @@ public final class TunuinoConsole extends Application {
 
     private void updateMapViews(CalibrationMap map) {
         if(map.rows()!=16||map.columns()!=16) {
-            if(dashboard!=null)dashboard.event("Ficheiro legado: não é um mapa ativo 16×16.");
             return;
         }
         for(DashboardPane page : new DashboardPane[]{dashboard,fuelTables,ignitionTables})
@@ -126,7 +125,6 @@ public final class TunuinoConsole extends Application {
                 return true;
             },ignored->{
                 updateMapViews(updated);
-                dashboard.event("Mapa "+updated.kind()+" guardado e verificado por leitura completa.");
                 status.setText("Mapa guardado e verificado na ECU");
                 refreshControls.run();completion.complete(null);
             },error->{
@@ -698,7 +696,7 @@ public final class TunuinoConsole extends Application {
             serialTask(()->MapReadClient.read(current,device,kind,Duration.ofSeconds(7)),
                 map->{updateMapViews(map);status.setText("Tabela "+kind+" 16×16 atualizada");
                     refreshConnection.run();},
-                error->{dashboard.event("Falha de leitura "+kind+": "+error.getMessage());
+                error->{
                     if(!current.isOpen()){connection.compareAndSet(current,null);identifiedDevice=null;}
                     status.setText("Não foi possível ler "+kind+": "+error.getMessage());
                     refreshConnection.run();});
@@ -748,7 +746,6 @@ public final class TunuinoConsole extends Application {
                         +" · MAP: "+((valid&2)!=0?String.format(Locale.ROOT,"%.1f kPa",values.sample().mapKpa()):"—")
                         +" · Lambda: "+((valid&4)!=0?String.format(Locale.ROOT,"%.3f",values.sample().lambda()):"—")
                         +" · Temperatura: "+((valid&8)!=0?String.format(Locale.ROOT,"%.1f °C",values.sample().coolantC()):"—"));
-                    dashboard.event("Diagnóstico USB e validação de configuração recebidos.");
                     status.setText("Diagnóstico de leitura concluído");
                     refreshConnection.run();
                 },error->{

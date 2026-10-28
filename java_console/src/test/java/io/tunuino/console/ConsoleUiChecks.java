@@ -116,7 +116,6 @@ public final class ConsoleUiChecks {
             byte[] statusProfile=new byte[128];statusProfile[0]=1;statusProfile[22]=5;statusProfile[23]=6;statusProfile[24]=7;
             cockpit.showOutputs(new io.tunuino.protocol.EngineOutputClient.State(0,0,1L<<4,0,true,4,true,1,0,true,false),statusProfile);
             check(((Label)scene.lookup("#dashboard-output-pump")).getText().contains("ON")&&((Label)scene.lookup("#dashboard-output-fan")).getText().contains("OFF"),"Dashboard uses the actual configured relay channels, not fixed contacts");
-            cockpit.event("Dados sintéticos de teste da interface · sem ECU física");
             snapshot(scene,"console-reference-layout");
             stage.setWidth(1510);stage.setHeight(1010);
             later(()->checkWideDashboard(stage));

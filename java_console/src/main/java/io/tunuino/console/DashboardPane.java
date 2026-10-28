@@ -4,9 +4,6 @@ package io.tunuino.console;
 import io.tunuino.calibration.CalibrationMap;
 import io.tunuino.datalog.LogSample;
 import io.tunuino.protocol.DeviceIdentity;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayDeque;
 import java.util.EnumMap;
 import java.util.Locale;
 import java.util.Optional;
@@ -37,16 +34,12 @@ final class DashboardPane extends VBox {
     private static final Color GRID=Color.web("#273c52");
     private static final Color WHITE=Color.web("#e8f2ff");
     private static final Color DIM=Color.web("#8da2ba");
-    private static final DateTimeFormatter TIME=DateTimeFormatter.ofPattern("HH:mm:ss");
     private final EnumMap<Channel,Gauge> gauges=new EnumMap<>(Channel.class);
     private final Label status=new Label("ECU desligada · aguarda ligação USB");
     private final Label source=new Label("Sem valores de sensores disponíveis");
     private final Label mapSource=new Label("Liga e identifica a ECU para ler as tabelas.");
     private final Label viewCaption=new Label("Mapas da ECU · a aguardar leitura real");
     private final Label connection=new Label("●  USB DESLIGADO");
-    private final Label records=new Label("REGISTO");
-    private final VBox eventRows=new VBox(7);
-    private final ArrayDeque<String> history=new ArrayDeque<>();
     private final Canvas tableCanvas=new Canvas(840,315);
     private final Canvas surfaceCanvas=new Canvas(470,285);
     private final Canvas ignitionOverview=new Canvas(740,285);
@@ -195,12 +188,10 @@ final class DashboardPane extends VBox {
         tablePanel.setPrefWidth(840);
         HBox.setHgrow(tablePanel,Priority.ALWAYS);
 
-        records.getStyleClass().add("dashboard-small-title");
         Label note=new Label("Perfil e armação explícita em Motor e saídas.");
         note.setWrapText(true);note.getStyleClass().add("dashboard-subtext");
         outputs.setId("dashboard-engine-status");
         outputs.getStyleClass().add("dashboard-output-status");
-        eventRows.setId("dashboard-event-list");
         VBox signalRows=new VBox(8);
         for(String[] role:new String[][]{{"pump","Bomba"},{"relay","Relé principal"},{"fan","Ventoinha 1"},{"fan2","Ventoinha 2"},{"ac","Pedido A/C"},{"launch","Launch"},{"shift","Flat shift"},{"antilag","Anti-lag"}}){
             Label name=new Label(role[1]),value=new Label("—");value.setId("dashboard-output-"+role[0]);outputValues.put(role[0],value);value.setStyle("-fx-text-fill:#8b9aa7;-fx-font-size:10px;");
@@ -208,10 +199,9 @@ final class DashboardPane extends VBox {
         }
         VBox side=new VBox(8,new Label("ESTADO DO MOTOR"),signalRows,outputs,new Label("COMUNICAÇÃO"),connection,portLabel,firmwareLabel);
         side.getStyleClass().add("dashboard-card");side.setMinWidth(0);
-        VBox logPanel=new VBox(8,records,eventRows);logPanel.getStyleClass().add("dashboard-card");logPanel.setMinWidth(0);logPanel.setId("dashboard-log-panel");
         javafx.scene.layout.GridPane center=new javafx.scene.layout.GridPane();center.setHgap(5);center.setId("dashboard-center-grid");
-        for(double percent:new double[]{66,15,19}){var column=new javafx.scene.layout.ColumnConstraints();column.setPercentWidth(percent);column.setMinWidth(0);center.getColumnConstraints().add(column);}
-        center.addRow(0,tablePanel,side,logPanel);
+        for(double percent:new double[]{80,20}){var column=new javafx.scene.layout.ColumnConstraints();column.setPercentWidth(percent);column.setMinWidth(0);center.getColumnConstraints().add(column);}
+        center.addRow(0,tablePanel,side);
 
         Label surfaceTitle=new Label("MAPA 3D  ·  VISUALIZAÇÃO DAS CÉLULAS");
         surfaceTitle.getStyleClass().add("dashboard-small-title");
@@ -247,7 +237,6 @@ final class DashboardPane extends VBox {
         } else {
             getChildren().addAll(gaugeRow,smallRow,center,lower);
         }
-        addEvent("Painel inicializado. Sem valores simulados.");
         setConnection(null,false,false);
         redrawMaps();
     }
@@ -284,7 +273,6 @@ final class DashboardPane extends VBox {
         if(mapOwner!=null&&(!active||!mapOwner.equals(identity)))clearMaps();
         mapOwner=active?identity:null;
         if(active!=online) {
-            addEvent(active?"ECU identificada.":"Ligação ou identificação da ECU indisponível.");
             if(!active)clearMeasurements();
         }
         online=active;readingAllowed=active&&available;
@@ -311,7 +299,6 @@ final class DashboardPane extends VBox {
     void monitoringStarted() {
         clearMeasurements();
         source.setText("Monitorização USB ativa · aguarda sensores válidos");
-        addEvent("Monitorização iniciada.");
     }
     void showSample(Optional<LogSample> sample) {
         if(sample.isEmpty()) {
@@ -327,7 +314,7 @@ final class DashboardPane extends VBox {
         source.setText("Telemetria USB real · relógio da ECU "+String.format(Locale.ROOT,"%.3f s",data.timeMs()/1000.0));
     }
     void monitoringStopped(String reason) {
-        clearMeasurements();source.setText(reason);addEvent(reason);
+        clearMeasurements();source.setText(reason);
     }
     void selectKind(CalibrationMap.Kind kind) {
         selected=java.util.Objects.requireNonNull(kind);
@@ -343,14 +330,12 @@ final class DashboardPane extends VBox {
         veTab.setSelected(selected==CalibrationMap.Kind.VE);
         sparkTab.setSelected(selected==CalibrationMap.Kind.IGNITION);
         mapSource.setText("Mapa "+selected+" lido da ECU · 16×16 · 256 células reais");
-        addEvent("Mapa "+selected+" 16×16 recebido e verificado.");
         redrawMaps();
     }
     void clearMaps() {
         maps.clear();mapSource.setText("Nenhum mapa recebido da ECU.");
         redrawMaps();
     }
-    void event(String message) { addEvent(message); }
     private void clearMeasurements() {
         latestSample=null;lambdaValue.setText("— λ");tpsGauge.clear();iatGauge.clear();smallValues.get("BATERIA").setText("— V");
         for(Gauge gauge:gauges.values())gauge.clear();
@@ -363,15 +348,6 @@ final class DashboardPane extends VBox {
             "Duplo clique numa célula para editar; a gravação na ECU é explícita no editor.");
         viewCaption.setText(map==null?"TABELA "+selected+" 16×16 · SEM DADOS":"TABELA "+selected+" 16×16 · DADOS DA ECU");
         drawHeatmap();drawIgnition();drawSurface();
-    }
-    private void addEvent(String message) {
-        history.addFirst("["+LocalTime.now().format(TIME)+"] "+message);
-        while(history.size()>8)history.removeLast();
-        eventRows.getChildren().clear();
-        for(String entry:history) {
-            Label line=new Label(entry);line.setWrapText(true);
-            line.getStyleClass().add("dashboard-event");eventRows.getChildren().add(line);
-        }
     }
     private static double clamp(double v) {return Math.max(0,Math.min(1,v));}
     private static Color heat(double ratio) {
