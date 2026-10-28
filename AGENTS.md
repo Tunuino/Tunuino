@@ -30,6 +30,9 @@
 - Modelos NTC indicam R25, Beta e pull-up; não os apresentar como calibrações universais de um motor ou sensor sem identificação.
 - Pesquisas automáticas de portas/dispositivos são tarefas de descoberta, não operações exclusivas: não alternar os controlos entre ativo/inativo nem reconstruir listas inalteradas. Suspender DFU com COM ocupada ou página não apresentada.
 
+- Usar o PNG original tunuino.png no cabeçalho; não substituir por um símbolo redesenhado.
+- O desenho dos mapas acompanha a área atribuída sem participar no cálculo do tamanho preferido do seu contentor. Separadores ajustáveis não alteram dados nem voltam à posição inicial durante a monitorização.
+
 ## Gravação e relógio USB
 
 - Depois de um dispatch que possa gravar na flash, atualizar o instante do ciclo USB antes de consultar/transmitir a resposta. O link começa o prazo de transmissão pelo relógio posterior ao dispatch; reutilizar o instante anterior causa um falso recuo do relógio e reinicia a ligação.

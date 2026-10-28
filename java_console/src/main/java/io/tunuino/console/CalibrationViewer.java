@@ -31,6 +31,7 @@ import javafx.concurrent.Task;
 import javafx.event.Event;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.stage.Window;
@@ -183,8 +184,8 @@ public final class CalibrationViewer {
             title.getStyleClass().add("map-heading");
             VBox header = new VBox(10,
                 title,
-                new HBox(8, undo, redo, save, refine, colors, state),
-                new HBox(8, new Label("RPM"), rpm, new Label("MAP (kPa)"), kpa, evaluate), result);
+                new FlowPane(8,8, undo, redo, save, refine, colors, state),
+                new FlowPane(8,8, new Label("RPM"), rpm, new Label("MAP (kPa)"), kpa, evaluate), result);
             if(upload!=null){
                 Button send=new Button("Guardar e verificar na ECU");send.setId("map-write");send.getStyleClass().add("primary");
                 send.disableProperty().bind(table.disabledProperty());
@@ -203,7 +204,14 @@ public final class CalibrationViewer {
             header.setPadding(new Insets(12));
             BorderPane root = new BorderPane(table);
             root.setTop(header);
-            stage.setScene(new Scene(root, 1080, 680));
+            var screen=owner==null?javafx.stage.Screen.getPrimary().getVisualBounds():javafx.stage.Screen.getScreensForRectangle(owner.getX(),owner.getY(),owner.getWidth(),owner.getHeight())
+                .stream().findFirst().orElse(javafx.stage.Screen.getPrimary()).getVisualBounds();
+            stage.setResizable(true);
+            stage.setMinWidth(Math.min(640,screen.getWidth()-40));
+            stage.setMinHeight(Math.min(440,screen.getHeight()-60));
+            stage.setScene(new Scene(root,Math.min(1080,screen.getWidth()-60),Math.min(680,screen.getHeight()-90)));
+            table.setMinSize(0,0);
+            table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
             ConsoleBranding.applyTheme(stage.getScene());
             stage.setOnCloseRequest(event -> {
                 if (allowClose) { return; }

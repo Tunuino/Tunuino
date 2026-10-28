@@ -203,3 +203,8 @@
 
 .console-shell:compact .wordmark, .console-shell:short .wordmark { -fx-font-size:32px; }
 .console-shell:compact .wordmark-subtitle, .console-shell:short .wordmark-subtitle { -fx-font-size:18px; }
+
+.dashboard-split { -fx-padding:0; -fx-background-color:transparent; -fx-box-border:transparent; }
+.dashboard-split > .split-pane-divider { -fx-padding:0 3; -fx-background-color:#263b4c; }
+.dashboard-split:vertical > .split-pane-divider { -fx-padding:3 0; }
+.dashboard-split > .split-pane-divider:hover { -fx-background-color:#0085ff; }

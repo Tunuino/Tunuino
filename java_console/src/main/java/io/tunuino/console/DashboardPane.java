@@ -21,7 +21,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.StackPane;
+import javafx.scene.control.SplitPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.ArcType;
@@ -43,9 +43,9 @@ final class DashboardPane extends VBox {
     private final Canvas tableCanvas=new Canvas(840,315);
     private final Canvas surfaceCanvas=new Canvas(470,285);
     private final Canvas ignitionOverview=new Canvas(740,285);
-    private final StackPane ignitionHost=new StackPane(ignitionOverview);
-    private final StackPane surfaceHost=new StackPane(surfaceCanvas);
-    private final StackPane tableHost=new StackPane(tableCanvas);
+    private final CanvasPane ignitionHost=new CanvasPane(ignitionOverview);
+    private final CanvasPane surfaceHost=new CanvasPane(surfaceCanvas);
+    private final CanvasPane tableHost=new CanvasPane(tableCanvas);
     private final ToggleButton veTab=new ToggleButton("VE 16×16");
     private final ToggleButton sparkTab=new ToggleButton("Ignição 16×16");
     private final Button readVe=new Button("Ler VE da ECU");
@@ -153,7 +153,7 @@ final class DashboardPane extends VBox {
         controls.getStyleClass().add("dashboard-table-actions");
         mapSource.getStyleClass().add("dashboard-subtext");mapSource.setWrapText(true);
         tableHost.getStyleClass().add("dashboard-table-host");
-        tableHost.setMinHeight(235);tableHost.setPrefHeight(265);
+        tableHost.setMinHeight(150);tableHost.setPrefHeight(265);
         cellDetails.setWrapText(true);
         cellDetails.getStyleClass().add("dashboard-subtext");
         tableCanvas.setOnMouseMoved(event->{
@@ -178,13 +178,11 @@ final class DashboardPane extends VBox {
             int column=(int)(x/cw),row=(int)(y/ch);
             if(row<16&&column<16)editSelected(row,column);
         });
-        tableCanvas.widthProperty().bind(tableHost.widthProperty());
-        tableCanvas.heightProperty().bind(tableHost.heightProperty());
-        tableHost.widthProperty().addListener((a,b,c)->drawHeatmap());
-        tableHost.heightProperty().addListener((a,b,c)->drawHeatmap());
+        tableCanvas.widthProperty().addListener((a,b,c)->drawHeatmap());
+        tableCanvas.heightProperty().addListener((a,b,c)->drawHeatmap());
         VBox tablePanel=new VBox(4,controls,viewCaption,tableHost,cellDetails);
         tablePanel.getStyleClass().add("dashboard-card");
-        tablePanel.setMinWidth(0);VBox.setVgrow(tableHost,Priority.NEVER);
+        tablePanel.setMinWidth(0);VBox.setVgrow(tableHost,Priority.ALWAYS);
         tablePanel.setPrefWidth(840);
         HBox.setHgrow(tablePanel,Priority.ALWAYS);
 
@@ -199,43 +197,44 @@ final class DashboardPane extends VBox {
         }
         VBox side=new VBox(8,new Label("ESTADO DO MOTOR"),signalRows,outputs,new Label("COMUNICAÇÃO"),connection,portLabel,firmwareLabel);
         side.getStyleClass().add("dashboard-card");side.setMinWidth(0);
-        javafx.scene.layout.GridPane center=new javafx.scene.layout.GridPane();center.setHgap(5);center.setId("dashboard-center-grid");
-        for(double percent:new double[]{80,20}){var column=new javafx.scene.layout.ColumnConstraints();column.setPercentWidth(percent);column.setMinWidth(0);center.getColumnConstraints().add(column);}
-        center.addRow(0,tablePanel,side);
+        var sideScroll=ConsoleShell.scroll(side);sideScroll.setMinWidth(165);
+        SplitPane center=new SplitPane(tablePanel,sideScroll);center.setId("dashboard-center-split");
+        center.getStyleClass().add("dashboard-split");center.setDividerPositions(.80);
+        center.setMinSize(0,300);tablePanel.setMinHeight(260);side.setMinWidth(165);
+        center.setAccessibleHelp("Arrasta o separador para ajustar a largura da tabela e do estado do motor.");
 
         Label surfaceTitle=new Label("MAPA 3D  ·  VISUALIZAÇÃO DAS CÉLULAS");
         surfaceTitle.getStyleClass().add("dashboard-small-title");
         surfaceHost.getStyleClass().add("dashboard-table-host");
-        surfaceHost.setMinHeight(210);surfaceHost.setPrefHeight(215);
-        surfaceCanvas.widthProperty().bind(surfaceHost.widthProperty());
-        surfaceCanvas.heightProperty().bind(surfaceHost.heightProperty());
-        surfaceHost.widthProperty().addListener((a,b,c)->drawSurface());
-        surfaceHost.heightProperty().addListener((a,b,c)->drawSurface());
+        surfaceHost.setMinHeight(120);surfaceHost.setPrefHeight(215);
+        surfaceCanvas.widthProperty().addListener((a,b,c)->drawSurface());
+        surfaceCanvas.heightProperty().addListener((a,b,c)->drawSurface());
         VBox surfacePanel=new VBox(8,surfaceTitle,surfaceHost);
         surfacePanel.getStyleClass().add("dashboard-card");
-        VBox.setVgrow(surfaceHost,Priority.NEVER);
-        VBox.setVgrow(surfacePanel,Priority.NEVER);
+        VBox.setVgrow(surfaceHost,Priority.ALWAYS);
+        VBox.setVgrow(surfacePanel,Priority.ALWAYS);
         surfacePanel.setMinWidth(0);
         ignitionHost.getStyleClass().add("dashboard-table-host");
-        ignitionHost.setMinHeight(210);ignitionHost.setPrefHeight(215);
-        ignitionOverview.widthProperty().bind(ignitionHost.widthProperty());
-        ignitionOverview.heightProperty().bind(ignitionHost.heightProperty());
-        ignitionHost.widthProperty().addListener((a,b,c)->drawIgnition());
-        ignitionHost.heightProperty().addListener((a,b,c)->drawIgnition());
+        ignitionHost.setMinHeight(120);ignitionHost.setPrefHeight(215);
+        ignitionOverview.widthProperty().addListener((a,b,c)->drawIgnition());
+        ignitionOverview.heightProperty().addListener((a,b,c)->drawIgnition());
         Label secondTitle=new Label("TABELA DE IGNIÇÃO · 16×16");
         secondTitle.getStyleClass().add("dashboard-small-title");
         VBox ignitionPanel=new VBox(8,secondTitle,ignitionHost);
         ignitionPanel.getStyleClass().add("dashboard-card");
-        ignitionPanel.setMinWidth(0);
-        javafx.scene.layout.GridPane lower=new javafx.scene.layout.GridPane();lower.setId("dashboard-lower-grid");lower.setHgap(5);
-        for(double percent:new double[]{63,37}){var column=new javafx.scene.layout.ColumnConstraints();column.setPercentWidth(percent);column.setMinWidth(0);lower.getColumnConstraints().add(column);}
-        lower.addRow(0,ignitionPanel,surfacePanel);
+        ignitionPanel.setMinWidth(0);VBox.setVgrow(ignitionHost,Priority.ALWAYS);
+        SplitPane lower=new SplitPane(ignitionPanel,surfacePanel);lower.setId("dashboard-lower-split");
+        lower.getStyleClass().add("dashboard-split");lower.setDividerPositions(.63);lower.setMinSize(0,180);
+        SplitPane tables=new SplitPane(center,lower);tables.setOrientation(javafx.geometry.Orientation.VERTICAL);
+        tables.setId("dashboard-tables-split");tables.getStyleClass().add("dashboard-split");
+        tables.setDividerPositions(.60);tables.setMinSize(0,490);tables.setPrefHeight(640);
+        VBox.setVgrow(tables,Priority.ALWAYS);
         if(mapsOnly) {
             Label heading=new Label("TABELAS NATIVAS 16×16 · ECU");
             heading.getStyleClass().add("dashboard-kicker");
-            getChildren().addAll(heading,center,lower);
+            getChildren().addAll(heading,tables);
         } else {
-            getChildren().addAll(gaugeRow,smallRow,center,lower);
+            getChildren().addAll(gaugeRow,smallRow,tables);
         }
         setConnection(null,false,false);
         redrawMaps();

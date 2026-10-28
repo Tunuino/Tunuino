@@ -79,6 +79,11 @@ public final class ConsoleUiChecks {
             check(cockpit!=null,"ECU cockpit is the first page");
             var gaugeNodes=new ArrayList<>(scene.getRoot().lookupAll(".dashboard-gauge"));
             check(gaugeNodes.size()==6,"Dashboard contains all six gauges");
+            checkCanvasSizing(scene);
+            var logo=(javafx.scene.image.ImageView)scene.lookup("#console-logo");
+            check(logo.isPreserveRatio()&&logo.getImage().getUrl().endsWith("/tunuino.png"),
+                "Header uses the original logo resource with its proportions preserved");
+
             var gaugeRows=new java.util.HashSet<Long>();
             for(var gauge:gaugeNodes)gaugeRows.add(Math.round(gauge.localToScene(gauge.getBoundsInLocal()).getMinY()));
             boolean wide=((javafx.scene.layout.FlowPane)gaugeNodes.get(0).getParent()).getWidth()>=760;
@@ -120,12 +125,50 @@ public final class ConsoleUiChecks {
             stage.setWidth(1510);stage.setHeight(1010);
             later(()->checkWideDashboard(stage));
         }
+        private void checkCanvasSizing(Scene scene) {
+            var canvas=(javafx.scene.canvas.Canvas)scene.lookup("#dashboard-map-canvas");
+            var host=(javafx.scene.layout.Region)canvas.getParent();
+            double preferred=host.prefWidth(-1);
+            host.resize(900,280);host.layout();
+            check(Math.abs(host.prefWidth(-1)-preferred)<0.1,
+                "Canvas rendering must not change its container preferred width");
+            host.resize(360,240);host.layout();
+            check(canvas.getWidth()<=360&&canvas.getHeight()<=240,
+                "Canvas fits a smaller host, including its borders");
+            scene.getRoot().requestLayout();scene.getRoot().layout();
+        }
+
         private void checkWideDashboard(Stage stage) throws Exception {
             Scene scene=stage.getScene();DashboardPane cockpit=(DashboardPane)scene.lookup("#dashboard");
             snapshot(scene,"console-reference-layout");snapshot(scene,"console-dashboard-wide");
             var build=(Label)scene.lookup("#console-active-build");
             check(build.getWidth()>=build.prefWidth(-1),"Active build remains readable in the header");
+            var center=(javafx.scene.control.SplitPane)scene.lookup("#dashboard-center-split");
+            var lower=(javafx.scene.control.SplitPane)scene.lookup("#dashboard-lower-split");
+            var tables=(javafx.scene.control.SplitPane)scene.lookup("#dashboard-tables-split");
+            double width=((javafx.scene.layout.Region)center.getItems().get(0)).getWidth();
+            double height=((javafx.scene.layout.Region)tables.getItems().get(0)).getHeight();
+            center.setDividerPositions(.66);lower.setDividerPositions(.50);tables.setDividerPositions(.70);
+            scene.getRoot().layout();
+            check(((javafx.scene.layout.Region)center.getItems().get(0)).getWidth()<width-40,
+                "Map and engine state divider changes the table width");
+            check(((javafx.scene.layout.Region)tables.getItems().get(0)).getHeight()>height+10,
+                "Table divider changes the allocated height");
+            center.setDividerPositions(.80);lower.setDividerPositions(.63);tables.setDividerPositions(.60);
             stage.setWidth(980);stage.setHeight(720);
+            later(()->checkCompactDashboard(stage));
+        }
+        private void checkCompactDashboard(Stage stage) throws Exception {
+            Scene scene=stage.getScene();DashboardPane cockpit=(DashboardPane)scene.lookup("#dashboard");
+            scene.getRoot().applyCss();scene.getRoot().layout();
+            var canvas=(javafx.scene.canvas.Canvas)scene.lookup("#dashboard-map-canvas");
+            double width=canvas.getWidth(),height=canvas.getHeight();
+            for(int i=0;i<60;i++){scene.getRoot().requestLayout();scene.getRoot().layout();}
+            check(Math.abs(canvas.getWidth()-width)<1&&Math.abs(canvas.getHeight()-height)<1,
+                "Repeated layouts never stretch the table while the window is unchanged");
+            check(canvas.localToScene(canvas.getBoundsInLocal()).getMaxX()<scene.getWidth(),
+                "Compact map stays inside the visible window");
+            snapshot(scene,"console-dashboard-resized");
             cockpit.clearMaps();
             ((ToggleButton)scene.lookup("#navigate-2")).fire();
             scene.getRoot().applyCss();scene.getRoot().layout();
@@ -536,7 +579,26 @@ public final class ConsoleUiChecks {
             }
             check(expanded,"8x8 to 16x16 conversion opens a new offline editor");
             check(CalibrationViewer.closeAll(),"Offline converted map editor closes cleanly");
-            checkFirmwareStability(stage);
+            CalibrationViewer.show(stage,"resize-16x16.tnmap",io.tunuino.calibration.BaseMaps.create(
+                io.tunuino.calibration.BaseMaps.Template.NATURALLY_ASPIRATED,CalibrationMap.Kind.VE));
+            Stage editor=Window.getWindows().stream().filter(w->w!=stage&&w instanceof Stage&&w.isShowing()
+                &&((Stage)w).getTitle().contains("resize-16x16")).map(w->(Stage)w).findFirst().orElseThrow();
+            check(editor.isResizable(),"Map editor exposes native resize and maximize controls");
+            editor.setWidth(740);editor.setHeight(520);
+            later(()->{
+                check(editor.getScene().getWidth()<800&&editor.getScene().getHeight()<540,
+                    "Native map editor actually shrinks across layout pulses");
+                var grid=(javafx.scene.control.TableView<?>)editor.getScene().lookup(".table-view");
+                check(grid.getColumns().size()==17&&grid.getItems().size()==16,
+                    "Resizing retains every map row and column");
+                snapshot(editor.getScene(),"console-map-editor-resized");
+                editor.setWidth(1240);editor.setHeight(780);
+                later(()->{
+                    check(editor.getScene().getWidth()>1100,"Native editor grows again after shrinking");
+                    check(CalibrationViewer.closeAll(),"Resizing does not modify calibration data");
+                    checkFirmwareStability(stage);
+                });
+            });
         }
 
         private void checkFirmwareStability(Stage main) {

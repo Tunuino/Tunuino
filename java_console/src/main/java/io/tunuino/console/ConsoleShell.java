@@ -51,19 +51,19 @@ final class ConsoleShell extends BorderPane {
 
     ConsoleShell(Node hardware, Node connectionControls, Label status, Label identity) {
         getStyleClass().add("console-shell");
-        SVGPath chip=new SVGPath();chip.setContent("M12 8H60V56H12ZM0 14H9V20H0ZM0 29H9V35H0ZM0 44H9V50H0ZM63 14H72V20H63ZM63 29H72V35H63ZM63 44H72V50H63ZM19 0H25V6H19ZM34 0H40V6H34ZM49 0H55V6H49ZM19 59H25V65H19ZM34 59H40V65H34ZM49 59H55V65H49Z");
-        chip.setFill(javafx.scene.paint.Color.web("#0085ff"));
-        Label glyph=new Label("T");glyph.setStyle("-fx-text-fill:#071019;-fx-font-size:48;-fx-font-weight:900;-fx-font-style:italic;");
-        StackPane logoBox=new StackPane(chip,glyph);logoBox.setId("console-logo");logoBox.setMinSize(78,70);
-        Label product=new Label("Tunuino");product.getStyleClass().add("wordmark");
+        ImageView logo=new ImageView(new Image(java.util.Objects.requireNonNull(
+            ConsoleShell.class.getResource("tunuino.png"),"Missing Tunuino logo").toExternalForm()));
+        logo.setId("console-logo");logo.setPreserveRatio(true);logo.setSmooth(true);
+        logo.setFitWidth(280);logo.setFitHeight(74);
         Label subtype=new Label("Console");subtype.getStyleClass().add("wordmark-subtitle");
         Label build=new Label(BuildInfo.label());build.setId("console-active-build");build.getStyleClass().add("build-label");
-        VBox productName=new VBox(-3,product,subtype,build);productName.setMinWidth(200);productName.setPrefWidth(200);
+        HBox brandingDetails=new HBox(12,subtype,build);brandingDetails.setAlignment(Pos.CENTER_LEFT);
+        VBox productName=new VBox(0,logo,brandingDetails);productName.setMinWidth(280);productName.setPrefWidth(280);
         device.getStyleClass().add("muted");device.setWrapText(true);device.setMaxWidth(210);
         connection.getStyleClass().addAll("connection-badge","offline");
         VBox state=new VBox(3,connection,device);state.setMinWidth(180);state.setMaxWidth(215);
         VBox controls=new VBox(2,connectionControls);controls.setMinWidth(280);controls.setPrefWidth(640);HBox.setHgrow(controls,Priority.ALWAYS);
-        HBox masthead=new HBox(12,logoBox,productName,state,controls);masthead.setAlignment(Pos.CENTER_LEFT);masthead.getStyleClass().add("masthead");
+        HBox masthead=new HBox(12,productName,state,controls);masthead.setAlignment(Pos.CENTER_LEFT);masthead.getStyleClass().add("masthead");
         // Hardware selection stays available beside the USB controls.
         if(connectionControls instanceof FlowPane bar)bar.getChildren().add(0,hardware);
         javafx.scene.control.MenuBar menus=new javafx.scene.control.MenuBar();menus.setId("console-menu-bar");

@@ -67,7 +67,7 @@ def main():
     installer = validate_installer(Path("build/installer"), commit, run_id)
     shutil.copy2(installer, output / SETUP_NAME)
     repo = os.environ["GITHUB_REPOSITORY"]
-    notes = f"""## Tunuino — painel com Estado do motor e mais espaço para os mapas
+    notes = f"""## Tunuino — tabelas estáveis, painéis ajustáveis e logótipo original
 
 Console Windows x64, firmware **Proteus v0.7 / STM32F427** e **INI TunerStudio**, produzidos a partir do mesmo commit.
 
@@ -86,7 +86,9 @@ O ZIP portátil mantém `console/`, `firmware/`, `kit-manifest.json`, `START-HER
 
 **Correção ao guardar na ECU:** o ciclo USB volta a ler o relógio depois de executar um pedido que pode gravar na flash. A transmissão já iniciava o seu prazo após a gravação; o ciclo principal reutilizava o instante anterior e provocava um erro de relógio, seguido de reinício USB. O teste do ciclo real reproduziu o erro antes da correção e passou com persistência simulada de 2, 250, 1500 e 4500 ms, incluindo falha de persistência sem falsa confirmação. A Console identifica a fase da falha e mantém o estado incerto para releitura, sem repetir automaticamente a gravação. **É necessário gravar na Proteus o firmware incluído neste Bundle para aplicar a correção.** [Detalhes e atualização](https://github.com/Tunuino/Tunuino_documents/blob/main/correcao-gravacao-usb.md).
 
-**Painel simplificado:** retirada a coluna Registo do Painel e das áreas de tabelas VE/ignição. Fica apenas Estado do motor com comunicação à direita; a tabela ocupa 80% da largura central. A página Datalog e os avisos das operações continuam disponíveis. Esta alteração visual aplica-se ao atualizar a Console.
+**Tabelas e logótipo:** eliminado o ciclo de cálculo de tamanho entre os desenhos das tabelas e os respetivos contentores. O mapa acompanha a área disponível sem a fazer crescer. Separadores arrastáveis ajustam a largura VE/estado, ignição/3D e a altura das duas zonas. O editor de mapas tem controlos que passam à linha, limites adaptados ao ecrã e redimensionamento nativo. O cabeçalho volta a usar o PNG original Tunuino, com proporções preservadas. A regressão do tamanho preferido falhou antes da correção; os testes verificam também encolher/expandir e preservar as 256 células. [Detalhes](https://github.com/Tunuino/Tunuino_documents/blob/main/console-tabelas-redimensionamento.md).
+
+**Painel simplificado:** retirada a coluna Registo do Painel e das áreas de tabelas VE/ignição. Fica apenas Estado do motor com comunicação à direita; a tabela começa com 80% da largura central, ajustável pelo separador. A página Datalog e os avisos das operações continuam disponíveis. Esta alteração visual aplica-se ao atualizar a Console.
 
 **Console e calibrações:** painel compacto com seis mostradores, duas tabelas 16×16, apenas Estado do motor à direita, sem coluna Registo e superfície 3D; calibrações MAP, lambda, CLT, TPS, IAT e tensão reunidas em Sensores e calibrações. Medir ponto usa o ADC real da ligação escolhida; TPS tem captura fechado/aberto e CLT/IAT têm assistente NTC com R25, Beta e pull-up explícitos. Guardar TPS/IAT/tensão preserva os restantes controlos e modos, com validação e releitura. As pesquisas automáticas COM/DFU deixam de bloquear os controlos; a DFU pausa fora da página ou com a COM ocupada e mantém listas/seleção quando nada mudou. A monitorização lê TPS, IAT, tensão e estado das saídas pelo protocolo nativo, sem alterar o formato CSV existente. [Guia e imagens](https://github.com/Tunuino/Tunuino_documents/blob/main/console-calibracoes-estabilidade.md).
 
