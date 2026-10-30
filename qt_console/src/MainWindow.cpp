@@ -21,6 +21,9 @@
 #include <QAbstractItemView>
 #include <QComboBox>
 #include <QCheckBox>
+#include <QSerialPortInfo>
+#include <QAction>
+#include "ecu/SerialSession.h"
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("Tunuino Console — Qt 6");
     resize(1400, 850);
@@ -503,8 +506,70 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connectionStatus_->setAlignment(Qt::AlignCenter);
     dock->setWidget(connectionStatus_);
     addDockWidget(Qt::RightDockWidgetArea, dock);
-    menuBar()->addMenu(tr("File"));
-    menuBar()->addMenu(tr("ECU"));
-    menuBar()->addMenu(tr("Settings"));
+    auto *session = new tunuino::SerialSession(this);
+    auto *fileMenu = menuBar()->addMenu(tr("File"));
+    fileMenu->addAction(tr("Exit"), this, &QWidget::close);
+    auto *ecuMenu = menuBar()->addMenu(tr("ECU"));
+    auto *connectMenu = ecuMenu->addMenu(tr("Connect to ECU"));
+    auto *disconnectAction = ecuMenu->addAction(tr("Disconnect"));
+    disconnectAction->setEnabled(false);
+    auto *settingsMenu = menuBar()->addMenu(tr("Settings"));
+    auto *refreshAction = settingsMenu->addAction(tr("Refresh serial ports"));
+    auto *firmwareMenu = menuBar()->addMenu(tr("Firmware"));
+    auto *dfuInfo = firmwareMenu->addAction(tr("USB DFU status / instructions"));
+    connect(dfuInfo, &QAction::triggered, this, [this]() {
+        QMessageBox::information(this, tr("Firmware / DFU"),
+            tr("Firmware flashing is not implemented in this Qt console. Use the validated legacy flashing tool. Do not flash an unverified image."));
+    });
+    auto refreshPorts = [=]() {
+        connectMenu->clear();
+        const auto ports = QSerialPortInfo::availablePorts();
+        if (ports.isEmpty()) {
+            auto *none = connectMenu->addAction(tr("No serial ports detected"));
+            none->setEnabled(false);
+        }
+        for (const auto &port : ports) {
+            const QString name = port.portName();
+            auto *action = connectMenu->addAction(name + QStringLiteral(" — ") + port.description());
+            connect(action, &QAction::triggered, this, [=]() {
+                session->close();
+                connectionStatus_->setText(tr("Connecting to %1...").arg(name));
+                if (!session->open(name, 115200)) return;
+                if (!session->exchange(QByteArray("TUNUINO?"), 3000)) {
+                    session->close();
+                    connectionStatus_->setText(tr("Identity request failed"));
+                }
+            });
+        }
+    };
+    connect(refreshAction, &QAction::triggered, this, refreshPorts);
+    connect(connectMenu, &QMenu::aboutToShow, this, refreshPorts);
+    connect(disconnectAction, &QAction::triggered, this, [=]() {
+        session->close();
+        connectionStatus_->setText(tr("ECU disconnected"));
+    });
+    connect(session, &tunuino::SerialSession::connectionChanged, this, [=](bool connected) {
+        disconnectAction->setEnabled(connected);
+        if (!connected) connectionStatus_->setText(tr("ECU disconnected"));
+    });
+    connect(session, &tunuino::SerialSession::exchangeFailed, this, [=](const QString &error) {
+        connectionStatus_->setText(tr("ECU communication failed: %1").arg(error));
+        statusBar()->showMessage(error, 10000);
+    });
+    connect(session, &tunuino::SerialSession::responseReceived, this, [=](const QByteArray &data) {
+        if (data.size() != 32 || data.mid(1, 7) != QByteArray("TUNUINO", 7)) {
+            connectionStatus_->setText(tr("Invalid ECU identity response"));
+            session->close();
+            return;
+        }
+        const int protocol = quint8(data[8]);
+        const int board = quint8(data[9]);
+        const int mcu = quint8(data[10]);
+        const QString version = QStringLiteral("%1.%2.%3").arg(quint8(data[13])).arg(quint8(data[14])).arg(quint8(data[15]));
+        connectionStatus_->setText(tr("ECU connected | Protocol %1 | Board %2 | MCU %3 | Firmware %4")
+            .arg(protocol).arg(board).arg(mcu).arg(version));
+        statusBar()->showMessage(tr("ECU identity verified (read-only). Configuration writes disabled."));
+    });
+    refreshPorts();
     statusBar()->showMessage(tr("Qt 6 interface prototype — ECU writes disabled"));
 }
