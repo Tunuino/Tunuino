@@ -35,7 +35,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *navigationList = new QListWidget(navigationDock);
     navigationList->setMinimumWidth(195);
     navigationList->setMaximumWidth(270);
-    navigationList->addItems({tr("Fuel Table"), tr("Spark Table"), tr("Datalogging"),
+    navigationList->addItems({tr("Fuel Table"), tr("Ignition Table"), tr("Datalogging"),
                               tr("Firmware"), tr("Calibration & Setup")});
     navigationDock->setWidget(navigationList);
     addDockWidget(Qt::LeftDockWidgetArea, navigationDock);
@@ -53,7 +53,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             maps->setItem(row, col, cell);
         }
     tabs->addTab(maps, tr("Fuel Table"));
-    for (const auto &name : {tr("Spark Table"), tr("Datalogging"), tr("Firmware")}) {
+    for (const auto &name : {tr("Ignition Table"), tr("Datalogging"), tr("Firmware")}) {
         auto *label = new QLabel(tr("Module pending integration with ECU firmware"), tabs);
         label->setAlignment(Qt::AlignCenter);
         tabs->addTab(label, name);
