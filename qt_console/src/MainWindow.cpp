@@ -44,8 +44,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     navigationList->setCurrentRow(0);
 
     auto *maps = new QTableWidget(16, 16, tabs);
-    maps->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-    maps->verticalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    maps->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    maps->horizontalHeader()->setDefaultSectionSize(62);
+    maps->horizontalHeader()->setMinimumSectionSize(48);
+    maps->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    maps->verticalHeader()->setDefaultSectionSize(28);
+    maps->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
+    maps->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    maps->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     for (int row = 0; row < 16; ++row)
         for (int col = 0; col < 16; ++col) {
             auto *cell = new QTableWidgetItem();
@@ -516,9 +522,32 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     if (auto *first = navigation->topLevelItem(0)) navigation->setCurrentItem(first->child(0));
     auto *dock = new QDockWidget(tr("Engine Status"), this);
     dock->setObjectName("EngineStatusDock");
-    connectionStatus_ = new QLabel(tr("ECU disconnected — no live data"), dock);
-    connectionStatus_->setAlignment(Qt::AlignCenter);
-    dock->setWidget(connectionStatus_);
+    auto *statusPanel = new QWidget(dock);
+    auto *statusLayout = new QVBoxLayout(statusPanel);
+    statusLayout->setContentsMargins(10, 12, 10, 12);
+    statusLayout->setSpacing(8);
+    auto *readingsTitle = new QLabel(tr("LIVE ENGINE DATA"), statusPanel);
+    readingsTitle->setStyleSheet(QStringLiteral("font-weight: bold; color: #e69a32;"));
+    statusLayout->addWidget(readingsTitle);
+    auto *readings = new QFormLayout();
+    readings->setLabelAlignment(Qt::AlignLeft);
+    for (const char *parameter : {"RPM", "TPS", "MAP", "Lambda", "CLT", "IAT", "Battery"}) {
+        auto *value = new QLabel(tr("No telemetry"), statusPanel);
+        value->setStyleSheet(QStringLiteral("color: #a9aaad;"));
+        readings->addRow(QString::fromLatin1(parameter), value);
+    }
+    statusLayout->addLayout(readings);
+    auto *identityTitle = new QLabel(tr("ECU CONNECTION"), statusPanel);
+    identityTitle->setStyleSheet(QStringLiteral("font-weight: bold; color: #e69a32;"));
+    statusLayout->addSpacing(12);
+    statusLayout->addWidget(identityTitle);
+    connectionStatus_ = new QLabel(tr("ECU disconnected"), statusPanel);
+    connectionStatus_->setWordWrap(true);
+    connectionStatus_->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    statusLayout->addWidget(connectionStatus_);
+    statusLayout->addStretch(1);
+    dock->setWidget(statusPanel);
+    dock->setMinimumWidth(245);
     addDockWidget(Qt::RightDockWidgetArea, dock);
     auto *session = new tunuino::SerialSession(this);
     auto *fileMenu = menuBar()->addMenu(tr("File"));
