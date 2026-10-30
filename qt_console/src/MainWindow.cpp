@@ -62,7 +62,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         {"Sensor Calibration", {"TPS", "MAP", "CLT", "IAT", "Lambda", "Analog Inputs", nullptr}},
         {"Fuel System", {"Injector Dead Time", "Fuel Pressure", "Injectors", nullptr}},
         {"Ignition System", {"Coils", "Dwell", "Trigger", nullptr}},
-        {"Engine Control", {"Idle Control", "Boost Control", "Launch Control", nullptr}},
+        {"Engine Control", {"Idle Control", "Boost Control", "Launch Control", "ETB / Drive by Wire", nullptr}},
         {"Input / Output", {"Inputs", "Outputs", nullptr}}
     };
     for (const auto &category : categories) {
@@ -219,6 +219,49 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 form->addRow(apply);
                 // Preview controls must never imply that a live ECU strategy is enabled.
                 enabled->setEnabled(false);
+            }
+            if (QString::fromLatin1(name) == QStringLiteral("ETB / Drive by Wire")) {
+                auto *mode = new QComboBox(page);
+                mode->addItems({tr("Disabled (default)"), tr("ETB / Drive by Wire (requires verified ECU support)")});
+                auto *pedal = new QComboBox(page);
+                pedal->addItems({tr("Select pedal sensor"), "APP 1 + APP 2"});
+                auto *throttle = new QComboBox(page);
+                throttle->addItems({tr("Select throttle sensor"), "TPS 1 + TPS 2"});
+                auto *driver = new QComboBox(page);
+                driver->addItems({tr("Select motor driver"), tr("Not configured")});
+                auto *pidP = new QDoubleSpinBox(page);
+                auto *pidI = new QDoubleSpinBox(page);
+                auto *pidD = new QDoubleSpinBox(page);
+                for (auto *spin : {pidP, pidI, pidD}) {
+                    spin->setRange(0.0, 1000.0);
+                    spin->setDecimals(3);
+                    spin->setSingleStep(0.01);
+                    spin->setValue(0.0);
+                }
+                auto *step1 = new QPushButton(tr("1. Calibrate pedal released / pressed"), page);
+                auto *step2 = new QPushButton(tr("2. Calibrate throttle closed / open"), page);
+                auto *step3 = new QPushButton(tr("3. Verify redundant sensors and motor direction"), page);
+                auto *step4 = new QPushButton(tr("4. Validate safety limits and save"), page);
+                for (auto *button : {step1, step2, step3, step4}) button->setEnabled(false);
+                auto *warning = new QLabel(tr("SAFETY: Electronic throttle actuation is locked. Calibration requires redundant APP/TPS plausibility checks, motor current and position limits, watchdog/fault shutdown, and a verified ECU driver. Never run an actuator sweep with the engine running."), page);
+                warning->setWordWrap(true);
+                warning->setStyleSheet(QStringLiteral("color: #b45309;"));
+                form->addRow(tr("ETB control"), mode);
+                form->addRow(tr("Accelerator pedal"), pedal);
+                form->addRow(tr("Throttle position"), throttle);
+                form->addRow(tr("H-bridge motor driver"), driver);
+                form->addRow(tr("PID P (unset)"), pidP);
+                form->addRow(tr("PID I (unset)"), pidI);
+                form->addRow(tr("PID D (unset)"), pidD);
+                form->addRow(step1);
+                form->addRow(step2);
+                form->addRow(step3);
+                form->addRow(step4);
+                form->addRow(warning);
+                // No ECU capabilities or live feedback are available yet. Keep the controls
+                // non-operational to avoid implying that drive-by-wire is safe to enable.
+                for (auto *control : {mode, pedal, throttle, driver}) control->setEnabled(false);
+                for (auto *spin : {pidP, pidI, pidD}) spin->setEnabled(false);
             }
             if (QString::fromLatin1(name) == QStringLiteral("Inputs") ||
                 QString::fromLatin1(name) == QStringLiteral("Outputs")) {
