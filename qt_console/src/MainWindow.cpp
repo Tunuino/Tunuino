@@ -43,7 +43,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(tabs, &QTabWidget::currentChanged, navigationList, [navigationList](int index) { navigationList->setCurrentRow(index); });
     navigationList->setCurrentRow(0);
 
-    auto *maps = new QTableWidget(16, 16, tabs);
+    // Compact calibration workspace with explicit read-only state.
+    auto *fuelPage = new QWidget(tabs);
+    auto *fuelLayout = new QVBoxLayout(fuelPage);
+    fuelLayout->setContentsMargins(10, 10, 10, 10);
+    fuelLayout->setSpacing(8);
+    auto *fuelToolbar = new QWidget(fuelPage);
+    auto *fuelToolbarLayout = new QHBoxLayout(fuelToolbar);
+    fuelToolbarLayout->setContentsMargins(0, 0, 0, 0);
+    auto *fuelHeading = new QLabel(tr("FUEL TABLE  |  16 x 16"), fuelToolbar);
+    fuelHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
+    fuelToolbarLayout->addWidget(fuelHeading);
+    fuelToolbarLayout->addStretch();
+    auto *fuelState = new QLabel(tr("READ ONLY  -  Awaiting ECU map protocol"), fuelToolbar);
+    fuelState->setStyleSheet(QStringLiteral("color: #bdbfc1;"));
+    fuelToolbarLayout->addWidget(fuelState);
+    fuelLayout->addWidget(fuelToolbar);
+    auto *maps = new QTableWidget(16, 16, fuelPage);
+    maps->setAlternatingRowColors(true);
+    maps->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    maps->setSelectionBehavior(QAbstractItemView::SelectItems);
+    maps->setCornerButtonEnabled(false);
+    maps->setToolTip(tr("Map values are unavailable until the ECU table-read protocol is implemented."));
     maps->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     maps->horizontalHeader()->setDefaultSectionSize(62);
     maps->horizontalHeader()->setMinimumSectionSize(48);
@@ -58,8 +79,35 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             cell->setFlags(cell->flags() & ~Qt::ItemIsEditable);
             maps->setItem(row, col, cell);
         }
-    tabs->addTab(maps, tr("Fuel Table"));
-    for (const auto &name : {tr("Ignition Table"), tr("Datalogging"), tr("Firmware")}) {
+    fuelLayout->addWidget(maps, 1);
+    auto *fuelFooter = new QLabel(tr("Values are intentionally blank until read from ECU. Editing and writing remain disabled."), fuelPage);
+    fuelFooter->setStyleSheet(QStringLiteral("color: #a9aaad;"));
+    fuelLayout->addWidget(fuelFooter);
+    tabs->addTab(fuelPage, tr("Fuel Table"));
+    auto *ignitionPage = new QWidget(tabs);
+    auto *ignitionLayout = new QVBoxLayout(ignitionPage);
+    auto *ignitionHeading = new QLabel(tr("IGNITION TABLE  |  16 x 16"), ignitionPage);
+    ignitionHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
+    ignitionLayout->addWidget(ignitionHeading);
+    auto *ignitionMap = new QTableWidget(16, 16, ignitionPage);
+    ignitionMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    ignitionMap->horizontalHeader()->setDefaultSectionSize(62);
+    ignitionMap->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    ignitionMap->verticalHeader()->setDefaultSectionSize(28);
+    ignitionMap->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
+    ignitionMap->setAlternatingRowColors(true);
+    for (int row = 0; row < 16; ++row)
+        for (int col = 0; col < 16; ++col) {
+            auto *cell = new QTableWidgetItem();
+            cell->setFlags(cell->flags() & ~Qt::ItemIsEditable);
+            ignitionMap->setItem(row, col, cell);
+        }
+    ignitionLayout->addWidget(ignitionMap, 1);
+    auto *ignitionFooter = new QLabel(tr("Ignition values unavailable. ECU read/write protocol not yet integrated."), ignitionPage);
+    ignitionFooter->setStyleSheet(QStringLiteral("color: #a9aaad;"));
+    ignitionLayout->addWidget(ignitionFooter);
+    tabs->addTab(ignitionPage, tr("Ignition Table"));
+    for (const auto &name : {tr("Datalogging"), tr("Firmware")}) {
         auto *label = new QLabel(tr("Module pending integration with ECU firmware"), tabs);
         label->setAlignment(Qt::AlignCenter);
         tabs->addTab(label, name);
