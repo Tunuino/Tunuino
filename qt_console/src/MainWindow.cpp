@@ -25,6 +25,8 @@
 #include <QAction>
 #include <QListWidget>
 #include <QTimer>
+#include <QSharedPointer>
+#include <QVector>
 #include "ecu/SerialSession.h"
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("Tunuino Console — Qt 6");
@@ -673,7 +675,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // The firmware runtime command is read-only: O + offset(U16 BE) + count(U16 BE).
     auto *liveTimer = new QTimer(this);
     liveTimer->setInterval(500);
-    bool *identityVerified = new bool(false);
+    auto identityVerified = QSharedPointer<bool>::create(false);
     auto requestLive = [session, identityVerified]() {
         if (!*identityVerified || !session->isOpen()) return;
         QByteArray command(5, char(0));
@@ -684,13 +686,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(liveTimer, &QTimer::timeout, this, requestLive);
     auto *liveValues = statusPanel->findChildren<QLabel *>();
     // The first seven value labels follow the LIVE ENGINE DATA heading.
-    auto *liveReadings = new QVector<QLabel *>();
+    auto liveReadings = QSharedPointer<QVector<QLabel *>>::create();
     for (int i = 0; i < 7 && i + 1 < liveValues.size(); ++i)
         liveReadings->append(liveValues.at(i + 1));
-    connect(this, &QObject::destroyed, this, [identityVerified, liveReadings]() {
-        delete identityVerified;
-        delete liveReadings;
-    });
     auto *fileMenu = menuBar()->addMenu(tr("File"));
     fileMenu->addAction(tr("Exit"), this, &QWidget::close);
     auto *ecuMenu = menuBar()->addMenu(tr("ECU"));
