@@ -16,11 +16,15 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
+      - name: Set up supported Python for Qt installer
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.7.3'
           arch: win64_msvc2019_64
-          modules: qtserialport qttest
+          modules: qtserialport
           cache: true
       - name: Configure
         run: cmake -S qt_console -B qt_console/build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
