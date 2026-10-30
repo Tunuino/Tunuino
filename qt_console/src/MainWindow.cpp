@@ -322,7 +322,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *openExample = new QPushButton(tr("Open JSON"), importPage);
     presetBar->addWidget(openExample);
     presetBar->addWidget(saveExample);
-    auto *importBar = new QHBoxLayout();
     auto *importTable = new QTableWidget(importPage);
     importTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     importTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
