@@ -258,6 +258,23 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 form->addRow(step3);
                 form->addRow(step4);
                 form->addRow(warning);
+                auto *diagnostics = new QGroupBox(tr("ETB Safety Diagnostics"), page);
+                auto *diagnosticsLayout = new QFormLayout(diagnostics);
+                auto *status = new QLabel(tr("NOT MONITORED — ECU disconnected"), diagnostics);
+                status->setStyleSheet(QStringLiteral("font-weight: bold; color: #b45309;"));
+                auto *appStatus = new QLabel(tr("APP1 / APP2: no live data"), diagnostics);
+                auto *tpsStatus = new QLabel(tr("TPS1 / TPS2: no live data"), diagnostics);
+                auto *motorStatus = new QLabel(tr("Motor driver: not verified"), diagnostics);
+                auto *faultStatus = new QLabel(tr("Fault handling: not verified"), diagnostics);
+                diagnosticsLayout->addRow(tr("ETB status"), status);
+                diagnosticsLayout->addRow(tr("Pedal correlation"), appStatus);
+                diagnosticsLayout->addRow(tr("Throttle correlation"), tpsStatus);
+                diagnosticsLayout->addRow(tr("Motor and current limits"), motorStatus);
+                diagnosticsLayout->addRow(tr("Fail-safe / watchdog"), faultStatus);
+                form->addRow(diagnostics);
+                auto *safetyInfo = new QLabel(tr("When live telemetry is implemented, mismatched redundant sensors, out-of-range voltage, motor overcurrent, actuator timeout or watchdog faults must produce a clear alarm and trigger the firmware fail-safe. The console cannot replace ECU-side protection."), page);
+                safetyInfo->setWordWrap(true);
+                form->addRow(safetyInfo);
                 // No ECU capabilities or live feedback are available yet. Keep the controls
                 // non-operational to avoid implying that drive-by-wire is safe to enable.
                 for (auto *control : {mode, pedal, throttle, driver}) control->setEnabled(false);
