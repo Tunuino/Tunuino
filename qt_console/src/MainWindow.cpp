@@ -19,6 +19,8 @@
 #include <QRegularExpression>
 #include <QSplitter>
 #include <QAbstractItemView>
+#include <QComboBox>
+#include <QCheckBox>
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("Tunuino Console — Qt 6");
     resize(1400, 850);
@@ -99,6 +101,55 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 auto *calibrate = new QPushButton(tr("Auto Calibrate (not connected)"), page);
                 calibrate->setEnabled(false);
                 form->addRow(calibrate);
+            }
+            if (QString::fromLatin1(name) == QStringLiteral("Lambda")) {
+                auto *brand = new QComboBox(page);
+                brand->addItems({tr("Select wideband manufacturer"), "AEM", "Innovate Motorsports", "14point7", "PLX Devices", tr("Other / Custom")});
+                auto *model = new QComboBox(page);
+                auto *input = new QComboBox(page);
+                input->addItems({tr("Select analog input"), "Analog 1", "Analog 2", "Analog 3", "Analog 4"});
+                auto *vLow = new QDoubleSpinBox(page);
+                auto *vHigh = new QDoubleSpinBox(page);
+                auto *afrLow = new QDoubleSpinBox(page);
+                auto *afrHigh = new QDoubleSpinBox(page);
+                for (auto *v : {vLow, vHigh}) { v->setRange(0, 5); v->setDecimals(3); v->setSuffix(" V"); }
+                for (auto *a : {afrLow, afrHigh}) { a->setRange(5, 30); a->setDecimals(2); a->setSuffix(" AFR"); }
+                auto *note = new QLabel(page);
+                note->setWordWrap(true);
+                form->addRow(tr("Wideband manufacturer"), brand);
+                form->addRow(tr("Controller / model"), model);
+                form->addRow(tr("ECU input"), input);
+                form->addRow(tr("Voltage at first calibration point"), vLow);
+                form->addRow(tr("AFR at first calibration point"), afrLow);
+                form->addRow(tr("Voltage at second calibration point"), vHigh);
+                form->addRow(tr("AFR at second calibration point"), afrHigh);
+                form->addRow(note);
+                auto update = [=]() {
+                    const bool custom = brand->currentIndex() == brand->count() - 1;
+                    model->clear();
+                    if (brand->currentIndex() == 0) model->addItem(tr("Select a manufacturer first"));
+                    else if (custom) model->addItem(tr("Custom analog output"));
+                    else model->addItem(tr("Exact model / transfer curve not yet verified"));
+                    for (auto *field : {vLow, vHigh, afrLow, afrHigh}) field->setEnabled(custom);
+                    note->setText(custom
+                        ? tr("Enter the two voltage/AFR points from your controller manual. No ECU write is available yet.")
+                        : tr("Manufacturer selection is a UI placeholder. No voltage-to-AFR preset is loaded; exact model and datasheet are required."));
+                };
+                connect(brand, QOverload<int>::of(&QComboBox::currentIndexChanged), page, [update](int) { update(); });
+                update();
+                auto *save = new QPushButton(tr("Apply to ECU (not connected)"), page);
+                save->setEnabled(false);
+                form->addRow(save);
+            }
+            if (QString::fromLatin1(name) == QStringLiteral("MAP") ||
+                QString::fromLatin1(name) == QStringLiteral("CLT") ||
+                QString::fromLatin1(name) == QStringLiteral("IAT")) {
+                auto *sensor = new QComboBox(page);
+                sensor->addItems({tr("Select sensor type"), tr("OEM / Manufacturer curve"), tr("Custom calibration")});
+                form->addRow(tr("Sensor profile"), sensor);
+                auto *help = new QLabel(tr("Choose the exact sensor and calibration curve before applying values to the ECU."), page);
+                help->setWordWrap(true);
+                form->addRow(help);
             }
             if (QString::fromLatin1(name) == QStringLiteral("Injector Dead Time")) {
                 auto *table = new QTableWidget(5, 2, page);
