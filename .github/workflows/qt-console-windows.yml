@@ -54,11 +54,21 @@ jobs:
           & $iscc "/DAppSource=$((Resolve-Path 'qt_console/dist').Path)" '/DAppVersion=0.1.0' 'installer/TunuinoConsole.iss'
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
           if (!(Test-Path 'installer/output/Tunuino-Console-Setup-0.1.0.exe')) { throw 'Installer not produced' }
+      - name: Verify installer payload and record SHA-256
+        run: |
+          $setup = 'installer/output/Tunuino-Console-Setup-0.1.0.exe'
+          if (!(Test-Path $setup)) { throw 'Installer missing' }
+          if ((Get-Item $setup).Length -lt 1000000) { throw 'Installer unexpectedly small' }
+          $digest = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
+          "$digest  Tunuino-Console-Setup-0.1.0.exe" | Set-Content -Encoding ascii 'installer/output/SHA256SUMS.txt'
+          Write-Host "Installer SHA-256: $digest"
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
           name: TunuinoConsole-Setup-Windows-x64
-          path: installer/output/Tunuino-Console-Setup-0.1.0.exe
+          path: |
+            installer/output/Tunuino-Console-Setup-0.1.0.exe
+            installer/output/SHA256SUMS.txt
           if-no-files-found: error
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
