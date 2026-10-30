@@ -132,11 +132,56 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionFooter->setStyleSheet(QStringLiteral("color: #a9aaad;"));
     ignitionLayout->addWidget(ignitionFooter);
     tabs->addTab(ignitionPage, tr("Ignition Table"));
-    for (const auto &name : {tr("Datalogging"), tr("Firmware")}) {
-        auto *label = new QLabel(tr("Module pending integration with ECU firmware"), tabs);
-        label->setAlignment(Qt::AlignCenter);
-        tabs->addTab(label, name);
+    auto *loggingPage = new QWidget(tabs);
+    auto *loggingLayout = new QVBoxLayout(loggingPage);
+    auto *loggingHeading = new QLabel(tr("DATALOGGING  |  Live channels"), loggingPage);
+    loggingHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
+    loggingLayout->addWidget(loggingHeading);
+    auto *loggingInfo = new QLabel(tr("No live data stream available. ECU telemetry protocol must be implemented before recording."), loggingPage);
+    loggingInfo->setWordWrap(true);
+    loggingLayout->addWidget(loggingInfo);
+    auto *loggingChannels = new QTableWidget(7, 3, loggingPage);
+    loggingChannels->setHorizontalHeaderLabels({tr("Channel"), tr("Value"), tr("Unit")});
+    const char *channelNames[] = {"RPM", "TPS", "MAP", "Lambda", "CLT", "IAT", "Battery"};
+    const char *channelUnits[] = {"rpm", "%", "kPa", "lambda", "deg C", "deg C", "V"};
+    for (int i = 0; i < 7; ++i) {
+        auto *channel = new QTableWidgetItem(QString::fromLatin1(channelNames[i]));
+        auto *value = new QTableWidgetItem(tr("Unavailable"));
+        auto *unit = new QTableWidgetItem(QString::fromLatin1(channelUnits[i]));
+        for (auto *item : {channel, value, unit}) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+        loggingChannels->setItem(i, 0, channel);
+        loggingChannels->setItem(i, 1, value);
+        loggingChannels->setItem(i, 2, unit);
     }
+    loggingChannels->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    loggingChannels->setMaximumHeight(300);
+    loggingLayout->addWidget(loggingChannels);
+    auto *loggingStart = new QPushButton(tr("Start logging"), loggingPage);
+    loggingStart->setEnabled(false);
+    loggingStart->setToolTip(tr("Requires verified ECU telemetry and timestamp handling."));
+    loggingLayout->addWidget(loggingStart, 0, Qt::AlignLeft);
+    loggingLayout->addStretch();
+    tabs->addTab(loggingPage, tr("Datalogging"));
+
+    auto *firmwarePage = new QWidget(tabs);
+    auto *firmwareLayout = new QVBoxLayout(firmwarePage);
+    auto *firmwareHeading = new QLabel(tr("FIRMWARE  |  Device management"), firmwarePage);
+    firmwareHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
+    firmwareLayout->addWidget(firmwareHeading);
+    auto *firmwareInfo = new QLabel(tr("USB serial identity is supported. Firmware flashing and recovery are not yet implemented in this Qt application."), firmwarePage);
+    firmwareInfo->setWordWrap(true);
+    firmwareLayout->addWidget(firmwareInfo);
+    auto *firmwareChecklist = new QFormLayout();
+    firmwareChecklist->addRow(tr("Identity"), new QLabel(tr("Available when connected"), firmwarePage));
+    firmwareChecklist->addRow(tr("USB DFU flashing"), new QLabel(tr("Not implemented"), firmwarePage));
+    firmwareChecklist->addRow(tr("Image compatibility check"), new QLabel(tr("Not implemented"), firmwarePage));
+    firmwareChecklist->addRow(tr("Post-flash verification"), new QLabel(tr("Not implemented"), firmwarePage));
+    firmwareLayout->addLayout(firmwareChecklist);
+    auto *firmwareFlash = new QPushButton(tr("Flash firmware (not available)"), firmwarePage);
+    firmwareFlash->setEnabled(false);
+    firmwareLayout->addWidget(firmwareFlash, 0, Qt::AlignLeft);
+    firmwareLayout->addStretch();
+    tabs->addTab(firmwarePage, tr("Firmware"));
     // Calibration navigation is independent of the legacy Java UI.
     auto *calibrationPage = new QWidget(tabs);
     auto *calibrationLayout = new QHBoxLayout(calibrationPage);
