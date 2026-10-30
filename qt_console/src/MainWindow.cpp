@@ -9,6 +9,8 @@
 #include <QWidget>
 #include <QVBoxLayout>
 #include <QTreeWidget>
+#include <QColor>
+#include <QFont>
 #include <QStackedWidget>
 #include <QFormLayout>
 #include <QDoubleSpinBox>
@@ -46,17 +48,85 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setCentralWidget(tabs);
     auto *navigationDock = new QDockWidget(tr("TUNUINO  |  Navigation"), this);
     navigationDock->setObjectName("NavigationDock");
-    auto *navigationList = new QListWidget(navigationDock);
-    navigationList->setMinimumWidth(195);
-    navigationList->setMaximumWidth(340);
-    navigationDock->setMinimumWidth(190);
-    navigationList->addItems({tr("Fuel Table"), tr("Ignition Table"), tr("AFR Target"), tr("Base Maps"), tr("Datalogging"),
-                              tr("Firmware"), tr("Calibration & Setup")});
-    navigationDock->setWidget(navigationList);
+    auto *navigationPanel = new QWidget(navigationDock);
+    auto *navigationLayout = new QVBoxLayout(navigationPanel);
+    navigationLayout->setContentsMargins(4, 4, 4, 4);
+    navigationLayout->setSpacing(4);
+    auto *navigationSearch = new QLineEdit(navigationPanel);
+    navigationSearch->setPlaceholderText(tr("Search settings..."));
+    navigationSearch->setClearButtonEnabled(true);
+    navigationLayout->addWidget(navigationSearch);
+    auto *navigationTree = new QTreeWidget(navigationPanel);
+    navigationTree->setHeaderHidden(true);
+    navigationTree->setIndentation(16);
+    navigationTree->setMinimumWidth(200);
+    navigationTree->setUniformRowHeights(true);
+    navigationLayout->addWidget(navigationTree, 1);
+    navigationDock->setMinimumWidth(210);
+    navigationDock->setWidget(navigationPanel);
     addDockWidget(Qt::LeftDockWidgetArea, navigationDock);
-    connect(navigationList, &QListWidget::currentRowChanged, tabs, &QTabWidget::setCurrentIndex);
-    connect(tabs, &QTabWidget::currentChanged, navigationList, [navigationList](int index) { navigationList->setCurrentRow(index); });
-    navigationList->setCurrentRow(0);
+    // Tab IDs are explicit: unsupported features are visible but never open dummy controls.
+    const auto addCategory = [=](const QString &name, const QList<QPair<QString,int>> &children) {
+        auto *category = new QTreeWidgetItem(navigationTree, QStringList(name));
+        QFont font = category->font(0);
+        font.setBold(true);
+        category->setFont(0, font);
+        for (const auto &child : children) {
+            auto *item = new QTreeWidgetItem(category, QStringList(child.first));
+            item->setData(0, Qt::UserRole, child.second);
+            if (child.second < 0) {
+                item->setForeground(0, QColor(QStringLiteral("#858585")));
+                item->setToolTip(0, tr("Not implemented yet"));
+            }
+        }
+        return category;
+    };
+    addCategory(tr("Sensors and inputs"), {{tr("TPS Calibration"),6},{tr("MAP Calibration"),6},{tr("Temperature sensors"),6},{tr("Lambda / O2"),6}});
+    addCategory(tr("Engine start"), {{tr("Cranking"),-1},{tr("Afterstart"),-1}});
+    addCategory(tr("Fueling"), {{tr("Fuel Table 16 x 16"),0},{tr("AFR Target 16 x 16"),2},{tr("Injector Dead Time"),6},{tr("Base Maps"),3}});
+    addCategory(tr("Ignition"), {{tr("Ignition Table 16 x 16"),1},{tr("Trigger setup"),6}});
+    addCategory(tr("Overrun"), {{tr("Fuel cut"),-1}});
+    addCategory(tr("Knock sensors"), {{tr("Knock settings"),-1}});
+    addCategory(tr("Idle"), {{tr("Idle control"),-1}});
+    addCategory(tr("Functions"), {{tr("General functions"),-1}});
+    addCategory(tr("Outputs"), {{tr("Output configuration"),-1}});
+    addCategory(tr("Boost"), {{tr("Boost control"),-1}});
+    addCategory(tr("DBW"), {{tr("Electronic throttle"),-1}});
+    addCategory(tr("Traction control"), {{tr("Traction settings"),-1}});
+    addCategory(tr("VVT"), {{tr("Cam timing"),-1}});
+    addCategory(tr("Sport"), {{tr("Sport mode"),-1}});
+    addCategory(tr("Nitrous"), {{tr("Nitrous control"),-1}});
+    addCategory(tr("Tables switching"), {{tr("Table selection"),-1}});
+    addCategory(tr("Engine protection"), {{tr("Protection settings"),-1}});
+    addCategory(tr("Timers"), {{tr("Timers setup"),-1}});
+    addCategory(tr("DSG Gearbox"), {{tr("Gearbox settings"),-1}});
+    addCategory(tr("Other"), {{tr("Firmware"),5}});
+    addCategory(tr("CAN, Serial"), {{tr("Communication settings"),6}});
+    addCategory(tr("Log"), {{tr("Datalogging"),4}});
+    addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
+    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs](QTreeWidgetItem *item, int) {
+        const int index = item->data(0, Qt::UserRole).toInt();
+        if (item->parent() && index >= 0 && index < tabs->count())
+            tabs->setCurrentIndex(index);
+        else if (!item->parent()) item->setExpanded(!item->isExpanded());
+    });
+    connect(navigationSearch, &QLineEdit::textChanged, navigationTree, [navigationTree](const QString &query) {
+        const QString term = query.trimmed();
+        for (int i = 0; i < navigationTree->topLevelItemCount(); ++i) {
+            auto *category = navigationTree->topLevelItem(i);
+            const bool categoryMatch = category->text(0).contains(term, Qt::CaseInsensitive);
+            bool any = categoryMatch;
+            for (int j = 0; j < category->childCount(); ++j) {
+                auto *child = category->child(j);
+                const bool match = term.isEmpty() || categoryMatch || child->text(0).contains(term, Qt::CaseInsensitive);
+                child->setHidden(!match);
+                any |= match;
+            }
+            category->setHidden(!any);
+            if (!term.isEmpty() && any) category->setExpanded(true);
+        }
+    });
+    navigationTree->topLevelItem(2)->setExpanded(true);
     // Context inspector on the right; dockable and resizable independently of map grids.
     auto *inspectorDock = new QDockWidget(tr("TUNUINO  |  Configuration"), this);
     inspectorDock->setObjectName(QStringLiteral("ConfigurationInspectorDock"));
