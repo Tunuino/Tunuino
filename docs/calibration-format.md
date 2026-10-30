@@ -1,6 +1,9 @@
 # Mapas de calibração Tunuino, versão 1
 
-O ficheiro `.tnmap` representa uma tabela independente de VE ou ignição. A leitura de um ficheiro não altera uma ECU. O projeto ainda não implementa páginas de calibração, escrita USB destes mapas, persistência na ECU ou integração destes valores no controlo físico do motor.
+> **Arquivo técnico legado:** este documento descreve um formato binário experimental. Não define o formato XML dos projetos da Tunuino Console atual e não deve ser usado como instrução de gravação na ECU. Mantido apenas como referência para código e testes que ainda utilizam este contrato.
+
+
+O ficheiro `.tnmap` representa uma tabela independente de VE ou ignição. A leitura de um ficheiro não altera uma ECU. A existência deste formato não comprova que o projeto Qt atual suporte a sua gravação ou aplicação na ECU; essas operações exigem validação separada.
 
 | Offset | Tamanho | Conteúdo |
 | --- | --- | --- |
