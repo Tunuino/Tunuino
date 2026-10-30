@@ -1,0 +1,39 @@
+name: Qt Console Windows
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'qt_console/**'
+      - '.github/workflows/qt-console-windows.yml'
+  workflow_dispatch:
+jobs:
+  windows-build:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          arch: win64_msvc2019_64
+          modules: qtserialport
+          cache: true
+      - name: Configure
+        run: cmake -S qt_console -B qt_console/build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
+      - name: Build
+        run: cmake --build qt_console/build --config Release --parallel 2
+      - name: Unit tests
+        run: ctest --test-dir qt_console/build -C Release --output-on-failure
+      - name: Package Qt runtime
+        run: |
+          New-Item -ItemType Directory -Force -Path qt_console/dist | Out-Null
+          Copy-Item qt_console/build/Release/TunuinoConsole.exe qt_console/dist/
+          windeployqt --release --no-translations --dir qt_console/dist qt_console/dist/TunuinoConsole.exe
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: TunuinoConsole-Windows-x64
+          path: qt_console/dist/
+          if-no-files-found: error
