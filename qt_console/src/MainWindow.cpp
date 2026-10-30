@@ -107,7 +107,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 brand->addItems({tr("Select wideband manufacturer"), "AEM", "Innovate Motorsports", "14point7", "PLX Devices", tr("Other / Custom")});
                 auto *model = new QComboBox(page);
                 auto *input = new QComboBox(page);
-                input->addItems({tr("Select analog input"), "Analog 1", "Analog 2", "Analog 3", "Analog 4"});
+                input->addItem(tr("Select analog input"));
+                for (int i = 1; i <= 8; ++i) input->addItem(tr("Analog Input %1").arg(i));
                 auto *vLow = new QDoubleSpinBox(page);
                 auto *vHigh = new QDoubleSpinBox(page);
                 auto *afrLow = new QDoubleSpinBox(page);
@@ -116,6 +117,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 for (auto *a : {afrLow, afrHigh}) { a->setRange(5, 30); a->setDecimals(2); a->setSuffix(" AFR"); }
                 auto *note = new QLabel(page);
                 note->setWordWrap(true);
+                auto *curveStatus = new QLabel(tr("Calibration: not configured"), page);
+                curveStatus->setWordWrap(true);
                 form->addRow(tr("Wideband manufacturer"), brand);
                 form->addRow(tr("Controller / model"), model);
                 form->addRow(tr("ECU input"), input);
@@ -124,18 +127,27 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 form->addRow(tr("Voltage at second calibration point"), vHigh);
                 form->addRow(tr("AFR at second calibration point"), afrHigh);
                 form->addRow(note);
+                form->addRow(tr("Calibration status"), curveStatus);
                 auto update = [=]() {
                     const bool custom = brand->currentIndex() == brand->count() - 1;
                     model->clear();
                     if (brand->currentIndex() == 0) model->addItem(tr("Select a manufacturer first"));
                     else if (custom) model->addItem(tr("Custom analog output"));
-                    else model->addItem(tr("Exact model / transfer curve not yet verified"));
+                    else if (brand->currentIndex() == 1) model->addItems({"AEM X-Series (verify part number)", "AEM UEGO (verify part number)"});
+                    else if (brand->currentIndex() == 2) model->addItems({"Innovate LC-2", "Innovate MTX-L (verify generation)"});
+                    else if (brand->currentIndex() == 3) model->addItems({"14point7 Spartan 2", "14point7 Spartan 3 (verify variant)"});
+                    else if (brand->currentIndex() == 4) model->addItems({"PLX SM-AFR (verify generation)", "PLX DM-6 / SM-AFR (verify controller)"});
                     for (auto *field : {vLow, vHigh, afrLow, afrHigh}) field->setEnabled(custom);
                     note->setText(custom
-                        ? tr("Enter the two voltage/AFR points from your controller manual. No ECU write is available yet.")
-                        : tr("Manufacturer selection is a UI placeholder. No voltage-to-AFR preset is loaded; exact model and datasheet are required."));
+                        ? tr("Enter two distinct voltage/AFR points from the controller manual. AFR scaling depends on fuel; confirm the controller output. ECU write is disabled.")
+                        : tr("Model selection only. No voltage-to-AFR curve is assumed: verify the exact part number and analog output settings from its manual."));
+                    const bool valid = custom && vLow->value() < vHigh->value() && afrLow->value() != afrHigh->value();
+                    curveStatus->setText(valid ? tr("Custom two-point curve: valid for review (not saved)") : tr("Calibration: not configured / invalid points"));
+                    curveStatus->setStyleSheet(valid ? QStringLiteral("color: #15803d;") : QStringLiteral("color: #b45309;"));
                 };
                 connect(brand, QOverload<int>::of(&QComboBox::currentIndexChanged), page, [update](int) { update(); });
+                for (auto *field : {vLow, vHigh, afrLow, afrHigh})
+                    connect(field, QOverload<double>::of(&QDoubleSpinBox::valueChanged), page, [update](double) { update(); });
                 update();
                 auto *save = new QPushButton(tr("Apply to ECU (not connected)"), page);
                 save->setEnabled(false);
