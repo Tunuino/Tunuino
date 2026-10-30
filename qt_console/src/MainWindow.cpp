@@ -24,6 +24,7 @@
 #include <QSerialPortInfo>
 #include <QAction>
 #include <QListWidget>
+#include <QTimer>
 #include "ecu/SerialSession.h"
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("Tunuino Console — Qt 6");
@@ -669,6 +670,27 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     dock->setMaximumWidth(400);
     addDockWidget(Qt::RightDockWidgetArea, dock);
     auto *session = new tunuino::SerialSession(this);
+    // The firmware runtime command is read-only: O + offset(U16 BE) + count(U16 BE).
+    auto *liveTimer = new QTimer(this);
+    liveTimer->setInterval(500);
+    bool *identityVerified = new bool(false);
+    auto requestLive = [session, identityVerified]() {
+        if (!*identityVerified || !session->isOpen()) return;
+        QByteArray command(5, char(0));
+        command[0] = 'O';
+        command[4] = char(100);
+        (void)session->exchange(command, 1500);
+    };
+    connect(liveTimer, &QTimer::timeout, this, requestLive);
+    auto *liveValues = statusPanel->findChildren<QLabel *>();
+    // The first seven value labels follow the LIVE ENGINE DATA heading.
+    auto *liveReadings = new QVector<QLabel *>();
+    for (int i = 0; i < 7 && i + 1 < liveValues.size(); ++i)
+        liveReadings->append(liveValues.at(i + 1));
+    connect(this, &QObject::destroyed, this, [identityVerified, liveReadings]() {
+        delete identityVerified;
+        delete liveReadings;
+    });
     auto *fileMenu = menuBar()->addMenu(tr("File"));
     fileMenu->addAction(tr("Exit"), this, &QWidget::close);
     auto *ecuMenu = menuBar()->addMenu(tr("ECU"));
@@ -694,6 +716,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             const QString name = port.portName();
             auto *action = connectMenu->addAction(name + QStringLiteral(" — ") + port.description());
             connect(action, &QAction::triggered, this, [=]() {
+                liveTimer->stop();
+                *identityVerified = false;
                 session->close();
                 connectionStatus_->setText(tr("Connecting to %1...").arg(name));
                 if (!session->open(name, 115200)) return;
@@ -707,18 +731,43 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(refreshAction, &QAction::triggered, this, refreshPorts);
     connect(connectMenu, &QMenu::aboutToShow, this, refreshPorts);
     connect(disconnectAction, &QAction::triggered, this, [=]() {
+        liveTimer->stop();
+        *identityVerified = false;
         session->close();
         connectionStatus_->setText(tr("ECU disconnected"));
     });
     connect(session, &tunuino::SerialSession::connectionChanged, this, [=](bool connected) {
         disconnectAction->setEnabled(connected);
-        if (!connected) connectionStatus_->setText(tr("ECU disconnected"));
+        if (!connected) { liveTimer->stop(); *identityVerified = false; connectionStatus_->setText(tr("ECU disconnected")); }
     });
     connect(session, &tunuino::SerialSession::exchangeFailed, this, [=](const QString &error) {
+        liveTimer->stop();
+        *identityVerified = false;
         connectionStatus_->setText(tr("ECU communication failed: %1").arg(error));
         statusBar()->showMessage(error, 10000);
     });
     connect(session, &tunuino::SerialSession::responseReceived, this, [=](const QByteArray &data) {
+        if (*identityVerified) {
+            // Status + 100-byte runtime record; never treat invalid channels as zero readings.
+            if (data.size() != 101 || quint8(data[0]) != 0) {
+                liveTimer->stop();
+                statusBar()->showMessage(tr("ECU runtime read unsupported or invalid; polling stopped."));
+                return;
+            }
+            const auto u32 = [&data](int at) -> quint32 {
+                return (quint32(quint8(data[at])) << 24) | (quint32(quint8(data[at+1])) << 16)
+                    | (quint32(quint8(data[at+2])) << 8) | quint32(quint8(data[at+3]));
+            };
+            const quint8 mask = quint8(data[1 + 38]);
+            const auto setReading = [liveReadings](int index, bool valid, const QString &value) {
+                if (index < liveReadings->size()) liveReadings->at(index)->setText(valid ? value : QObject::tr("Unavailable"));
+            };
+            setReading(0, mask & 1, QString::number(u32(1 + 40) / 1000.0, 'f', 0) + QStringLiteral(" rpm"));
+            setReading(2, mask & 2, QString::number(u32(1 + 44) / 1000.0, 'f', 1) + QStringLiteral(" kPa"));
+            setReading(3, mask & 4, QString::number(u32(1 + 48) / 1000000.0, 'f', 3));
+            setReading(4, mask & 8, QString::number(qint32(u32(1 + 52)) / 1000.0, 'f', 1) + QStringLiteral(" C"));
+            return;
+        }
         if (data.size() != 32 || data.mid(1, 7) != QByteArray("TUNUINO", 7)) {
             connectionStatus_->setText(tr("Invalid ECU identity response"));
             session->close();
@@ -730,7 +779,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const QString version = QStringLiteral("%1.%2.%3").arg(quint8(data[13])).arg(quint8(data[14])).arg(quint8(data[15]));
         connectionStatus_->setText(tr("ECU connected | Protocol %1 | Board %2 | MCU %3 | Firmware %4")
             .arg(protocol).arg(board).arg(mcu).arg(version));
-        statusBar()->showMessage(tr("ECU identity verified (read-only). Configuration writes disabled."));
+        *identityVerified = true;
+        liveTimer->start();
+        statusBar()->showMessage(tr("ECU identity verified. Read-only runtime polling active; configuration writes disabled."));
     });
     refreshPorts();
     statusBar()->showMessage(tr("TUNUINO  |  ECU connection ready  |  Map read/write unavailable until firmware integration"));
