@@ -95,12 +95,12 @@ jobs:
           $files = Get-ChildItem 'qt_console/bundle' -Recurse -File | Where-Object { $_.Name -ne 'SHA256SUMS.txt' }
           $hashes = $files | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.FullName.Substring((Resolve-Path 'qt_console/bundle').Path.Length + 1).Replace('\\','/'))" }
           $hashes | Set-Content -Encoding ascii 'qt_console/bundle/SHA256SUMS.txt'
-          Compress-Archive -Path 'qt_console/bundle/*' -DestinationPath 'qt_console/Tunuino-Qt-F427-Bench-Bundle.zip' -CompressionLevel Optimal
+          Compress-Archive -Path 'qt_console/bundle/*' -DestinationPath 'qt_console/Tunuino-F427-Bundle.zip' -CompressionLevel Optimal
       - name: Upload single Qt bench Bundle ZIP
         uses: actions/upload-artifact@v4
         with:
           name: Tunuino-Qt-F427-Bench-Bundle
-          path: qt_console/Tunuino-Qt-F427-Bench-Bundle.zip
+          path: qt_console/Tunuino-F427-Bundle.zip
           if-no-files-found: error
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
