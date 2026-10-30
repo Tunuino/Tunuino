@@ -27,6 +27,7 @@
 #include <QTimer>
 #include <QSharedPointer>
 #include <QVector>
+#include <QByteArray>
 #include "ecu/SerialSession.h"
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("Tunuino Console — Qt 6");
@@ -652,10 +653,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     statusLayout->addWidget(readingsTitle);
     auto *readings = new QFormLayout();
     readings->setLabelAlignment(Qt::AlignLeft);
+    auto liveReadings = QSharedPointer<QVector<QLabel *>>::create();
     for (const char *parameter : {"RPM", "TPS", "MAP", "Lambda", "CLT", "IAT", "Battery"}) {
         auto *value = new QLabel(tr("No telemetry"), statusPanel);
         value->setStyleSheet(QStringLiteral("color: #a9aaad;"));
         readings->addRow(QString::fromLatin1(parameter), value);
+        liveReadings->append(value);
     }
     statusLayout->addLayout(readings);
     auto *identityTitle = new QLabel(tr("ECU CONNECTION"), statusPanel);
@@ -684,11 +687,49 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         (void)session->exchange(command, 1500);
     };
     connect(liveTimer, &QTimer::timeout, this, requestLive);
-    auto *liveValues = statusPanel->findChildren<QLabel *>();
-    // The first seven value labels follow the LIVE ENGINE DATA heading.
-    auto liveReadings = QSharedPointer<QVector<QLabel *>>::create();
-    for (int i = 0; i < 7 && i + 1 < liveValues.size(); ++i)
-        liveReadings->append(liveValues.at(i + 1));
+    struct MapTransfer {
+        int page = 0;
+        int offset = 0;
+        QByteArray bytes;
+    };
+    auto transfer = QSharedPointer<MapTransfer>::create();
+    auto sendChunk = [session, transfer]() -> bool {
+        if (!transfer->page || transfer->offset >= 576) return false;
+        const int count = qMin(64, 576 - transfer->offset);
+        QByteArray command(7, char(0));
+        command[0] = 'r';
+        command[1] = char(0);
+        command[2] = char(transfer->page);
+        command[3] = char((transfer->offset >> 8) & 0xff);
+        command[4] = char(transfer->offset & 0xff);
+        command[5] = char((count >> 8) & 0xff);
+        command[6] = char(count & 0xff);
+        return session->exchange(command, 3000);
+    };
+    auto abortTransfer = [=](const QString &message) {
+        const int page = transfer->page;
+        transfer->page = 0;
+        transfer->offset = 0;
+        transfer->bytes.clear();
+        fuelRead->setEnabled(*identityVerified && session->isOpen());
+        ignitionRead->setEnabled(*identityVerified && session->isOpen());
+        if (page == 2) fuelState->setText(message);
+        statusBar()->showMessage(message, 10000);
+        liveTimer->start();
+    };
+    auto startTransfer = [=](int page) {
+        if (!*identityVerified || !session->isOpen() || transfer->page) return;
+        liveTimer->stop();
+        transfer->page = page;
+        transfer->offset = 0;
+        transfer->bytes.clear();
+        fuelRead->setEnabled(false);
+        ignitionRead->setEnabled(false);
+        if (page == 2) fuelState->setText(tr("READING ECU MAP..."));
+        if (!sendChunk()) abortTransfer(tr("Unable to request map page"));
+    };
+    connect(fuelRead, &QPushButton::clicked, this, [=]() { startTransfer(2); });
+    connect(ignitionRead, &QPushButton::clicked, this, [=]() { startTransfer(3); });
     auto *fileMenu = menuBar()->addMenu(tr("File"));
     fileMenu->addAction(tr("Exit"), this, &QWidget::close);
     auto *ecuMenu = menuBar()->addMenu(tr("ECU"));
@@ -715,6 +756,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             auto *action = connectMenu->addAction(name + QStringLiteral(" — ") + port.description());
             connect(action, &QAction::triggered, this, [=]() {
                 liveTimer->stop();
+                transfer->page = 0;
+                transfer->bytes.clear();
                 *identityVerified = false;
                 session->close();
                 connectionStatus_->setText(tr("Connecting to %1...").arg(name));
@@ -730,21 +773,76 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(connectMenu, &QMenu::aboutToShow, this, refreshPorts);
     connect(disconnectAction, &QAction::triggered, this, [=]() {
         liveTimer->stop();
+        transfer->page = 0;
+        transfer->bytes.clear();
         *identityVerified = false;
         session->close();
         connectionStatus_->setText(tr("ECU disconnected"));
     });
     connect(session, &tunuino::SerialSession::connectionChanged, this, [=](bool connected) {
         disconnectAction->setEnabled(connected);
-        if (!connected) { liveTimer->stop(); *identityVerified = false; connectionStatus_->setText(tr("ECU disconnected")); }
+        if (!connected) { liveTimer->stop(); transfer->page = 0; *identityVerified = false; fuelRead->setEnabled(false); ignitionRead->setEnabled(false); connectionStatus_->setText(tr("ECU disconnected")); }
     });
     connect(session, &tunuino::SerialSession::exchangeFailed, this, [=](const QString &error) {
         liveTimer->stop();
+        transfer->page = 0;
         *identityVerified = false;
+        fuelRead->setEnabled(false);
+        ignitionRead->setEnabled(false);
         connectionStatus_->setText(tr("ECU communication failed: %1").arg(error));
         statusBar()->showMessage(error, 10000);
     });
     connect(session, &tunuino::SerialSession::responseReceived, this, [=](const QByteArray &data) {
+        if (transfer->page) {
+            const int count = qMin(64, 576 - transfer->offset);
+            if (data.size() != count + 1 || quint8(data[0]) != 0) {
+                abortTransfer(tr("Invalid map response; table not updated"));
+                return;
+            }
+            transfer->bytes.append(data.constData() + 1, count);
+            transfer->offset += count;
+            if (transfer->offset < 576) {
+                if (!sendChunk()) abortTransfer(tr("Map read interrupted"));
+                return;
+            }
+            if (transfer->bytes.size() != 576) {
+                abortTransfer(tr("Incomplete map read"));
+                return;
+            }
+            const auto u16 = [transfer](int offset) -> quint16 {
+                return (quint16(quint8(transfer->bytes[offset])) << 8)
+                    | quint16(quint8(transfer->bytes[offset + 1]));
+            };
+            bool valid = true;
+            for (int i = 0; i < 16; ++i) {
+                if (u16(2 * i) > 20000 || u16(32 + 2 * i) > 50000 ||
+                    (i && (u16(2 * i) <= u16(2 * (i - 1)) ||
+                           u16(32 + 2 * i) <= u16(32 + 2 * (i - 1))))) valid = false;
+            }
+            const int page = transfer->page;
+            for (int i = 0; i < 256; ++i) {
+                const qint16 value = qint16(u16(64 + 2 * i));
+                if ((page == 2 && (value < 0 || value > 30000)) ||
+                    (page == 3 && (value < -9000 || value > 9000))) valid = false;
+            }
+            if (!valid) {
+                abortTransfer(tr("Map axes or cells failed validation; table unchanged"));
+                return;
+            }
+            auto *table = page == 2 ? maps : ignitionMap;
+            QStringList rpmLabels, loadLabels;
+            for (int i = 0; i < 16; ++i) {
+                rpmLabels.append(QString::number(u16(2 * i)));
+                loadLabels.append(QString::number(u16(32 + 2 * i) / 100.0, 'f', 1));
+            }
+            table->setHorizontalHeaderLabels(rpmLabels);
+            table->setVerticalHeaderLabels(loadLabels);
+            for (int row = 0; row < 16; ++row)
+                for (int col = 0; col < 16; ++col)
+                    table->item(row, col)->setText(QString::number(qint16(u16(64 + 2 * (row * 16 + col))) / 100.0, 'f', 2));
+            abortTransfer(tr("Map page %1 read from ECU (read-only)").arg(page));
+            return;
+        }
         if (*identityVerified) {
             // Status + 100-byte runtime record; never treat invalid channels as zero readings.
             if (data.size() != 101 || quint8(data[0]) != 0) {
@@ -778,6 +876,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         connectionStatus_->setText(tr("ECU connected | Protocol %1 | Board %2 | MCU %3 | Firmware %4")
             .arg(protocol).arg(board).arg(mcu).arg(version));
         *identityVerified = true;
+        fuelRead->setEnabled(true);
+        ignitionRead->setEnabled(true);
         liveTimer->start();
         statusBar()->showMessage(tr("ECU identity verified. Read-only runtime polling active; configuration writes disabled."));
     });
