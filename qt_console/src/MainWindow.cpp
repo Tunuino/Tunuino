@@ -57,6 +57,41 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(navigationList, &QListWidget::currentRowChanged, tabs, &QTabWidget::setCurrentIndex);
     connect(tabs, &QTabWidget::currentChanged, navigationList, [navigationList](int index) { navigationList->setCurrentRow(index); });
     navigationList->setCurrentRow(0);
+    // Context inspector on the right; dockable and resizable independently of map grids.
+    auto *inspectorDock = new QDockWidget(tr("TUNUINO  |  Configuration"), this);
+    inspectorDock->setObjectName(QStringLiteral("ConfigurationInspectorDock"));
+    inspectorDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    inspectorDock->setMinimumWidth(210);
+    auto *inspectorBody = new QWidget(inspectorDock);
+    auto *inspectorLayout = new QVBoxLayout(inspectorBody);
+    auto *inspectorTitle = new QLabel(tr("Table information"), inspectorBody);
+    inspectorTitle->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
+    inspectorLayout->addWidget(inspectorTitle);
+    auto *inspectorDescription = new QLabel(inspectorBody);
+    inspectorDescription->setWordWrap(true);
+    inspectorLayout->addWidget(inspectorDescription);
+    auto *inspectorSafety = new QLabel(tr("ECU writes require a validated protocol and explicit user confirmation."), inspectorBody);
+    inspectorSafety->setWordWrap(true);
+    inspectorSafety->setStyleSheet(QStringLiteral("color: #b8b8b8;"));
+    inspectorLayout->addWidget(inspectorSafety);
+    inspectorLayout->addStretch(1);
+    inspectorDock->setWidget(inspectorBody);
+    addDockWidget(Qt::RightDockWidgetArea, inspectorDock);
+    resizeDocks({navigationDock, inspectorDock}, {235, 260}, Qt::Horizontal);
+    const QStringList inspectorNotes = {
+        tr("Fuel / VE table. 16 x 16 grid. ECU values must be read and verified before use."),
+        tr("Ignition advance table. 16 x 16 grid. Verify trigger configuration and timing before running an engine."),
+        tr("AFR target table. Confirm sensor calibration and operating conditions."),
+        tr("Offline base maps. Illustrative examples are not calibrated engine tunes."),
+        tr("Datalogging. Runtime channels and capture status."),
+        tr("Firmware management. Check board identity before flashing."),
+        tr("Calibration and setup. Configure sensors and engine parameters.")
+    };
+    connect(tabs, &QTabWidget::currentChanged, inspectorDescription, [inspectorTitle, inspectorDescription, inspectorNotes, tabs](int index) {
+        inspectorTitle->setText(tabs->tabText(index));
+        inspectorDescription->setText(index >= 0 && index < inspectorNotes.size() ? inspectorNotes.at(index) : QString());
+    });
+    inspectorDescription->setText(inspectorNotes.first());
 
     // Compact calibration workspace with explicit read-only state.
     auto *fuelPage = new QWidget(tabs);
