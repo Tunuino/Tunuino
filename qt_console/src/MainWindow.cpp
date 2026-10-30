@@ -28,6 +28,12 @@
 #include <QSharedPointer>
 #include <QVector>
 #include <QByteArray>
+#include <QFileDialog>
+#include <QFile>
+#include <QXmlStreamReader>
+#include <QStringList>
+#include <QMap>
+#include <cmath>
 #include "ecu/SerialSession.h"
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("Tunuino Console — Qt 6");
@@ -40,7 +46,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     navigationList->setMinimumWidth(195);
     navigationList->setMaximumWidth(340);
     navigationDock->setMinimumWidth(190);
-    navigationList->addItems({tr("Fuel Table"), tr("Ignition Table"), tr("AFR Target"), tr("Datalogging"),
+    navigationList->addItems({tr("Fuel Table"), tr("Ignition Table"), tr("AFR Target"), tr("Base Maps"), tr("Datalogging"),
                               tr("Firmware"), tr("Calibration & Setup")});
     navigationDock->setWidget(navigationList);
     addDockWidget(Qt::LeftDockWidgetArea, navigationDock);
@@ -179,6 +185,90 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrFoot->setWordWrap(true);
     afrLayout->addWidget(afrFoot);
     tabs->addTab(afrPage, tr("AFR Target"));
+
+    // User-selected external tune preview. No network access or ECU write path.
+    auto *importPage = new QWidget(tabs);
+    auto *importLayout = new QVBoxLayout(importPage);
+    auto *importTitle = new QLabel(tr("BASE MAPS  |  Local MSQ tune viewer"), importPage);
+    importTitle->setStyleSheet(QStringLiteral("font-weight: 700; color: #e69a32;"));
+    importLayout->addWidget(importTitle);
+    auto *importNotice = new QLabel(tr("Read-only preview of locally selected MSQ files. Imported values are not ECU maps and are never flashed."), importPage);
+    importNotice->setWordWrap(true);
+    importLayout->addWidget(importNotice);
+    auto *importBar = new QHBoxLayout();
+    auto *importButton = new QPushButton(tr("Open .msq tune"), importPage);
+    auto *importSelect = new QComboBox(importPage);
+    importSelect->setEnabled(false);
+    importBar->addWidget(importButton);
+    importBar->addWidget(importSelect, 1);
+    importLayout->addLayout(importBar);
+    auto *importTable = new QTableWidget(importPage);
+    importTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    importTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    importTable->horizontalHeader()->setDefaultSectionSize(65);
+    importTable->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    importTable->verticalHeader()->setDefaultSectionSize(28);
+    importTable->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
+    importLayout->addWidget(importTable, 1);
+    auto *importStatus = new QLabel(tr("No local tune loaded"), importPage);
+    importStatus->setWordWrap(true);
+    importLayout->addWidget(importStatus);
+    auto imported = QSharedPointer<QMap<QString, QVector<double>>>::create();
+    connect(importSelect, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [=](int index) {
+        if (index < 0) return;
+        const QString name = importSelect->itemData(index).toString();
+        const auto values = imported->value(name);
+        if (values.size() != 256) return;
+        importTable->setRowCount(16);
+        importTable->setColumnCount(16);
+        for (int row = 0; row < 16; ++row)
+            for (int col = 0; col < 16; ++col)
+                importTable->setItem(row, col, new QTableWidgetItem(QString::number(values[row * 16 + col], 'f', 2)));
+        importStatus->setText(tr("Offline preview: %1 (16 x 16). Axes require independent verification.").arg(name));
+    });
+    connect(importButton, &QPushButton::clicked, this, [=]() {
+        const QString filename = QFileDialog::getOpenFileName(this, tr("Open local tune"), QString(), tr("Tune files (*.msq *.xml)"));
+        if (filename.isEmpty()) return;
+        QFile file(filename);
+        if (!file.open(QIODevice::ReadOnly) || file.size() > 8 * 1024 * 1024) {
+            importStatus->setText(tr("Cannot open tune or file exceeds 8 MB."));
+            return;
+        }
+        QXmlStreamReader xml(&file);
+        QMap<QString, QVector<double>> parsed;
+        while (!xml.atEnd()) {
+            xml.readNext();
+            if (!xml.isStartElement() || (xml.name() != QLatin1String("constant") && xml.name() != QLatin1String("pcVariable"))) continue;
+            const auto attrs = xml.attributes();
+            if (attrs.value(QLatin1String("rows")).toInt() != 16 ||
+                attrs.value(QLatin1String("cols")).toInt() != 16) continue;
+            const QString name = attrs.value(QLatin1String("name")).toString();
+            const QString body = xml.readElementText(QXmlStreamReader::SkipChildElements);
+            const auto parts = body.split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
+            if (parts.size() != 256 || name.isEmpty() || parsed.contains(name)) continue;
+            QVector<double> values;
+            bool valid = true;
+            for (const auto &part : parts) {
+                bool ok = false;
+                const double value = part.toDouble(&ok);
+                if (!ok || !std::isfinite(value)) { valid = false; break; }
+                values.append(value);
+            }
+            if (valid) parsed.insert(name, values);
+        }
+        if (xml.hasError() || parsed.isEmpty()) {
+            importStatus->setText(tr("No valid 16 x 16 numeric tables found, or invalid XML."));
+            return;
+        }
+        *imported = parsed;
+        importSelect->clear();
+        for (auto it = imported->cbegin(); it != imported->cend(); ++it)
+            importSelect->addItem(it.key(), it.key());
+        importSelect->setEnabled(true);
+        importSelect->setCurrentIndex(0);
+        importStatus->setText(tr("Loaded %1 offline 16 x 16 tables. Select a table to preview.").arg(parsed.size()));
+    });
+    tabs->addTab(importPage, tr("Base Maps"));
 
     auto *loggingPage = new QWidget(tabs);
     auto *loggingLayout = new QVBoxLayout(loggingPage);
