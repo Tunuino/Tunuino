@@ -147,9 +147,23 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 auto *sensor = new QComboBox(page);
                 sensor->addItems({tr("Select sensor type"), tr("OEM / Manufacturer curve"), tr("Custom calibration")});
                 form->addRow(tr("Sensor profile"), sensor);
-                auto *help = new QLabel(tr("Choose the exact sensor and calibration curve before applying values to the ECU."), page);
+                auto *input = new QComboBox(page);
+                input->addItem(tr("Select input"));
+                for (int i = 1; i <= 8; ++i) input->addItem(tr("Analog Input %1").arg(i));
+                form->addRow(tr("ECU analog input"), input);
+                auto *curve = new QComboBox(page);
+                if (QString::fromLatin1(name) == QStringLiteral("MAP")) {
+                    curve->addItems({tr("Select MAP sensor calibration"), tr("Manufacturer-specific curve"), tr("Custom 2-point voltage / kPa")});
+                } else {
+                    curve->addItems({tr("Select temperature calibration"), tr("Manufacturer thermistor curve"), tr("Custom resistance / temperature table")});
+                }
+                form->addRow(tr("Calibration curve"), curve);
+                auto *help = new QLabel(tr("Choose the exact sensor and calibration curve before applying values to the ECU. No generic transfer curve is assumed."), page);
                 help->setWordWrap(true);
                 form->addRow(help);
+                auto *apply = new QPushButton(tr("Apply to ECU (not connected)"), page);
+                apply->setEnabled(false);
+                form->addRow(apply);
             }
             if (QString::fromLatin1(name) == QStringLiteral("Idle Control") ||
                 QString::fromLatin1(name) == QStringLiteral("Boost Control") ||
