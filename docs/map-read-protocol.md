@@ -1,5 +1,8 @@
 # Leitura de mapas Tunuino
 
+> **Arquivo técnico legado:** este documento descreve um formato binário experimental. Não define o formato XML dos projetos da Tunuino Console atual e não deve ser usado como instrução de gravação na ECU. Mantido apenas como referência para código e testes que ainda utilizam este contrato.
+
+
 Protocolo original de leitura; não escreve calibração, não ativa valores no motor e não declara compatibilidade TunerStudio. Requer a capacidade `0x02` na identidade. A integração STM32 ainda não existe e a identidade padrão dos testes não anuncia esta capacidade.
 
 Cada pedido/resposta usa o enquadramento de `frame.h`. Inteiros multibyte são big-endian. O prefixo dos pedidos é ASCII `TUNUINO:M` (9 bytes). Tipo de mapa: `1` VE, `2` ignição. O ficheiro transferido segue `calibration-format.md`.
