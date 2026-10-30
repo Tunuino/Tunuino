@@ -26,6 +26,14 @@ jobs:
         run: cmake --build qt_console/build --config Release --parallel 2
       - name: Unit tests
         run: ctest --test-dir qt_console/build -C Release --output-on-failure
+      - name: Smoke test Windows launch (offscreen)
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $exe = (Resolve-Path "qt_console/build/Release/TunuinoConsole.exe").Path
+          $process = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 4
+          if ($process.HasExited) { throw "Console exited during startup with code $($process.ExitCode)" }
+          Stop-Process -Id $process.Id -Force
       - name: Package Qt runtime
         run: |
           New-Item -ItemType Directory -Force -Path qt_console/dist | Out-Null
