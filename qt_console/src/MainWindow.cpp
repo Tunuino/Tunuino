@@ -29,6 +29,10 @@
 #include <QVector>
 #include <QByteArray>
 #include <QFileDialog>
+#include <QSaveFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 #include <QFile>
 #include <QXmlStreamReader>
 #include <QStringList>
@@ -210,6 +214,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     presetBar->addWidget(presetMap);
     presetBar->addWidget(presetLoad);
     importLayout->addLayout(presetBar);
+    auto *saveExample = new QPushButton(tr("Save example as JSON"), importPage);
+    presetBar->addWidget(saveExample);
     auto *importBar = new QHBoxLayout();
     auto *importButton = new QPushButton(tr("Open .msq tune"), importPage);
     auto *importSelect = new QComboBox(importPage);
@@ -275,6 +281,45 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             }
         }
         importStatus->setText(tr("EXAMPLE ONLY — %1 / %2. Columns: RPM. Rows: MAP (kPa). Not a safe tune; do not flash.").arg(presetSelect->currentText(), presetMap->currentText()));
+    });
+    connect(saveExample, &QPushButton::clicked, this, [=]() {
+        if (importTable->rowCount() != 16 || importTable->columnCount() != 16 ||
+            !importStatus->text().startsWith(QLatin1String("EXAMPLE ONLY"))) {
+            QMessageBox::information(this, tr("Base Maps"), tr("Preview an original example before saving."));
+            return;
+        }
+        const QString filename = QFileDialog::getSaveFileName(this, tr("Save offline example"), QStringLiteral("tunuino-example.json"), tr("JSON files (*.json)"));
+        if (filename.isEmpty()) return;
+        QJsonObject document;
+        document.insert(QStringLiteral("format"), QStringLiteral("tunuino-offline-example-v1"));
+        document.insert(QStringLiteral("validated"), false);
+        document.insert(QStringLiteral("ecuWritable"), false);
+        document.insert(QStringLiteral("profile"), presetSelect->currentText());
+        document.insert(QStringLiteral("map"), presetMap->currentText());
+        document.insert(QStringLiteral("rowAxis"), QStringLiteral("MAP_kPa"));
+        document.insert(QStringLiteral("columnAxis"), QStringLiteral("RPM"));
+        QJsonArray rpm, pressure, cells;
+        for (int c = 0; c < 16; ++c) rpm.append(importTable->horizontalHeaderItem(c)->text().toDouble());
+        for (int r = 0; r < 16; ++r) {
+            pressure.append(importTable->verticalHeaderItem(r)->text().toDouble());
+            QJsonArray row;
+            for (int c = 0; c < 16; ++c) row.append(importTable->item(r,c)->text().toDouble());
+            cells.append(row);
+        }
+        document.insert(QStringLiteral("rpm"), rpm);
+        document.insert(QStringLiteral("mapKpa"), pressure);
+        document.insert(QStringLiteral("values"), cells);
+        QSaveFile output(filename);
+        if (!output.open(QIODevice::WriteOnly)) {
+            QMessageBox::warning(this, tr("Save failed"), output.errorString());
+            return;
+        }
+        const QByteArray payload = QJsonDocument(document).toJson(QJsonDocument::Indented);
+        if (output.write(payload) != payload.size() || !output.commit()) {
+            QMessageBox::warning(this, tr("Save failed"), output.errorString());
+            return;
+        }
+        importStatus->setText(tr("Saved illustrative offline map to %1. Never flash without calibration.").arg(filename));
     });
     connect(importButton, &QPushButton::clicked, this, [=]() {
         const QString filename = QFileDialog::getOpenFileName(this, tr("Open local tune"), QString(), tr("Tune files (*.msq *.xml)"));
