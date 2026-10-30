@@ -1136,7 +1136,39 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(fuelRead, &QPushButton::clicked, this, [=]() { startTransfer(2); });
     connect(ignitionRead, &QPushButton::clicked, this, [=]() { startTransfer(3); });
     auto *fileMenu = menuBar()->addMenu(tr("File"));
-    fileMenu->addAction(tr("Exit"), this, &QWidget::close);
+    auto *openProject = fileMenu->addAction(tr("Open offline map..."));
+    openProject->setShortcut(QKeySequence::Open);
+    connect(openProject, &QAction::triggered, openExample, &QPushButton::click);
+    auto *saveProject = fileMenu->addAction(tr("Save offline map as..."));
+    saveProject->setShortcut(QKeySequence::Save);
+    connect(saveProject, &QAction::triggered, saveExample, &QPushButton::click);
+    auto *importTune = fileMenu->addAction(tr("Import MSQ tune..."));
+    connect(importTune, &QAction::triggered, importButton, &QPushButton::click);
+    fileMenu->addSeparator();
+    auto *fullScreen = fileMenu->addAction(tr("Full screen"));
+    fullScreen->setShortcut(QKeySequence(QStringLiteral("Ctrl+F")));
+    fullScreen->setCheckable(true);
+    connect(fullScreen, &QAction::toggled, this, [this](bool enabled) {
+        if (enabled) showFullScreen(); else showNormal();
+    });
+    fileMenu->addSeparator();
+    auto *exitAction = fileMenu->addAction(tr("Exit"), this, &QWidget::close);
+    exitAction->setShortcut(QKeySequence(QStringLiteral("Alt+X")));
+    auto *editMenu = menuBar()->addMenu(tr("Edit"));
+    auto *editInfo = editMenu->addAction(tr("Edit offline base map"));
+    connect(editInfo, &QAction::triggered, this, [tabs]() { tabs->setCurrentIndex(3); });
+    auto *viewMenu = menuBar()->addMenu(tr("View"));
+    viewMenu->addAction(navigationDock->toggleViewAction());
+    viewMenu->addAction(inspectorDock->toggleViewAction());
+    auto *toolsMenu = menuBar()->addMenu(tr("Tools"));
+    auto *calibrationAction = toolsMenu->addAction(tr("Calibration and setup"));
+    connect(calibrationAction, &QAction::triggered, this, [tabs]() { tabs->setCurrentIndex(6); });
+    auto *helpMenu = menuBar()->addMenu(tr("Help"));
+    auto *aboutAction = helpMenu->addAction(tr("About Tunuino Console"));
+    connect(aboutAction, &QAction::triggered, this, [this]() {
+        QMessageBox::about(this, tr("About Tunuino Console"),
+            tr("Tunuino Console — Qt 6\\nOffline map editing and ECU diagnostics.\\nFirmware writing and unverified ECU configuration operations are disabled."));
+    });
     auto *ecuMenu = menuBar()->addMenu(tr("ECU"));
     auto *connectMenu = ecuMenu->addMenu(tr("Connect to ECU"));
     auto *disconnectAction = ecuMenu->addAction(tr("Disconnect"));
