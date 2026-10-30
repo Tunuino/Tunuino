@@ -34,7 +34,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     navigationDock->setObjectName("NavigationDock");
     auto *navigationList = new QListWidget(navigationDock);
     navigationList->setMinimumWidth(195);
-    navigationList->setMaximumWidth(270);
+    navigationList->setMaximumWidth(340);
+    navigationDock->setMinimumWidth(190);
     navigationList->addItems({tr("Fuel Table"), tr("Ignition Table"), tr("Datalogging"),
                               tr("Firmware"), tr("Calibration & Setup")});
     navigationDock->setWidget(navigationList);
@@ -59,6 +60,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelState->setStyleSheet(QStringLiteral("color: #bdbfc1;"));
     fuelToolbarLayout->addWidget(fuelState);
     fuelLayout->addWidget(fuelToolbar);
+    auto *fuelActions = new QWidget(fuelPage);
+    auto *fuelActionsLayout = new QHBoxLayout(fuelActions);
+    fuelActionsLayout->setContentsMargins(0, 0, 0, 0);
+    auto *fuelRead = new QPushButton(tr("Read from ECU"), fuelActions);
+    auto *fuelSave = new QPushButton(tr("Write to ECU"), fuelActions);
+    fuelRead->setEnabled(false);
+    fuelSave->setEnabled(false);
+    fuelRead->setToolTip(tr("Requires validated ECU map-read protocol."));
+    fuelSave->setToolTip(tr("Requires validated ECU map-write protocol and safety checks."));
+    fuelActionsLayout->addWidget(fuelRead);
+    fuelActionsLayout->addWidget(fuelSave);
+    fuelActionsLayout->addStretch();
+    fuelLayout->addWidget(fuelActions);
     auto *maps = new QTableWidget(16, 16, fuelPage);
     maps->setAlternatingRowColors(true);
     maps->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -89,6 +103,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *ignitionHeading = new QLabel(tr("IGNITION TABLE  |  16 x 16"), ignitionPage);
     ignitionHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     ignitionLayout->addWidget(ignitionHeading);
+    auto *ignitionActions = new QWidget(ignitionPage);
+    auto *ignitionActionsLayout = new QHBoxLayout(ignitionActions);
+    ignitionActionsLayout->setContentsMargins(0, 0, 0, 0);
+    auto *ignitionRead = new QPushButton(tr("Read from ECU"), ignitionActions);
+    auto *ignitionSave = new QPushButton(tr("Write to ECU"), ignitionActions);
+    ignitionRead->setEnabled(false);
+    ignitionSave->setEnabled(false);
+    ignitionActionsLayout->addWidget(ignitionRead);
+    ignitionActionsLayout->addWidget(ignitionSave);
+    ignitionActionsLayout->addStretch();
+    ignitionLayout->addWidget(ignitionActions);
     auto *ignitionMap = new QTableWidget(16, 16, ignitionPage);
     ignitionMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     ignitionMap->horizontalHeader()->setDefaultSectionSize(62);
@@ -596,6 +621,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     statusLayout->addStretch(1);
     dock->setWidget(statusPanel);
     dock->setMinimumWidth(245);
+    dock->setMaximumWidth(400);
     addDockWidget(Qt::RightDockWidgetArea, dock);
     auto *session = new tunuino::SerialSession(this);
     auto *fileMenu = menuBar()->addMenu(tr("File"));
@@ -662,5 +688,5 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         statusBar()->showMessage(tr("ECU identity verified (read-only). Configuration writes disabled."));
     });
     refreshPorts();
-    statusBar()->showMessage(tr("Qt 6 interface prototype — ECU writes disabled"));
+    statusBar()->showMessage(tr("TUNUINO  |  ECU connection ready  |  Map read/write unavailable until firmware integration"));
 }
