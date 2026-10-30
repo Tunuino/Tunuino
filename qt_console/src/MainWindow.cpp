@@ -327,6 +327,48 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     [update](int) { update(); });
                 update();
             }
+            if (QString::fromLatin1(name) == QStringLiteral("Coils") ||
+                QString::fromLatin1(name) == QStringLiteral("Dwell") ||
+                QString::fromLatin1(name) == QStringLiteral("Trigger") ||
+                QString::fromLatin1(name) == QStringLiteral("Injectors") ||
+                QString::fromLatin1(name) == QStringLiteral("Fuel Pressure")) {
+                const QString section = QString::fromLatin1(name);
+                auto *profile = new QComboBox(page);
+                auto *channel = new QComboBox(page);
+                auto *note = new QLabel(page);
+                note->setWordWrap(true);
+                if (section == QStringLiteral("Coils")) {
+                    profile->addItems({tr("Select coil type"), tr("Smart coil (built-in igniter)"), tr("Dumb coil (external igniter)")});
+                    channel->addItem(tr("Select ignition channel"));
+                    for (int i = 1; i <= 8; ++i) channel->addItem(tr("Ignition %1").arg(i));
+                    note->setText(tr("Coil type and driver compatibility must be verified before enabling outputs."));
+                } else if (section == QStringLiteral("Dwell")) {
+                    profile->addItems({tr("Select dwell strategy"), tr("Battery voltage compensation table"), tr("Fixed dwell (reference only)")});
+                    channel->addItem(tr("Select ignition channel"));
+                    for (int i = 1; i <= 8; ++i) channel->addItem(tr("Ignition %1").arg(i));
+                    note->setText(tr("Dwell values require the coil manufacturer's data. No default firing dwell is applied."));
+                } else if (section == QStringLiteral("Trigger")) {
+                    profile->addItems({tr("Select trigger pattern"), tr("Missing tooth"), tr("Dual wheel"), tr("Cam + crank"), tr("Custom / verify with oscilloscope")});
+                    channel->addItems({tr("Select trigger input"), "Crank", "Cam 1", "Cam 2"});
+                    note->setText(tr("Trigger polarity, tooth count and sync angle require verification before engine operation."));
+                } else if (section == QStringLiteral("Injectors")) {
+                    profile->addItems({tr("Select injector type"), tr("High impedance"), tr("Low impedance (driver required)")});
+                    channel->addItem(tr("Select injector channel"));
+                    for (int i = 1; i <= 8; ++i) channel->addItem(tr("Injector %1").arg(i));
+                    note->setText(tr("Injector impedance, flow rate and driver compatibility must be confirmed."));
+                } else {
+                    profile->addItems({tr("Select pressure sensor"), tr("Analog 0–5 V"), tr("Digital / CAN (requires support)"), tr("Custom calibration")});
+                    channel->addItem(tr("Select analog input"));
+                    for (int i = 1; i <= 8; ++i) channel->addItem(tr("Analog Input %1").arg(i));
+                    note->setText(tr("Choose the exact sensor pressure range and transfer curve before calibration."));
+                }
+                form->addRow(tr("Configuration"), profile);
+                form->addRow(tr("Channel / Input"), channel);
+                form->addRow(note);
+                auto *apply = new QPushButton(tr("Apply to ECU (not connected)"), page);
+                apply->setEnabled(false);
+                form->addRow(apply);
+            }
             if (QString::fromLatin1(name) == QStringLiteral("Injector Dead Time")) {
                 auto *table = new QTableWidget(5, 2, page);
                 table->setHorizontalHeaderLabels({tr("Battery voltage (V)"), tr("Dead Time (ms)")});
