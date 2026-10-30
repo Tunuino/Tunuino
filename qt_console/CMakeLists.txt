@@ -18,3 +18,7 @@ endif()
 install(TARGETS TunuinoConsole RUNTIME DESTINATION .)
 qt_generate_deploy_app_script(TARGET TunuinoConsole OUTPUT_SCRIPT deploy_script NO_UNSUPPORTED_PLATFORM_ERROR)
 install(SCRIPT ${deploy_script})
+
+# Read-only serial identity probe for physical ECU validation on Windows.
+qt_add_executable(EcuIdentityProbe tests/EcuIdentityProbe.cpp src/ecu/SerialSession.cpp src/ecu/SerialSession.h)
+target_link_libraries(EcuIdentityProbe PRIVATE Qt6::SerialPort TunuinoProtocol)
