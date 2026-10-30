@@ -369,6 +369,27 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 apply->setEnabled(false);
                 form->addRow(apply);
             }
+            if (QString::fromLatin1(name) == QStringLiteral("Analog Inputs")) {
+                auto *channel = new QComboBox(page);
+                channel->addItem(tr("Select analog input"));
+                for (int i = 1; i <= 8; ++i) channel->addItem(tr("Analog Input %1").arg(i));
+                auto *sensor = new QComboBox(page);
+                sensor->addItems({tr("Unassigned"), tr("Oil Pressure"), tr("Fuel Pressure"),
+                    tr("Wideband 1"), tr("Wideband 2"), tr("External MAP"),
+                    tr("Oil Temperature"), tr("Exhaust Pressure"), tr("Custom Sensor")});
+                auto *profile = new QComboBox(page);
+                profile->addItems({tr("Select sensor profile"), tr("0–5 V linear (requires range)"),
+                    tr("Manufacturer curve"), tr("Custom two-point calibration")});
+                auto *note = new QLabel(tr("Select the channel, sensor and its verified calibration curve. A generic 0–5 V input does not define engineering units."), page);
+                note->setWordWrap(true);
+                form->addRow(tr("Input channel"), channel);
+                form->addRow(tr("Sensor function"), sensor);
+                form->addRow(tr("Calibration profile"), profile);
+                form->addRow(note);
+                auto *apply = new QPushButton(tr("Apply to ECU (not connected)"), page);
+                apply->setEnabled(false);
+                form->addRow(apply);
+            }
             if (QString::fromLatin1(name) == QStringLiteral("Injector Dead Time")) {
                 auto *table = new QTableWidget(5, 2, page);
                 table->setHorizontalHeaderLabels({tr("Battery voltage (V)"), tr("Dead Time (ms)")});
