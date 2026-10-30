@@ -220,6 +220,53 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 // Preview controls must never imply that a live ECU strategy is enabled.
                 enabled->setEnabled(false);
             }
+            if (QString::fromLatin1(name) == QStringLiteral("Inputs") ||
+                QString::fromLatin1(name) == QStringLiteral("Outputs")) {
+                const bool isOutput = QString::fromLatin1(name) == QStringLiteral("Outputs");
+                auto *channel = new QComboBox(page);
+                auto *function = new QComboBox(page);
+                auto *polarity = new QComboBox(page);
+                auto *help = new QLabel(page);
+                help->setWordWrap(true);
+                if (isOutput) {
+                    channel->addItem(tr("Select output"));
+                    for (int i = 1; i <= 12; ++i) channel->addItem(tr("Output %1").arg(i));
+                    function->addItems({tr("Unassigned"), tr("Injector 1"), tr("Injector 2"), tr("Injector 3"),
+                        tr("Injector 4"), tr("Injector 5"), tr("Injector 6"), tr("Injector 7"), tr("Injector 8"),
+                        tr("Ignition 1"), tr("Ignition 2"), tr("Ignition 3"), tr("Ignition 4"),
+                        tr("Ignition 5"), tr("Ignition 6"), tr("Ignition 7"), tr("Ignition 8"),
+                        tr("Fuel Pump"), tr("Cooling Fan 1"), tr("Cooling Fan 2"),
+                        tr("Idle Valve"), tr("Boost Solenoid"), tr("Tachometer")});
+                    polarity->addItems({tr("Active High"), tr("Active Low")});
+                    help->setText(tr("Choose an output and its function. The physical pin and available drivers depend on the detected ECU board; no pin is assigned automatically."));
+                } else {
+                    channel->addItem(tr("Select input"));
+                    for (int i = 1; i <= 12; ++i) channel->addItem(tr("Digital Input %1").arg(i));
+                    for (int i = 1; i <= 8; ++i) channel->addItem(tr("Analog Input %1").arg(i));
+                    function->addItems({tr("Unassigned"), tr("Clutch Switch"), tr("Brake Switch"),
+                        tr("Launch Enable"), tr("Flex Fuel"), tr("Oil Pressure"),
+                        tr("Fuel Pressure"), tr("External MAP"), tr("Wideband 1"),
+                        tr("Wideband 2"), tr("Switchable Map")});
+                    polarity->addItems({tr("Active High"), tr("Active Low")});
+                    help->setText(tr("Choose a physical input and function. Analog/digital compatibility and pin mapping require ECU board validation."));
+                }
+                form->addRow(isOutput ? tr("Output channel") : tr("Input channel"), channel);
+                form->addRow(tr("Assigned function"), function);
+                form->addRow(tr("Signal polarity"), polarity);
+                form->addRow(help);
+                auto *apply = new QPushButton(tr("Apply to ECU (not connected)"), page);
+                apply->setEnabled(false);
+                form->addRow(apply);
+                auto update = [=]() {
+                    const bool selected = channel->currentIndex() > 0;
+                    function->setEnabled(selected);
+                    polarity->setEnabled(selected);
+                    if (!selected) function->setCurrentIndex(0);
+                };
+                connect(channel, QOverload<int>::of(&QComboBox::currentIndexChanged), page,
+                    [update](int) { update(); });
+                update();
+            }
             if (QString::fromLatin1(name) == QStringLiteral("Injector Dead Time")) {
                 auto *table = new QTableWidget(5, 2, page);
                 table->setHorizontalHeaderLabels({tr("Battery voltage (V)"), tr("Dead Time (ms)")});
