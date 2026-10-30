@@ -1,9 +1,5 @@
 # Tunuino
 
-![Logótipo Tunuino](java_console/src/main/resources/io/tunuino/console/tunuino.png)
+![Tunuino](java_console/src/main/resources/io/tunuino/console/tunuino.png)
 
-A Tunuino é um projeto de firmware para centralinas Proteus e uaEFI, acompanhado pela Tunuino Console para Windows. Destina-se à configuração e monitorização do motor, à gravação de firmware e ao registo de dados. Está em desenvolvimento.
-
-# Tunuino Console
-
-![Tunuino Console com o logótipo ampliado](docs/images/tunuino-console.png)
+Firmware de gestão de motor para Proteus e uaEFI, com Tunuino Console para Windows. Projeto em desenvolvimento.
