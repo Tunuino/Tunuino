@@ -36,7 +36,6 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QFile>
-#include <QXmlStreamReader>
 #include <QStringList>
 #include <QMap>
 #include <cmath>
@@ -298,10 +297,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // User-selected external tune preview. No network access or ECU write path.
     auto *importPage = new QWidget(tabs);
     auto *importLayout = new QVBoxLayout(importPage);
-    auto *importTitle = new QLabel(tr("BASE MAPS  |  Local MSQ tune viewer"), importPage);
+    auto *importTitle = new QLabel(tr("BASE MAPS  |  Tunuino offline examples"), importPage);
     importTitle->setStyleSheet(QStringLiteral("font-weight: 700; color: #e69a32;"));
     importLayout->addWidget(importTitle);
-    auto *importNotice = new QLabel(tr("Read-only preview of locally selected MSQ files. Imported values are not ECU maps and are never flashed."), importPage);
+    auto *importNotice = new QLabel(tr("Original example maps are offline only. Values are not validated and cannot be flashed."), importPage);
     importNotice->setWordWrap(true);
     importLayout->addWidget(importNotice);
     auto *presetBar = new QHBoxLayout();
@@ -324,12 +323,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     presetBar->addWidget(openExample);
     presetBar->addWidget(saveExample);
     auto *importBar = new QHBoxLayout();
-    auto *importButton = new QPushButton(tr("Open .msq tune"), importPage);
-    auto *importSelect = new QComboBox(importPage);
-    importSelect->setEnabled(false);
-    importBar->addWidget(importButton);
-    importBar->addWidget(importSelect, 1);
-    importLayout->addLayout(importBar);
     auto *importTable = new QTableWidget(importPage);
     importTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     importTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
@@ -343,21 +336,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto loadedExample = QSharedPointer<QJsonObject>::create();
     importStatus->setWordWrap(true);
     importLayout->addWidget(importStatus);
-    auto imported = QSharedPointer<QMap<QString, QVector<double>>>::create();
-    connect(importSelect, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [=](int index) {
-        if (index < 0) return;
-        const QString name = importSelect->itemData(index).toString();
-        const auto values = imported->value(name);
-        if (values.size() != 256) return;
-        *editableExample = false;
-        importTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-        importTable->setRowCount(16);
-        importTable->setColumnCount(16);
-        for (int row = 0; row < 16; ++row)
-            for (int col = 0; col < 16; ++col)
-                importTable->setItem(row, col, new QTableWidgetItem(QString::number(values[row * 16 + col], 'f', 2)));
-        importStatus->setText(tr("Offline preview: %1 (16 x 16). Axes require independent verification.").arg(name));
-    });
     connect(presetLoad, &QPushButton::clicked, this, [=]() {
         // These are original mathematical examples, not tested engine calibrations.
         // They cannot be sent to an ECU through this page.
@@ -496,48 +474,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 importTable->setItem(r, c, new QTableWidgetItem(QString::number(numbers[r * 16 + c], 'f', 2)));
         importTable->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
         importStatus->setText(tr("Offline example loaded: %1. Double-click to edit. Not validated; ECU write disabled.").arg(filename));
-    });
-    connect(importButton, &QPushButton::clicked, this, [=]() {
-        const QString filename = QFileDialog::getOpenFileName(this, tr("Open local tune"), QString(), tr("Tune files (*.msq *.xml)"));
-        if (filename.isEmpty()) return;
-        QFile file(filename);
-        if (!file.open(QIODevice::ReadOnly) || file.size() > 8 * 1024 * 1024) {
-            importStatus->setText(tr("Cannot open tune or file exceeds 8 MB."));
-            return;
-        }
-        QXmlStreamReader xml(&file);
-        QMap<QString, QVector<double>> parsed;
-        while (!xml.atEnd()) {
-            xml.readNext();
-            if (!xml.isStartElement() || (xml.name() != QLatin1String("constant") && xml.name() != QLatin1String("pcVariable"))) continue;
-            const auto attrs = xml.attributes();
-            if (attrs.value(QLatin1String("rows")).toInt() != 16 ||
-                attrs.value(QLatin1String("cols")).toInt() != 16) continue;
-            const QString name = attrs.value(QLatin1String("name")).toString();
-            const QString body = xml.readElementText(QXmlStreamReader::SkipChildElements);
-            const auto parts = body.split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
-            if (parts.size() != 256 || name.isEmpty() || parsed.contains(name)) continue;
-            QVector<double> values;
-            bool valid = true;
-            for (const auto &part : parts) {
-                bool ok = false;
-                const double value = part.toDouble(&ok);
-                if (!ok || !std::isfinite(value)) { valid = false; break; }
-                values.append(value);
-            }
-            if (valid) parsed.insert(name, values);
-        }
-        if (xml.hasError() || parsed.isEmpty()) {
-            importStatus->setText(tr("No valid 16 x 16 numeric tables found, or invalid XML."));
-            return;
-        }
-        *imported = parsed;
-        importSelect->clear();
-        for (auto it = imported->cbegin(); it != imported->cend(); ++it)
-            importSelect->addItem(it.key(), it.key());
-        importSelect->setEnabled(true);
-        importSelect->setCurrentIndex(0);
-        importStatus->setText(tr("Loaded %1 offline 16 x 16 tables. Select a table to preview.").arg(parsed.size()));
     });
     tabs->addTab(importPage, tr("Base Maps"));
 
@@ -1142,8 +1078,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *saveProject = fileMenu->addAction(tr("Save offline map as..."));
     saveProject->setShortcut(QKeySequence::Save);
     connect(saveProject, &QAction::triggered, saveExample, &QPushButton::click);
-    auto *importTune = fileMenu->addAction(tr("Import MSQ tune..."));
-    connect(importTune, &QAction::triggered, importButton, &QPushButton::click);
     fileMenu->addSeparator();
     auto *fullScreen = fileMenu->addAction(tr("Full screen"));
     fullScreen->setShortcut(QKeySequence(QStringLiteral("Ctrl+F")));
