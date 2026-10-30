@@ -40,7 +40,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     navigationDock->setWidget(navigationList);
     addDockWidget(Qt::LeftDockWidgetArea, navigationDock);
     connect(navigationList, &QListWidget::currentRowChanged, tabs, &QTabWidget::setCurrentIndex);
-    connect(tabs, &QTabWidget::currentChanged, navigationList, &QListWidget::setCurrentRow);
+    connect(tabs, &QTabWidget::currentChanged, navigationList, [navigationList](int index) { navigationList->setCurrentRow(index); });
     navigationList->setCurrentRow(0);
 
     auto *maps = new QTableWidget(16, 16, tabs);
