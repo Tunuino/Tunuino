@@ -151,6 +151,75 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 help->setWordWrap(true);
                 form->addRow(help);
             }
+            if (QString::fromLatin1(name) == QStringLiteral("Idle Control") ||
+                QString::fromLatin1(name) == QStringLiteral("Boost Control") ||
+                QString::fromLatin1(name) == QStringLiteral("Launch Control")) {
+                const QString modeName = QString::fromLatin1(name);
+                auto *enabled = new QCheckBox(tr("Enable strategy (preview only)"), page);
+                enabled->setChecked(false);
+                auto *mode = new QComboBox(page);
+                auto *rpm = new QDoubleSpinBox(page);
+                rpm->setRange(0, 12000);
+                rpm->setDecimals(0);
+                rpm->setSingleStep(50);
+                rpm->setSuffix(tr(" rpm"));
+                auto *threshold = new QDoubleSpinBox(page);
+                auto *hysteresis = new QDoubleSpinBox(page);
+                auto *output = new QComboBox(page);
+                output->addItems({tr("Not assigned"), "PWM 1", "PWM 2", "PWM 3"});
+                auto *description = new QLabel(page);
+                description->setWordWrap(true);
+                if (modeName == QStringLiteral("Idle Control")) {
+                    mode->addItems({tr("Disabled"), tr("Open Loop"), tr("Closed Loop PID")});
+                    rpm->setValue(850);
+                    threshold->setRange(0, 100);
+                    threshold->setSuffix(" %");
+                    threshold->setValue(20);
+                    hysteresis->setRange(0, 50);
+                    hysteresis->setSuffix(" %");
+                    hysteresis->setValue(3);
+                    form->addRow(tr("Idle mode"), mode);
+                    form->addRow(tr("Target Idle RPM (reference)"), rpm);
+                    form->addRow(tr("Base valve duty (reference)"), threshold);
+                    form->addRow(tr("Duty limit / hysteresis (reference)"), hysteresis);
+                    form->addRow(tr("Idle valve output"), output);
+                    description->setText(tr("Target RPM is a starting reference, not a verified engine setting. PID tuning and coolant-temperature tables are not connected."));
+                } else if (modeName == QStringLiteral("Boost Control")) {
+                    mode->addItems({tr("Disabled"), tr("Open Loop Duty"), tr("Closed Loop Target")});
+                    threshold->setRange(0, 400);
+                    threshold->setSuffix(" kPa abs");
+                    threshold->setValue(100);
+                    hysteresis->setRange(0, 100);
+                    hysteresis->setSuffix(" %");
+                    hysteresis->setValue(0);
+                    form->addRow(tr("Boost mode"), mode);
+                    form->addRow(tr("Target MAP (reference)"), threshold);
+                    form->addRow(tr("Solenoid duty (reference)"), hysteresis);
+                    form->addRow(tr("Boost solenoid output"), output);
+                    description->setText(tr("100 kPa absolute is approximately atmospheric pressure, NOT a safe boost target. Overboost protection and control maps must be configured before use."));
+                } else {
+                    mode->addItems({tr("Disabled"), tr("Clutch switch"), tr("Digital input")});
+                    rpm->setValue(0);
+                    threshold->setRange(0, 100);
+                    threshold->setSuffix(" % TPS");
+                    threshold->setValue(0);
+                    hysteresis->setRange(0, 30);
+                    hysteresis->setSuffix(" s");
+                    hysteresis->setDecimals(1);
+                    form->addRow(tr("Activation source"), mode);
+                    form->addRow(tr("Launch RPM (unset)"), rpm);
+                    form->addRow(tr("Minimum TPS (unset)"), threshold);
+                    form->addRow(tr("Maximum activation duration (unset)"), hysteresis);
+                    description->setText(tr("Launch limits are intentionally unset. Input wiring, RPM cut strategy and safety conditions must be validated before activation."));
+                }
+                form->addRow(enabled);
+                form->addRow(description);
+                auto *apply = new QPushButton(tr("Apply to ECU (not connected)"), page);
+                apply->setEnabled(false);
+                form->addRow(apply);
+                // Preview controls must never imply that a live ECU strategy is enabled.
+                enabled->setEnabled(false);
+            }
             if (QString::fromLatin1(name) == QStringLiteral("Injector Dead Time")) {
                 auto *table = new QTableWidget(5, 2, page);
                 table->setHorizontalHeaderLabels({tr("Battery voltage (V)"), tr("Dead Time (ms)")});
