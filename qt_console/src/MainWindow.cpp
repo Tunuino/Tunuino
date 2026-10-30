@@ -195,6 +195,21 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *importNotice = new QLabel(tr("Read-only preview of locally selected MSQ files. Imported values are not ECU maps and are never flashed."), importPage);
     importNotice->setWordWrap(true);
     importLayout->addWidget(importNotice);
+    auto *presetBar = new QHBoxLayout();
+    auto *presetLabel = new QLabel(tr("Original example profile"), importPage);
+    auto *presetSelect = new QComboBox(importPage);
+    presetSelect->addItem(tr("Naturally aspirated - illustrative"), 0);
+    presetSelect->addItem(tr("Turbo - illustrative"), 1);
+    auto *presetMap = new QComboBox(importPage);
+    presetMap->addItem(tr("Fuel / VE"), 0);
+    presetMap->addItem(tr("Ignition advance"), 1);
+    presetMap->addItem(tr("AFR Target"), 2);
+    auto *presetLoad = new QPushButton(tr("Preview example"), importPage);
+    presetBar->addWidget(presetLabel);
+    presetBar->addWidget(presetSelect);
+    presetBar->addWidget(presetMap);
+    presetBar->addWidget(presetLoad);
+    importLayout->addLayout(presetBar);
     auto *importBar = new QHBoxLayout();
     auto *importButton = new QPushButton(tr("Open .msq tune"), importPage);
     auto *importSelect = new QComboBox(importPage);
@@ -225,6 +240,41 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             for (int col = 0; col < 16; ++col)
                 importTable->setItem(row, col, new QTableWidgetItem(QString::number(values[row * 16 + col], 'f', 2)));
         importStatus->setText(tr("Offline preview: %1 (16 x 16). Axes require independent verification.").arg(name));
+    });
+    connect(presetLoad, &QPushButton::clicked, this, [=]() {
+        // These are original mathematical examples, not tested engine calibrations.
+        // They cannot be sent to an ECU through this page.
+        const bool turbo = presetSelect->currentData().toInt() == 1;
+        const int kind = presetMap->currentData().toInt();
+        const double rpm[16] = {500,750,1000,1250,1500,1750,2000,2500,3000,3500,4000,4500,5000,5500,6000,6500};
+        const double mapNA[16] = {20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,100};
+        const double mapTurbo[16] = {20,30,40,50,60,70,80,90,100,110,120,130,145,160,180,200};
+        const double *load = turbo ? mapTurbo : mapNA;
+        importTable->clear();
+        importTable->setRowCount(16);
+        importTable->setColumnCount(16);
+        QStringList horizontal, vertical;
+        for (int c = 0; c < 16; ++c) horizontal.append(QString::number(rpm[c]));
+        for (int r = 0; r < 16; ++r) vertical.append(QString::number(load[r]));
+        importTable->setHorizontalHeaderLabels(horizontal);
+        importTable->setVerticalHeaderLabels(vertical);
+        for (int r = 0; r < 16; ++r) {
+            for (int c = 0; c < 16; ++c) {
+                const double normalizedLoad = load[r] / 100.0;
+                const double normalizedRpm = rpm[c] / 6500.0;
+                double value = 0.0;
+                if (kind == 0)
+                    value = 35.0 + 42.0 * normalizedLoad + 9.0 * normalizedRpm;
+                else if (kind == 1)
+                    value = 12.0 + 18.0 * normalizedRpm - 8.0 * normalizedLoad - (turbo ? 8.0 * qMax(0.0, normalizedLoad - 1.0) : 0.0);
+                else
+                    value = 14.7 - 2.0 * qMax(0.0, normalizedLoad - 0.55) - (turbo ? 0.8 * qMax(0.0, normalizedLoad - 1.0) : 0.0);
+                auto *cell = new QTableWidgetItem(QString::number(value, 'f', 2));
+                cell->setToolTip(tr("Illustrative calculated value. Not validated for any engine."));
+                importTable->setItem(r, c, cell);
+            }
+        }
+        importStatus->setText(tr("EXAMPLE ONLY — %1 / %2. Columns: RPM. Rows: MAP (kPa). Not a safe tune; do not flash.").arg(presetSelect->currentText(), presetMap->currentText()));
     });
     connect(importButton, &QPushButton::clicked, this, [=]() {
         const QString filename = QFileDialog::getOpenFileName(this, tr("Open local tune"), QString(), tr("Tune files (*.msq *.xml)"));
