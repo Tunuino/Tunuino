@@ -38,7 +38,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path qt_console/dist | Out-Null
           Copy-Item qt_console/build/Release/TunuinoConsole.exe qt_console/dist/
+          Copy-Item qt_console/build/Release/EcuIdentityProbe.exe qt_console/dist/
           windeployqt --release --no-translations --dir qt_console/dist qt_console/dist/TunuinoConsole.exe
+          windeployqt --release --no-translations --dir qt_console/dist qt_console/dist/EcuIdentityProbe.exe
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
         with:
