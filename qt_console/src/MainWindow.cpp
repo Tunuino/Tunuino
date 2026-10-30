@@ -14,6 +14,11 @@
 #include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QGroupBox>
+#include <QLineEdit>
+#include <QMessageBox>
+#include <QRegularExpression>
+#include <QSplitter>
+#include <QAbstractItemView>
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("Tunuino Console — Qt 6");
     resize(1400, 850);
@@ -40,7 +45,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *navigation = new QTreeWidget(calibrationPage);
     navigation->setHeaderHidden(true);
     navigation->setMinimumWidth(230);
+    navigation->setMaximumWidth(380);
+    navigation->setUniformRowHeights(true);
     auto *pages = new QStackedWidget(calibrationPage);
+    auto *leftPanel = new QWidget(calibrationPage);
+    auto *leftLayout = new QVBoxLayout(leftPanel);
+    auto *search = new QLineEdit(leftPanel);
+    search->setPlaceholderText(tr("Search settings..."));
+    search->setClearButtonEnabled(true);
+    leftLayout->addWidget(search);
+    leftLayout->addWidget(navigation, 1);
     struct Category { const char *title; const char *items[8]; };
     const Category categories[] = {
         {"Sensor Calibration", {"TPS", "MAP", "CLT", "IAT", "Lambda", "Analog Inputs", nullptr}},
@@ -72,6 +86,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 maxVoltage->setValue(5.0);
                 form->addRow(tr("Closed throttle reference"), minVoltage);
                 form->addRow(tr("Wide open throttle reference"), maxVoltage);
+                auto *rangeStatus = new QLabel(tr("Reference values only — no sensor measurement"), page);
+                form->addRow(rangeStatus);
+                auto validate = [minVoltage, maxVoltage, rangeStatus]() {
+                    const bool valid = maxVoltage->value() - minVoltage->value() >= 0.2;
+                    rangeStatus->setText(valid ? QObject::tr("Valid reference range (not calibrated)") : QObject::tr("Invalid: open throttle must exceed closed throttle by 0.2 V"));
+                    rangeStatus->setStyleSheet(valid ? QString() : QStringLiteral("color: #c0392b;"));
+                };
+                connect(minVoltage, QOverload<double>::of(&QDoubleSpinBox::valueChanged), page, [validate](double) { validate(); });
+                connect(maxVoltage, QOverload<double>::of(&QDoubleSpinBox::valueChanged), page, [validate](double) { validate(); });
+                validate();
                 auto *calibrate = new QPushButton(tr("Auto Calibrate (not connected)"), page);
                 calibrate->setEnabled(false);
                 form->addRow(calibrate);
@@ -89,6 +113,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     table->setItem(i, 1, deadTime);
                 }
                 table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+                table->setMinimumHeight(190);
+                table->setToolTip(tr("Reference voltage rows only. Dead Time requires injector manufacturer data."));
                 form->addRow(table);
             }
             pages->addWidget(page);
@@ -101,8 +127,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if (current && current->data(0, Qt::UserRole).isValid())
                 pages->setCurrentIndex(current->data(0, Qt::UserRole).toInt());
         });
-    calibrationLayout->addWidget(navigation);
-    calibrationLayout->addWidget(pages, 1);
+    connect(search, &QLineEdit::textChanged, navigation, [navigation](const QString &query) {
+        for (int i = 0; i < navigation->topLevelItemCount(); ++i) {
+            auto *category = navigation->topLevelItem(i);
+            const bool parentMatch = category->text(0).contains(query, Qt::CaseInsensitive);
+            bool visibleChild = false;
+            for (int j = 0; j < category->childCount(); ++j) {
+                auto *child = category->child(j);
+                const bool show = parentMatch || child->text(0).contains(query, Qt::CaseInsensitive);
+                child->setHidden(!show);
+                visibleChild |= show;
+            }
+            category->setHidden(!visibleChild);
+            if (!query.isEmpty() && visibleChild) category->setExpanded(true);
+        }
+    });
+    auto *splitter = new QSplitter(Qt::Horizontal, calibrationPage);
+    splitter->addWidget(leftPanel);
+    splitter->addWidget(pages);
+    splitter->setStretchFactor(0, 0);
+    splitter->setStretchFactor(1, 1);
+    splitter->setSizes({280, 900});
+    calibrationLayout->addWidget(splitter);
     tabs->addTab(calibrationPage, tr("Calibration & Setup"));
     if (auto *first = navigation->topLevelItem(0)) navigation->setCurrentItem(first->child(0));
     auto *dock = new QDockWidget(tr("Engine Status"), this);
