@@ -40,7 +40,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     navigationList->setMinimumWidth(195);
     navigationList->setMaximumWidth(340);
     navigationDock->setMinimumWidth(190);
-    navigationList->addItems({tr("Fuel Table"), tr("Ignition Table"), tr("Datalogging"),
+    navigationList->addItems({tr("Fuel Table"), tr("Ignition Table"), tr("AFR Target"), tr("Datalogging"),
                               tr("Firmware"), tr("Calibration & Setup")});
     navigationDock->setWidget(navigationList);
     addDockWidget(Qt::LeftDockWidgetArea, navigationDock);
@@ -136,6 +136,50 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionFooter->setStyleSheet(QStringLiteral("color: #a9aaad;"));
     ignitionLayout->addWidget(ignitionFooter);
     tabs->addTab(ignitionPage, tr("Ignition Table"));
+    // AFR Target is an editable OFFLINE template only. Firmware page storage is not
+    // implemented for this table, so it cannot be written to the ECU.
+    auto *afrPage = new QWidget(tabs);
+    auto *afrLayout = new QVBoxLayout(afrPage);
+    auto *afrTitle = new QLabel(tr("AFR TARGET  |  Generic reference  |  16 x 16"), afrPage);
+    afrTitle->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
+    afrLayout->addWidget(afrTitle);
+    auto *afrWarning = new QLabel(tr("OFFLINE REFERENCE ONLY. Generic targets are not a validated engine tune and are never sent to the ECU."), afrPage);
+    afrWarning->setWordWrap(true);
+    afrWarning->setStyleSheet(QStringLiteral("color: #e6a750;"));
+    afrLayout->addWidget(afrWarning);
+    auto *afrMap = new QTableWidget(16, 16, afrPage);
+    afrMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    afrMap->horizontalHeader()->setDefaultSectionSize(62);
+    afrMap->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    afrMap->verticalHeader()->setDefaultSectionSize(28);
+    afrMap->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
+    afrMap->setAlternatingRowColors(true);
+    const int rpmAxis[16] = {500,750,1000,1250,1500,1750,2000,2500,3000,3500,4000,4500,5000,6000,7000,8000};
+    const int loadAxis[16] = {20,30,40,50,60,70,80,90,100,110,120,130,140,160,180,200};
+    QStringList rpmHeaders, loadHeaders;
+    for (int i = 0; i < 16; ++i) {
+        rpmHeaders.append(QString::number(rpmAxis[i]));
+        loadHeaders.append(QString::number(loadAxis[i]));
+    }
+    afrMap->setHorizontalHeaderLabels(rpmHeaders);
+    afrMap->setVerticalHeaderLabels(loadHeaders);
+    for (int row = 0; row < 16; ++row) {
+        for (int col = 0; col < 16; ++col) {
+            // Stoichiometric example at low load; richer illustrative targets
+            // under higher load. Never apply these values automatically.
+            const double afr = loadAxis[row] <= 80 ? 14.7
+                : loadAxis[row] <= 100 ? 13.8 : loadAxis[row] <= 140 ? 12.5 : 12.0;
+            auto *cell = new QTableWidgetItem(QString::number(afr, 'f', 2));
+            cell->setToolTip(tr("Generic gasoline AFR reference only; requires engine-specific validation."));
+            afrMap->setItem(row, col, cell);
+        }
+    }
+    afrLayout->addWidget(afrMap, 1);
+    auto *afrFoot = new QLabel(tr("RPM (columns) / MAP kPa (rows). AFR assumes gasoline stoichiometric 14.7. No ECU AFR table protocol exists yet."), afrPage);
+    afrFoot->setWordWrap(true);
+    afrLayout->addWidget(afrFoot);
+    tabs->addTab(afrPage, tr("AFR Target"));
+
     auto *loggingPage = new QWidget(tabs);
     auto *loggingLayout = new QVBoxLayout(loggingPage);
     auto *loggingHeading = new QLabel(tr("DATALOGGING  |  Live channels"), loggingPage);
