@@ -5,6 +5,8 @@ on:
     paths:
       - 'qt_console/**'
       - '.github/workflows/qt-console-windows.yml'
+      - 'installer/TunuinoConsole.iss'
+      - 'LICENSE'
   workflow_dispatch:
 jobs:
   windows-build:
@@ -18,7 +20,7 @@ jobs:
         with:
           version: '6.7.3'
           arch: win64_msvc2019_64
-          modules: qtserialport
+          modules: qtserialport qttest
           cache: true
       - name: Configure
         run: cmake -S qt_console -B qt_console/build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
@@ -41,6 +43,19 @@ jobs:
           Copy-Item qt_console/build/Release/EcuIdentityProbe.exe qt_console/dist/
           windeployqt --release --no-translations --dir qt_console/dist qt_console/dist/TunuinoConsole.exe
           windeployqt --release --no-translations --dir qt_console/dist qt_console/dist/EcuIdentityProbe.exe
+      - name: Build branded Windows setup (Inno Setup)
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\\ISCC.exe'
+          if (!(Test-Path $iscc)) { throw 'Inno Setup 6 is not installed on runner' }
+          & $iscc "/DAppSource=$((Resolve-Path 'qt_console/dist').Path)" '/DAppVersion=0.1.0' 'installer/TunuinoConsole.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
+          if (!(Test-Path 'installer/output/Tunuino-Console-Setup-0.1.0.exe')) { throw 'Installer not produced' }
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: TunuinoConsole-Setup-Windows-x64
+          path: installer/output/Tunuino-Console-Setup-0.1.0.exe
+          if-no-files-found: error
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
         with:
