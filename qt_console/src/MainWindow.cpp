@@ -23,12 +23,26 @@
 #include <QCheckBox>
 #include <QSerialPortInfo>
 #include <QAction>
+#include <QListWidget>
 #include "ecu/SerialSession.h"
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("Tunuino Console — Qt 6");
     resize(1400, 850);
     auto *tabs = new QTabWidget(this);
     setCentralWidget(tabs);
+    auto *navigationDock = new QDockWidget(tr("TUNUINO  |  Navigation"), this);
+    navigationDock->setObjectName("NavigationDock");
+    auto *navigationList = new QListWidget(navigationDock);
+    navigationList->setMinimumWidth(195);
+    navigationList->setMaximumWidth(270);
+    navigationList->addItems({tr("Fuel Map 16×16"), tr("Ignition"), tr("Datalogging"),
+                              tr("Firmware"), tr("Calibration & Setup")});
+    navigationDock->setWidget(navigationList);
+    addDockWidget(Qt::LeftDockWidgetArea, navigationDock);
+    connect(navigationList, &QListWidget::currentRowChanged, tabs, &QTabWidget::setCurrentIndex);
+    connect(tabs, &QTabWidget::currentChanged, navigationList, &QListWidget::setCurrentRow);
+    navigationList->setCurrentRow(0);
+
     auto *maps = new QTableWidget(16, 16, tabs);
     maps->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
     maps->verticalHeader()->setSectionResizeMode(QHeaderView::Interactive);
