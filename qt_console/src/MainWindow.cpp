@@ -215,6 +215,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     presetBar->addWidget(presetLoad);
     importLayout->addLayout(presetBar);
     auto *saveExample = new QPushButton(tr("Save example as JSON"), importPage);
+    auto *openExample = new QPushButton(tr("Open JSON"), importPage);
+    presetBar->addWidget(openExample);
     presetBar->addWidget(saveExample);
     auto *importBar = new QHBoxLayout();
     auto *importButton = new QPushButton(tr("Open .msq tune"), importPage);
@@ -232,6 +234,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     importTable->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
     importLayout->addWidget(importTable, 1);
     auto *importStatus = new QLabel(tr("No local tune loaded"), importPage);
+    auto editableExample = QSharedPointer<bool>::create(false);
+    auto loadedExample = QSharedPointer<QJsonObject>::create();
     importStatus->setWordWrap(true);
     importLayout->addWidget(importStatus);
     auto imported = QSharedPointer<QMap<QString, QVector<double>>>::create();
@@ -240,6 +244,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const QString name = importSelect->itemData(index).toString();
         const auto values = imported->value(name);
         if (values.size() != 256) return;
+        *editableExample = false;
+        importTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
         importTable->setRowCount(16);
         importTable->setColumnCount(16);
         for (int row = 0; row < 16; ++row)
@@ -256,6 +262,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const double mapNA[16] = {20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,100};
         const double mapTurbo[16] = {20,30,40,50,60,70,80,90,100,110,120,130,145,160,180,200};
         const double *load = turbo ? mapTurbo : mapNA;
+        *editableExample = true;
+        *loadedExample = QJsonObject();
+        importTable->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
         importTable->clear();
         importTable->setRowCount(16);
         importTable->setColumnCount(16);
@@ -283,8 +292,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         importStatus->setText(tr("EXAMPLE ONLY — %1 / %2. Columns: RPM. Rows: MAP (kPa). Not a safe tune; do not flash.").arg(presetSelect->currentText(), presetMap->currentText()));
     });
     connect(saveExample, &QPushButton::clicked, this, [=]() {
-        if (importTable->rowCount() != 16 || importTable->columnCount() != 16 ||
-            !importStatus->text().startsWith(QLatin1String("EXAMPLE ONLY"))) {
+        if (!*editableExample || importTable->rowCount() != 16 || importTable->columnCount() != 16) {
             QMessageBox::information(this, tr("Base Maps"), tr("Preview an original example before saving."));
             return;
         }
@@ -294,8 +302,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         document.insert(QStringLiteral("format"), QStringLiteral("tunuino-offline-example-v1"));
         document.insert(QStringLiteral("validated"), false);
         document.insert(QStringLiteral("ecuWritable"), false);
-        document.insert(QStringLiteral("profile"), presetSelect->currentText());
-        document.insert(QStringLiteral("map"), presetMap->currentText());
+        document.insert(QStringLiteral("profile"), loadedExample->isEmpty() ? presetSelect->currentText() : loadedExample->value(QStringLiteral("profile")).toString());
+        document.insert(QStringLiteral("map"), loadedExample->isEmpty() ? presetMap->currentText() : loadedExample->value(QStringLiteral("map")).toString());
         document.insert(QStringLiteral("rowAxis"), QStringLiteral("MAP_kPa"));
         document.insert(QStringLiteral("columnAxis"), QStringLiteral("RPM"));
         QJsonArray rpm, pressure, cells;
@@ -303,7 +311,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         for (int r = 0; r < 16; ++r) {
             pressure.append(importTable->verticalHeaderItem(r)->text().toDouble());
             QJsonArray row;
-            for (int c = 0; c < 16; ++c) row.append(importTable->item(r,c)->text().toDouble());
+            for (int c = 0; c < 16; ++c) {
+                const auto *cell = importTable->item(r,c);
+                bool ok = false;
+                const double value = cell ? cell->text().toDouble(&ok) : 0.0;
+                if (!ok || !std::isfinite(value)) {
+                    QMessageBox::warning(this, tr("Invalid map"), tr("All 256 cells must contain finite numbers."));
+                    return;
+                }
+                row.append(value);
+            }
             cells.append(row);
         }
         document.insert(QStringLiteral("rpm"), rpm);
@@ -320,6 +337,60 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             return;
         }
         importStatus->setText(tr("Saved illustrative offline map to %1. Never flash without calibration.").arg(filename));
+    });
+    connect(openExample, &QPushButton::clicked, this, [=]() {
+        const QString filename = QFileDialog::getOpenFileName(this, tr("Open Tunuino offline map"), QString(), tr("JSON files (*.json)"));
+        if (filename.isEmpty()) return;
+        QFile file(filename);
+        if (!file.open(QIODevice::ReadOnly) || file.size() > 1024 * 1024) {
+            QMessageBox::warning(this, tr("Open failed"), tr("File cannot be read or exceeds 1 MB."));
+            return;
+        }
+        QJsonParseError error;
+        const QJsonDocument json = QJsonDocument::fromJson(file.readAll(), &error);
+        const QJsonObject obj = json.object();
+        const QJsonArray rpm = obj.value(QStringLiteral("rpm")).toArray();
+        const QJsonArray pressure = obj.value(QStringLiteral("mapKpa")).toArray();
+        const QJsonArray rows = obj.value(QStringLiteral("values")).toArray();
+        if (error.error != QJsonParseError::NoError ||
+            obj.value(QStringLiteral("format")).toString() != QLatin1String("tunuino-offline-example-v1") ||
+            rpm.size() != 16 || pressure.size() != 16 || rows.size() != 16 ||
+            obj.value(QStringLiteral("validated")).toBool(true) ||
+            obj.value(QStringLiteral("ecuWritable")).toBool(true)) {
+            QMessageBox::warning(this, tr("Invalid map"), tr("Not a supported offline example."));
+            return;
+        }
+        QStringList h, v;
+        QVector<double> numbers;
+        bool valid = true;
+        for (int i = 0; i < 16; ++i) {
+            if (!rpm[i].isDouble() || !pressure[i].isDouble()) { valid = false; break; }
+            h.append(QString::number(rpm[i].toDouble()));
+            v.append(QString::number(pressure[i].toDouble()));
+            const QJsonArray row = rows[i].toArray();
+            if (row.size() != 16) { valid = false; break; }
+            for (const auto &item : row) {
+                if (!item.isDouble() || !std::isfinite(item.toDouble())) { valid = false; break; }
+                numbers.append(item.toDouble());
+            }
+            if (!valid) break;
+        }
+        if (!valid || numbers.size() != 256) {
+            QMessageBox::warning(this, tr("Invalid map"), tr("Axes and all 256 values must be numeric."));
+            return;
+        }
+        *loadedExample = obj;
+        *editableExample = true;
+        importTable->clear();
+        importTable->setRowCount(16);
+        importTable->setColumnCount(16);
+        importTable->setHorizontalHeaderLabels(h);
+        importTable->setVerticalHeaderLabels(v);
+        for (int r = 0; r < 16; ++r)
+            for (int c = 0; c < 16; ++c)
+                importTable->setItem(r, c, new QTableWidgetItem(QString::number(numbers[r * 16 + c], 'f', 2)));
+        importTable->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
+        importStatus->setText(tr("Offline example loaded: %1. Double-click to edit. Not validated; ECU write disabled.").arg(filename));
     });
     connect(importButton, &QPushButton::clicked, this, [=]() {
         const QString filename = QFileDialog::getOpenFileName(this, tr("Open local tune"), QString(), tr("Tune files (*.msq *.xml)"));
