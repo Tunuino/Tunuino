@@ -130,24 +130,42 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 form->addRow(tr("Calibration status"), curveStatus);
                 auto update = [=]() {
                     const bool custom = brand->currentIndex() == brand->count() - 1;
-                    model->clear();
-                    if (brand->currentIndex() == 0) model->addItem(tr("Select a manufacturer first"));
-                    else if (custom) model->addItem(tr("Custom analog output"));
-                    else if (brand->currentIndex() == 1) model->addItems({"AEM X-Series (verify part number)", "AEM UEGO (verify part number)"});
-                    else if (brand->currentIndex() == 2) model->addItems({"Innovate LC-2", "Innovate MTX-L (verify generation)"});
-                    else if (brand->currentIndex() == 3) model->addItems({"14point7 Spartan 2", "14point7 Spartan 3 (verify variant)"});
-                    else if (brand->currentIndex() == 4) model->addItems({"PLX SM-AFR (verify generation)", "PLX DM-6 / SM-AFR (verify controller)"});
-                    for (auto *field : {vLow, vHigh, afrLow, afrHigh}) field->setEnabled(custom);
-                    note->setText(custom
-                        ? tr("Enter two distinct voltage/AFR points from the controller manual. AFR scaling depends on fuel; confirm the controller output. ECU write is disabled.")
-                        : tr("Model selection only. No voltage-to-AFR curve is assumed: verify the exact part number and analog output settings from its manual."));
+                    const bool aem = brand->currentIndex() == 1 && model->currentIndex() == 0;
+                    const bool lc2 = brand->currentIndex() == 2 && model->currentIndex() == 0;
+                    for (auto *field : {vLow, vHigh, afrLow, afrHigh})
+                        field->setEnabled(custom);
+                    if (aem) {
+                        vLow->setValue(0.5); afrLow->setValue(8.5);
+                        vHigh->setValue(4.5); afrHigh->setValue(18.0);
+                        note->setText(tr("Verified AEM 30-0300: AFR = 2.3750 * V + 7.3125. Below 0.50 V = not ready; above 4.50 V = sensor error. Check exact part number. Source: documents.aemelectronics.com/techlibrary_30-0300.pdf"));
+                    } else if (lc2) {
+                        vLow->setValue(0.0); afrLow->setValue(7.35);
+                        vHigh->setValue(5.0); afrHigh->setValue(22.39);
+                        note->setText(tr("Verified Innovate LC-2 factory Analog Output 1 (yellow), gasoline AFR: 0 V = 7.35, 5 V = 22.39. Programmable outputs may differ. Source: innovatemotorsports.com LC-2 manual."));
+                    } else {
+                        note->setText(custom
+                            ? tr("Enter two points from your controller manual. Confirm the configured analog output and AFR fuel reference.")
+                            : tr("No verified analog scaling for this exact model. Do not use another controller's curve."));
+                    }
                     const bool valid = custom && vLow->value() < vHigh->value() && afrLow->value() != afrHigh->value();
-                    curveStatus->setText(valid ? tr("Custom two-point curve: valid for review (not saved)") : tr("Calibration: not configured / invalid points"));
-                    curveStatus->setStyleSheet(valid ? QStringLiteral("color: #15803d;") : QStringLiteral("color: #b45309;"));
+                    curveStatus->setText(aem || lc2 ? tr("Manufacturer profile loaded for review (not saved)") :
+                        valid ? tr("Custom two-point curve: valid for review (not saved)") : tr("Calibration: not configured / invalid points"));
+                    curveStatus->setStyleSheet(aem || lc2 || valid ? QStringLiteral("color: #15803d;") : QStringLiteral("color: #b45309;"));
                 };
-                connect(brand, QOverload<int>::of(&QComboBox::currentIndexChanged), page, [update](int) { update(); });
+                connect(brand, QOverload<int>::of(&QComboBox::currentIndexChanged), page, [=](int) {
+                    model->clear();
+                    if (brand->currentIndex() == 0) model->addItem(tr("Select manufacturer first"));
+                    else if (brand->currentIndex() == 1) model->addItems({"AEM X-Series 30-0300 (verified)", "Other AEM model (unverified)"});
+                    else if (brand->currentIndex() == 2) model->addItems({"Innovate LC-2 Output 1 (verified)", "Other Innovate model/output (unverified)"});
+                    else if (brand->currentIndex() == 3) model->addItems({"14point7 Spartan 2 (unverified)", "14point7 Spartan 3 (unverified)"});
+                    else if (brand->currentIndex() == 4) model->addItems({"PLX SM-AFR (unverified)", "PLX DM-6 / SM-AFR (unverified)"});
+                    else model->addItem(tr("Custom analog output"));
+                    update();
+                });
+                connect(model, QOverload<int>::of(&QComboBox::currentIndexChanged), page, [update](int) { update(); });
                 for (auto *field : {vLow, vHigh, afrLow, afrHigh})
                     connect(field, QOverload<double>::of(&QDoubleSpinBox::valueChanged), page, [update](double) { update(); });
+                model->addItem(tr("Select manufacturer first"));
                 update();
                 auto *save = new QPushButton(tr("Apply to ECU (not connected)"), page);
                 save->setEnabled(false);
