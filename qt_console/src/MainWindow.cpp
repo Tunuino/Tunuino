@@ -558,7 +558,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     dfuLog->setMaximumBlockCount(500);
     firmwareLayout->addWidget(dfuLog, 1);
     auto *dfuProcess = new QProcess(firmwarePage);
-    auto *dfuPorts = QSharedPointer<QStringList>::create();
+    const auto dfuPorts = QSharedPointer<QStringList>::create();
     const auto resolveCli = [cliPath]() -> QString {
         const QString specified = cliPath->text().trimmed();
         if (!specified.isEmpty() && QFileInfo(specified).isFile()) return specified;
