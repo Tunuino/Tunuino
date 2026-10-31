@@ -29,9 +29,9 @@ jobs:
             exit 1
           fi
 
-          gh api --paginate --slurp \
+          gh api --paginate \
             "repos/$GH_REPO/releases?per_page=100" \
-            --jq '.[][] | .id' > releases.txt
+            --jq '.[].id' > releases.txt
 
           while read -r id; do
             [[ -z "$id" ]] && continue
@@ -39,9 +39,9 @@ jobs:
               "repos/$GH_REPO/releases/$id"
           done < releases.txt
 
-          gh api --paginate --slurp \
+          gh api --paginate \
             "repos/$GH_REPO/git/matching-refs/tags" \
-            --jq '.[][] | .ref' > tags.txt
+            --jq '.[].ref' > tags.txt
 
           while read -r ref; do
             [[ -z "$ref" ]] && continue
