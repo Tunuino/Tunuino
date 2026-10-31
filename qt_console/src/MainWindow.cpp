@@ -36,6 +36,10 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QFile>
+#include <QProcess>
+#include <QStandardPaths>
+#include <QFileInfo>
+#include <QPlainTextEdit>
 #include <QStringList>
 #include <QMap>
 #include <cmath>
@@ -512,19 +516,152 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *firmwareHeading = new QLabel(tr("FIRMWARE  |  Device management"), firmwarePage);
     firmwareHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     firmwareLayout->addWidget(firmwareHeading);
-    auto *firmwareInfo = new QLabel(tr("USB serial identity is supported. Firmware flashing and recovery are not yet implemented in this Qt application."), firmwarePage);
+    auto *firmwareInfo = new QLabel(tr("Proteus STM32F427 USB DFU. Place the ECU in STM32 bootloader DFU mode manually. Requires ST STM32CubeProgrammer installed on Windows."), firmwarePage);
     firmwareInfo->setWordWrap(true);
     firmwareLayout->addWidget(firmwareInfo);
-    auto *firmwareChecklist = new QFormLayout();
-    firmwareChecklist->addRow(tr("Identity"), new QLabel(tr("Available when connected"), firmwarePage));
-    firmwareChecklist->addRow(tr("USB DFU flashing"), new QLabel(tr("Not implemented"), firmwarePage));
-    firmwareChecklist->addRow(tr("Image compatibility check"), new QLabel(tr("Not implemented"), firmwarePage));
-    firmwareChecklist->addRow(tr("Post-flash verification"), new QLabel(tr("Not implemented"), firmwarePage));
-    firmwareLayout->addLayout(firmwareChecklist);
-    auto *firmwareFlash = new QPushButton(tr("Flash firmware (not available)"), firmwarePage);
-    firmwareFlash->setEnabled(false);
-    firmwareLayout->addWidget(firmwareFlash, 0, Qt::AlignLeft);
-    firmwareLayout->addStretch();
+    auto *dfuForm = new QFormLayout();
+    auto *cliPath = new QLineEdit(firmwarePage);
+    cliPath->setPlaceholderText(tr("STM32_Programmer_CLI.exe"));
+    auto *browseCli = new QPushButton(tr("Browse programmer..."), firmwarePage);
+    auto *cliRow = new QWidget(firmwarePage);
+    auto *cliRowLayout = new QHBoxLayout(cliRow);
+    cliRowLayout->setContentsMargins(0, 0, 0, 0);
+    cliRowLayout->addWidget(cliPath, 1);
+    cliRowLayout->addWidget(browseCli);
+    dfuForm->addRow(tr("ST programmer"), cliRow);
+    auto *imagePath = new QLineEdit(firmwarePage);
+    imagePath->setReadOnly(true);
+    auto *browseImage = new QPushButton(tr("Select F427 .bin..."), firmwarePage);
+    auto *imageRow = new QWidget(firmwarePage);
+    auto *imageRowLayout = new QHBoxLayout(imageRow);
+    imageRowLayout->setContentsMargins(0, 0, 0, 0);
+    imageRowLayout->addWidget(imagePath, 1);
+    imageRowLayout->addWidget(browseImage);
+    dfuForm->addRow(tr("Firmware image"), imageRow);
+    auto *dfuPort = new QComboBox(firmwarePage);
+    dfuPort->setEditable(false);
+    dfuForm->addRow(tr("DFU port"), dfuPort);
+    firmwareLayout->addLayout(dfuForm);
+    auto *dfuButtons = new QHBoxLayout();
+    auto *detectDfu = new QPushButton(tr("Detect USB DFU"), firmwarePage);
+    auto *flashDfu = new QPushButton(tr("Flash and verify F427"), firmwarePage);
+    flashDfu->setEnabled(false);
+    dfuButtons->addWidget(detectDfu);
+    dfuButtons->addWidget(flashDfu);
+    dfuButtons->addStretch();
+    firmwareLayout->addLayout(dfuButtons);
+    auto *dfuStatus = new QLabel(tr("DFU not detected. Disconnect the Console serial session before flashing."), firmwarePage);
+    dfuStatus->setWordWrap(true);
+    firmwareLayout->addWidget(dfuStatus);
+    auto *dfuLog = new QPlainTextEdit(firmwarePage);
+    dfuLog->setReadOnly(true);
+    dfuLog->setMaximumBlockCount(500);
+    firmwareLayout->addWidget(dfuLog, 1);
+    auto *dfuProcess = new QProcess(firmwarePage);
+    auto *dfuPorts = QSharedPointer<QStringList>::create();
+    const auto resolveCli = [cliPath]() -> QString {
+        const QString specified = cliPath->text().trimmed();
+        if (!specified.isEmpty() && QFileInfo(specified).isFile()) return specified;
+        return QStandardPaths::findExecutable(QStringLiteral("STM32_Programmer_CLI.exe"));
+    };
+    connect(browseCli, &QPushButton::clicked, firmwarePage, [cliPath, firmwarePage]() {
+        const QString file = QFileDialog::getOpenFileName(firmwarePage, QObject::tr("Select STM32CubeProgrammer CLI"), QString(), QObject::tr("Executable (*.exe)"));
+        if (!file.isEmpty()) cliPath->setText(file);
+    });
+    connect(browseImage, &QPushButton::clicked, firmwarePage, [imagePath, firmwarePage]() {
+        const QString file = QFileDialog::getOpenFileName(firmwarePage, QObject::tr("Select Proteus F427 firmware"), QString(), QObject::tr("Binary firmware (*.bin)"));
+        if (!file.isEmpty()) imagePath->setText(file);
+    });
+    connect(dfuProcess, &QProcess::readyReadStandardOutput, firmwarePage, [dfuProcess, dfuLog]() {
+        dfuLog->appendPlainText(QString::fromLocal8Bit(dfuProcess->readAllStandardOutput()));
+    });
+    connect(dfuProcess, &QProcess::readyReadStandardError, firmwarePage, [dfuProcess, dfuLog]() {
+        dfuLog->appendPlainText(QString::fromLocal8Bit(dfuProcess->readAllStandardError()));
+    });
+    connect(detectDfu, &QPushButton::clicked, firmwarePage, [=]() {
+        if (dfuProcess->state() != QProcess::NotRunning) return;
+        const QString cli = resolveCli();
+        if (cli.isEmpty()) { QMessageBox::warning(firmwarePage, tr("Programmer unavailable"), tr("Install STM32CubeProgrammer and select STM32_Programmer_CLI.exe.")); return; }
+        dfuPorts->clear();
+        dfuPort->clear();
+        flashDfu->setEnabled(false);
+        dfuLog->clear();
+        dfuStatus->setText(tr("Searching for STM32 USB DFU bootloader..."));
+        detectDfu->setEnabled(false);
+        dfuProcess->setProgram(cli);
+        dfuProcess->setArguments({QStringLiteral("-l"), QStringLiteral("usb")});
+        dfuProcess->start();
+    });
+    connect(dfuProcess, QOverload<int,QProcess::ExitStatus>::of(&QProcess::finished), firmwarePage,
+            [=](int code, QProcess::ExitStatus status) {
+        detectDfu->setEnabled(true);
+        if (status != QProcess::NormalExit || code != 0) {
+            dfuStatus->setText(tr("STM32CubeProgrammer failed. Inspect the log and USB drivers."));
+            flashDfu->setEnabled(false);
+            return;
+        }
+        if (dfuProcess->property("flashing").toBool()) {
+            dfuProcess->setProperty("flashing", false);
+            flashDfu->setEnabled(false);
+            dfuStatus->setText(tr("Programmer completed. Disconnect and reconnect the ECU, then verify normal USB operation. Hardware operation is not yet validated."));
+            return;
+        }
+        const QString output = dfuLog->toPlainText();
+        const QRegularExpression portPattern(QStringLiteral(R"(Port\\s*:\\s*(USB[0-9]+))"), QRegularExpression::CaseInsensitiveOption);
+        auto matches = portPattern.globalMatch(output);
+        while (matches.hasNext()) {
+            const QString port = matches.next().captured(1).toUpper();
+            if (!dfuPorts->contains(port)) dfuPorts->append(port);
+        }
+        dfuPort->addItems(*dfuPorts);
+        flashDfu->setEnabled(!dfuPorts->isEmpty());
+        dfuStatus->setText(dfuPorts->isEmpty() ? tr("No USB DFU device detected.") : tr("USB DFU port detected. Confirm it is the intended Proteus ECU before flashing."));
+    });
+    connect(dfuProcess, &QProcess::errorOccurred, firmwarePage, [=](QProcess::ProcessError) {
+        detectDfu->setEnabled(true);
+        flashDfu->setEnabled(false);
+        dfuStatus->setText(tr("Unable to start programmer: %1").arg(dfuProcess->errorString()));
+    });
+    connect(flashDfu, &QPushButton::clicked, firmwarePage, [=]() {
+        if (dfuProcess->state() != QProcess::NotRunning || dfuPort->currentText().isEmpty()) return;
+        const QString cli = resolveCli();
+        QFile image(imagePath->text());
+        if (cli.isEmpty() || !image.open(QIODevice::ReadOnly)) {
+            QMessageBox::warning(firmwarePage, tr("Missing file"), tr("Select a valid programmer and F427 .bin image."));
+            return;
+        }
+        const QByteArray header = image.read(8);
+        const auto u32 = [](const QByteArray &b, int at) -> quint32 {
+            return quint32(quint8(b[at])) | (quint32(quint8(b[at+1])) << 8)
+                | (quint32(quint8(b[at+2])) << 16) | (quint32(quint8(b[at+3])) << 24);
+        };
+        const qint64 size = image.size();
+        const quint32 stack = header.size() == 8 ? u32(header, 0) : 0;
+        const quint32 reset = header.size() == 8 ? u32(header, 4) : 0;
+        if (!imagePath->text().endsWith(QStringLiteral(".bin"), Qt::CaseInsensitive)
+            || size < 1024 || size > 1024*1024
+            || stack <= 0x20000000u || stack > 0x20030000u || (stack % 8) != 0
+            || !(reset & 1u) || (reset & ~1u) < 0x08000000u
+            || quint64(reset & ~1u) >= 0x08000000ull + quint64(size)) {
+            QMessageBox::critical(firmwarePage, tr("Invalid F427 image"), tr("Binary vector table, address or image size is invalid. Flash cancelled."));
+            return;
+        }
+        if (QMessageBox::warning(firmwarePage, tr("Confirm DFU flash"),
+            tr("Flash %1 (%2 bytes) to %3 at 0x08000000?\\n"
+               "Only proceed if this is a Proteus STM32F427 in USB DFU bootloader mode. "
+               "The image is not validated on physical hardware. An incorrect image may prevent startup.")
+                .arg(QFileInfo(image.fileName()).fileName()).arg(size).arg(dfuPort->currentText()),
+            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes) return;
+        dfuProcess->setProperty("flashing", true);
+        dfuLog->clear();
+        detectDfu->setEnabled(false);
+        flashDfu->setEnabled(false);
+        dfuStatus->setText(tr("Writing and verifying firmware. Do not disconnect the ECU."));
+        dfuProcess->setProgram(cli);
+        dfuProcess->setArguments({QStringLiteral("-c"), QStringLiteral("port=%1").arg(dfuPort->currentText()),
+            QStringLiteral("-w"), image.fileName(), QStringLiteral("0x08000000"), QStringLiteral("-v")});
+        dfuProcess->start();
+    });
     tabs->addTab(firmwarePage, tr("Firmware"));
     // Calibration navigation is independent of the legacy Java UI.
     auto *calibrationPage = new QWidget(tabs);
