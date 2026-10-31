@@ -1439,6 +1439,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     viewMenu->addAction(navigationDock->toggleViewAction());
     viewMenu->addAction(inspectorDock->toggleViewAction());
     auto *toolsMenu = menuBar()->addMenu(tr("Tools"));
+    auto *validationAction = toolsMenu->addAction(tr("Check ECU configuration (read-only)"));
+    validationAction->setEnabled(false);
+    auto validationPending = QSharedPointer<bool>::create(false);
+    connect(validationAction, &QAction::triggered, this, [=]() {
+        if (!*identityVerified || !session->isOpen() || transfer->page || *validationPending) return;
+        liveTimer->stop();
+        *validationPending = true;
+        if (!session->exchange(QByteArray("TUNUINO:V"), 3000)) {
+            *validationPending = false;
+            liveTimer->start();
+        }
+    });
     auto *calibrationAction = toolsMenu->addAction(tr("Calibration and setup"));
     connect(calibrationAction, &QAction::triggered, this, [tabs]() { tabs->setCurrentIndex(6); });
     auto *helpMenu = menuBar()->addMenu(tr("Help"));
