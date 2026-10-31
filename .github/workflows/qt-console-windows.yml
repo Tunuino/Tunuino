@@ -79,10 +79,20 @@ jobs:
           $sha = '${{ github.sha }}'
           $repo = '${{ github.repository }}'
           $runs = gh api "repos/$repo/actions/workflows/build-firmware.yml/runs?head_sha=$sha&event=push&per_page=30" | ConvertFrom-Json
-          $run = $runs.workflow_runs | Where-Object { $_.head_sha -eq $sha -and $_.head_branch -eq 'master' -and $_.status -eq 'completed' -and $_.conclusion -eq 'success' } | Select-Object -First 1
-          if (!$run) { throw "No successful matching firmware build for commit $sha; refusing mixed-commit Bundle" }
+          $run = $null
+          for ($attempt = 0; $attempt -lt 30; $attempt++) {
+            $runs = gh api "repos/$repo/actions/workflows/build-firmware.yml/runs?head_sha=$sha&event=push&per_page=30" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to query firmware workflow runs' }
+            $matching = @($runs.workflow_runs | Where-Object { $_.head_sha -eq $sha -and $_.head_branch -eq 'master' })
+            $run = $matching | Where-Object { $_.status -eq 'completed' -and $_.conclusion -eq 'success' } | Select-Object -First 1
+            if ($run) { break }
+            if ($matching | Where-Object { $_.status -eq 'completed' -and $_.conclusion -ne 'success' }) { throw "Firmware build failed for commit $sha" }
+            Start-Sleep -Seconds 10
+          }
+          if (!$run) { throw "No successful matching firmware build for commit $sha after waiting; refusing mixed-commit Bundle" }
           New-Item -ItemType Directory -Force 'qt_console/bundle/console','qt_console/bundle/firmware' | Out-Null
           Copy-Item 'qt_console/dist/*' 'qt_console/bundle/console/' -Recurse -Force
+          Copy-Item 'installer/output/Tunuino-Console-Setup-0.1.0.exe' 'qt_console/bundle/Tunuino-Console-Setup-0.1.0.exe'
           gh run download $run.id --repo $repo --name "firmware-proteus-f427-$sha" --dir 'qt_console/bundle/firmware'
           if ($LASTEXITCODE -ne 0) { throw 'Firmware artifact download failed' }
           $firmware = Get-ChildItem 'qt_console/bundle/firmware' -Filter '*.bin'
