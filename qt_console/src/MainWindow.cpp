@@ -584,8 +584,24 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             SetupDiGetDeviceRegistryPropertyW(devices, &deviceInfo, SPDRP_DEVICEDESC,
                 nullptr, reinterpret_cast<PBYTE>(description), sizeof(description), nullptr);
             const QString name = QString::fromWCharArray(description);
-            dfuPort->addItem(QStringLiteral("STM32 BOOTLOADER — %1").arg(name), hardwareId);
+            wchar_t service[512]{};
+            const bool hasService = SetupDiGetDeviceRegistryPropertyW(devices, &deviceInfo,
+                SPDRP_SERVICE, nullptr, reinterpret_cast<PBYTE>(service), sizeof(service), nullptr) != FALSE;
+            wchar_t manufacturer[512]{};
+            const bool hasManufacturer = SetupDiGetDeviceRegistryPropertyW(devices, &deviceInfo,
+                SPDRP_MFG, nullptr, reinterpret_cast<PBYTE>(manufacturer), sizeof(manufacturer), nullptr) != FALSE;
+            wchar_t instanceId[1024]{};
+            const bool hasInstanceId = SetupDiGetDeviceInstanceIdW(devices, &deviceInfo,
+                instanceId, DWORD(sizeof(instanceId) / sizeof(instanceId[0])), nullptr) != FALSE;
+            const QString driverService = hasService ? QString::fromWCharArray(service) : tr("(unknown)");
+            const QString driverManufacturer = hasManufacturer ? QString::fromWCharArray(manufacturer) : tr("(unknown)");
+            const QString deviceInstance = hasInstanceId ? QString::fromWCharArray(instanceId) : hardwareId;
+            dfuPort->addItem(QStringLiteral("STM32 BOOTLOADER — %1").arg(name), deviceInstance);
             dfuLog->appendPlainText(tr("Windows detected: %1 (%2)").arg(name, hardwareId));
+            dfuLog->appendPlainText(tr("Driver service: %1").arg(driverService));
+            dfuLog->appendPlainText(tr("Driver manufacturer: %1").arg(driverManufacturer));
+            dfuLog->appendPlainText(tr("Device instance: %1").arg(deviceInstance));
+            dfuLog->appendPlainText(tr("Read-only discovery only. No USB transfer or flash operation was attempted."));
         }
         SetupDiDestroyDeviceInfoList(devices);
         dfuStatus->setText(dfuPort->count() > 0
