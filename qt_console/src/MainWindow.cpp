@@ -608,7 +608,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             return;
         }
         const QString output = dfuLog->toPlainText();
-        const QRegularExpression portPattern(QStringLiteral(R"(Port\\s*:\\s*(USB[0-9]+))"), QRegularExpression::CaseInsensitiveOption);
+        const QRegularExpression portPattern(QStringLiteral("Port[[:space:]]*:[[:space:]]*(USB[0-9]+)"), QRegularExpression::CaseInsensitiveOption);
         auto matches = portPattern.globalMatch(output);
         while (matches.hasNext()) {
             const QString port = matches.next().captured(1).toUpper();
