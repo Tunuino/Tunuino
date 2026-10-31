@@ -63,7 +63,7 @@ def main():
             digest = hashlib.file_digest(source, "sha256").hexdigest()
         checksums.append(f"{digest}  {path.relative_to(root).as_posix()}\n")
     (root / "SHA256SUMS.txt").write_text("".join(checksums), encoding="utf-8")
-    bundle(root, output / "tunuino_bundle_proteus_v07_f427_usb_bench.zip")
+    bundle(root, output / "Tunuino-F427-Bundle.zip")
     installer = validate_installer(Path("build/installer"), commit, run_id)
     shutil.copy2(installer, output / SETUP_NAME)
     repo = os.environ["GITHUB_REPOSITORY"]
@@ -78,7 +78,7 @@ Esta imagem usa o startup, kernel e USB CDC do repositório **Tunuino/ChibiOS**,
 | Download | Conteúdo |
 |---|---|
 | **`tunuino_setup_windows_x64.msi`** | **Descarga principal:** instalador Windows x64 com Java, Console, firmware e INI |
-| `tunuino_bundle_proteus_v07_f427_usb_bench.zip` | Versão portátil temporária para testes |
+| `Tunuino-F427-Bundle.zip` | Versão portátil temporária para testes |
 
 **Instalação:** abrir o MSI e seguir o assistente. Inclui atalhos no ambiente de trabalho e menu Iniciar, escolha de pasta e desinstalação nas Definições do Windows. Java está incluído. O firmware, o INI correspondente, o código-fonte e as licenças estão na pasta `firmware` junto da aplicação; o seletor de firmware da Console abre essa pasta. Não grava a ECU nem instala drivers automaticamente.
 
