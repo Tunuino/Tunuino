@@ -925,6 +925,48 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 auto *apply = new QPushButton(tr("Apply to ECU (not connected)"), page);
                 apply->setEnabled(false);
                 form->addRow(apply);
+                auto *saveStrategy = new QPushButton(tr("Save offline strategy settings..."), page);
+                form->addRow(saveStrategy);
+                connect(saveStrategy, &QPushButton::clicked, page, [=]() {
+                    // Export is a draft only: it never enables an ECU output.
+                    if (mode->currentIndex() == 0) {
+                        QMessageBox::warning(page, QObject::tr("Strategy not configured"),
+                            QObject::tr("Select a strategy mode before saving the offline draft."));
+                        return;
+                    }
+                    if (modeName == QStringLiteral("Launch Control") &&
+                        (rpm->value() <= 0 || threshold->value() <= 0 || hysteresis->value() <= 0)) {
+                        QMessageBox::warning(page, QObject::tr("Launch limits incomplete"),
+                            QObject::tr("Set RPM, minimum TPS and maximum activation duration."));
+                        return;
+                    }
+                    if (modeName != QStringLiteral("Launch Control") && output->currentIndex() == 0) {
+                        QMessageBox::warning(page, QObject::tr("Output not selected"),
+                            QObject::tr("Select an output for this offline strategy draft."));
+                        return;
+                    }
+                    const QString path = QFileDialog::getSaveFileName(page, QObject::tr("Save offline strategy draft"),
+                        QStringLiteral("engine-strategy.json"), QObject::tr("JSON files (*.json)"));
+                    if (path.isEmpty()) return;
+                    QJsonObject root;
+                    root.insert(QStringLiteral("format"), QStringLiteral("tunuino-strategy-draft-v1"));
+                    root.insert(QStringLiteral("strategy"), modeName);
+                    root.insert(QStringLiteral("mode"), mode->currentText());
+                    root.insert(QStringLiteral("rpm_reference"), rpm->value());
+                    root.insert(QStringLiteral("threshold_reference"), threshold->value());
+                    root.insert(QStringLiteral("secondary_reference"), hysteresis->value());
+                    root.insert(QStringLiteral("output_reference"), output->currentText());
+                    root.insert(QStringLiteral("ecu_activation_enabled"), false);
+                    root.insert(QStringLiteral("offline_only"), true);
+                    QSaveFile file(path);
+                    if (!file.open(QIODevice::WriteOnly)) {
+                        QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
+                        return;
+                    }
+                    const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Indented);
+                    if (file.write(data) != data.size() || !file.commit())
+                        QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
+                });
                 // Preview controls must never imply that a live ECU strategy is enabled.
                 enabled->setEnabled(false);
             }
