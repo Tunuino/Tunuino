@@ -41,6 +41,8 @@
 #include <QProcess>
 #include <QStandardPaths>
 #include <QFileInfo>
+#include <QDir>
+#include <QCoreApplication>
 #include <QPlainTextEdit>
 #include <QStringList>
 #include <QMap>
@@ -563,8 +565,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     const auto resolveCli = [cliPath]() -> QString {
         const QString specified = cliPath->text().trimmed();
         if (!specified.isEmpty() && QFileInfo(specified).isFile()) return specified;
-        return QStandardPaths::findExecutable(QStringLiteral("STM32_Programmer_CLI.exe"));
+        const QString executable = QStringLiteral("STM32_Programmer_CLI.exe");
+        const QStringList candidates = {
+            QCoreApplication::applicationDirPath() + QStringLiteral("/programmer/bin/") + executable,
+            QCoreApplication::applicationDirPath() + QStringLiteral("/") + executable,
+            qEnvironmentVariable("ProgramFiles") + QStringLiteral("/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/") + executable,
+            qEnvironmentVariable("ProgramFiles(x86)") + QStringLiteral("/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/") + executable,
+            qEnvironmentVariable("ProgramFiles") + QStringLiteral("/STMicroelectronics/STM32CubeProgrammer/bin/") + executable
+        };
+        for (const QString &candidate : candidates)
+            if (QFileInfo(candidate).isFile()) return QDir::toNativeSeparators(candidate);
+        return QStandardPaths::findExecutable(executable);
     };
+    const QString detectedProgrammer = resolveCli();
+    if (!detectedProgrammer.isEmpty()) cliPath->setText(detectedProgrammer);
     connect(browseCli, &QPushButton::clicked, firmwarePage, [cliPath, firmwarePage]() {
         const QString file = QFileDialog::getOpenFileName(firmwarePage, QObject::tr("Select STM32CubeProgrammer CLI"), QString(), QObject::tr("Executable (*.exe)"));
         if (!file.isEmpty()) cliPath->setText(file);
@@ -582,7 +596,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(detectDfu, &QPushButton::clicked, firmwarePage, [=]() {
         if (dfuProcess->state() != QProcess::NotRunning) return;
         const QString cli = resolveCli();
-        if (cli.isEmpty()) { QMessageBox::warning(firmwarePage, tr("Programmer unavailable"), tr("Install STM32CubeProgrammer and select STM32_Programmer_CLI.exe.")); return; }
+        if (cli.isEmpty()) { QMessageBox::warning(firmwarePage, tr("Programmer unavailable"), tr("STM32CubeProgrammer CLI was not found automatically. Install the official ST package or select its CLI executable.")); return; }
         dfuPorts->clear();
         dfuPort->clear();
         flashDfu->setEnabled(false);
