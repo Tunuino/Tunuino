@@ -1,4 +1,8 @@
-"""Generate a readable Windows desktop icon from the official Tunuino artwork."""
+"""Create a square, high-visibility Windows shortcut icon from official Tunuino art.
+
+The full horizontal wordmark remains unchanged in the installer and application.
+Desktop icons require a compact square mark instead of a scaled-down banner.
+"""
 from pathlib import Path
 from PIL import Image, ImageOps
 
@@ -7,19 +11,37 @@ source = root / "assets" / "tunuino.png"
 target = root / "assets" / "tunuino.ico"
 
 with Image.open(source) as opened:
-    logo = opened.convert("RGBA")
-    alpha_bounds = logo.getchannel("A").getbbox()
-    if alpha_bounds:
-        logo = logo.crop(alpha_bounds)
+    original = opened.convert("RGBA")
 
-# A wide logo is illegible when scaled into a transparent square.
-# Use a solid square tile, then fit the complete mark to nearly its full width.
-# This changes only the Windows icon; installer wizard artwork stays unchanged.
+# Remove opaque/transparent uniform borders by measuring against the corner.
+# The logo has a dark rectangular backdrop, so alpha-only trimming is insufficient.
+rgb = original.convert("RGB")
+background = rgb.getpixel((0, 0))
+pixels = rgb.load()
+threshold = 32
+xs, ys = [], []
+for y in range(rgb.height):
+    for x in range(rgb.width):
+        p = pixels[x, y]
+        if max(abs(p[k] - background[k]) for k in range(3)) > threshold:
+            xs.append(x)
+            ys.append(y)
+if xs:
+    original = original.crop((min(xs), min(ys), max(xs) + 1, max(ys) + 1))
+
+# The full horizontal wordmark is unsuitable for an app icon. Crop the central
+# square to feature the gauge/lettermark at readable desktop sizes.
+width, height = original.size
+side = min(width, height)
+left = (width - side) // 2
+top = 0
+symbol = original.crop((left, top, left + side, top + side))
+symbol = ImageOps.contain(symbol, (464, 464), Image.Resampling.LANCZOS)
 canvas = Image.new("RGBA", (512, 512), "#121820")
-mark = ImageOps.contain(logo, (496, 400), Image.Resampling.LANCZOS)
-canvas.alpha_composite(mark, ((512 - mark.width) // 2, (512 - mark.height) // 2))
+canvas.alpha_composite(symbol, ((512 - symbol.width) // 2,
+                                (512 - symbol.height) // 2))
 canvas.save(target, format="ICO", sizes=[
     (16, 16), (24, 24), (32, 32), (48, 48),
     (64, 64), (128, 128), (256, 256)
 ])
-print(f"Generated high-visibility Windows icon: {target}")
+print(f"Generated compact square desktop icon: {target}")
