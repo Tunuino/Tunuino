@@ -47,6 +47,10 @@
 #include <QStringList>
 #include <QMap>
 #include <cmath>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <setupapi.h>
+#endif
 #include "ecu/SerialSession.h"
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("Tunuino Console — Qt 6");
@@ -595,17 +599,41 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     });
     connect(detectDfu, &QPushButton::clicked, firmwarePage, [=]() {
         if (dfuProcess->state() != QProcess::NotRunning) return;
-        const QString cli = resolveCli();
-        if (cli.isEmpty()) { QMessageBox::warning(firmwarePage, tr("Programmer unavailable"), tr("STM32CubeProgrammer CLI was not found automatically. Install the official ST package or select its CLI executable.")); return; }
         dfuPorts->clear();
         dfuPort->clear();
         flashDfu->setEnabled(false);
         dfuLog->clear();
-        dfuStatus->setText(tr("Searching for STM32 USB DFU bootloader..."));
-        detectDfu->setEnabled(false);
-        dfuProcess->setProgram(cli);
-        dfuProcess->setArguments({QStringLiteral("-l"), QStringLiteral("usb")});
-        dfuProcess->start();
+#ifdef Q_OS_WIN
+        // Read-only native Windows enumeration: no external ST tool required.
+        HDEVINFO devices = SetupDiGetClassDevsW(nullptr, nullptr, nullptr, DIGCF_ALLCLASSES | DIGCF_PRESENT);
+        if (devices == INVALID_HANDLE_VALUE) {
+            dfuStatus->setText(tr("Windows USB enumeration failed."));
+            return;
+        }
+        SP_DEVINFO_DATA deviceInfo{};
+        deviceInfo.cbSize = sizeof(deviceInfo);
+        for (DWORD index = 0; SetupDiEnumDeviceInfo(devices, index, &deviceInfo); ++index) {
+            wchar_t hardwareIds[4096]{};
+            if (!SetupDiGetDeviceRegistryPropertyW(devices, &deviceInfo, SPDRP_HARDWAREID,
+                    nullptr, reinterpret_cast<PBYTE>(hardwareIds), sizeof(hardwareIds), nullptr))
+                continue;
+            const QString hardwareId = QString::fromWCharArray(hardwareIds).toUpper();
+            // ST's ROM USB DFU bootloader has VID 0483 and PID DF11.
+            if (!hardwareId.contains(QStringLiteral("VID_0483&PID_DF11"))) continue;
+            wchar_t description[512]{};
+            SetupDiGetDeviceRegistryPropertyW(devices, &deviceInfo, SPDRP_DEVICEDESC,
+                nullptr, reinterpret_cast<PBYTE>(description), sizeof(description), nullptr);
+            const QString name = QString::fromWCharArray(description);
+            dfuPort->addItem(QStringLiteral("STM32 BOOTLOADER — %1").arg(name), hardwareId);
+            dfuLog->appendPlainText(tr("Windows detected: %1 (%2)").arg(name, hardwareId));
+        }
+        SetupDiDestroyDeviceInfoList(devices);
+        dfuStatus->setText(dfuPort->count() > 0
+            ? tr("STM32 USB DFU bootloader detected by Windows. Direct flashing is not yet implemented; flashing remains disabled.")
+            : tr("No STM32 DFU bootloader (VID 0483 / PID DF11) found. Check bootloader mode and USB driver."));
+#else
+        dfuStatus->setText(tr("Native DFU detection is available on Windows only."));
+#endif
     });
     connect(dfuProcess, QOverload<int,QProcess::ExitStatus>::of(&QProcess::finished), firmwarePage,
             [=](int code, QProcess::ExitStatus status) {
