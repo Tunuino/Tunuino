@@ -596,6 +596,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             [=](int code, QProcess::ExitStatus status) {
         detectDfu->setEnabled(true);
         if (status != QProcess::NormalExit || code != 0) {
+            dfuProcess->setProperty("flashing", false);
             dfuStatus->setText(tr("STM32CubeProgrammer failed. Inspect the log and USB drivers."));
             flashDfu->setEnabled(false);
             return;
@@ -619,6 +620,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     });
     connect(dfuProcess, &QProcess::errorOccurred, firmwarePage, [=](QProcess::ProcessError) {
         detectDfu->setEnabled(true);
+        dfuProcess->setProperty("flashing", false);
         flashDfu->setEnabled(false);
         dfuStatus->setText(tr("Unable to start programmer: %1").arg(dfuProcess->errorString()));
     });
