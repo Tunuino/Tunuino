@@ -14,6 +14,7 @@
 #include <QStackedWidget>
 #include <QFormLayout>
 #include <QDoubleSpinBox>
+#include <QSpinBox>
 #include <QPushButton>
 #include <QGroupBox>
 #include <QLineEdit>
@@ -1058,6 +1059,68 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     profile->addItems({tr("Select trigger pattern"), tr("Missing tooth"), tr("Dual wheel"), tr("Cam + crank"), tr("Custom / verify with oscilloscope")});
                     channel->addItems({tr("Select trigger input"), "Crank", "Cam 1", "Cam 2"});
                     note->setText(tr("Trigger polarity, tooth count and sync angle require verification before engine operation."));
+                    auto *wheel = new QComboBox(page);
+                    wheel->addItems({tr("Select wheel pattern"), "60-2", "36-1", "36-2", "24-1", "12-1", "12-0", tr("Custom")});
+                    auto *teeth = new QSpinBox(page);
+                    teeth->setRange(1, 360);
+                    teeth->setValue(60);
+                    auto *missing = new QSpinBox(page);
+                    missing->setRange(0, 12);
+                    missing->setValue(2);
+                    auto *triggerAngle = new QDoubleSpinBox(page);
+                    triggerAngle->setRange(-360.0, 360.0);
+                    triggerAngle->setDecimals(1);
+                    triggerAngle->setSuffix(QStringLiteral(" deg"));
+                    auto *polarity = new QComboBox(page);
+                    polarity->addItems({tr("Not selected"), tr("Rising edge"), tr("Falling edge")});
+                    form->addRow(tr("Trigger wheel"), wheel);
+                    form->addRow(tr("Nominal teeth"), teeth);
+                    form->addRow(tr("Missing teeth"), missing);
+                    form->addRow(tr("Trigger angle (unverified)"), triggerAngle);
+                    form->addRow(tr("Trigger edge"), polarity);
+                    const auto updateWheel = [=](int index) {
+                        const bool custom = index == wheel->count() - 1;
+                        teeth->setEnabled(custom);
+                        missing->setEnabled(custom);
+                        if (!custom) {
+                            const QStringList parts = wheel->currentText().split(QLatin1Char('-'));
+                            if (parts.size() == 2) {
+                                teeth->setValue(parts.at(0).toInt());
+                                missing->setValue(parts.at(1).toInt());
+                            }
+                        }
+                    };
+                    connect(wheel, QOverload<int>::of(&QComboBox::currentIndexChanged), page, updateWheel);
+                    updateWheel(wheel->currentIndex());
+                    auto *saveWheel = new QPushButton(tr("Save offline trigger setup..."), page);
+                    form->addRow(saveWheel);
+                    connect(saveWheel, &QPushButton::clicked, page, [=]() {
+                        if (wheel->currentIndex() == 0 || polarity->currentIndex() == 0 ||
+                            missing->value() >= teeth->value()) {
+                            QMessageBox::warning(page, QObject::tr("Incomplete trigger setup"),
+                                QObject::tr("Select a wheel and trigger edge; missing teeth must be fewer than nominal teeth."));
+                            return;
+                        }
+                        const QString path = QFileDialog::getSaveFileName(page, QObject::tr("Save offline trigger setup"),
+                            QStringLiteral("trigger-setup.json"), QObject::tr("JSON files (*.json)"));
+                        if (path.isEmpty()) return;
+                        QJsonObject root;
+                        root.insert(QStringLiteral("format"), QStringLiteral("tunuino-trigger-v1"));
+                        root.insert(QStringLiteral("wheel"), wheel->currentText());
+                        root.insert(QStringLiteral("nominal_teeth"), teeth->value());
+                        root.insert(QStringLiteral("missing_teeth"), missing->value());
+                        root.insert(QStringLiteral("trigger_angle_deg_unverified"), triggerAngle->value());
+                        root.insert(QStringLiteral("trigger_edge"), polarity->currentText());
+                        root.insert(QStringLiteral("offline_only"), true);
+                        QSaveFile file(path);
+                        if (!file.open(QIODevice::WriteOnly)) {
+                            QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
+                            return;
+                        }
+                        const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Indented);
+                        if (file.write(data) != data.size() || !file.commit())
+                            QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
+                    });
                 } else if (section == QStringLiteral("Injectors")) {
                     profile->addItems({tr("Select injector type"), tr("High impedance"), tr("Low impedance (driver required)")});
                     channel->addItem(tr("Select injector channel"));
