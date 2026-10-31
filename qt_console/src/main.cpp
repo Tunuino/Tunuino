@@ -1,9 +1,11 @@
 #include <QApplication>
+#include <QIcon>
 #include <QStyleFactory>
 #include "MainWindow.h"
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QApplication::setApplicationName("Tunuino Console");
+    QApplication::setWindowIcon(QIcon(":/branding/tunuino.png"));
     QApplication::setOrganizationName("Tunuino");
     app.setStyle(QStyleFactory::create("Fusion"));
     app.setStyleSheet(R"QSS(
