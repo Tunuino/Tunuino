@@ -50,6 +50,8 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <setupapi.h>
+#include <winusb.h>
+#include <usbiodef.h>
 #endif
 #include "ecu/SerialSession.h"
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
@@ -601,6 +603,70 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             dfuLog->appendPlainText(tr("Driver service: %1").arg(driverService));
             dfuLog->appendPlainText(tr("Driver manufacturer: %1").arg(driverManufacturer));
             dfuLog->appendPlainText(tr("Device instance: %1").arg(deviceInstance));
+            // Locate the WinUSB device interface associated with this exact PnP
+            // instance. SetupDi device presence alone is not a usable USB handle.
+            const GUID winUsbInterface = {0xA5DCBF10, 0x6530, 0x11D2,
+                {0x90, 0x1F, 0x00, 0xC0, 0x4F, 0xB9, 0x51, 0xED}};
+            HDEVINFO interfaces = SetupDiGetClassDevsW(&winUsbInterface, nullptr, nullptr,
+                DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+            bool interfaceFound = false;
+            if (interfaces != INVALID_HANDLE_VALUE) {
+                SP_DEVICE_INTERFACE_DATA iface{};
+                iface.cbSize = sizeof(iface);
+                for (DWORD n = 0; SetupDiEnumDeviceInterfaces(interfaces, nullptr,
+                        &winUsbInterface, n, &iface); ++n) {
+                    DWORD needed = 0;
+                    SetupDiGetDeviceInterfaceDetailW(interfaces, &iface, nullptr, 0, &needed, nullptr);
+                    if (!needed) continue;
+                    QByteArray detailStorage(int(needed), char(0));
+                    auto *detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W *>(detailStorage.data());
+                    detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
+                    SP_DEVINFO_DATA linked{};
+                    linked.cbSize = sizeof(linked);
+                    if (!SetupDiGetDeviceInterfaceDetailW(interfaces, &iface, detail, needed, nullptr, &linked))
+                        continue;
+                    wchar_t linkedId[1024]{};
+                    if (!SetupDiGetDeviceInstanceIdW(interfaces, &linked, linkedId, 1024, nullptr))
+                        continue;
+                    if (QString::fromWCharArray(linkedId).compare(deviceInstance, Qt::CaseInsensitive) != 0)
+                        continue;
+                    interfaceFound = true;
+                    HANDLE handle = CreateFileW(detail->DevicePath, GENERIC_READ | GENERIC_WRITE,
+                        FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr);
+                    if (handle == INVALID_HANDLE_VALUE) {
+                        dfuLog->appendPlainText(tr("WinUSB interface found; opening failed (Windows error %1).")
+                            .arg(GetLastError()));
+                        break;
+                    }
+                    WINUSB_INTERFACE_HANDLE usb = nullptr;
+                    if (!WinUsb_Initialize(handle, &usb)) {
+                        dfuLog->appendPlainText(tr("WinUSB initialization failed (Windows error %1).")
+                            .arg(GetLastError()));
+                    } else {
+                        USB_DEVICE_DESCRIPTOR descriptor{};
+                        ULONG transferred = 0;
+                        if (WinUsb_GetDescriptor(usb, USB_DEVICE_DESCRIPTOR_TYPE, 0, 0,
+                                reinterpret_cast<PUCHAR>(&descriptor), sizeof(descriptor), &transferred)
+                                && transferred == sizeof(descriptor)) {
+                            dfuLog->appendPlainText(tr("WinUSB open OK: VID %1, PID %2, USB %3.%4")
+                                .arg(descriptor.idVendor, 4, 16, QLatin1Char('0'))
+                                .arg(descriptor.idProduct, 4, 16, QLatin1Char('0'))
+                                .arg((descriptor.bcdUSB >> 8) & 0xff)
+                                .arg((descriptor.bcdUSB >> 4) & 0xf));
+                        } else {
+                            dfuLog->appendPlainText(tr("WinUSB opened; device descriptor read failed (Windows error %1).")
+                                .arg(GetLastError()));
+                        }
+                        WinUsb_Free(usb);
+                    }
+                    CloseHandle(handle);
+                    break;
+                }
+                SetupDiDestroyDeviceInfoList(interfaces);
+            }
+            if (!interfaceFound)
+                dfuLog->appendPlainText(tr("No matching WinUSB interface path found; USB handle not opened."));
             dfuLog->appendPlainText(tr("Read-only discovery only. No USB transfer or flash operation was attempted."));
         }
         SetupDiDestroyDeviceInfoList(devices);
