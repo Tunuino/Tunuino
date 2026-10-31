@@ -1,5 +1,5 @@
 # Tunuino
 
-![Tunuino](java_console/src/main/resources/io/tunuino/console/tunuino.png)
+![Tunuino](qt_console/assets/tunuino.png)
 
-Software Tunuino Console para Windows para gestão de motor, Projeto em desenvolvimento.
+Tunuino Console para Windows (Qt 6) e firmware ECU em desenvolvimento.
