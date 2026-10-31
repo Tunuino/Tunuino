@@ -1520,6 +1520,27 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         statusBar()->showMessage(error, 10000);
     });
     connect(session, &tunuino::SerialSession::responseReceived, this, [=](const QByteArray &data) {
+        if (*validationPending) {
+            *validationPending = false;
+            liveTimer->start();
+            if (data.size() != 16 || quint8(data[0]) != 0 || quint8(data[1]) != 1) {
+                QMessageBox::warning(this, tr("ECU configuration"),
+                    tr("Invalid validation response. No ECU settings changed."));
+                return;
+            }
+            const auto read32 = [&data](int i) -> quint32 {
+                return (quint32(quint8(data[i])) << 24) | (quint32(quint8(data[i+1])) << 16)
+                    | (quint32(quint8(data[i+2])) << 8) | quint32(quint8(data[i+3]));
+            };
+            QMessageBox::information(this, tr("ECU configuration"),
+                tr("Staged changes: %1\\nPersisted: %2\\nValidation errors: 0x%3\\nGeneration: %4\\nHeader CRC32: 0x%5\\n\\nRead-only inspection.")
+                    .arg(quint8(data[2]) ? tr("Yes") : tr("No"))
+                    .arg(quint8(data[3]) ? tr("Yes") : tr("No"))
+                    .arg(QString::number(read32(4), 16))
+                    .arg(read32(8))
+                    .arg(QString::number(read32(12), 16)));
+            return;
+        }
         if (transfer->page) {
             const int count = qMin(64, 576 - transfer->offset);
             if (data.size() != count + 1 || quint8(data[0]) != 0) {
