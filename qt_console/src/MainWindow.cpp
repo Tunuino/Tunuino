@@ -725,6 +725,33 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 auto *calibrate = new QPushButton(tr("Auto Calibrate (not connected)"), page);
                 calibrate->setEnabled(false);
                 form->addRow(calibrate);
+                auto *saveTps = new QPushButton(tr("Save offline TPS calibration..."), page);
+                form->addRow(saveTps);
+                connect(saveTps, &QPushButton::clicked, page, [minVoltage, maxVoltage, page]() {
+                    const double closed = minVoltage->value();
+                    const double open = maxVoltage->value();
+                    if (open - closed < 0.2) {
+                        QMessageBox::warning(page, QObject::tr("Invalid TPS calibration"),
+                            QObject::tr("Open throttle voltage must exceed closed throttle voltage by at least 0.2 V."));
+                        return;
+                    }
+                    const QString path = QFileDialog::getSaveFileName(page, QObject::tr("Save offline TPS calibration"),
+                        QStringLiteral("tps-calibration.json"), QObject::tr("JSON files (*.json)"));
+                    if (path.isEmpty()) return;
+                    QJsonObject root;
+                    root.insert(QStringLiteral("format"), QStringLiteral("tunuino-tps-calibration-v1"));
+                    root.insert(QStringLiteral("closed_voltage_v"), closed);
+                    root.insert(QStringLiteral("open_voltage_v"), open);
+                    root.insert(QStringLiteral("source"), QStringLiteral("manual-reference-not-measured"));
+                    QSaveFile file(path);
+                    if (!file.open(QIODevice::WriteOnly)) {
+                        QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
+                        return;
+                    }
+                    const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Indented);
+                    if (file.write(data) != data.size() || !file.commit())
+                        QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
+                });
             }
             if (QString::fromLatin1(name) == QStringLiteral("Lambda")) {
                 auto *brand = new QComboBox(page);
