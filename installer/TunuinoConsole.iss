@@ -54,7 +54,23 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-function InitializeSetup(): Boolean;
+// The built-in language selector is shown before the regular wizard.
+// Its default icon is only 32x32; enlarge the actual selector layout here.
+function InitializeLanguageDialog(): Boolean;
 begin
+  with SelectLanguageForm do
+  begin
+    ClientWidth := ScaleX(560);
+    ClientHeight := ScaleY(240);
+
+    IconBitmapImage.SetBounds(ScaleX(18), ScaleY(18), ScaleX(175), ScaleY(110));
+    IconBitmapImage.Stretch := True;
+
+    SelectLabel.SetBounds(ScaleX(215), ScaleY(28), ScaleX(325), ScaleY(55));
+    LangCombo.SetBounds(ScaleX(215), ScaleY(100), ScaleX(325), LangCombo.Height);
+
+    OKButton.SetBounds(ScaleX(340), ScaleY(192), ScaleX(95), OKButton.Height);
+    CancelButton.SetBounds(ScaleX(445), ScaleY(192), ScaleX(95), CancelButton.Height);
+  end;
   Result := True;
 end;
