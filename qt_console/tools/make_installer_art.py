@@ -1,4 +1,4 @@
-"""Build visible, branded Inno Setup wizard artwork from the official Tunuino PNG."""
+"""Create correctly proportioned Inno Setup wizard artwork from Tunuino branding."""
 from pathlib import Path
 from PIL import Image, ImageOps
 
@@ -7,27 +7,26 @@ source = root / "qt_console" / "assets" / "tunuino.png"
 assets = root / "installer" / "assets"
 assets.mkdir(parents=True, exist_ok=True)
 
-with Image.open(source) as opened:
-    logo = opened.convert("RGBA")
-    # Remove only fully transparent outer margins; keep the logo proportions.
-    bounds = logo.getchannel("A").getbbox()
-    if bounds:
-        logo = logo.crop(bounds)
+with Image.open(source) as src:
+    logo = src.convert("RGBA")
+    bbox = logo.getchannel("A").getbbox()
+    if bbox:
+        logo = logo.crop(bbox)
 
-def place(canvas, target_width, center_y):
-    resized = ImageOps.contain(logo, (target_width, canvas.height), Image.Resampling.LANCZOS)
-    if resized.height > canvas.height:
-        raise ValueError("Logo does not fit")
-    canvas.paste(resized, ((canvas.width - resized.width) // 2,
-                           center_y - resized.height // 2), resized)
+def composite_contained(canvas, bounds):
+    x, y, width, height = bounds
+    fitted = ImageOps.contain(logo, (width, height), Image.Resampling.LANCZOS)
+    canvas.paste(fitted, (x + (width - fitted.width) // 2,
+                          y + (height - fitted.height) // 2), fitted)
 
-# Inno Setup scales this tall artwork into the left welcome/finish sidebar.
-large = Image.new("RGB", (328, 604), "#161b22")
-place(large, 302, 230)
+# Welcome/finish image: a large centered logo, no clipping.
+large = Image.new("RGB", (328, 604), "#171c24")
+composite_contained(large, (16, 100, 296, 400))
 large.save(assets / "wizard-large.bmp", format="BMP")
 
-# Full-width top header image on intermediate wizard pages.
-small = Image.new("RGB", (600, 110), "#161b22")
-place(small, 420, 55)
+# Header on all other pages: compact, fully contained logo on a white header.
+# A header image is not a banner: oversized artwork gets clipped by Inno Setup.
+small = Image.new("RGB", (180, 60), "#ffffff")
+composite_contained(small, (8, 5, 164, 50))
 small.save(assets / "wizard-small.bmp", format="BMP")
-print("Generated branded installer wizard images")
+print("Generated correctly sized wizard artwork")
