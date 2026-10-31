@@ -71,46 +71,18 @@ jobs:
             installer/output/Tunuino-Console-Setup-0.1.0.exe
             installer/output/SHA256SUMS.txt
           if-no-files-found: error
-      - name: Assemble Qt console and firmware bench Bundle
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Package standalone Qt console
         run: |
-          $sha = '${{ github.sha }}'
-          $repo = '${{ github.repository }}'
-          $runs = gh api "repos/$repo/actions/workflows/build-firmware.yml/runs?head_sha=$sha&event=push&per_page=30" | ConvertFrom-Json
-          $run = $null
-          for ($attempt = 0; $attempt -lt 30; $attempt++) {
-            $runs = gh api "repos/$repo/actions/workflows/build-firmware.yml/runs?head_sha=$sha&event=push&per_page=30" | ConvertFrom-Json
-            if ($LASTEXITCODE -ne 0) { throw 'Unable to query firmware workflow runs' }
-            $matching = @($runs.workflow_runs | Where-Object { $_.head_sha -eq $sha -and $_.head_branch -eq 'master' })
-            $run = $matching | Where-Object { $_.status -eq 'completed' -and $_.conclusion -eq 'success' } | Select-Object -First 1
-            if ($run) { break }
-            if ($matching | Where-Object { $_.status -eq 'completed' -and $_.conclusion -ne 'success' }) { throw "Firmware build failed for commit $sha" }
-            Start-Sleep -Seconds 10
-          }
-          if (!$run) { throw "No successful matching firmware build for commit $sha after waiting; refusing mixed-commit Bundle" }
-          New-Item -ItemType Directory -Force 'qt_console/bundle/console','qt_console/bundle/firmware' | Out-Null
-          Copy-Item 'qt_console/dist/*' 'qt_console/bundle/console/' -Recurse -Force
-          Copy-Item 'installer/output/Tunuino-Console-Setup-0.1.0.exe' 'qt_console/bundle/Tunuino-Console-Setup-0.1.0.exe'
-          gh run download $run.id --repo $repo --name "firmware-proteus-f427-$sha" --dir 'qt_console/bundle/firmware'
-          if ($LASTEXITCODE -ne 0) { throw 'Firmware artifact download failed' }
-          $firmware = Get-ChildItem 'qt_console/bundle/firmware' -Filter '*.bin'
-          if (!$firmware) { throw 'Firmware binary missing; refusing Bundle' }
-          foreach ($bin in $firmware) {
-            if (!(Test-Path "$($bin.FullName).properties")) { throw "Firmware properties missing for $($bin.Name)" }
-          }
-          Copy-Item LICENSE 'qt_console/bundle/LICENSE.txt'
-          'BENCH BUILD - not validated on physical ECU. Do not flash without verifying board, bootloader and image.' | Set-Content 'qt_console/bundle/READ-ME-FIRST.txt'
-          $files = Get-ChildItem 'qt_console/bundle' -Recurse -File | Where-Object { $_.Name -ne 'SHA256SUMS.txt' }
-          $hashes = $files | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.FullName.Substring((Resolve-Path 'qt_console/bundle').Path.Length + 1).Replace('\\','/'))" }
-          $hashes | Set-Content -Encoding ascii 'qt_console/bundle/SHA256SUMS.txt'
-          Compress-Archive -Path 'qt_console/bundle/*' -DestinationPath 'qt_console/Tunuino-F427-Bundle.zip' -CompressionLevel Optimal
-      - name: Upload single Qt bench Bundle ZIP
+          New-Item -ItemType Directory -Force 'qt_console/console-package' | Out-Null
+          Copy-Item 'qt_console/dist/*' 'qt_console/console-package/' -Recurse -Force
+          Copy-Item 'installer/output/Tunuino-Console-Setup-0.1.0.exe' 'qt_console/console-package/Tunuino-Console-Setup-0.1.0.exe'
+          Copy-Item LICENSE 'qt_console/console-package/LICENSE.txt'
+          Compress-Archive -Path 'qt_console/console-package/*' -DestinationPath 'qt_console/Tunuino-Console-Windows.zip' -CompressionLevel Optimal
+      - name: Upload standalone Qt console ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: Tunuino-Qt-F427-Bench-Bundle
-          path: qt_console/Tunuino-F427-Bundle.zip
+          name: Tunuino-Console-Windows
+          path: qt_console/Tunuino-Console-Windows.zip
           if-no-files-found: error
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
