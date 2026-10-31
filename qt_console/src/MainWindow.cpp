@@ -1508,12 +1508,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     });
     connect(session, &tunuino::SerialSession::connectionChanged, this, [=](bool connected) {
         disconnectAction->setEnabled(connected);
-        if (!connected) { liveTimer->stop(); transfer->page = 0; *identityVerified = false; fuelRead->setEnabled(false); ignitionRead->setEnabled(false); connectionStatus_->setText(tr("ECU disconnected")); }
+        if (!connected) { liveTimer->stop(); transfer->page = 0; *identityVerified = false; *validationPending = false; validationAction->setEnabled(false); fuelRead->setEnabled(false); ignitionRead->setEnabled(false); connectionStatus_->setText(tr("ECU disconnected")); }
     });
     connect(session, &tunuino::SerialSession::exchangeFailed, this, [=](const QString &error) {
         liveTimer->stop();
         transfer->page = 0;
         *identityVerified = false;
+        *validationPending = false;
+        validationAction->setEnabled(false);
         fuelRead->setEnabled(false);
         ignitionRead->setEnabled(false);
         connectionStatus_->setText(tr("ECU communication failed: %1").arg(error));
@@ -1624,6 +1626,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         connectionStatus_->setText(tr("ECU connected | Protocol %1 | Board %2 | MCU %3 | Firmware %4")
             .arg(protocol).arg(board).arg(mcu).arg(version));
         *identityVerified = true;
+        validationAction->setEnabled(true);
         fuelRead->setEnabled(true);
         ignitionRead->setEnabled(true);
         liveTimer->start();
