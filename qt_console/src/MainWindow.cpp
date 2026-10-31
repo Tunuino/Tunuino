@@ -90,11 +90,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("Ignition"), {{tr("Ignition Table 16 x 16"),1},{tr("Trigger setup"),6}});
     addCategory(tr("Overrun"), {{tr("Fuel cut"),-1}});
     addCategory(tr("Knock sensors"), {{tr("Knock settings"),-1}});
-    addCategory(tr("Idle"), {{tr("Idle control"),-1}});
+    addCategory(tr("Idle"), {{tr("Idle control"),6}});
     addCategory(tr("Functions"), {{tr("General functions"),-1}});
-    addCategory(tr("Outputs"), {{tr("Output configuration"),-1}});
-    addCategory(tr("Boost"), {{tr("Boost control"),-1}});
-    addCategory(tr("DBW"), {{tr("Electronic throttle"),-1}});
+    addCategory(tr("Outputs"), {{tr("Output configuration"),6}});
+    addCategory(tr("Boost"), {{tr("Boost control"),6}});
+    addCategory(tr("DBW"), {{tr("Electronic throttle"),6}});
     addCategory(tr("Traction control"), {{tr("Traction settings"),-1}});
     addCategory(tr("VVT"), {{tr("Cam timing"),-1}});
     addCategory(tr("Sport"), {{tr("Sport mode"),-1}});
@@ -1135,6 +1135,37 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
         parentItem->setExpanded(true);
     }
+    // Route the main motorsport navigation directly to the corresponding real
+    // configuration panel instead of opening an unrelated default panel.
+    const QMap<QString, QString> mainNavigationTargets = {
+        {tr("TPS Calibration"), tr("TPS")},
+        {tr("MAP Calibration"), tr("MAP")},
+        {tr("Temperature sensors"), tr("CLT")},
+        {tr("Lambda / O2"), tr("Lambda")},
+        {tr("Injector Dead Time"), tr("Injector Dead Time")},
+        {tr("Trigger setup"), tr("Trigger")},
+        {tr("Idle control"), tr("Idle Control")},
+        {tr("Boost control"), tr("Boost Control")},
+        {tr("Electronic throttle"), tr("ETB / Drive by Wire")},
+        {tr("Output configuration"), tr("Outputs")},
+        {tr("Communication settings"), tr("Inputs")}
+    };
+    connect(navigationTree, &QTreeWidget::itemClicked, calibrationPage,
+            [navigation, mainNavigationTargets](QTreeWidgetItem *selected, int) {
+        if (!selected || !selected->parent()) return;
+        const QString target = mainNavigationTargets.value(selected->text(0));
+        if (target.isEmpty()) return;
+        for (int i = 0; i < navigation->topLevelItemCount(); ++i) {
+            auto *category = navigation->topLevelItem(i);
+            for (int j = 0; j < category->childCount(); ++j) {
+                auto *child = category->child(j);
+                if (child->text(0) == target) {
+                    navigation->setCurrentItem(child);
+                    return;
+                }
+            }
+        }
+    });
     connect(navigation, &QTreeWidget::currentItemChanged, pages,
         [pages](QTreeWidgetItem *current, QTreeWidgetItem *) {
             if (current && current->data(0, Qt::UserRole).isValid())
