@@ -1477,7 +1477,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *dfuInfo = firmwareMenu->addAction(tr("USB DFU status / instructions"));
     connect(dfuInfo, &QAction::triggered, this, [this]() {
         QMessageBox::information(this, tr("Firmware / DFU"),
-            tr("Firmware flashing is not implemented in this Qt console. Use the validated legacy flashing tool. Do not flash an unverified image."));
+            tr("USB DFU uses STM32CubeProgrammer CLI. Enter STM32 bootloader DFU mode manually, select a verified F427 firmware image and detect the DFU device before flashing. Hardware validation is still required."));
     });
     auto refreshPorts = [=]() {
         connectMenu->clear();
