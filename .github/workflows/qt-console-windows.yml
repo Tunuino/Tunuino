@@ -26,9 +26,14 @@ jobs:
           arch: win64_msvc2019_64
           modules: qtserialport
           cache: true
+      - name: Restore Python 3.12 after Qt setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Generate Windows application icon from Tunuino logo
         run: |
-          python -m pip install --disable-pip-version-check Pillow==11.3.0
+          python -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version"
+          python -m pip install --disable-pip-version-check --only-binary=:all: Pillow==11.3.0
           python qt_console/tools/make_icon.py
       - name: Configure
         run: cmake -S qt_console -B qt_console/build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
