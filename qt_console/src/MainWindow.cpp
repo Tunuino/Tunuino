@@ -5,6 +5,7 @@
 #include <QStatusBar>
 #include <QTableWidget>
 #include <QTabWidget>
+#include <QTabBar>
 #include <QHeaderView>
 #include <QWidget>
 #include <QVBoxLayout>
@@ -104,7 +105,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("Engine protection"), {{tr("Protection settings"),-1}});
     addCategory(tr("Timers"), {{tr("Timers setup"),-1}});
     addCategory(tr("DSG Gearbox"), {{tr("Gearbox settings"),-1}});
-    addCategory(tr("Other"), {{tr("Firmware"),5}});
     addCategory(tr("CAN, Serial"), {{tr("Communication settings"),6}});
     addCategory(tr("Log"), {{tr("Datalogging"),4}});
     addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
@@ -665,7 +665,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             QStringLiteral("-w"), image.fileName(), QStringLiteral("0x08000000"), QStringLiteral("-v")});
         dfuProcess->start();
     });
+    // Firmware is accessed exclusively from the top menu.
+    // Keep its widget as a hidden tab page to preserve the existing DFU controls.
     tabs->addTab(firmwarePage, tr("Firmware"));
+    const int firmwareTabIndex = tabs->indexOf(firmwarePage);
+    tabs->tabBar()->setTabVisible(firmwareTabIndex, false);
     // Calibration navigation is independent of the legacy Java UI.
     auto *calibrationPage = new QWidget(tabs);
     auto *calibrationLayout = new QHBoxLayout(calibrationPage);
@@ -1466,6 +1470,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *settingsMenu = menuBar()->addMenu(tr("Settings"));
     auto *refreshAction = settingsMenu->addAction(tr("Refresh serial ports"));
     auto *firmwareMenu = menuBar()->addMenu(tr("Firmware"));
+    auto *openFirmware = firmwareMenu->addAction(tr("Firmware / USB DFU"));
+    connect(openFirmware, &QAction::triggered, this, [tabs, firmwarePage]() {
+        tabs->setCurrentWidget(firmwarePage);
+    });
     auto *dfuInfo = firmwareMenu->addAction(tr("USB DFU status / instructions"));
     connect(dfuInfo, &QAction::triggered, this, [this]() {
         QMessageBox::information(this, tr("Firmware / DFU"),
