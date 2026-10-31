@@ -7,7 +7,6 @@ on:
       - '.github/workflows/qt-console-windows.yml'
       - 'installer/TunuinoConsole.iss'
       - 'LICENSE'
-      - '.github/workflows/build-firmware.yml'
   workflow_dispatch:
 jobs:
   windows-build:
@@ -70,19 +69,6 @@ jobs:
           path: |
             installer/output/Tunuino-Console-Setup-0.1.0.exe
             installer/output/SHA256SUMS.txt
-          if-no-files-found: error
-      - name: Package standalone Qt console
-        run: |
-          New-Item -ItemType Directory -Force 'qt_console/console-package' | Out-Null
-          Copy-Item 'qt_console/dist/*' 'qt_console/console-package/' -Recurse -Force
-          Copy-Item 'installer/output/Tunuino-Console-Setup-0.1.0.exe' 'qt_console/console-package/Tunuino-Console-Setup-0.1.0.exe'
-          Copy-Item LICENSE 'qt_console/console-package/LICENSE.txt'
-          Compress-Archive -Path 'qt_console/console-package/*' -DestinationPath 'qt_console/Tunuino-Console-Windows.zip' -CompressionLevel Optimal
-      - name: Upload standalone Qt console ZIP
-        uses: actions/upload-artifact@v4
-        with:
-          name: Tunuino-Console-Windows
-          path: qt_console/Tunuino-Console-Windows.zip
           if-no-files-found: error
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
