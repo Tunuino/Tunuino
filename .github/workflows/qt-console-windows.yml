@@ -68,20 +68,7 @@ jobs:
           GH_TOKEN: ${{ secrets.FIRMWARE_READ_TOKEN || github.token }}
           FIRMWARE_RUN_ID: ${{ inputs.firmware_run_id }}
         run: |
-          if ($env:FIRMWARE_RUN_ID -notmatch '^[0-9]+        uses: actions/upload-artifact@v4
-        with:
-          name: TunuinoConsole-Setup-Windows-x64
-          path: |
-            installer/output/Tunuino-Console-Setup-0.1.0.exe
-            installer/output/SHA256SUMS.txt
-          if-no-files-found: error
-      - name: Upload Windows executable
-        uses: actions/upload-artifact@v4
-        with:
-          name: TunuinoConsole-Windows-x64
-          path: qt_console/dist/
-          if-no-files-found: error
-) { throw 'firmware_run_id must be numeric' }
+          if ($env:FIRMWARE_RUN_ID -notmatch '^[0-9]+$') { throw 'firmware_run_id must be numeric' }
           $run = gh api "repos/Tunuino/Tunuino_Firmware/actions/runs/$env:FIRMWARE_RUN_ID" | ConvertFrom-Json
           if ($run.conclusion -ne 'success' -or $run.head_branch -ne 'master') { throw 'Firmware run must have succeeded on master' }
           $items = (gh api "repos/Tunuino/Tunuino_Firmware/actions/runs/$env:FIRMWARE_RUN_ID/artifacts" | ConvertFrom-Json).artifacts
