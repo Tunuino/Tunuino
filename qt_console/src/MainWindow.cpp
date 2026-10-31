@@ -1071,6 +1071,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 form->addRow(apply);
             }
             if (QString::fromLatin1(name) == QStringLiteral("Injector Dead Time")) {
+                auto *note = new QLabel(tr("Enter verified injector manufacturer dead-time values in milliseconds. Zero means not configured. Offline only; nothing is sent to the ECU."), page);
+                note->setWordWrap(true);
+                form->addRow(note);
                 auto *table = new QTableWidget(5, 2, page);
                 table->setHorizontalHeaderLabels({tr("Battery voltage (V)"), tr("Dead Time (ms)")});
                 const QStringList volts = {"8", "10", "12", "14", "16"};
@@ -1078,14 +1081,54 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     auto *voltage = new QTableWidgetItem(volts[i]);
                     voltage->setFlags(voltage->flags() & ~Qt::ItemIsEditable);
                     table->setItem(i, 0, voltage);
-                    auto *deadTime = new QTableWidgetItem(tr("Not configured"));
-                    deadTime->setFlags(deadTime->flags() & ~Qt::ItemIsEditable);
-                    table->setItem(i, 1, deadTime);
+                    auto *deadTime = new QDoubleSpinBox(table);
+                    deadTime->setRange(0.0, 10.0);
+                    deadTime->setDecimals(3);
+                    deadTime->setSingleStep(0.025);
+                    deadTime->setSuffix(QStringLiteral(" ms"));
+                    deadTime->setSpecialValueText(tr("Not configured"));
+                    deadTime->setValue(0.0);
+                    table->setCellWidget(i, 1, deadTime);
                 }
                 table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-                table->setMinimumHeight(190);
-                table->setToolTip(tr("Reference voltage rows only. Dead Time requires injector manufacturer data."));
+                table->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+                table->setMinimumHeight(220);
                 form->addRow(table);
+                auto *save = new QPushButton(tr("Save offline dead-time table..."), page);
+                form->addRow(save);
+                connect(save, &QPushButton::clicked, page, [table, page]() {
+                    QJsonArray values;
+                    for (int i = 0; i < table->rowCount(); ++i) {
+                        const auto *spin = qobject_cast<QDoubleSpinBox *>(table->cellWidget(i, 1));
+                        if (!spin || spin->value() <= 0.0) {
+                            QMessageBox::warning(page, QObject::tr("Incomplete dead-time table"),
+                                QObject::tr("Enter a verified nonzero dead time for every battery-voltage row before saving."));
+                            return;
+                        }
+                        QJsonObject entry;
+                        entry.insert(QStringLiteral("voltage_v"), table->item(i, 0)->text().toInt());
+                        entry.insert(QStringLiteral("dead_time_ms"), spin->value());
+                        values.append(entry);
+                    }
+                    const QString path = QFileDialog::getSaveFileName(page, QObject::tr("Save offline dead-time table"),
+                        QStringLiteral("injector-dead-time.json"), QObject::tr("JSON files (*.json)"));
+                    if (path.isEmpty()) return;
+                    QSaveFile file(path);
+                    if (!file.open(QIODevice::WriteOnly)) {
+                        QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
+                        return;
+                    }
+                    QJsonObject root;
+                    root.insert(QStringLiteral("format"), QStringLiteral("tunuino-injector-dead-time-v1"));
+                    root.insert(QStringLiteral("units"), QStringLiteral("ms"));
+                    root.insert(QStringLiteral("values"), values);
+                    const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Indented);
+                    if (file.write(data) != data.size() || !file.commit())
+                        QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
+                });
+                auto *apply = new QPushButton(tr("Write to ECU (protocol not validated)"), page);
+                apply->setEnabled(false);
+                form->addRow(apply);
             }
             pages->addWidget(page);
             item->setData(0, Qt::UserRole, pages->count() - 1);
