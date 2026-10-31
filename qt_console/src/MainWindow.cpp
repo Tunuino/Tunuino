@@ -635,77 +635,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         dfuStatus->setText(tr("Native DFU detection is available on Windows only."));
 #endif
     });
-    connect(dfuProcess, QOverload<int,QProcess::ExitStatus>::of(&QProcess::finished), firmwarePage,
-            [=](int code, QProcess::ExitStatus status) {
-        detectDfu->setEnabled(true);
-        if (status != QProcess::NormalExit || code != 0) {
-            dfuProcess->setProperty("flashing", false);
-            dfuStatus->setText(tr("STM32CubeProgrammer failed. Inspect the log and USB drivers."));
-            flashDfu->setEnabled(false);
-            return;
-        }
-        if (dfuProcess->property("flashing").toBool()) {
-            dfuProcess->setProperty("flashing", false);
-            flashDfu->setEnabled(false);
-            dfuStatus->setText(tr("Programmer completed. Disconnect and reconnect the ECU, then verify normal USB operation. Hardware operation is not yet validated."));
-            return;
-        }
-        const QString output = dfuLog->toPlainText();
-        const QRegularExpression portPattern(QStringLiteral("Port[[:space:]]*:[[:space:]]*(USB[0-9]+)"), QRegularExpression::CaseInsensitiveOption);
-        auto matches = portPattern.globalMatch(output);
-        while (matches.hasNext()) {
-            const QString port = matches.next().captured(1).toUpper();
-            if (!dfuPorts->contains(port)) dfuPorts->append(port);
-        }
-        dfuPort->addItems(*dfuPorts);
-        flashDfu->setEnabled(!dfuPorts->isEmpty());
-        dfuStatus->setText(dfuPorts->isEmpty() ? tr("No USB DFU device detected.") : tr("USB DFU port detected. Confirm it is the intended Proteus ECU before flashing."));
-    });
-    connect(dfuProcess, &QProcess::errorOccurred, firmwarePage, [=](QProcess::ProcessError) {
-        detectDfu->setEnabled(true);
-        dfuProcess->setProperty("flashing", false);
-        flashDfu->setEnabled(false);
-        dfuStatus->setText(tr("Unable to start programmer: %1").arg(dfuProcess->errorString()));
-    });
+    // Native Windows discovery is read-only. Never enable the legacy CLI
+    // flash handler for a Windows device instance ID: it is not a DFU port.
     connect(flashDfu, &QPushButton::clicked, firmwarePage, [=]() {
-        if (dfuProcess->state() != QProcess::NotRunning || dfuPort->currentText().isEmpty()) return;
-        const QString cli = resolveCli();
-        QFile image(imagePath->text());
-        if (cli.isEmpty() || !image.open(QIODevice::ReadOnly)) {
-            QMessageBox::warning(firmwarePage, tr("Missing file"), tr("Select a valid programmer and F427 .bin image."));
-            return;
-        }
-        const QByteArray header = image.read(8);
-        const auto u32 = [](const QByteArray &b, int at) -> quint32 {
-            return quint32(quint8(b[at])) | (quint32(quint8(b[at+1])) << 8)
-                | (quint32(quint8(b[at+2])) << 16) | (quint32(quint8(b[at+3])) << 24);
-        };
-        const qint64 size = image.size();
-        const quint32 stack = header.size() == 8 ? u32(header, 0) : 0;
-        const quint32 reset = header.size() == 8 ? u32(header, 4) : 0;
-        if (!imagePath->text().endsWith(QStringLiteral(".bin"), Qt::CaseInsensitive)
-            || size < 1024 || size > 1024*1024
-            || stack <= 0x20000000u || stack > 0x20030000u || (stack % 8) != 0
-            || !(reset & 1u) || (reset & ~1u) < 0x08000000u
-            || quint64(reset & ~1u) >= 0x08000000ull + quint64(size)) {
-            QMessageBox::critical(firmwarePage, tr("Invalid F427 image"), tr("Binary vector table, address or image size is invalid. Flash cancelled."));
-            return;
-        }
-        if (QMessageBox::warning(firmwarePage, tr("Confirm DFU flash"),
-            tr("Flash %1 (%2 bytes) to %3 at 0x08000000?\\n"
-               "Only proceed if this is a Proteus STM32F427 in USB DFU bootloader mode. "
-               "The image is not validated on physical hardware. An incorrect image may prevent startup.")
-                .arg(QFileInfo(image.fileName()).fileName()).arg(size).arg(dfuPort->currentText()),
-            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes) return;
-        dfuProcess->setProperty("flashing", true);
-        dfuLog->clear();
-        detectDfu->setEnabled(false);
-        flashDfu->setEnabled(false);
-        dfuStatus->setText(tr("Writing and verifying firmware. Do not disconnect the ECU."));
-        dfuProcess->setProgram(cli);
-        dfuProcess->setArguments({QStringLiteral("-c"), QStringLiteral("port=%1").arg(dfuPort->currentText()),
-            QStringLiteral("-w"), image.fileName(), QStringLiteral("0x08000000"), QStringLiteral("-v")});
-        dfuProcess->start();
+        QMessageBox::information(firmwarePage, tr("DFU flashing unavailable"),
+            tr("STM32 BOOTLOADER detection is working, but direct DFU communication, "
+               "target verification, erase, write and read-back are not yet implemented. "
+               "No firmware was written."));
     });
     // Firmware is accessed exclusively from the top menu.
     // Keep its widget as a hidden tab page to preserve the existing DFU controls.
