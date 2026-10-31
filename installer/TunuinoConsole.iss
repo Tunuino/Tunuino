@@ -24,6 +24,7 @@ OutputBaseFilename=Tunuino-Console-Setup-{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+DisableWelcomePage=no
 ; Skip the tiny pre-wizard language popup; choose the language automatically.
 ShowLanguageDialog=no
 PrivilegesRequired=admin
