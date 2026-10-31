@@ -523,19 +523,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *firmwareHeading = new QLabel(tr("FIRMWARE  |  Device management"), firmwarePage);
     firmwareHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     firmwareLayout->addWidget(firmwareHeading);
-    auto *firmwareInfo = new QLabel(tr("Proteus STM32F427 USB DFU. Place the ECU in STM32 bootloader DFU mode manually. Requires ST STM32CubeProgrammer installed on Windows."), firmwarePage);
+    auto *firmwareInfo = new QLabel(tr("Proteus STM32F427 USB DFU. Windows bootloader detection is available without external tools. Direct flashing is under development and remains disabled."), firmwarePage);
     firmwareInfo->setWordWrap(true);
     firmwareLayout->addWidget(firmwareInfo);
     auto *dfuForm = new QFormLayout();
-    auto *cliPath = new QLineEdit(firmwarePage);
-    cliPath->setPlaceholderText(tr("STM32_Programmer_CLI.exe"));
-    auto *browseCli = new QPushButton(tr("Browse programmer..."), firmwarePage);
-    auto *cliRow = new QWidget(firmwarePage);
-    auto *cliRowLayout = new QHBoxLayout(cliRow);
-    cliRowLayout->setContentsMargins(0, 0, 0, 0);
-    cliRowLayout->addWidget(cliPath, 1);
-    cliRowLayout->addWidget(browseCli);
-    dfuForm->addRow(tr("ST programmer"), cliRow);
     auto *imagePath = new QLineEdit(firmwarePage);
     imagePath->setReadOnly(true);
     auto *browseImage = new QPushButton(tr("Select F427 .bin..."), firmwarePage);
@@ -547,59 +538,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     dfuForm->addRow(tr("Firmware image"), imageRow);
     auto *dfuPort = new QComboBox(firmwarePage);
     dfuPort->setEditable(false);
-    dfuForm->addRow(tr("DFU port"), dfuPort);
+    dfuForm->addRow(tr("USB DFU device"), dfuPort);
     firmwareLayout->addLayout(dfuForm);
     auto *dfuButtons = new QHBoxLayout();
     auto *detectDfu = new QPushButton(tr("Detect USB DFU"), firmwarePage);
-    auto *flashDfu = new QPushButton(tr("Flash and verify F427"), firmwarePage);
+    auto *flashDfu = new QPushButton(tr("Flash and verify F427 (not available yet)"), firmwarePage);
     flashDfu->setEnabled(false);
     dfuButtons->addWidget(detectDfu);
     dfuButtons->addWidget(flashDfu);
     dfuButtons->addStretch();
     firmwareLayout->addLayout(dfuButtons);
-    auto *dfuStatus = new QLabel(tr("DFU not detected. Disconnect the Console serial session before flashing."), firmwarePage);
+    auto *dfuStatus = new QLabel(tr("Select Detect USB DFU. Flashing is disabled until the native DFU protocol is validated."), firmwarePage);
     dfuStatus->setWordWrap(true);
     firmwareLayout->addWidget(dfuStatus);
     auto *dfuLog = new QPlainTextEdit(firmwarePage);
     dfuLog->setReadOnly(true);
     dfuLog->setMaximumBlockCount(500);
     firmwareLayout->addWidget(dfuLog, 1);
-    auto *dfuProcess = new QProcess(firmwarePage);
-    const auto dfuPorts = QSharedPointer<QStringList>::create();
-    const auto resolveCli = [cliPath]() -> QString {
-        const QString specified = cliPath->text().trimmed();
-        if (!specified.isEmpty() && QFileInfo(specified).isFile()) return specified;
-        const QString executable = QStringLiteral("STM32_Programmer_CLI.exe");
-        const QStringList candidates = {
-            QCoreApplication::applicationDirPath() + QStringLiteral("/programmer/bin/") + executable,
-            QCoreApplication::applicationDirPath() + QStringLiteral("/") + executable,
-            qEnvironmentVariable("ProgramFiles") + QStringLiteral("/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/") + executable,
-            qEnvironmentVariable("ProgramFiles(x86)") + QStringLiteral("/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/") + executable,
-            qEnvironmentVariable("ProgramFiles") + QStringLiteral("/STMicroelectronics/STM32CubeProgrammer/bin/") + executable
-        };
-        for (const QString &candidate : candidates)
-            if (QFileInfo(candidate).isFile()) return QDir::toNativeSeparators(candidate);
-        return QStandardPaths::findExecutable(executable);
-    };
-    const QString detectedProgrammer = resolveCli();
-    if (!detectedProgrammer.isEmpty()) cliPath->setText(detectedProgrammer);
-    connect(browseCli, &QPushButton::clicked, firmwarePage, [cliPath, firmwarePage]() {
-        const QString file = QFileDialog::getOpenFileName(firmwarePage, QObject::tr("Select STM32CubeProgrammer CLI"), QString(), QObject::tr("Executable (*.exe)"));
-        if (!file.isEmpty()) cliPath->setText(file);
-    });
     connect(browseImage, &QPushButton::clicked, firmwarePage, [imagePath, firmwarePage]() {
         const QString file = QFileDialog::getOpenFileName(firmwarePage, QObject::tr("Select Proteus F427 firmware"), QString(), QObject::tr("Binary firmware (*.bin)"));
         if (!file.isEmpty()) imagePath->setText(file);
     });
-    connect(dfuProcess, &QProcess::readyReadStandardOutput, firmwarePage, [dfuProcess, dfuLog]() {
-        dfuLog->appendPlainText(QString::fromLocal8Bit(dfuProcess->readAllStandardOutput()));
-    });
-    connect(dfuProcess, &QProcess::readyReadStandardError, firmwarePage, [dfuProcess, dfuLog]() {
-        dfuLog->appendPlainText(QString::fromLocal8Bit(dfuProcess->readAllStandardError()));
-    });
     connect(detectDfu, &QPushButton::clicked, firmwarePage, [=]() {
-        if (dfuProcess->state() != QProcess::NotRunning) return;
-        dfuPorts->clear();
         dfuPort->clear();
         flashDfu->setEnabled(false);
         dfuLog->clear();
