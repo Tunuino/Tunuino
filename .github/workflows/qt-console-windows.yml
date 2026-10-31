@@ -2,11 +2,6 @@ name: Qt Console Windows
 on:
   push:
     branches: [master]
-    paths:
-      - 'qt_console/**'
-      - '.github/workflows/qt-console-windows.yml'
-      - 'installer/TunuinoConsole.iss'
-      - 'LICENSE'
   workflow_dispatch:
 jobs:
   windows-build:
