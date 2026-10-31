@@ -3,6 +3,11 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      firmware_run_id:
+        description: 'Successful Tunuino_Firmware F427 workflow run ID (optional; required for firmware bundle)'
+        required: false
+        type: string
 jobs:
   windows-build:
     runs-on: windows-2022
@@ -57,6 +62,51 @@ jobs:
           $digest = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
           "$digest  Tunuino-Console-Setup-0.1.0.exe" | Set-Content -Encoding ascii 'installer/output/SHA256SUMS.txt'
           Write-Host "Installer SHA-256: $digest"
+      - name: Download explicitly selected F427 firmware artifact
+        if: ${{ inputs.firmware_run_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FIRMWARE_RUN_ID: ${{ inputs.firmware_run_id }}
+        run: |
+          if ($env:FIRMWARE_RUN_ID -notmatch '^[0-9]+        uses: actions/upload-artifact@v4
+        with:
+          name: TunuinoConsole-Setup-Windows-x64
+          path: |
+            installer/output/Tunuino-Console-Setup-0.1.0.exe
+            installer/output/SHA256SUMS.txt
+          if-no-files-found: error
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: TunuinoConsole-Windows-x64
+          path: qt_console/dist/
+          if-no-files-found: error
+) { throw 'firmware_run_id must be numeric' }
+          $run = gh api "repos/Tunuino/Tunuino_Firmware/actions/runs/$env:FIRMWARE_RUN_ID" | ConvertFrom-Json
+          if ($run.conclusion -ne 'success' -or $run.head_branch -ne 'master') { throw 'Firmware run must have succeeded on master' }
+          $items = (gh api "repos/Tunuino/Tunuino_Firmware/actions/runs/$env:FIRMWARE_RUN_ID/artifacts" | ConvertFrom-Json).artifacts
+          $matching = @($items | Where-Object { $_.name -eq "f427-build-unverified-$($run.head_sha)" -and -not $_.expired })
+          if ($matching.Count -ne 1) { throw 'Exactly one unexpired F427 artifact matching the firmware commit is required' }
+          New-Item -ItemType Directory -Force -Path 'qt_console/firmware' | Out-Null
+          gh api "repos/Tunuino/Tunuino_Firmware/actions/artifacts/$($matching[0].id)/zip" > "$env:RUNNER_TEMP/firmware.zip"
+          Expand-Archive -LiteralPath "$env:RUNNER_TEMP/firmware.zip" -DestinationPath 'qt_console/firmware' -Force
+          $bins = @(Get-ChildItem 'qt_console/firmware' -Recurse -Filter '*.bin')
+          if ($bins.Count -ne 1 -or $bins[0].Length -lt 8) { throw 'Expected exactly one nonempty F427 binary' }
+          "Firmware source: Tunuino/Tunuino_Firmware commit $($run.head_sha), run $env:FIRMWARE_RUN_ID; NOT hardware validated" | Set-Content 'qt_console/firmware/FIRMWARE-SOURCE.txt'
+      - name: Create test bundle with Qt Console and F427 firmware
+        if: ${{ inputs.firmware_run_id != '' }}
+        run: |
+          New-Item -ItemType Directory -Force -Path 'qt_console/bundle' | Out-Null
+          Copy-Item 'qt_console/dist' 'qt_console/bundle/Console' -Recurse
+          Copy-Item 'qt_console/firmware' 'qt_console/bundle/Firmware' -Recurse
+          Compress-Archive -Path 'qt_console/bundle/*' -DestinationPath 'Tunuino-F427-Bundle.zip' -Force
+      - name: Upload test bundle
+        if: ${{ inputs.firmware_run_id != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tunuino-F427-Bundle
+          path: Tunuino-F427-Bundle.zip
+          if-no-files-found: error
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
