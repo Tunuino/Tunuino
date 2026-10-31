@@ -11,7 +11,6 @@ REQUIRED = {
     "build-firmware.yml": ("firmware-proteus-f427-", "build/kit/firmware"),
     "build-console.yml": ("console-windows-x64-", "build/kit/console"),
     "build-desktop.yml": None,
-    "validate-tunerstudio.yml": None,
 }
 
 
