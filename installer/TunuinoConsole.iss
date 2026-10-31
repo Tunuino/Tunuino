@@ -31,9 +31,8 @@ DisableProgramGroupPage=no
 SetupLogging=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-; Optional branded artwork, if supplied in the future:
-; WizardImageFile=assets\wizard-large.bmp
-; WizardSmallImageFile=assets\wizard-small.bmp
+WizardImageFile=assets\wizard-large.bmp
+WizardSmallImageFile=assets\wizard-small.bmp
 LicenseFile=..\LICENSE
 
 [Languages]
