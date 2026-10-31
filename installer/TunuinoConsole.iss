@@ -26,6 +26,7 @@ SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
 UninstallDisplayIcon={app}\{#AppExe}
+SetupIconFile=..\qt_console\assets\tunuino.ico
 DisableProgramGroupPage=no
 SetupLogging=yes
 ArchitecturesAllowed=x64compatible
