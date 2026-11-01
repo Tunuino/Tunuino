@@ -658,6 +658,42 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                             dfuLog->appendPlainText(tr("WinUSB opened; device descriptor read failed (Windows error %1).")
                                 .arg(GetLastError()));
                         }
+                        // DFU_GETSTATE (0x05) and DFU_GETSTATUS (0x03) are
+                        // read-only USB class requests. Never issue DNLOAD here.
+                        UCHAR state = 0xff;
+                        ULONG received = 0;
+                        WINUSB_SETUP_PACKET stateRequest{};
+                        stateRequest.RequestType = 0xA1;
+                        stateRequest.Request = 0x05;
+                        stateRequest.Value = 0;
+                        stateRequest.Index = 0;
+                        stateRequest.Length = 1;
+                        if (WinUsb_ControlTransfer(usb, stateRequest, &state, 1, &received, nullptr)
+                                && received == 1) {
+                            dfuLog->appendPlainText(tr("DFU GETSTATE OK: state=%1").arg(unsigned(state)));
+                        } else {
+                            dfuLog->appendPlainText(tr("DFU GETSTATE failed (Windows error %1).")
+                                .arg(GetLastError()));
+                        }
+                        UCHAR status[6]{};
+                        received = 0;
+                        WINUSB_SETUP_PACKET statusRequest{};
+                        statusRequest.RequestType = 0xA1;
+                        statusRequest.Request = 0x03;
+                        statusRequest.Value = 0;
+                        statusRequest.Index = 0;
+                        statusRequest.Length = 6;
+                        if (WinUsb_ControlTransfer(usb, statusRequest, status, 6, &received, nullptr)
+                                && received == 6) {
+                            const unsigned pollMs = unsigned(status[1]) | (unsigned(status[2]) << 8)
+                                | (unsigned(status[3]) << 16);
+                            dfuLog->appendPlainText(tr("DFU GETSTATUS OK: status=%1, poll=%2 ms, state=%3, iString=%4")
+                                .arg(unsigned(status[0])).arg(pollMs)
+                                .arg(unsigned(status[4])).arg(unsigned(status[5])));
+                        } else {
+                            dfuLog->appendPlainText(tr("DFU GETSTATUS failed (Windows error %1).")
+                                .arg(GetLastError()));
+                        }
                         WinUsb_Free(usb);
                     }
                     CloseHandle(handle);
