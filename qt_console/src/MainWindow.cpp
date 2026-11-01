@@ -527,13 +527,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *firmwareHeading = new QLabel(tr("FIRMWARE  |  Device management"), firmwarePage);
     firmwareHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     firmwareLayout->addWidget(firmwareHeading);
-    auto *firmwareInfo = new QLabel(tr("Proteus STM32F427 USB DFU. Windows bootloader detection is available without external tools. Direct flashing is under development and remains disabled."), firmwarePage);
+    auto *firmwareInfo = new QLabel(tr("USB DFU device management. Windows bootloader detection is available without external tools. Direct flashing is under development and remains disabled."), firmwarePage);
     firmwareInfo->setWordWrap(true);
     firmwareLayout->addWidget(firmwareInfo);
     auto *dfuForm = new QFormLayout();
     auto *imagePath = new QLineEdit(firmwarePage);
     imagePath->setReadOnly(true);
-    auto *browseImage = new QPushButton(tr("Select F427 .bin..."), firmwarePage);
+    auto *browseImage = new QPushButton(tr("Select firmware .bin..."), firmwarePage);
     auto *imageRow = new QWidget(firmwarePage);
     auto *imageRowLayout = new QHBoxLayout(imageRow);
     imageRowLayout->setContentsMargins(0, 0, 0, 0);
@@ -546,9 +546,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     firmwareLayout->addLayout(dfuForm);
     auto *dfuButtons = new QHBoxLayout();
     auto *detectDfu = new QPushButton(tr("Detect USB DFU"), firmwarePage);
-    auto *flashDfu = new QPushButton(tr("Flash and verify F427 (not available yet)"), firmwarePage);
+    auto *flashDfu = new QPushButton(tr("Flash and verify (not available yet)"), firmwarePage);
     flashDfu->setEnabled(false);
-    auto *inspectBin = new QPushButton(tr("Validate F427 .bin"), firmwarePage);
+    auto *inspectBin = new QPushButton(tr("Validate firmware .bin"), firmwarePage);
     dfuButtons->addWidget(detectDfu);
     dfuButtons->addWidget(inspectBin);
     dfuButtons->addWidget(flashDfu);
@@ -562,7 +562,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     dfuLog->setMaximumBlockCount(500);
     firmwareLayout->addWidget(dfuLog, 1);
     connect(browseImage, &QPushButton::clicked, firmwarePage, [imagePath, firmwarePage]() {
-        const QString file = QFileDialog::getOpenFileName(firmwarePage, QObject::tr("Select Proteus F427 firmware"), QString(), QObject::tr("Binary firmware (*.bin)"));
+        const QString file = QFileDialog::getOpenFileName(firmwarePage, QObject::tr("Select ECU firmware"), QString(), QObject::tr("Binary firmware (*.bin)"));
         if (!file.isEmpty()) imagePath->setText(file);
     });
     connect(inspectBin, &QPushButton::clicked, firmwarePage, [=]() {
@@ -593,7 +593,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         dfuLog->appendPlainText(tr("Vector table: initial SP=0x%1, reset handler=0x%2")
             .arg(stack, 8, 16, QLatin1Char('0')).arg(reset, 8, 16, QLatin1Char('0')));
         dfuLog->appendPlainText(stackValid && resetValid
-            ? tr("BIN vector preflight passed. This does NOT prove Proteus compatibility; flashing remains disabled.")
+            ? tr("BIN vector preflight passed. This does NOT prove ECU compatibility; flashing remains disabled.")
             : tr("BIN vector preflight FAILED. Do not flash this image."));
     });
     connect(detectDfu, &QPushButton::clicked, firmwarePage, [=]() {
@@ -1633,7 +1633,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *dfuInfo = firmwareMenu->addAction(tr("USB DFU status / instructions"));
     connect(dfuInfo, &QAction::triggered, this, [this]() {
         QMessageBox::information(this, tr("Firmware / DFU"),
-            tr("USB DFU uses STM32CubeProgrammer CLI. Enter STM32 bootloader DFU mode manually, select a verified F427 firmware image and detect the DFU device before flashing. Hardware validation is still required."));
+            tr("Enter USB DFU bootloader mode, select a verified firmware image and detect the device. Flashing remains disabled pending hardware validation."));
     });
     auto refreshPorts = [=]() {
         connectMenu->clear();
