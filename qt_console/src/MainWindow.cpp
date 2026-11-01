@@ -827,6 +827,77 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                                     .arg(GetLastError()));
                             }
                         }
+                        // STM32 DfuSe: set address pointer with DNLOAD block 0.
+                        // This command changes the bootloader read cursor only;
+                        // it does not erase or program flash. Read exactly 256 bytes.
+                        UCHAR ready[6]{};
+                        ULONG readyLength = 0;
+                        if (WinUsb_ControlTransfer(usb, statusRequest, ready, 6, &readyLength, nullptr)
+                                && readyLength == 6 && ready[0] == 0 && ready[4] == 2) {
+                            WINUSB_SETUP_PACKET addressRequest{};
+                            addressRequest.RequestType = 0x21;
+                            addressRequest.Request = 0x01; // DFU_DNLOAD
+                            addressRequest.Value = 0;
+                            addressRequest.Index = 0;
+                            addressRequest.Length = 5;
+                            UCHAR addressCommand[5] = {0x21, 0x00, 0x00, 0x00, 0x08};
+                            ULONG sent = 0;
+                            if (WinUsb_ControlTransfer(usb, addressRequest, addressCommand, 5, &sent, nullptr)
+                                    && sent == 5) {
+                                UCHAR pointerStatus[6]{};
+                                ULONG pointerLength = 0;
+                                if (WinUsb_ControlTransfer(usb, statusRequest, pointerStatus, 6,
+                                        &pointerLength, nullptr) && pointerLength == 6) {
+                                    const unsigned poll = unsigned(pointerStatus[1])
+                                        | (unsigned(pointerStatus[2]) << 8)
+                                        | (unsigned(pointerStatus[3]) << 16);
+                                    if (poll > 0 && poll <= 1000) Sleep(poll);
+                                    UCHAR finalStatus[6]{};
+                                    ULONG finalLength = 0;
+                                    if (WinUsb_ControlTransfer(usb, statusRequest, finalStatus, 6,
+                                            &finalLength, nullptr) && finalLength == 6
+                                            && finalStatus[0] == 0 && finalStatus[4] == 5) {
+                                        WINUSB_SETUP_PACKET upload{};
+                                        upload.RequestType = 0xA1;
+                                        upload.Request = 0x02; // DFU_UPLOAD
+                                        upload.Value = 2; // STM32 data blocks start at 2
+                                        upload.Index = 0;
+                                        upload.Length = 256;
+                                        UCHAR flashData[256]{};
+                                        ULONG readLength = 0;
+                                        if (WinUsb_ControlTransfer(usb, upload, flashData, 256,
+                                                &readLength, nullptr) && readLength == 256) {
+                                            const QByteArray data(reinterpret_cast<const char *>(flashData), 256);
+                                            dfuLog->appendPlainText(tr("Flash read OK: 256 bytes at 0x08000000; SHA256=%1")
+                                                .arg(QString::fromLatin1(QCryptographicHash::hash(
+                                                    data, QCryptographicHash::Sha256).toHex())));
+                                            dfuLog->appendPlainText(tr("First 32 bytes: %1")
+                                                .arg(QString::fromLatin1(data.left(32).toHex(' '))));
+                                        } else {
+                                            dfuLog->appendPlainText(tr("Flash upload failed or short read: %1 bytes (Windows error %2)")
+                                                .arg(readLength).arg(GetLastError()));
+                                        }
+                                    } else {
+                                        dfuLog->appendPlainText(tr("Address pointer not ready: status=%1, state=%2")
+                                            .arg(unsigned(finalStatus[0])).arg(unsigned(finalStatus[4])));
+                                    }
+                                }
+                            } else {
+                                dfuLog->appendPlainText(tr("DFU set-address failed (Windows error %1)")
+                                    .arg(GetLastError()));
+                            }
+                            // Return the DFU state machine to idle after an upload.
+                            WINUSB_SETUP_PACKET abortRequest{};
+                            abortRequest.RequestType = 0x21;
+                            abortRequest.Request = 0x06; // DFU_ABORT
+                            abortRequest.Index = 0;
+                            abortRequest.Length = 0;
+                            UCHAR dummy = 0;
+                            ULONG ignored = 0;
+                            WinUsb_ControlTransfer(usb, abortRequest, &dummy, 0, &ignored, nullptr);
+                        } else {
+                            dfuLog->appendPlainText(tr("Flash read skipped: DFU is not in idle state."));
+                        }
                         WinUsb_Free(usb);
                     }
                     CloseHandle(handle);
