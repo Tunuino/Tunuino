@@ -730,6 +730,39 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                             dfuLog->appendPlainText(tr("USB interface descriptor unavailable (Windows error %1).")
                                 .arg(GetLastError()));
                         }
+                        // Parse the DFU functional descriptor from the configuration
+                        // descriptor before allowing any future upload implementation.
+                        // This is a standard USB descriptor read, not a memory read.
+                        UCHAR configBytes[1024]{};
+                        ULONG configLength = 0;
+                        if (WinUsb_GetDescriptor(usb, USB_CONFIGURATION_DESCRIPTOR_TYPE, 0, 0,
+                                configBytes, sizeof(configBytes), &configLength)
+                                && configLength >= 9) {
+                            bool foundDfu = false;
+                            for (ULONG offset = 0; offset + 2 <= configLength;) {
+                                const UCHAR len = configBytes[offset];
+                                if (len < 2 || offset + len > configLength) break;
+                                if (configBytes[offset + 1] == 0x21 && len >= 9) {
+                                    const unsigned attributes = configBytes[offset + 2];
+                                    const unsigned transferSize = unsigned(configBytes[offset + 5])
+                                        | (unsigned(configBytes[offset + 6]) << 8);
+                                    const unsigned version = unsigned(configBytes[offset + 7])
+                                        | (unsigned(configBytes[offset + 8]) << 8);
+                                    dfuLog->appendPlainText(tr("DFU capabilities: upload=%1, download=%2, transfer=%3 bytes, DFU version=0x%4")
+                                        .arg((attributes & 0x02) ? tr("yes") : tr("no"))
+                                        .arg((attributes & 0x01) ? tr("yes") : tr("no"))
+                                        .arg(transferSize)
+                                        .arg(version, 4, 16, QLatin1Char('0')));
+                                    foundDfu = true;
+                                    break;
+                                }
+                                offset += len;
+                            }
+                            if (!foundDfu)
+                                dfuLog->appendPlainText(tr("DFU functional descriptor not found; memory reading not enabled."));
+                        } else {
+                            dfuLog->appendPlainText(tr("USB configuration descriptor unavailable; memory reading not enabled."));
+                        }
                         // DFU_GETSTATE (0x05) and DFU_GETSTATUS (0x03) are
                         // read-only USB class requests. Never issue DNLOAD here.
                         UCHAR state = 0xff;
