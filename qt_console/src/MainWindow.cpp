@@ -41,6 +41,8 @@
 #include <QProcess>
 #include <QStandardPaths>
 #include <QFileInfo>
+#include <QCryptographicHash>
+#include <QtEndian>
 #include <QDir>
 #include <QCoreApplication>
 #include <QPlainTextEdit>
@@ -546,7 +548,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *detectDfu = new QPushButton(tr("Detect USB DFU"), firmwarePage);
     auto *flashDfu = new QPushButton(tr("Flash and verify F427 (not available yet)"), firmwarePage);
     flashDfu->setEnabled(false);
+    auto *inspectBin = new QPushButton(tr("Validate F427 .bin"), firmwarePage);
     dfuButtons->addWidget(detectDfu);
+    dfuButtons->addWidget(inspectBin);
     dfuButtons->addWidget(flashDfu);
     dfuButtons->addStretch();
     firmwareLayout->addLayout(dfuButtons);
@@ -560,6 +564,37 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(browseImage, &QPushButton::clicked, firmwarePage, [imagePath, firmwarePage]() {
         const QString file = QFileDialog::getOpenFileName(firmwarePage, QObject::tr("Select Proteus F427 firmware"), QString(), QObject::tr("Binary firmware (*.bin)"));
         if (!file.isEmpty()) imagePath->setText(file);
+    });
+    connect(inspectBin, &QPushButton::clicked, firmwarePage, [=]() {
+        const QString path = imagePath->text();
+        QFile file(path);
+        if (path.isEmpty() || !file.open(QIODevice::ReadOnly)) {
+            dfuLog->appendPlainText(tr("BIN validation: select an accessible .bin file first."));
+            return;
+        }
+        const qint64 size = file.size();
+        if (size < 8 || size > 1024 * 1024) {
+            dfuLog->appendPlainText(tr("BIN rejected: size %1 bytes (expected 8 to 1048576).").arg(size));
+            return;
+        }
+        const QByteArray bytes = file.readAll();
+        if (bytes.size() != size) {
+            dfuLog->appendPlainText(tr("BIN rejected: incomplete file read."));
+            return;
+        }
+        const quint32 stack = qFromLittleEndian<quint32>(reinterpret_cast<const uchar *>(bytes.constData()));
+        const quint32 reset = qFromLittleEndian<quint32>(reinterpret_cast<const uchar *>(bytes.constData() + 4));
+        const bool stackValid = stack >= 0x20000000u && stack < 0x20030000u && (stack % 8u == 0u);
+        const bool resetValid = (reset & 1u) && (reset & ~quint32(1)) >= 0x08000000u
+            && (reset & ~quint32(1)) < (0x08000000u + quint32(size));
+        const QString digest = QString::fromLatin1(QCryptographicHash::hash(bytes,
+            QCryptographicHash::Sha256).toHex());
+        dfuLog->appendPlainText(tr("BIN preflight: %1 bytes, SHA256 %2").arg(size).arg(digest));
+        dfuLog->appendPlainText(tr("Vector table: initial SP=0x%1, reset handler=0x%2")
+            .arg(stack, 8, 16, QLatin1Char('0')).arg(reset, 8, 16, QLatin1Char('0')));
+        dfuLog->appendPlainText(stackValid && resetValid
+            ? tr("BIN vector preflight passed. This does NOT prove Proteus compatibility; flashing remains disabled.")
+            : tr("BIN vector preflight FAILED. Do not flash this image."));
     });
     connect(detectDfu, &QPushButton::clicked, firmwarePage, [=]() {
         dfuPort->clear();
