@@ -895,6 +895,29 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                                                     data, QCryptographicHash::Sha256).toHex())));
                                             dfuLog->appendPlainText(tr("First 32 bytes: %1")
                                                 .arg(QString::fromLatin1(data.left(32).toHex(' '))));
+                                            // Compare the actual bytes, not only the vector
+                                            // table or a hash from a different image.
+                                            if (!imagePath->text().isEmpty()) {
+                                                QFile selectedFirmware(imagePath->text());
+                                                if (selectedFirmware.open(QIODevice::ReadOnly)) {
+                                                    const QByteArray expected = selectedFirmware.read(256);
+                                                    if (expected.size() != 256) {
+                                                        dfuLog->appendPlainText(tr("Firmware comparison unavailable: selected file is shorter than 256 bytes."));
+                                                    } else if (expected == data) {
+                                                        dfuLog->appendPlainText(tr("Flash comparison PASS: first 256 bytes match selected firmware exactly."));
+                                                    } else {
+                                                        int firstDifference = 0;
+                                                        while (firstDifference < 256 && expected[firstDifference] == data[firstDifference])
+                                                            ++firstDifference;
+                                                        dfuLog->appendPlainText(tr("Flash comparison DIFFERENT: first mismatch at offset 0x%1. Do not assume the ECU contains the selected firmware.")
+                                                            .arg(firstDifference, 4, 16, QLatin1Char('0')));
+                                                    }
+                                                } else {
+                                                    dfuLog->appendPlainText(tr("Firmware comparison unavailable: cannot open selected file."));
+                                                }
+                                            } else {
+                                                dfuLog->appendPlainText(tr("Select a firmware .bin to compare the first 256 bytes."));
+                                            }
                                         } else {
                                             const DWORD uploadError = GetLastError();
                                             dfuLog->appendPlainText(tr("Flash upload failed or short read: %1 bytes (Windows error %2)")
@@ -939,7 +962,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             }
             if (!interfaceFound)
                 dfuLog->appendPlainText(tr("No matching WinUSB interface path found; USB handle not opened."));
-            dfuLog->appendPlainText(tr("Read-only discovery only. No USB transfer or flash operation was attempted."));
+            dfuLog->appendPlainText(tr("DFU diagnostics may read Flash. No Flash erase or programming operation was attempted."));
         }
         SetupDiDestroyDeviceInfoList(devices);
         dfuStatus->setText(dfuPort->count() > 0
