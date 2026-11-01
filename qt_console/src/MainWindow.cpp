@@ -551,6 +551,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *inspectBin = new QPushButton(tr("Validate firmware .bin"), firmwarePage);
     dfuButtons->addWidget(detectDfu);
     dfuButtons->addWidget(inspectBin);
+    auto *prepareFlash = new QPushButton(tr("Prepare flash (no write)"), firmwarePage);
+    dfuButtons->addWidget(prepareFlash);
     dfuButtons->addWidget(flashDfu);
     dfuButtons->addStretch();
     firmwareLayout->addLayout(dfuButtons);
@@ -564,6 +566,40 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(browseImage, &QPushButton::clicked, firmwarePage, [imagePath, firmwarePage]() {
         const QString file = QFileDialog::getOpenFileName(firmwarePage, QObject::tr("Select ECU firmware"), QString(), QObject::tr("Binary firmware (*.bin)"));
         if (!file.isEmpty()) imagePath->setText(file);
+    });
+    connect(prepareFlash, &QPushButton::clicked, firmwarePage, [=]() {
+        QFile file(imagePath->text());
+        if (!file.open(QIODevice::ReadOnly)) {
+            dfuLog->appendPlainText(tr("Flash preparation blocked: select a firmware .bin first."));
+            return;
+        }
+        const QByteArray bytes = file.readAll();
+        if (bytes.size() < 8 || bytes.size() > 1024 * 1024) {
+            dfuLog->appendPlainText(tr("Flash preparation blocked: invalid firmware size."));
+            return;
+        }
+        const auto *raw = reinterpret_cast<const uchar *>(bytes.constData());
+        const quint32 stack = qFromLittleEndian<quint32>(raw);
+        const quint32 reset = qFromLittleEndian<quint32>(raw + 4);
+        if (stack < 0x20000000u || stack >= 0x20030000u || stack % 8u != 0
+                || !(reset & 1u) || (reset & ~quint32(1)) < 0x08000000u
+                || (reset & ~quint32(1)) >= 0x08000000u + quint32(bytes.size())) {
+            dfuLog->appendPlainText(tr("Flash preparation blocked: invalid vector table."));
+            return;
+        }
+        // STM32 1 MiB single-bank sectors: 4x16 KiB, 1x64 KiB, 7x128 KiB.
+        const quint32 sectorEnds[] = {16384,32768,49152,65536,131072,
+            262144,393216,524288,655360,786432,917504,1048576};
+        int sectors = 0;
+        while (sectors < 12 && sectorEnds[sectors] < quint32(bytes.size()))
+            ++sectors;
+        ++sectors;
+        dfuLog->appendPlainText(tr("Flash plan ONLY (no write): %1 bytes, sectors 0-%2, start 0x08000000")
+            .arg(bytes.size()).arg(sectors - 1));
+        dfuLog->appendPlainText(tr("Firmware SHA256: %1")
+            .arg(QString::fromLatin1(QCryptographicHash::hash(bytes,
+                QCryptographicHash::Sha256).toHex())));
+        dfuLog->appendPlainText(tr("Flash operation remains DISABLED. This plan does not prove board compatibility or backup completeness."));
     });
     connect(inspectBin, &QPushButton::clicked, firmwarePage, [=]() {
         const QString path = imagePath->text();
