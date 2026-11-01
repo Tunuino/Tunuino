@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "NativeDfuFlash.h"
 #include <QDockWidget>
 #include <QLabel>
 #include <QMenuBar>
@@ -546,8 +547,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     firmwareLayout->addLayout(dfuForm);
     auto *dfuButtons = new QHBoxLayout();
     auto *detectDfu = new QPushButton(tr("Detect USB DFU"), firmwarePage);
-    auto *flashDfu = new QPushButton(tr("Flash and verify (not available yet)"), firmwarePage);
-    flashDfu->setEnabled(false);
+    auto *flashDfu = new QPushButton(tr("Flash and verify"), firmwarePage);
+    flashDfu->setEnabled(true);
     auto *inspectBin = new QPushButton(tr("Validate firmware .bin"), firmwarePage);
     dfuButtons->addWidget(detectDfu);
     dfuButtons->addWidget(inspectBin);
@@ -566,6 +567,56 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(browseImage, &QPushButton::clicked, firmwarePage, [imagePath, firmwarePage]() {
         const QString file = QFileDialog::getOpenFileName(firmwarePage, QObject::tr("Select ECU firmware"), QString(), QObject::tr("Binary firmware (*.bin)"));
         if (!file.isEmpty()) imagePath->setText(file);
+    });
+    connect(flashDfu, &QPushButton::clicked, firmwarePage, [=]() {
+#ifdef Q_OS_WIN
+        QFile firmware(imagePath->text());
+        if (!firmware.open(QIODevice::ReadOnly)) {
+            dfuLog->appendPlainText(tr("FLASH BLOCKED: select a firmware .bin."));
+            return;
+        }
+        const QByteArray image = firmware.readAll();
+        if (image.size() < 8 || image.size() > 1048576) {
+            dfuLog->appendPlainText(tr("FLASH BLOCKED: invalid firmware size."));
+            return;
+        }
+        const QString backupPath = QFileDialog::getOpenFileName(firmwarePage,
+            tr("Select verified ECU sector backup"), QString(),
+            tr("Binary backup (*.bin)"));
+        if (backupPath.isEmpty()) return;
+        if (QFileInfo(backupPath).absoluteFilePath() == QFileInfo(imagePath->text()).absoluteFilePath()) {
+            dfuLog->appendPlainText(tr("FLASH BLOCKED: firmware and backup must be different files."));
+            return;
+        }
+        QFile backupFile(backupPath);
+        if (!backupFile.open(QIODevice::ReadOnly)) return;
+        const QByteArray backup = backupFile.readAll();
+        const QString imageHash = QString::fromLatin1(QCryptographicHash::hash(image,
+            QCryptographicHash::Sha256).toHex());
+        const QString backupHash = QString::fromLatin1(QCryptographicHash::hash(backup,
+            QCryptographicHash::Sha256).toHex());
+        const QString warning = tr("DANGER: This operation ERASES ECU Flash sectors and replaces the firmware.\\n\\n"
+            "Firmware: %1\\nBytes: %2\\nSHA256: %3\\n\\n"
+            "Backup: %4\\nBytes: %5\\nSHA256: %6\\n\\n"
+            "Confirm that the firmware is intended for this ECU, that the engine and actuators are disconnected, "
+            "and that the backup is stored safely. The ECU may require DFU recovery if interrupted.")
+            .arg(QFileInfo(imagePath->text()).fileName()).arg(image.size()).arg(imageHash)
+            .arg(QFileInfo(backupPath).fileName()).arg(backup.size()).arg(backupHash);
+        if (QMessageBox::warning(firmwarePage, tr("Confirm destructive ECU Flash operation"),
+            warning, QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes)
+            return;
+        flashDfu->setEnabled(false);
+        detectDfu->setEnabled(false);
+        dfuLog->appendPlainText(tr("Starting native DFU flash; do not disconnect power or USB."));
+        const bool success = TunuinoDfu::flash(image, backup,
+            [dfuLog](const QString &message) { dfuLog->appendPlainText(message); });
+        dfuStatus->setText(success ? tr("Flash and verify PASS.")
+            : tr("Flash blocked or failed. See DFU log; do not assume ECU is programmed."));
+        flashDfu->setEnabled(true);
+        detectDfu->setEnabled(true);
+#else
+        dfuLog->appendPlainText(tr("Native USB DFU flashing is Windows-only."));
+#endif
     });
     connect(prepareFlash, &QPushButton::clicked, firmwarePage, [=]() {
         QFile file(imagePath->text());
@@ -667,7 +718,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     });
     connect(detectDfu, &QPushButton::clicked, firmwarePage, [=]() {
         dfuPort->clear();
-        flashDfu->setEnabled(false);
+        flashDfu->setEnabled(true);
         dfuLog->clear();
 #ifdef Q_OS_WIN
         // Read-only native Windows enumeration: no external ST tool required.
