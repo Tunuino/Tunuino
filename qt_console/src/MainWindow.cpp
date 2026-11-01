@@ -557,7 +557,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     dfuButtons->addWidget(flashDfu);
     dfuButtons->addStretch();
     firmwareLayout->addLayout(dfuButtons);
-    auto *dfuStatus = new QLabel(tr("Select Detect USB DFU. Flashing is disabled until the native DFU protocol is validated."), firmwarePage);
+    auto *dfuStatus = new QLabel(tr("Select the firmware .bin and detect USB DFU. Flash and verify requires a verified sector backup."), firmwarePage);
     dfuStatus->setWordWrap(true);
     firmwareLayout->addWidget(dfuStatus);
     auto *dfuLog = new QPlainTextEdit(firmwarePage);
@@ -1123,7 +1123,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
         SetupDiDestroyDeviceInfoList(devices);
         dfuStatus->setText(dfuPort->count() > 0
-            ? tr("STM32 USB DFU bootloader detected by Windows. Direct flashing is not yet implemented; flashing remains disabled.")
+            ? tr("STM32 USB DFU bootloader detected by Windows. Flash and verify requires a verified backup.")
             : tr("No STM32 DFU bootloader (VID 0483 / PID DF11) found. Check bootloader mode and USB driver."));
 #else
         dfuStatus->setText(tr("Native DFU detection is available on Windows only."));
