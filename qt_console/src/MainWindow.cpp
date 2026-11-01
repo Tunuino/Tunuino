@@ -879,55 +879,78 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                                             .arg(aborted ? tr("OK") : tr("FAILED"))
                                             .arg(unsigned(idleStatus[0])).arg(unsigned(idleStatus[4])));
                                         if (idle) {
-                                        WINUSB_SETUP_PACKET upload{};
-                                        upload.RequestType = 0xA1;
-                                        upload.Request = 0x02; // DFU_UPLOAD
-                                        upload.Value = 2; // STM32 data blocks start at 2
-                                        upload.Index = 0;
-                                        upload.Length = 256;
-                                        UCHAR flashData[256]{};
-                                        ULONG readLength = 0;
-                                        if (WinUsb_ControlTransfer(usb, upload, flashData, 256,
-                                                &readLength, nullptr) && readLength == 256) {
-                                            const QByteArray data(reinterpret_cast<const char *>(flashData), 256);
-                                            dfuLog->appendPlainText(tr("Flash read OK: 256 bytes at 0x08000000; SHA256=%1")
-                                                .arg(QString::fromLatin1(QCryptographicHash::hash(
-                                                    data, QCryptographicHash::Sha256).toHex())));
-                                            dfuLog->appendPlainText(tr("First 32 bytes: %1")
-                                                .arg(QString::fromLatin1(data.left(32).toHex(' '))));
-                                            // Compare the actual bytes, not only the vector
-                                            // table or a hash from a different image.
-                                            if (!imagePath->text().isEmpty()) {
-                                                QFile selectedFirmware(imagePath->text());
-                                                if (selectedFirmware.open(QIODevice::ReadOnly)) {
-                                                    const QByteArray expected = selectedFirmware.read(256);
-                                                    if (expected.size() != 256) {
-                                                        dfuLog->appendPlainText(tr("Firmware comparison unavailable: selected file is shorter than 256 bytes."));
-                                                    } else if (expected == data) {
-                                                        dfuLog->appendPlainText(tr("Flash comparison PASS: first 256 bytes match selected firmware exactly."));
-                                                    } else {
-                                                        int firstDifference = 0;
-                                                        while (firstDifference < 256 && expected[firstDifference] == data[firstDifference])
-                                                            ++firstDifference;
-                                                        dfuLog->appendPlainText(tr("Flash comparison DIFFERENT: first mismatch at offset 0x%1. Do not assume the ECU contains the selected firmware.")
-                                                            .arg(firstDifference, 4, 16, QLatin1Char('0')));
-                                                    }
-                                                } else {
-                                                    dfuLog->appendPlainText(tr("Firmware comparison unavailable: cannot open selected file."));
-                                                }
-                                            } else {
-                                                dfuLog->appendPlainText(tr("Select a firmware .bin to compare the first 256 bytes."));
-                                            }
+                                        // Read only the selected firmware length, never beyond
+                                        // the 1 MiB internal Flash descriptor. No erase/write.
+                                        QFile reference(imagePath->text());
+                                        const bool referenceOpen = !imagePath->text().isEmpty()
+                                            && reference.open(QIODevice::ReadOnly);
+                                        const qint64 targetSize = referenceOpen ? reference.size() : 256;
+                                        if (targetSize < 8 || targetSize > 1024 * 1024) {
+                                            dfuLog->appendPlainText(tr("Flash read skipped: invalid selected firmware size."));
                                         } else {
-                                            const DWORD uploadError = GetLastError();
-                                            dfuLog->appendPlainText(tr("Flash upload failed or short read: %1 bytes (Windows error %2)")
-                                                .arg(readLength).arg(uploadError));
-                                            UCHAR failedStatus[6]{};
-                                            ULONG failedLength = 0;
-                                            if (WinUsb_ControlTransfer(usb, statusRequest, failedStatus, 6,
-                                                    &failedLength, nullptr) && failedLength == 6)
-                                                dfuLog->appendPlainText(tr("DFU after failed UPLOAD: status=%1, state=%2")
-                                                    .arg(unsigned(failedStatus[0])).arg(unsigned(failedStatus[4])));
+                                            QByteArray flash;
+                                            flash.reserve(int(targetSize));
+                                            bool complete = true;
+                                            const int transferSize = 2048;
+                                            for (int offset = 0; offset < targetSize; offset += transferSize) {
+                                                const int length = int(qMin(qint64(transferSize), targetSize - offset));
+                                                WINUSB_SETUP_PACKET upload{};
+                                                upload.RequestType = 0xA1;
+                                                upload.Request = 0x02; // DFU_UPLOAD
+                                                upload.Value = USHORT(2 + offset / transferSize);
+                                                upload.Index = 0;
+                                                upload.Length = USHORT(length);
+                                                UCHAR chunk[2048]{};
+                                                ULONG readLength = 0;
+                                                const BOOL ok = WinUsb_ControlTransfer(usb, upload, chunk,
+                                                    ULONG(length), &readLength, nullptr);
+                                                if (!ok || readLength != ULONG(length)) {
+                                                    const DWORD error = ok ? 0 : GetLastError();
+                                                    dfuLog->appendPlainText(tr("Flash read FAILED at offset %1: received %2/%3 bytes, Windows error %4")
+                                                        .arg(offset).arg(readLength).arg(length).arg(error));
+                                                    complete = false;
+                                                    break;
+                                                }
+                                                flash.append(reinterpret_cast<const char *>(chunk), length);
+                                            }
+                                            if (complete && flash.size() == targetSize) {
+                                                dfuLog->appendPlainText(tr("Flash read OK: %1 bytes at 0x08000000; SHA256=%2")
+                                                    .arg(flash.size())
+                                                    .arg(QString::fromLatin1(QCryptographicHash::hash(
+                                                        flash, QCryptographicHash::Sha256).toHex())));
+                                                dfuLog->appendPlainText(tr("First 32 bytes: %1")
+                                                    .arg(QString::fromLatin1(flash.left(32).toHex(' '))));
+                                                if (referenceOpen) {
+                                                    const QByteArray expected = reference.readAll();
+                                                    if (expected == flash) {
+                                                        dfuLog->appendPlainText(tr("Full firmware comparison PASS: all %1 bytes match.")
+                                                            .arg(flash.size()));
+                                                    } else {
+                                                        int mismatch = 0;
+                                                        while (mismatch < expected.size() && mismatch < flash.size()
+                                                            && expected[mismatch] == flash[mismatch]) ++mismatch;
+                                                        dfuLog->appendPlainText(tr("Full firmware comparison DIFFERENT at offset 0x%1.")
+                                                            .arg(mismatch, 8, 16, QLatin1Char('0')));
+                                                    }
+                                                }
+                                                const QString backupPath = QFileDialog::getSaveFileName(firmwarePage,
+                                                    tr("Save ECU Flash backup"), QStringLiteral("ecu-flash-backup.bin"),
+                                                    tr("Binary firmware (*.bin)"));
+                                                if (!backupPath.isEmpty()) {
+                                                    if (QFileInfo(backupPath).absoluteFilePath()
+                                                            == QFileInfo(imagePath->text()).absoluteFilePath()) {
+                                                        dfuLog->appendPlainText(tr("Backup refused: destination is the selected firmware file."));
+                                                    } else {
+                                                        QSaveFile backup(backupPath);
+                                                        if (backup.open(QIODevice::WriteOnly)
+                                                                && backup.write(flash) == flash.size()
+                                                                && backup.commit())
+                                                            dfuLog->appendPlainText(tr("ECU Flash backup saved: %1").arg(backupPath));
+                                                        else
+                                                            dfuLog->appendPlainText(tr("ECU Flash backup save FAILED."));
+                                                    }
+                                                }
+                                            }
                                         }
                                         } else {
                                             dfuLog->appendPlainText(tr("Flash read skipped: DFU did not return to idle after address selection."));
