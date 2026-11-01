@@ -694,6 +694,34 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                             dfuLog->appendPlainText(tr("DFU GETSTATUS failed (Windows error %1).")
                                 .arg(GetLastError()));
                         }
+                        // DFU_CLRSTATUS is only valid in dfuERROR (state 10).
+                        // Never send it on a healthy or unidentified interface.
+                        if (received == 6 && status[4] == 10) {
+                            WINUSB_SETUP_PACKET clearRequest{};
+                            clearRequest.RequestType = 0x21;
+                            clearRequest.Request = 0x04;
+                            clearRequest.Value = 0;
+                            clearRequest.Index = 0;
+                            clearRequest.Length = 0;
+                            ULONG cleared = 0;
+                            UCHAR unused = 0;
+                            if (WinUsb_ControlTransfer(usb, clearRequest, &unused, 0, &cleared, nullptr)) {
+                                dfuLog->appendPlainText(tr("DFU CLRSTATUS sent (no flash erase/write)."));
+                                UCHAR after[6]{};
+                                ULONG afterLength = 0;
+                                if (WinUsb_ControlTransfer(usb, statusRequest, after, 6, &afterLength, nullptr)
+                                        && afterLength == 6) {
+                                    dfuLog->appendPlainText(tr("DFU after CLRSTATUS: status=%1, state=%2")
+                                        .arg(unsigned(after[0])).arg(unsigned(after[4])));
+                                } else {
+                                    dfuLog->appendPlainText(tr("DFU status after CLRSTATUS failed (Windows error %1).")
+                                        .arg(GetLastError()));
+                                }
+                            } else {
+                                dfuLog->appendPlainText(tr("DFU CLRSTATUS failed (Windows error %1).")
+                                    .arg(GetLastError()));
+                            }
+                        }
                         WinUsb_Free(usb);
                     }
                     CloseHandle(handle);
