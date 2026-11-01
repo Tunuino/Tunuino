@@ -920,7 +920,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                                         QFile reference(imagePath->text());
                                         const bool referenceOpen = !imagePath->text().isEmpty()
                                             && reference.open(QIODevice::ReadOnly);
-                                        const qint64 targetSize = referenceOpen ? reference.size() : 256;
+                                        // Backup the entire erase footprint, not just the
+                                        // firmware length: otherwise the last sector's
+                                        // trailing bytes would be lost on erase.
+                                        const qint64 firmwareSize = referenceOpen ? reference.size() : 256;
+                                        const qint64 sectorEnds[] = {16384,32768,49152,65536,
+                                            131072,262144,393216,524288,655360,786432,917504,1048576};
+                                        qint64 targetSize = firmwareSize;
+                                        if (referenceOpen && firmwareSize >= 8 && firmwareSize <= 1048576) {
+                                            for (const qint64 end : sectorEnds) {
+                                                if (firmwareSize <= end) { targetSize = end; break; }
+                                            }
+                                        }
                                         if (targetSize < 8 || targetSize > 1024 * 1024) {
                                             dfuLog->appendPlainText(tr("Flash read skipped: invalid selected firmware size."));
                                         } else {
@@ -958,19 +969,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                                                     .arg(QString::fromLatin1(flash.left(32).toHex(' '))));
                                                 if (referenceOpen) {
                                                     const QByteArray expected = reference.readAll();
-                                                    if (expected == flash) {
-                                                        dfuLog->appendPlainText(tr("Full firmware comparison PASS: all %1 bytes match.")
-                                                            .arg(flash.size()));
+                                                    if (expected.size() == firmwareSize
+                                                            && flash.left(expected.size()) == expected) {
+                                                        dfuLog->appendPlainText(tr("Firmware comparison PASS: all %1 firmware bytes match.")
+                                                            .arg(expected.size()));
                                                     } else {
                                                         int mismatch = 0;
                                                         while (mismatch < expected.size() && mismatch < flash.size()
                                                             && expected[mismatch] == flash[mismatch]) ++mismatch;
-                                                        dfuLog->appendPlainText(tr("Full firmware comparison DIFFERENT at offset 0x%1.")
+                                                        dfuLog->appendPlainText(tr("Firmware comparison DIFFERENT at offset 0x%1.")
                                                             .arg(mismatch, 8, 16, QLatin1Char('0')));
                                                     }
+                                                    dfuLog->appendPlainText(tr("Erase-footprint backup: %1 bytes read, firmware length %2 bytes.")
+                                                        .arg(flash.size()).arg(firmwareSize));
                                                 }
                                                 const QString backupPath = QFileDialog::getSaveFileName(firmwarePage,
-                                                    tr("Save ECU Flash backup"), QStringLiteral("ecu-flash-backup.bin"),
+                                                    tr("Save ECU Flash backup"), QStringLiteral("ecu-flash-sector-backup.bin"),
                                                     tr("Binary firmware (*.bin)"));
                                                 if (!backupPath.isEmpty()) {
                                                     if (QFileInfo(backupPath).absoluteFilePath()
