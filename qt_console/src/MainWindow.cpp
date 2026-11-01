@@ -658,6 +658,43 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                             dfuLog->appendPlainText(tr("WinUSB opened; device descriptor read failed (Windows error %1).")
                                 .arg(GetLastError()));
                         }
+                        // Inspect DFU interface alternate settings and memory layout
+                        // strings. These standard descriptor requests are read-only.
+                        USB_INTERFACE_DESCRIPTOR ifaceDescriptor{};
+                        if (WinUsb_QueryInterfaceSettings(usb, 0, &ifaceDescriptor)) {
+                            dfuLog->appendPlainText(tr("USB interface: class=%1, subclass=%2, protocol=%3, alternate=%4")
+                                .arg(unsigned(ifaceDescriptor.bInterfaceClass))
+                                .arg(unsigned(ifaceDescriptor.bInterfaceSubClass))
+                                .arg(unsigned(ifaceDescriptor.bInterfaceProtocol))
+                                .arg(unsigned(ifaceDescriptor.bAlternateSetting)));
+                            if (ifaceDescriptor.bInterfaceClass != 0xFE ||
+                                    ifaceDescriptor.bInterfaceSubClass != 0x01) {
+                                dfuLog->appendPlainText(tr("Warning: selected USB interface is not DFU class/subclass."));
+                            }
+                            if (ifaceDescriptor.iInterface != 0) {
+                                UCHAR stringBytes[256]{};
+                                ULONG stringLength = 0;
+                                if (WinUsb_GetDescriptor(usb, USB_STRING_DESCRIPTOR_TYPE,
+                                        ifaceDescriptor.iInterface, 0x0409, stringBytes,
+                                        sizeof(stringBytes), &stringLength)
+                                        && stringLength >= 2 && stringBytes[1] == USB_STRING_DESCRIPTOR_TYPE) {
+                                    const int chars = qMin(int(stringBytes[0]), int(stringLength)) / 2 - 1;
+                                    QString layout;
+                                    for (int j = 0; j < chars; ++j) {
+                                        const unsigned code = unsigned(stringBytes[2 + 2*j])
+                                            | (unsigned(stringBytes[3 + 2*j]) << 8);
+                                        layout.append(QChar(ushort(code)));
+                                    }
+                                    dfuLog->appendPlainText(tr("DFU interface memory descriptor: %1").arg(layout));
+                                } else {
+                                    dfuLog->appendPlainText(tr("DFU interface string descriptor unavailable (Windows error %1).")
+                                        .arg(GetLastError()));
+                                }
+                            }
+                        } else {
+                            dfuLog->appendPlainText(tr("USB interface descriptor unavailable (Windows error %1).")
+                                .arg(GetLastError()));
+                        }
                         // DFU_GETSTATE (0x05) and DFU_GETSTATUS (0x03) are
                         // read-only USB class requests. Never issue DNLOAD here.
                         UCHAR state = 0xff;
