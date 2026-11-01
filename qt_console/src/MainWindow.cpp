@@ -857,6 +857,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                                     if (WinUsb_ControlTransfer(usb, statusRequest, finalStatus, 6,
                                             &finalLength, nullptr) && finalLength == 6
                                             && finalStatus[0] == 0 && finalStatus[4] == 5) {
+                                        // DNLOAD leaves the device in dfuDNLOAD-IDLE (5).
+                                        // DFU_UPLOAD is only legal after DFU_ABORT returns it
+                                        // to dfuIDLE (2). The address pointer is retained.
+                                        WINUSB_SETUP_PACKET toIdle{};
+                                        toIdle.RequestType = 0x21;
+                                        toIdle.Request = 0x06; // DFU_ABORT
+                                        toIdle.Index = 0;
+                                        toIdle.Length = 0;
+                                        UCHAR unusedByte = 0;
+                                        ULONG abortLength = 0;
+                                        const bool aborted = WinUsb_ControlTransfer(usb, toIdle,
+                                            &unusedByte, 0, &abortLength, nullptr) != FALSE;
+                                        UCHAR idleStatus[6]{};
+                                        ULONG idleLength = 0;
+                                        const bool idle = aborted &&
+                                            WinUsb_ControlTransfer(usb, statusRequest, idleStatus, 6,
+                                                &idleLength, nullptr) && idleLength == 6
+                                            && idleStatus[0] == 0 && idleStatus[4] == 2;
+                                        dfuLog->appendPlainText(tr("DFU before UPLOAD: ABORT=%1, status=%2, state=%3")
+                                            .arg(aborted ? tr("OK") : tr("FAILED"))
+                                            .arg(unsigned(idleStatus[0])).arg(unsigned(idleStatus[4])));
+                                        if (idle) {
                                         WINUSB_SETUP_PACKET upload{};
                                         upload.RequestType = 0xA1;
                                         upload.Request = 0x02; // DFU_UPLOAD
@@ -874,8 +896,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                                             dfuLog->appendPlainText(tr("First 32 bytes: %1")
                                                 .arg(QString::fromLatin1(data.left(32).toHex(' '))));
                                         } else {
+                                            const DWORD uploadError = GetLastError();
                                             dfuLog->appendPlainText(tr("Flash upload failed or short read: %1 bytes (Windows error %2)")
-                                                .arg(readLength).arg(GetLastError()));
+                                                .arg(readLength).arg(uploadError));
+                                            UCHAR failedStatus[6]{};
+                                            ULONG failedLength = 0;
+                                            if (WinUsb_ControlTransfer(usb, statusRequest, failedStatus, 6,
+                                                    &failedLength, nullptr) && failedLength == 6)
+                                                dfuLog->appendPlainText(tr("DFU after failed UPLOAD: status=%1, state=%2")
+                                                    .arg(unsigned(failedStatus[0])).arg(unsigned(failedStatus[4])));
+                                        }
+                                        } else {
+                                            dfuLog->appendPlainText(tr("Flash read skipped: DFU did not return to idle after address selection."));
                                         }
                                     } else {
                                         dfuLog->appendPlainText(tr("Address pointer not ready: status=%1, state=%2")
