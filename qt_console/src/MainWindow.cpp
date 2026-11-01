@@ -596,6 +596,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         ++sectors;
         dfuLog->appendPlainText(tr("Flash plan ONLY (no write): %1 bytes, sectors 0-%2, start 0x08000000")
             .arg(bytes.size()).arg(sectors - 1));
+        const quint32 eraseBytes = sectorEnds[sectors - 1];
+        const int transferBytes = 2048;
+        const int writeBlocks = (bytes.size() + transferBytes - 1) / transferBytes;
+        dfuLog->appendPlainText(tr("Erase footprint: %1 bytes; program blocks: %2 (max %3 bytes each); readback bytes: %4")
+            .arg(eraseBytes).arg(writeBlocks).arg(transferBytes).arg(bytes.size()));
+        dfuLog->appendPlainText(tr("Erase sector start addresses:"));
+        for (int i = 0; i < sectors; ++i) {
+            const quint32 offset = i == 0 ? 0 : sectorEnds[i - 1];
+            dfuLog->appendPlainText(tr("  Sector %1: 0x%2")
+                .arg(i).arg(0x08000000u + offset, 8, 16, QLatin1Char('0')));
+        }
+        dfuLog->appendPlainText(tr("Safety: save and verify a %1-byte sector backup before any erase.")
+            .arg(eraseBytes));
         dfuLog->appendPlainText(tr("Firmware SHA256: %1")
             .arg(QString::fromLatin1(QCryptographicHash::hash(bytes,
                 QCryptographicHash::Sha256).toHex())));
