@@ -2063,6 +2063,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             setReading(2, mask & 2, QString::number(u32(1 + 44) / 1000.0, 'f', 1) + QStringLiteral(" kPa"));
             setReading(3, mask & 4, QString::number(u32(1 + 48) / 1000000.0, 'f', 3));
             setReading(4, mask & 8, QString::number(qint32(u32(1 + 52)) / 1000.0, 'f', 1) + QStringLiteral(" C"));
+            // The current runtime protocol has no calibrated TPS, IAT or battery fields.
+            // Never manufacture these readings from unrelated raw ADC channels.
+            setReading(1, false, QString());
+            setReading(5, false, QString());
+            setReading(6, false, QString());
+            const quint8 flags = quint8(data[1 + 39]);
+            const quint32 uptimeSeconds = u32(1 + 32);
+            const quint32 triggerErrors = u32(1 + 96);
+            statusBar()->showMessage(tr("ECU live: uptime %1 s | ADC %2 | trigger %3 | valid channels 0x%4 | trigger errors %5")
+                .arg(uptimeSeconds)
+                .arg((flags & 1) ? tr("OK") : tr("unavailable"))
+                .arg((flags & 8) ? tr("synchronised") : tr("not synchronised"))
+                .arg(QString::number(mask, 16))
+                .arg(triggerErrors));
             return;
         }
         if (data.size() != 32 || data.mid(1, 7) != QByteArray("TUNUINO", 7)) {
