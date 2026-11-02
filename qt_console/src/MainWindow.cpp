@@ -528,7 +528,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *firmwareHeading = new QLabel(tr("FIRMWARE  |  Device management"), firmwarePage);
     firmwareHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     firmwareLayout->addWidget(firmwareHeading);
-    auto *firmwareInfo = new QLabel(tr("USB DFU device management. Windows bootloader detection is available without external tools. Direct flashing is under development and remains disabled."), firmwarePage);
+    auto *firmwareInfo = new QLabel(tr("USB DFU device management. Windows bootloader detection is available without external tools. Native DFU flashing is experimental. Always verify the firmware and preserve a full ECU backup before programming."), firmwarePage);
     firmwareInfo->setWordWrap(true);
     firmwareLayout->addWidget(firmwareInfo);
     auto *dfuForm = new QFormLayout();
@@ -595,9 +595,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             QCryptographicHash::Sha256).toHex());
         const QString backupHash = QString::fromLatin1(QCryptographicHash::hash(backup,
             QCryptographicHash::Sha256).toHex());
-        const QString warning = tr("DANGER: This operation ERASES ECU Flash sectors and replaces the firmware.\\n\\n"
-            "Firmware: %1\\nBytes: %2\\nSHA256: %3\\n\\n"
-            "Backup: %4\\nBytes: %5\\nSHA256: %6\\n\\n"
+        const QString warning = tr("DANGER: This operation ERASES ECU Flash sectors and replaces the firmware.\n\n"
+            "Firmware: %1\nBytes: %2\nSHA256: %3\n\n"
+            "Backup: %4\nBytes: %5\nSHA256: %6\n\n"
             "Confirm that the firmware is intended for this ECU, that the engine and actuators are disconnected, "
             "and that the backup is stored safely. The ECU may require DFU recovery if interrupted.")
             .arg(QFileInfo(imagePath->text()).fileName()).arg(image.size()).arg(imageHash)
@@ -688,7 +688,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         dfuLog->appendPlainText(tr("Firmware SHA256: %1")
             .arg(QString::fromLatin1(QCryptographicHash::hash(bytes,
                 QCryptographicHash::Sha256).toHex())));
-        dfuLog->appendPlainText(tr("Flash operation remains DISABLED. This plan does not prove board compatibility or backup completeness."));
+        dfuLog->appendPlainText(tr("Preparation only: no erase/write attempted. This plan does not prove board compatibility or backup completeness."));
     });
     connect(inspectBin, &QPushButton::clicked, firmwarePage, [=]() {
         const QString path = imagePath->text();
@@ -718,7 +718,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         dfuLog->appendPlainText(tr("Vector table: initial SP=0x%1, reset handler=0x%2")
             .arg(stack, 8, 16, QLatin1Char('0')).arg(reset, 8, 16, QLatin1Char('0')));
         dfuLog->appendPlainText(stackValid && resetValid
-            ? tr("BIN vector preflight passed. This does NOT prove ECU compatibility; flashing remains disabled.")
+            ? tr("BIN vector preflight passed. This does NOT prove ECU compatibility.")
             : tr("BIN vector preflight FAILED. Do not flash this image."));
     });
     connect(detectDfu, &QPushButton::clicked, firmwarePage, [=]() {
