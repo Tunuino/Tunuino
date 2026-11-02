@@ -2059,7 +2059,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             const auto setReading = [liveReadings](int index, bool valid, const QString &value) {
                 if (index < liveReadings->size()) liveReadings->at(index)->setText(valid ? value : QObject::tr("Unavailable"));
             };
-            setReading(0, mask & 1, QString::number(u32(1 + 40) / 1000.0, 'f', 0) + QStringLiteral(" rpm"));
+            // A stopped engine has zero RPM even when the trigger decoder has no sync.
+            // Only show zero if the ECU explicitly reports zero RPM and no trigger errors;
+            // never turn a nonzero, unvalidated reading into a valid RPM value.
+            const quint32 rpmMilli = u32(1 + 40);
+            const quint32 triggerErrors = u32(1 + 96);
+            const bool stoppedEngine = !(mask & 1) && rpmMilli == 0 && triggerErrors == 0;
+            setReading(0, (mask & 1) || stoppedEngine,
+                QString::number(rpmMilli / 1000.0, 'f', 0) + QStringLiteral(" rpm"));
             setReading(2, mask & 2, QString::number(u32(1 + 44) / 1000.0, 'f', 1) + QStringLiteral(" kPa"));
             setReading(3, mask & 4, QString::number(u32(1 + 48) / 1000000.0, 'f', 3));
             setReading(4, mask & 8, QString::number(qint32(u32(1 + 52)) / 1000.0, 'f', 1) + QStringLiteral(" C"));
@@ -2070,7 +2077,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             setReading(6, false, QString());
             const quint8 flags = quint8(data[1 + 39]);
             const quint32 uptimeSeconds = u32(1 + 32);
-            const quint32 triggerErrors = u32(1 + 96);
             statusBar()->showMessage(tr("ECU live: uptime %1 s | ADC %2 | trigger %3 | valid channels 0x%4 | trigger errors %5")
                 .arg(uptimeSeconds)
                 .arg((flags & 1) ? tr("OK") : tr("unavailable"))
