@@ -1,5 +1,9 @@
 #include "MainWindow.h"
 #include "NativeDfuFlash.h"
+#include <QPainter>
+#include <QPaintEvent>
+#include <QPolygonF>
+#include <QFrame>
 #include <QDockWidget>
 #include <QLabel>
 #include <QMenuBar>
@@ -66,6 +70,73 @@
 #include <usbiodef.h>
 #endif
 #include "ecu/SerialSession.h"
+
+// Read-only perspective surface. The plotted samples are taken directly from
+// the visible ECU map table; empty cells never generate synthetic map values.
+class MapSurfacePreview final : public QFrame {
+public:
+    explicit MapSurfacePreview(QTableWidget *source, QWidget *parent = nullptr)
+        : QFrame(parent), source_(source) {
+        setMinimumSize(310, 340);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        setFrameShape(QFrame::StyledPanel);
+        connect(source_, &QTableWidget::itemChanged, this, [this](QTableWidgetItem *) { update(); });
+    }
+protected:
+    void paintEvent(QPaintEvent *event) override {
+        QFrame::paintEvent(event);
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.fillRect(rect().adjusted(1, 1, -1, -1), QColor(32, 35, 40));
+        double z[16][16] = {};
+        double minValue = 1e100, maxValue = -1e100;
+        for (int row = 0; row < 16; ++row) {
+            for (int col = 0; col < 16; ++col) {
+                const auto *item = source_->item(row, col);
+                bool ok = false;
+                const double value = item ? item->text().toDouble(&ok) : 0.0;
+                if (!ok || !std::isfinite(value)) {
+                    painter.setPen(QColor(185, 188, 192));
+                    painter.drawText(rect(), Qt::AlignCenter | Qt::TextWordWrap,
+                                     tr("Read map from ECU to display 3D surface"));
+                    return;
+                }
+                z[row][col] = value;
+                minValue = std::min(minValue, value);
+                maxValue = std::max(maxValue, value);
+            }
+        }
+        const double span = std::max(0.001, maxValue - minValue);
+        const double scale = std::min((width() - 40.0) / 31.0, (height() - 65.0) / 23.0);
+        const QPointF origin(width() * 0.5, height() * 0.77);
+        auto point = [&](int row, int col) {
+            const double heightValue = (z[row][col] - minValue) / span;
+            return origin + QPointF((col - row) * scale, (col + row) * scale * 0.40
+                                      - heightValue * scale * 9.0);
+        };
+        // Draw distant polygons first to preserve a consistent perspective.
+        for (int sum = 2; sum <= 30; ++sum) {
+            for (int row = 0; row < 15; ++row) {
+                const int col = sum - row - 2;
+                if (col < 0 || col >= 15) continue;
+                const double avg = (z[row][col] + z[row+1][col] +
+                                    z[row][col+1] + z[row+1][col+1]) / 4.0;
+                const double level = (avg - minValue) / span;
+                const QColor color = QColor::fromHsvF(0.33 - level * 0.32, 0.76, 0.86);
+                painter.setBrush(color);
+                painter.setPen(QPen(color.darker(155), 0.6));
+                painter.drawPolygon(QPolygonF{point(row, col), point(row, col+1),
+                                               point(row+1, col+1), point(row+1, col)});
+            }
+        }
+        painter.setPen(QColor(220, 223, 225));
+        painter.drawText(QRect(8, 6, width()-16, 22), Qt::AlignLeft,
+                         tr("3D map preview (read-only)"));
+    }
+private:
+    QTableWidget *source_;
+};
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("Tunuino Console — Qt 6");
     resize(1400, 850);
@@ -285,7 +356,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelGridLayout->addWidget(fuelMapAxis);
     auto *fuelWorkspace = new QHBoxLayout();
     fuelWorkspace->addWidget(fuelGridPanel, 0, Qt::AlignTop);
-    fuelWorkspace->addStretch(1);
+    auto *fuelSurface = new MapSurfacePreview(maps, fuelPage);
+    fuelWorkspace->addWidget(fuelSurface, 1, Qt::AlignTop);
     fuelLayout->addLayout(fuelWorkspace);
     fuelLayout->addStretch(1);
     auto *fuelFooter = new QLabel(tr("Values are intentionally blank until read from ECU. Editing and writing remain disabled."), fuelPage);
@@ -370,7 +442,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionGridLayout->addWidget(ignitionMapAxis);
     auto *ignitionWorkspace = new QHBoxLayout();
     ignitionWorkspace->addWidget(ignitionGridPanel, 0, Qt::AlignTop);
-    ignitionWorkspace->addStretch(1);
+    auto *ignitionSurface = new MapSurfacePreview(ignitionMap, ignitionPage);
+    ignitionWorkspace->addWidget(ignitionSurface, 1, Qt::AlignTop);
     ignitionLayout->addLayout(ignitionWorkspace);
     ignitionLayout->addStretch(1);
     auto *ignitionFooter = new QLabel(tr("Ignition values unavailable. ECU read/write protocol not yet integrated."), ignitionPage);
