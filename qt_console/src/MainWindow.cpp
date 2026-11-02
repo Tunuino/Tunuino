@@ -236,6 +236,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             cell->setFlags(cell->flags() & ~Qt::ItemIsEditable);
             maps->setItem(row, col, cell);
         }
+    maps->setCornerButtonEnabled(false);
+    maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
+    maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
+    auto *fuelAxes = new QLabel(tr("Columns: RPM (rev/min)     |     Rows: MAP (kPa)"), fuelPage);
+    fuelAxes->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
+    fuelLayout->addWidget(fuelAxes);
     fuelLayout->addWidget(maps, 1);
     auto *fuelFooter = new QLabel(tr("Values are intentionally blank until read from ECU. Editing and writing remain disabled."), fuelPage);
     fuelFooter->setStyleSheet(QStringLiteral("color: #a9aaad;"));
@@ -270,6 +276,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             cell->setFlags(cell->flags() & ~Qt::ItemIsEditable);
             ignitionMap->setItem(row, col, cell);
         }
+    ignitionMap->setCornerButtonEnabled(false);
+    ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
+    ignitionMap->verticalHeader()->setToolTip(tr("MAP (kPa)"));
+    auto *ignitionAxes = new QLabel(tr("Columns: RPM (rev/min)     |     Rows: MAP (kPa)"), ignitionPage);
+    ignitionAxes->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
+    ignitionLayout->addWidget(ignitionAxes);
     ignitionLayout->addWidget(ignitionMap, 1);
     auto *ignitionFooter = new QLabel(tr("Ignition values unavailable. ECU read/write protocol not yet integrated."), ignitionPage);
     ignitionFooter->setStyleSheet(QStringLiteral("color: #a9aaad;"));
