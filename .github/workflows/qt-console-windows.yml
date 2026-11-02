@@ -37,7 +37,7 @@ jobs:
           python qt_console/tools/make_icon.py
           python qt_console/tools/make_installer_art.py
       - name: Configure
-        run: cmake -S qt_console -B qt_console/build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
+        run: cmake -S qt_console -B qt_console/build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON "-DTUNUINO_BUILD_VERSION=0.1.3.${{ github.run_number }}"
       - name: Build
         run: cmake --build qt_console/build --config Release --parallel 2
       - name: Unit tests
@@ -61,16 +61,16 @@ jobs:
         run: |
           $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\\ISCC.exe'
           if (!(Test-Path $iscc)) { throw 'Inno Setup 6 is not installed on runner' }
-          & $iscc "/DAppSource=$((Resolve-Path 'qt_console/dist').Path)" '/DAppVersion=0.1.3' 'installer/TunuinoConsole.iss'
+          & $iscc "/DAppSource=$((Resolve-Path 'qt_console/dist').Path)" '/DAppVersion=0.1.3.${{ github.run_number }}' 'installer/TunuinoConsole.iss'
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
-          if (!(Test-Path 'installer/output/Tunuino-Console-Setup-0.1.3.exe')) { throw 'Installer not produced' }
+          if (!(Test-Path 'installer/output/Tunuino-Console-Setup-0.1.3.${{ github.run_number }}.exe')) { throw 'Installer not produced' }
       - name: Verify installer payload and record SHA-256
         run: |
-          $setup = 'installer/output/Tunuino-Console-Setup-0.1.3.exe'
+          $setup = 'installer/output/Tunuino-Console-Setup-0.1.3.${{ github.run_number }}.exe'
           if (!(Test-Path $setup)) { throw 'Installer missing' }
           if ((Get-Item $setup).Length -lt 1000000) { throw 'Installer unexpectedly small' }
           $digest = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
-          "$digest  Tunuino-Console-Setup-0.1.3.exe" | Set-Content -Encoding ascii 'installer/output/SHA256SUMS.txt'
+          "$digest  Tunuino-Console-Setup-0.1.3.${{ github.run_number }}.exe" | Set-Content -Encoding ascii 'installer/output/SHA256SUMS.txt'
           Write-Host "Installer SHA-256: $digest"
       - name: Download explicitly selected F427 firmware artifact
         if: ${{ inputs.firmware_run_id != '' }}
@@ -110,7 +110,7 @@ jobs:
         with:
           name: TunuinoConsole-Setup-Windows-x64
           path: |
-            installer/output/Tunuino-Console-Setup-0.1.3.exe
+            installer/output/Tunuino-Console-Setup-0.1.3.${{ github.run_number }}.exe
             installer/output/SHA256SUMS.txt
           if-no-files-found: error
       - name: Upload Windows executable
@@ -157,15 +157,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p public/updates
-          installer="Tunuino-Console-Setup-0.1.3.exe"
+          installer="Tunuino-Console-Setup-0.1.3.${{ github.run_number }}.exe"
           test -s "installer/$installer"
           cp "installer/$installer" "public/updates/$installer"
           python3 - <<'PY'
           import hashlib, json, pathlib
-          p = pathlib.Path('public/updates/Tunuino-Console-Setup-0.1.3.exe')
+          p = pathlib.Path('public/updates/Tunuino-Console-Setup-0.1.3.${{ github.run_number }}.exe')
           sha = hashlib.sha256(p.read_bytes()).hexdigest()
           data = {
-              'version': '0.1.3',
+              'version': '0.1.3.${{ github.run_number }}',
               'url': 'https://tunuino.github.io/Tunuino/updates/' + p.name,
               'sha256': sha,
           }
