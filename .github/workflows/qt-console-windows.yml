@@ -61,16 +61,16 @@ jobs:
         run: |
           $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\\ISCC.exe'
           if (!(Test-Path $iscc)) { throw 'Inno Setup 6 is not installed on runner' }
-          & $iscc "/DAppSource=$((Resolve-Path 'qt_console/dist').Path)" '/DAppVersion=0.1.0' 'installer/TunuinoConsole.iss'
+          & $iscc "/DAppSource=$((Resolve-Path 'qt_console/dist').Path)" '/DAppVersion=0.1.1' 'installer/TunuinoConsole.iss'
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
-          if (!(Test-Path 'installer/output/Tunuino-Console-Setup-0.1.0.exe')) { throw 'Installer not produced' }
+          if (!(Test-Path 'installer/output/Tunuino-Console-Setup-0.1.1.exe')) { throw 'Installer not produced' }
       - name: Verify installer payload and record SHA-256
         run: |
-          $setup = 'installer/output/Tunuino-Console-Setup-0.1.0.exe'
+          $setup = 'installer/output/Tunuino-Console-Setup-0.1.1.exe'
           if (!(Test-Path $setup)) { throw 'Installer missing' }
           if ((Get-Item $setup).Length -lt 1000000) { throw 'Installer unexpectedly small' }
           $digest = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
-          "$digest  Tunuino-Console-Setup-0.1.0.exe" | Set-Content -Encoding ascii 'installer/output/SHA256SUMS.txt'
+          "$digest  Tunuino-Console-Setup-0.1.1.exe" | Set-Content -Encoding ascii 'installer/output/SHA256SUMS.txt'
           Write-Host "Installer SHA-256: $digest"
       - name: Download explicitly selected F427 firmware artifact
         if: ${{ inputs.firmware_run_id != '' }}
@@ -110,7 +110,7 @@ jobs:
         with:
           name: TunuinoConsole-Setup-Windows-x64
           path: |
-            installer/output/Tunuino-Console-Setup-0.1.0.exe
+            installer/output/Tunuino-Console-Setup-0.1.1.exe
             installer/output/SHA256SUMS.txt
           if-no-files-found: error
       - name: Upload Windows executable
@@ -144,19 +144,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p public/updates
-          installer="Tunuino-Console-Setup-0.1.0.exe"
+          installer="Tunuino-Console-Setup-0.1.1.exe"
           test -s "installer/$installer"
           cp "installer/$installer" "public/updates/$installer"
           python3 - <<'PY'
           import hashlib, json, pathlib
-          p = pathlib.Path('public/updates/Tunuino-Console-Setup-0.1.0.exe')
+          p = pathlib.Path('public/updates/Tunuino-Console-Setup-0.1.1.exe')
           sha = hashlib.sha256(p.read_bytes()).hexdigest()
           data = {
-              'version': '0.1.0',
+              'version': '0.1.1',
               'url': 'https://tunuino.github.io/Tunuino/updates/' + p.name,
               'sha256': sha,
           }
-          pathlib.Path('public/updates/beta.json').write_text(json.dumps(data, indent=2) + '\\n', encoding='utf-8')
+          pathlib.Path('public/updates/beta.json').write_text(json.dumps(data, indent=2) + chr(10), encoding='utf-8')
           PY
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
