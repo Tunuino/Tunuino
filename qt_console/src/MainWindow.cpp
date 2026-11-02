@@ -1907,7 +1907,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *helpMenu = menuBar()->addMenu(tr("Help"));
     auto *checkUpdates = helpMenu->addAction(tr("Check for updates..."));
     connect(checkUpdates, &QAction::triggered, this, [=]() {
-        const bool beta = betaChannel->isChecked();
+        const bool beta = QSettings(QStringLiteral("Tunuino"), QStringLiteral("TunuinoConsole"))
+            .value(QStringLiteral("updates/channel"), QStringLiteral("beta")).toString() != QLatin1String("stable");
         const QString destination = beta
             ? QStringLiteral("https://github.com/Tunuino/Tunuino/actions")
             : QStringLiteral("https://github.com/Tunuino/Tunuino/releases");
@@ -1917,7 +1918,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             : tr("Stable channel selected. Only published stable releases should be installed. "
                  "Automatic download and installation are not yet available.");
         if (QMessageBox::information(this, tr("Tunuino updates"), details +
-            tr("\\n\\nOpen the selected update channel in your browser?"),
+            tr("\n\nOpen the selected update channel in your browser?"),
             QMessageBox::Open | QMessageBox::Cancel, QMessageBox::Open) == QMessageBox::Open)
             QDesktopServices::openUrl(QUrl(destination));
     });
