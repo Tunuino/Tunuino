@@ -28,6 +28,10 @@
 #include <QCheckBox>
 #include <QSerialPortInfo>
 #include <QAction>
+#include <QActionGroup>
+#include <QSettings>
+#include <QDesktopServices>
+#include <QUrl>
 #include <QListWidget>
 #include <QTimer>
 #include <QSharedPointer>
@@ -1901,6 +1905,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *calibrationAction = toolsMenu->addAction(tr("Calibration and setup"));
     connect(calibrationAction, &QAction::triggered, this, [tabs]() { tabs->setCurrentIndex(6); });
     auto *helpMenu = menuBar()->addMenu(tr("Help"));
+    auto *checkUpdates = helpMenu->addAction(tr("Check for updates..."));
+    connect(checkUpdates, &QAction::triggered, this, [=]() {
+        const bool beta = betaChannel->isChecked();
+        const QString destination = beta
+            ? QStringLiteral("https://github.com/Tunuino/Tunuino/actions")
+            : QStringLiteral("https://github.com/Tunuino/Tunuino/releases");
+        const QString details = beta
+            ? tr("Beta channel selected. Test builds are currently published as GitHub Actions artifacts. "
+                 "Automatic download and installation are not yet available; GitHub sign-in may be required.")
+            : tr("Stable channel selected. Only published stable releases should be installed. "
+                 "Automatic download and installation are not yet available.");
+        if (QMessageBox::information(this, tr("Tunuino updates"), details +
+            tr("\\n\\nOpen the selected update channel in your browser?"),
+            QMessageBox::Open | QMessageBox::Cancel, QMessageBox::Open) == QMessageBox::Open)
+            QDesktopServices::openUrl(QUrl(destination));
+    });
     auto *aboutAction = helpMenu->addAction(tr("About Tunuino Console"));
     connect(aboutAction, &QAction::triggered, this, [this]() {
         QMessageBox::about(this, tr("About Tunuino Console"),
@@ -1911,6 +1931,27 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *disconnectAction = ecuMenu->addAction(tr("Disconnect"));
     disconnectAction->setEnabled(false);
     auto *settingsMenu = menuBar()->addMenu(tr("Settings"));
+    auto *updatesMenu = settingsMenu->addMenu(tr("Update channel"));
+    auto *channelActions = new QActionGroup(this);
+    channelActions->setExclusive(true);
+    auto *betaChannel = updatesMenu->addAction(tr("Beta — test builds"));
+    auto *stableChannel = updatesMenu->addAction(tr("Stable — validated releases"));
+    for (auto *action : {betaChannel, stableChannel}) {
+        action->setCheckable(true);
+        channelActions->addAction(action);
+    }
+    QSettings updateSettings(QStringLiteral("Tunuino"), QStringLiteral("TunuinoConsole"));
+    const QString initialChannel = updateSettings.value(QStringLiteral("updates/channel"),
+        QStringLiteral("beta")).toString();
+    (initialChannel == QLatin1String("stable") ? stableChannel : betaChannel)->setChecked(true);
+    connect(betaChannel, &QAction::triggered, this, []() {
+        QSettings(QStringLiteral("Tunuino"), QStringLiteral("TunuinoConsole"))
+            .setValue(QStringLiteral("updates/channel"), QStringLiteral("beta"));
+    });
+    connect(stableChannel, &QAction::triggered, this, []() {
+        QSettings(QStringLiteral("Tunuino"), QStringLiteral("TunuinoConsole"))
+            .setValue(QStringLiteral("updates/channel"), QStringLiteral("stable"));
+    });
     auto *refreshAction = settingsMenu->addAction(tr("Refresh serial ports"));
     auto *firmwareMenu = menuBar()->addMenu(tr("Firmware"));
     auto *openFirmware = firmwareMenu->addAction(tr("Firmware / USB DFU"));
