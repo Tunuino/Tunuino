@@ -199,7 +199,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     fuelToolbarLayout->addWidget(fuelHeading);
     fuelToolbarLayout->addStretch();
-    auto *fuelState = new QLabel(tr("READ ONLY  -  Awaiting ECU map protocol"), fuelToolbar);
+    auto *fuelState = new QLabel(tr("READ ONLY  -  Connect ECU to read map"), fuelToolbar);
     fuelState->setStyleSheet(QStringLiteral("color: #bdbfc1;"));
     fuelToolbarLayout->addWidget(fuelState);
     fuelLayout->addWidget(fuelToolbar);
@@ -210,7 +210,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *fuelSave = new QPushButton(tr("Write to ECU"), fuelActions);
     fuelRead->setEnabled(false);
     fuelSave->setEnabled(false);
-    fuelRead->setToolTip(tr("Requires validated ECU map-read protocol."));
+    fuelRead->setToolTip(tr("Connect to a compatible ECU to read its 16x16 map."));
     fuelSave->setToolTip(tr("Requires validated ECU map-write protocol and safety checks."));
     fuelActionsLayout->addWidget(fuelRead);
     fuelActionsLayout->addWidget(fuelSave);
@@ -2211,8 +2211,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         fuelRead->setEnabled(true);
         ignitionRead->setEnabled(true);
         liveTimer->start();
-        statusBar()->showMessage(tr("ECU identity verified. Read-only runtime polling active; configuration writes disabled."));
+        statusBar()->showMessage(tr("ECU identity verified. Fuel and Ignition map reading available; ECU writes disabled."));
     });
     refreshPorts();
-    statusBar()->showMessage(tr("TUNUINO  |  ECU connection ready  |  Map read/write unavailable until firmware integration"));
+    statusBar()->showMessage(tr("TUNUINO  |  ECU connection ready  |  Connect ECU to read 16x16 maps; map writing disabled"));
 }
