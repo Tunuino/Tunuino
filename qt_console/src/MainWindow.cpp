@@ -237,8 +237,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             maps->setItem(row, col, cell);
         }
     maps->setCornerButtonEnabled(false);
-    maps->horizontalHeader()->setToolTip(tr("MAP (kPa)"));
-    maps->verticalHeader()->setToolTip(tr("RPM (rev/min)"));
+    maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
+    maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
     maps->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     maps->setFixedSize(maps->verticalHeader()->width() + 16 * maps->horizontalHeader()->defaultSectionSize() + 4,
                          maps->horizontalHeader()->height() + 16 * maps->verticalHeader()->defaultSectionSize() + 4);
@@ -249,12 +249,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *fuelAxisRow = new QHBoxLayout();
     fuelAxisRow->setSpacing(5);
     fuelAxisRow->addWidget(maps, 0, Qt::AlignTop);
-    auto *fuelRpmAxis = new QLabel(tr("RPM (rev/min)"), fuelGridPanel);
+    auto *fuelRpmAxis = new QLabel(tr("MAP (kPa)"), fuelGridPanel);
     fuelRpmAxis->setAlignment(Qt::AlignCenter);
     fuelRpmAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     fuelAxisRow->addWidget(fuelRpmAxis, 0, Qt::AlignVCenter);
     fuelGridLayout->addLayout(fuelAxisRow);
-    auto *fuelMapAxis = new QLabel(tr("MAP sensor load (kPa)"), fuelGridPanel);
+    auto *fuelMapAxis = new QLabel(tr("RPM (rev/min)"), fuelGridPanel);
     fuelMapAxis->setAlignment(Qt::AlignHCenter);
     fuelMapAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     fuelGridLayout->addWidget(fuelMapAxis);
@@ -297,8 +297,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             ignitionMap->setItem(row, col, cell);
         }
     ignitionMap->setCornerButtonEnabled(false);
-    ignitionMap->horizontalHeader()->setToolTip(tr("MAP (kPa)"));
-    ignitionMap->verticalHeader()->setToolTip(tr("RPM (rev/min)"));
+    ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
+    ignitionMap->verticalHeader()->setToolTip(tr("MAP (kPa)"));
     ignitionMap->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     ignitionMap->setFixedSize(ignitionMap->verticalHeader()->width() + 16 * ignitionMap->horizontalHeader()->defaultSectionSize() + 4,
                          ignitionMap->horizontalHeader()->height() + 16 * ignitionMap->verticalHeader()->defaultSectionSize() + 4);
@@ -309,12 +309,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *ignitionAxisRow = new QHBoxLayout();
     ignitionAxisRow->setSpacing(5);
     ignitionAxisRow->addWidget(ignitionMap, 0, Qt::AlignTop);
-    auto *ignitionRpmAxis = new QLabel(tr("RPM (rev/min)"), ignitionGridPanel);
+    auto *ignitionRpmAxis = new QLabel(tr("MAP (kPa)"), ignitionGridPanel);
     ignitionRpmAxis->setAlignment(Qt::AlignCenter);
     ignitionRpmAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     ignitionAxisRow->addWidget(ignitionRpmAxis, 0, Qt::AlignVCenter);
     ignitionGridLayout->addLayout(ignitionAxisRow);
-    auto *ignitionMapAxis = new QLabel(tr("MAP sensor load (kPa)"), ignitionGridPanel);
+    auto *ignitionMapAxis = new QLabel(tr("RPM (rev/min)"), ignitionGridPanel);
     ignitionMapAxis->setAlignment(Qt::AlignHCenter);
     ignitionMapAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     ignitionGridLayout->addWidget(ignitionMapAxis);
@@ -2198,14 +2198,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 rpmLabels.append(QString::number(u16(2 * i)));
                 loadLabels.append(QString::number(u16(32 + 2 * i) / 100.0, 'f', 1));
             }
-            // Display with RPM vertically (highest at top) and MAP horizontally.
-            // Firmware storage remains load-major: cells[load][rpm].
-            std::reverse(rpmLabels.begin(), rpmLabels.end());
-            table->setHorizontalHeaderLabels(loadLabels);
-            table->setVerticalHeaderLabels(rpmLabels);
+            // Rows are MAP load (kPa); columns are engine speed (RPM).
+            // Firmware storage is load-major: cells[load][rpm].
+            table->setHorizontalHeaderLabels(rpmLabels);
+            table->setVerticalHeaderLabels(loadLabels);
             for (int row = 0; row < 16; ++row)
                 for (int col = 0; col < 16; ++col)
-                    table->item(row, col)->setText(QString::number(qint16(u16(64 + 2 * (col * 16 + (15 - row)))) / 100.0, 'f', 2));
+                    table->item(row, col)->setText(QString::number(qint16(u16(64 + 2 * (row * 16 + col))) / 100.0, 'f', 2));
             abortTransfer(tr("Map page %1 read from ECU (read-only)").arg(page));
             return;
         }
