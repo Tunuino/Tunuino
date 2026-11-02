@@ -248,11 +248,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelGridLayout->setSpacing(3);
     auto *fuelAxisRow = new QHBoxLayout();
     fuelAxisRow->setSpacing(5);
+    // MAP axis label is positioned to the left of the grid.
     fuelAxisRow->addWidget(maps, 0, Qt::AlignTop);
     auto *fuelRpmAxis = new QLabel(tr("MAP (kPa)"), fuelGridPanel);
     fuelRpmAxis->setAlignment(Qt::AlignCenter);
     fuelRpmAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
-    fuelAxisRow->addWidget(fuelRpmAxis, 0, Qt::AlignVCenter);
+    fuelAxisRow->insertWidget(0, fuelRpmAxis, 0, Qt::AlignVCenter);
     fuelGridLayout->addLayout(fuelAxisRow);
     maps->horizontalHeader()->hide();
     auto *fuelRpmValues = new QTableWidget(1, 16, fuelGridPanel);
@@ -272,7 +273,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         fuelRpmValues->setItem(0, i, cell);
     }
     auto *fuelBottomAxis = new QHBoxLayout();
-    fuelBottomAxis->setContentsMargins(maps->verticalHeader()->width(), 0, 0, 0);
+    fuelBottomAxis->setContentsMargins(fuelRpmAxis->sizeHint().width() + 5 + maps->verticalHeader()->width(), 0, 0, 0);
     fuelBottomAxis->addWidget(fuelRpmValues, 0, Qt::AlignLeft);
     fuelGridLayout->addLayout(fuelBottomAxis);
 
@@ -330,11 +331,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionGridLayout->setSpacing(3);
     auto *ignitionAxisRow = new QHBoxLayout();
     ignitionAxisRow->setSpacing(5);
+    // MAP axis label is positioned to the left of the grid.
     ignitionAxisRow->addWidget(ignitionMap, 0, Qt::AlignTop);
     auto *ignitionRpmAxis = new QLabel(tr("MAP (kPa)"), ignitionGridPanel);
     ignitionRpmAxis->setAlignment(Qt::AlignCenter);
     ignitionRpmAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
-    ignitionAxisRow->addWidget(ignitionRpmAxis, 0, Qt::AlignVCenter);
+    ignitionAxisRow->insertWidget(0, ignitionRpmAxis, 0, Qt::AlignVCenter);
     ignitionGridLayout->addLayout(ignitionAxisRow);
     ignitionMap->horizontalHeader()->hide();
     auto *ignitionRpmValues = new QTableWidget(1, 16, ignitionGridPanel);
@@ -354,7 +356,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         ignitionRpmValues->setItem(0, i, cell);
     }
     auto *ignitionBottomAxis = new QHBoxLayout();
-    ignitionBottomAxis->setContentsMargins(ignitionMap->verticalHeader()->width(), 0, 0, 0);
+    ignitionBottomAxis->setContentsMargins(ignitionRpmAxis->sizeHint().width() + 5 + ignitionMap->verticalHeader()->width(), 0, 0, 0);
     ignitionBottomAxis->addWidget(ignitionRpmValues, 0, Qt::AlignLeft);
     ignitionGridLayout->addLayout(ignitionBottomAxis);
 
