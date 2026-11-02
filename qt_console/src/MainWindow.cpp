@@ -237,21 +237,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             maps->setItem(row, col, cell);
         }
     maps->setCornerButtonEnabled(false);
-    maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
-    maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
-    auto *fuelAxes = new QLabel(tr("RPM (rev/min)"), fuelPage);
-    fuelAxes->setAlignment(Qt::AlignHCenter);
-    fuelAxes->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
-    fuelLayout->addWidget(fuelAxes);
-    auto *fuelMapAxis = new QLabel(tr("MAP (kPa)"), fuelPage);
-    fuelMapAxis->setAlignment(Qt::AlignCenter);
-    fuelMapAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
-    fuelMapAxis->setFixedWidth(26);
+    maps->horizontalHeader()->setToolTip(tr("MAP (kPa)"));
+    maps->verticalHeader()->setToolTip(tr("RPM (rev/min)"));
     auto *fuelAxisRow = new QHBoxLayout();
-    fuelAxisRow->setSpacing(4);
-    fuelAxisRow->addWidget(fuelMapAxis);
+    fuelAxisRow->setSpacing(6);
     fuelAxisRow->addWidget(maps, 1);
+    auto *fuelRpmAxis = new QLabel(tr("RPM (rev/min)"), fuelPage);
+    fuelRpmAxis->setAlignment(Qt::AlignCenter);
+    fuelRpmAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
+    fuelAxisRow->addWidget(fuelRpmAxis);
     fuelLayout->addLayout(fuelAxisRow, 1);
+    auto *fuelMapAxis = new QLabel(tr("MAP sensor load (kPa)"), fuelPage);
+    fuelMapAxis->setAlignment(Qt::AlignHCenter);
+    fuelMapAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
+    fuelLayout->addWidget(fuelMapAxis);
     auto *fuelFooter = new QLabel(tr("Values are intentionally blank until read from ECU. Editing and writing remain disabled."), fuelPage);
     fuelFooter->setStyleSheet(QStringLiteral("color: #a9aaad;"));
     fuelLayout->addWidget(fuelFooter);
@@ -286,21 +285,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             ignitionMap->setItem(row, col, cell);
         }
     ignitionMap->setCornerButtonEnabled(false);
-    ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
-    ignitionMap->verticalHeader()->setToolTip(tr("MAP (kPa)"));
-    auto *ignitionAxes = new QLabel(tr("RPM (rev/min)"), ignitionPage);
-    ignitionAxes->setAlignment(Qt::AlignHCenter);
-    ignitionAxes->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
-    ignitionLayout->addWidget(ignitionAxes);
-    auto *ignitionMapAxis = new QLabel(tr("MAP (kPa)"), ignitionPage);
-    ignitionMapAxis->setAlignment(Qt::AlignCenter);
-    ignitionMapAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
-    ignitionMapAxis->setFixedWidth(26);
+    ignitionMap->horizontalHeader()->setToolTip(tr("MAP (kPa)"));
+    ignitionMap->verticalHeader()->setToolTip(tr("RPM (rev/min)"));
     auto *ignitionAxisRow = new QHBoxLayout();
-    ignitionAxisRow->setSpacing(4);
-    ignitionAxisRow->addWidget(ignitionMapAxis);
+    ignitionAxisRow->setSpacing(6);
     ignitionAxisRow->addWidget(ignitionMap, 1);
+    auto *ignitionRpmAxis = new QLabel(tr("RPM (rev/min)"), ignitionPage);
+    ignitionRpmAxis->setAlignment(Qt::AlignCenter);
+    ignitionRpmAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
+    ignitionAxisRow->addWidget(ignitionRpmAxis);
     ignitionLayout->addLayout(ignitionAxisRow, 1);
+    auto *ignitionMapAxis = new QLabel(tr("MAP sensor load (kPa)"), ignitionPage);
+    ignitionMapAxis->setAlignment(Qt::AlignHCenter);
+    ignitionMapAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
+    ignitionLayout->addWidget(ignitionMapAxis);
     auto *ignitionFooter = new QLabel(tr("Ignition values unavailable. ECU read/write protocol not yet integrated."), ignitionPage);
     ignitionFooter->setStyleSheet(QStringLiteral("color: #a9aaad;"));
     ignitionLayout->addWidget(ignitionFooter);
@@ -2176,11 +2174,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 rpmLabels.append(QString::number(u16(2 * i)));
                 loadLabels.append(QString::number(u16(32 + 2 * i) / 100.0, 'f', 1));
             }
-            table->setHorizontalHeaderLabels(rpmLabels);
-            table->setVerticalHeaderLabels(loadLabels);
+            // Display with RPM vertically (highest at top) and MAP horizontally.
+            // Firmware storage remains load-major: cells[load][rpm].
+            std::reverse(rpmLabels.begin(), rpmLabels.end());
+            table->setHorizontalHeaderLabels(loadLabels);
+            table->setVerticalHeaderLabels(rpmLabels);
             for (int row = 0; row < 16; ++row)
                 for (int col = 0; col < 16; ++col)
-                    table->item(row, col)->setText(QString::number(qint16(u16(64 + 2 * (row * 16 + col))) / 100.0, 'f', 2));
+                    table->item(row, col)->setText(QString::number(qint16(u16(64 + 2 * (col * 16 + (15 - row)))) / 100.0, 'f', 2));
             abortTransfer(tr("Map page %1 read from ECU (read-only)").arg(page));
             return;
         }
