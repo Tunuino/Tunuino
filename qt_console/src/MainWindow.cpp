@@ -1916,7 +1916,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             .value(QStringLiteral("updates/channel"), QStringLiteral("beta")).toString() == QLatin1String("stable")
             ? QStringLiteral("stable") : QStringLiteral("beta");
         // Public HTTPS manifest: no GitHub login or token is used by the Console.
-        const QUrl manifestUrl(QStringLiteral("https://tunuino.github.io/updates/") + channel + QStringLiteral(".json"));
+        const QUrl manifestUrl(QStringLiteral("https://tunuino.github.io/Tunuino/updates/") + channel + QStringLiteral(".json"));
         auto *network = new QNetworkAccessManager(this);
         checkUpdates->setEnabled(false);
         auto *reply = network->get(QNetworkRequest(manifestUrl));
