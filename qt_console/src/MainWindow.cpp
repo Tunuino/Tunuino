@@ -1108,14 +1108,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         dfuStatus->setText(tr("Native DFU detection is available on Windows only."));
 #endif
     });
-    // Native Windows discovery is read-only. Never enable the legacy CLI
-    // flash handler for a Windows device instance ID: it is not a DFU port.
-    connect(flashDfu, &QPushButton::clicked, firmwarePage, [=]() {
-        QMessageBox::information(firmwarePage, tr("DFU flashing unavailable"),
-            tr("STM32 BOOTLOADER detection is working, but direct DFU communication, "
-               "target verification, erase, write and read-back are not yet implemented. "
-               "No firmware was written."));
-    });
     // Firmware is accessed exclusively from the top menu.
     // Keep its widget as a hidden tab page to preserve the existing DFU controls.
     tabs->addTab(firmwarePage, tr("Firmware"));
