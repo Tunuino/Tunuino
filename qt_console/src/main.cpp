@@ -5,6 +5,7 @@
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QApplication::setApplicationName("Tunuino Console");
+    QApplication::setApplicationVersion(QStringLiteral(TUNUINO_CONSOLE_VERSION));
     QApplication::setWindowIcon(QIcon(":/branding/tunuino.png"));
     QApplication::setOrganizationName("Tunuino");
     app.setStyle(QStyleFactory::create("Fusion"));
