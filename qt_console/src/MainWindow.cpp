@@ -30,6 +30,10 @@
 #include <QAction>
 #include <QActionGroup>
 #include <QSettings>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QVersionNumber>
 #include <QDesktopServices>
 #include <QUrl>
 #include <QListWidget>
@@ -54,6 +58,7 @@
 #include <QStringList>
 #include <QMap>
 #include <cmath>
+#include <algorithm>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <setupapi.h>
@@ -1906,21 +1911,84 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(calibrationAction, &QAction::triggered, this, [tabs]() { tabs->setCurrentIndex(6); });
     auto *helpMenu = menuBar()->addMenu(tr("Help"));
     auto *checkUpdates = helpMenu->addAction(tr("Check for updates..."));
-    connect(checkUpdates, &QAction::triggered, this, [=]() {
-        const bool beta = QSettings(QStringLiteral("Tunuino"), QStringLiteral("TunuinoConsole"))
-            .value(QStringLiteral("updates/channel"), QStringLiteral("beta")).toString() != QLatin1String("stable");
-        const QString destination = beta
-            ? QStringLiteral("https://github.com/Tunuino/Tunuino/actions")
-            : QStringLiteral("https://github.com/Tunuino/Tunuino/releases");
-        const QString details = beta
-            ? tr("Beta channel selected. Test builds are currently published as GitHub Actions artifacts. "
-                 "Automatic download and installation are not yet available; GitHub sign-in may be required.")
-            : tr("Stable channel selected. Only published stable releases should be installed. "
-                 "Automatic download and installation are not yet available.");
-        if (QMessageBox::information(this, tr("Tunuino updates"), details +
-            tr("\n\nOpen the selected update channel in your browser?"),
-            QMessageBox::Open | QMessageBox::Cancel, QMessageBox::Open) == QMessageBox::Open)
-            QDesktopServices::openUrl(QUrl(destination));
+    connect(checkUpdates, &QAction::triggered, this, [this, checkUpdates]() {
+        const QString channel = QSettings(QStringLiteral("Tunuino"), QStringLiteral("TunuinoConsole"))
+            .value(QStringLiteral("updates/channel"), QStringLiteral("beta")).toString() == QLatin1String("stable")
+            ? QStringLiteral("stable") : QStringLiteral("beta");
+        // Public HTTPS manifest: no GitHub login or token is used by the Console.
+        const QUrl manifestUrl(QStringLiteral("https://tunuino.github.io/updates/") + channel + QStringLiteral(".json"));
+        auto *network = new QNetworkAccessManager(this);
+        checkUpdates->setEnabled(false);
+        auto *reply = network->get(QNetworkRequest(manifestUrl));
+        connect(reply, &QNetworkReply::finished, this, [this, reply, network, checkUpdates, channel]() {
+            checkUpdates->setEnabled(true);
+            reply->deleteLater();
+            if (reply->error() != QNetworkReply::NoError || reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200) {
+                QMessageBox::warning(this, tr("Console updates"),
+                    tr("The public %1 update feed is not available yet. No sign-in is required.").arg(channel));
+                network->deleteLater();
+                return;
+            }
+            const QJsonDocument document = QJsonDocument::fromJson(reply->readAll());
+            const QJsonObject item = document.object();
+            const QString version = item.value(QStringLiteral("version")).toString();
+            const QUrl packageUrl(item.value(QStringLiteral("url")).toString());
+            const QByteArray expectedHash = item.value(QStringLiteral("sha256")).toString().toLatin1().toLower();
+            const bool valid = !version.isEmpty() && QVersionNumber::fromString(version).segmentCount() > 0
+                && packageUrl.isValid() && packageUrl.scheme() == QLatin1String("https")
+                && expectedHash.size() == 64 &&
+                std::all_of(expectedHash.cbegin(), expectedHash.cend(), [](char c) {
+                    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+                });
+            if (!valid) {
+                QMessageBox::warning(this, tr("Console updates"), tr("Invalid update manifest. Installation cancelled."));
+                network->deleteLater();
+                return;
+            }
+            const QVersionNumber installed = QVersionNumber::fromString(QCoreApplication::applicationVersion());
+            if (installed.segmentCount() && QVersionNumber::compare(QVersionNumber::fromString(version), installed) <= 0) {
+                QMessageBox::information(this, tr("Console updates"), tr("The Console is up to date."));
+                network->deleteLater();
+                return;
+            }
+            if (QMessageBox::question(this, tr("Console update available"),
+                    tr("Download and install Console %1 (%2)? Firmware will not be changed.").arg(version, channel))
+                != QMessageBox::Yes) {
+                network->deleteLater();
+                return;
+            }
+            auto *download = network->get(QNetworkRequest(packageUrl));
+            connect(download, &QNetworkReply::finished, this, [this, download, network, expectedHash, version]() {
+                download->deleteLater();
+                network->deleteLater();
+                const QByteArray bytes = download->readAll();
+                if (download->error() != QNetworkReply::NoError || bytes.isEmpty()
+                    || QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex() != expectedHash) {
+                    QMessageBox::warning(this, tr("Console updates"), tr("Download failed or SHA-256 verification failed. Nothing was installed."));
+                    return;
+                }
+                const QString folder = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)
+                    + QStringLiteral("/updates");
+                if (!QDir().mkpath(folder)) {
+                    QMessageBox::warning(this, tr("Console updates"), tr("Cannot create the update directory."));
+                    return;
+                }
+                const QString installer = folder + QStringLiteral("/Tunuino-Console-") + version + QStringLiteral(".exe");
+                QSaveFile output(installer);
+                if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit()) {
+                    QMessageBox::warning(this, tr("Console updates"), tr("Cannot save the verified installer."));
+                    return;
+                }
+                if (QMessageBox::question(this, tr("Install Console update"),
+                        tr("The verified installer is ready. Close the Console and launch installation now?"))
+                    == QMessageBox::Yes) {
+                    if (QProcess::startDetached(installer, QStringList()))
+                        QCoreApplication::quit();
+                    else
+                        QMessageBox::warning(this, tr("Console updates"), tr("Could not start the installer."));
+                }
+            });
+        });
     });
     auto *aboutAction = helpMenu->addAction(tr("About Tunuino Console"));
     connect(aboutAction, &QAction::triggered, this, [this]() {
