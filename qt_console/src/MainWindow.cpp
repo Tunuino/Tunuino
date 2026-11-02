@@ -658,33 +658,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             dfuLog->appendPlainText(tr("  Sector %1: 0x%2")
                 .arg(i).arg(0x08000000u + offset, 8, 16, QLatin1Char('0')));
         }
-        // A complete sector backup must be verified on disk before a future
-        // destructive DFU operation can be enabled.
-        const QString backupPath = QFileDialog::getOpenFileName(firmwarePage,
-            tr("Select saved ECU sector backup for preflight"), QString(),
-            tr("Binary backup (*.bin)"));
-        if (backupPath.isEmpty()) {
-            dfuLog->appendPlainText(tr("Backup preflight skipped: no file selected."));
-        } else {
-            QFile backup(backupPath);
-            if (!backup.open(QIODevice::ReadOnly)) {
-                dfuLog->appendPlainText(tr("Flash gate BLOCKED: cannot open backup %1").arg(backupPath));
-            } else {
-                const QByteArray saved = backup.readAll();
-                if (saved.size() != qint64(eraseBytes)) {
-                    dfuLog->appendPlainText(tr("Flash gate BLOCKED: backup size %1, required %2 bytes.")
-                        .arg(saved.size()).arg(eraseBytes));
-                } else {
-                    dfuLog->appendPlainText(tr("Backup file preflight PASS: %1 bytes; SHA256=%2")
-                        .arg(saved.size())
-                        .arg(QString::fromLatin1(QCryptographicHash::hash(saved,
-                            QCryptographicHash::Sha256).toHex())));
-                    dfuLog->appendPlainText(tr("Backup on disk checked; live ECU equality is checked before erase."));
-                }
-            }
-        }
-        dfuLog->appendPlainText(tr("Safety: save and verify a %1-byte sector backup before any erase.")
-            .arg(eraseBytes));
+        dfuLog->appendPlainText(tr("Preparation is read-only. Backup selection and verification occur during Flash and verify."));
         dfuLog->appendPlainText(tr("Firmware SHA256: %1")
             .arg(QString::fromLatin1(QCryptographicHash::hash(bytes,
                 QCryptographicHash::Sha256).toHex())));
