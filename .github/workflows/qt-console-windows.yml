@@ -121,6 +121,9 @@ jobs:
           if-no-files-found: error
 
   publish-beta-updates:
+    concurrency:
+      group: tunuino-beta-pages
+      cancel-in-progress: true
     # Enable after configuring Settings > Pages > Source: GitHub Actions.
     # Repository variable ENABLE_BETA_UPDATES must be set to true.
     if: ${{ github.ref == 'refs/heads/master' && vars.ENABLE_BETA_UPDATES == 'true' }}
@@ -134,6 +137,16 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Reject obsolete master builds before publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=$(git ls-remote https://github.com/Tunuino/Tunuino.git refs/heads/master | cut -f1)
+          test -n "$latest"
+          if [ "$latest" != "$GITHUB_SHA" ]; then
+            echo "Refusing stale Beta deployment: run=$GITHUB_SHA current=$latest"
+            exit 1
+          fi
       - name: Download verified Console installer
         uses: actions/download-artifact@v4
         with:
