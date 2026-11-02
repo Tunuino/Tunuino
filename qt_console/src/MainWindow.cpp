@@ -250,8 +250,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelAxisRow->setSpacing(5);
     // MAP axis label is positioned to the left of the grid.
     fuelAxisRow->addWidget(maps, 0, Qt::AlignTop);
-    auto *fuelRpmAxis = new QLabel(tr("MAP (kPa)"), fuelGridPanel);
+    auto *fuelRpmAxis = new QLabel(tr("M\nA\nP\n\n(kPa)"), fuelGridPanel);
     fuelRpmAxis->setAlignment(Qt::AlignCenter);
+    fuelRpmAxis->setFixedWidth(34);
+    fuelRpmAxis->setWordWrap(false);
     fuelRpmAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     fuelAxisRow->insertWidget(0, fuelRpmAxis, 0, Qt::AlignVCenter);
     fuelGridLayout->addLayout(fuelAxisRow);
@@ -333,8 +335,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionAxisRow->setSpacing(5);
     // MAP axis label is positioned to the left of the grid.
     ignitionAxisRow->addWidget(ignitionMap, 0, Qt::AlignTop);
-    auto *ignitionRpmAxis = new QLabel(tr("MAP (kPa)"), ignitionGridPanel);
+    auto *ignitionRpmAxis = new QLabel(tr("M\nA\nP\n\n(kPa)"), ignitionGridPanel);
     ignitionRpmAxis->setAlignment(Qt::AlignCenter);
+    ignitionRpmAxis->setFixedWidth(34);
+    ignitionRpmAxis->setWordWrap(false);
     ignitionRpmAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     ignitionAxisRow->insertWidget(0, ignitionRpmAxis, 0, Qt::AlignVCenter);
     ignitionGridLayout->addLayout(ignitionAxisRow);
