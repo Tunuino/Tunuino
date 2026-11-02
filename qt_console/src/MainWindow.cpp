@@ -241,7 +241,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
     maps->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     maps->setFixedSize(maps->verticalHeader()->width() + 16 * maps->horizontalHeader()->defaultSectionSize() + 4,
-                         maps->horizontalHeader()->height() + 16 * maps->verticalHeader()->defaultSectionSize() + 4);
+                         16 * maps->verticalHeader()->defaultSectionSize() + 4);
     auto *fuelGridPanel = new QWidget(fuelPage);
     auto *fuelGridLayout = new QVBoxLayout(fuelGridPanel);
     fuelGridLayout->setContentsMargins(0, 0, 0, 0);
@@ -254,6 +254,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelRpmAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     fuelAxisRow->addWidget(fuelRpmAxis, 0, Qt::AlignVCenter);
     fuelGridLayout->addLayout(fuelAxisRow);
+    maps->horizontalHeader()->hide();
+    auto *fuelRpmValues = new QTableWidget(1, 16, fuelGridPanel);
+    fuelRpmValues->horizontalHeader()->hide();
+    fuelRpmValues->verticalHeader()->hide();
+    fuelRpmValues->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    fuelRpmValues->setFocusPolicy(Qt::NoFocus);
+    fuelRpmValues->setSelectionMode(QAbstractItemView::NoSelection);
+    fuelRpmValues->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    fuelRpmValues->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    fuelRpmValues->horizontalHeader()->setDefaultSectionSize(maps->horizontalHeader()->defaultSectionSize());
+    fuelRpmValues->verticalHeader()->setDefaultSectionSize(28);
+    fuelRpmValues->setFixedSize(16 * maps->horizontalHeader()->defaultSectionSize() + 4, 32);
+    for (int i = 0; i < 16; ++i) {
+        auto *cell = new QTableWidgetItem(QString::number(i + 1));
+        cell->setTextAlignment(Qt::AlignCenter);
+        fuelRpmValues->setItem(0, i, cell);
+    }
+    auto *fuelBottomAxis = new QHBoxLayout();
+    fuelBottomAxis->setContentsMargins(maps->verticalHeader()->width(), 0, 0, 0);
+    fuelBottomAxis->addWidget(fuelRpmValues, 0, Qt::AlignLeft);
+    fuelGridLayout->addLayout(fuelBottomAxis);
+
     auto *fuelMapAxis = new QLabel(tr("RPM (rev/min)"), fuelGridPanel);
     fuelMapAxis->setAlignment(Qt::AlignHCenter);
     fuelMapAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
@@ -301,7 +323,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionMap->verticalHeader()->setToolTip(tr("MAP (kPa)"));
     ignitionMap->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     ignitionMap->setFixedSize(ignitionMap->verticalHeader()->width() + 16 * ignitionMap->horizontalHeader()->defaultSectionSize() + 4,
-                         ignitionMap->horizontalHeader()->height() + 16 * ignitionMap->verticalHeader()->defaultSectionSize() + 4);
+                         16 * ignitionMap->verticalHeader()->defaultSectionSize() + 4);
     auto *ignitionGridPanel = new QWidget(ignitionPage);
     auto *ignitionGridLayout = new QVBoxLayout(ignitionGridPanel);
     ignitionGridLayout->setContentsMargins(0, 0, 0, 0);
@@ -314,6 +336,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionRpmAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     ignitionAxisRow->addWidget(ignitionRpmAxis, 0, Qt::AlignVCenter);
     ignitionGridLayout->addLayout(ignitionAxisRow);
+    ignitionMap->horizontalHeader()->hide();
+    auto *ignitionRpmValues = new QTableWidget(1, 16, ignitionGridPanel);
+    ignitionRpmValues->horizontalHeader()->hide();
+    ignitionRpmValues->verticalHeader()->hide();
+    ignitionRpmValues->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    ignitionRpmValues->setFocusPolicy(Qt::NoFocus);
+    ignitionRpmValues->setSelectionMode(QAbstractItemView::NoSelection);
+    ignitionRpmValues->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    ignitionRpmValues->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    ignitionRpmValues->horizontalHeader()->setDefaultSectionSize(ignitionMap->horizontalHeader()->defaultSectionSize());
+    ignitionRpmValues->verticalHeader()->setDefaultSectionSize(28);
+    ignitionRpmValues->setFixedSize(16 * ignitionMap->horizontalHeader()->defaultSectionSize() + 4, 32);
+    for (int i = 0; i < 16; ++i) {
+        auto *cell = new QTableWidgetItem(QString::number(i + 1));
+        cell->setTextAlignment(Qt::AlignCenter);
+        ignitionRpmValues->setItem(0, i, cell);
+    }
+    auto *ignitionBottomAxis = new QHBoxLayout();
+    ignitionBottomAxis->setContentsMargins(ignitionMap->verticalHeader()->width(), 0, 0, 0);
+    ignitionBottomAxis->addWidget(ignitionRpmValues, 0, Qt::AlignLeft);
+    ignitionGridLayout->addLayout(ignitionBottomAxis);
+
     auto *ignitionMapAxis = new QLabel(tr("RPM (rev/min)"), ignitionGridPanel);
     ignitionMapAxis->setAlignment(Qt::AlignHCenter);
     ignitionMapAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
@@ -2200,7 +2244,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             }
             // Rows are MAP load (kPa); columns are engine speed (RPM).
             // Firmware storage is load-major: cells[load][rpm].
-            table->setHorizontalHeaderLabels(rpmLabels);
+            auto *rpmValues = (table == maps) ? fuelRpmValues : ignitionRpmValues;
+            for (int i = 0; i < 16; ++i)
+                rpmValues->item(0, i)->setText(rpmLabels.at(i));
             table->setVerticalHeaderLabels(loadLabels);
             for (int row = 0; row < 16; ++row)
                 for (int col = 0; col < 16; ++col)
