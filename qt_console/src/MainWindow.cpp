@@ -577,6 +577,83 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             for (int col = left; col <= right; ++col)
                 table->item(row, col)->setText(QString::number(output[row][col], 'f', afr ? 1 : 0));
     };
+    // Per-table undo/redo history. Snapshot changes once per event-loop turn,
+    // so bulk interpolation/smoothing is one undoable operation.
+    auto installTableEditControls = [this, editMapRegion](QHBoxLayout *bar, QTableWidget *table, bool afr) {
+        struct History {
+            QVector<QStringList> undo;
+            QVector<QStringList> redo;
+            QStringList current;
+            bool pending = false;
+            bool restoring = false;
+        };
+        auto history = QSharedPointer<History>::create();
+        const auto snapshot = [table]() {
+            QStringList result;
+            result.reserve(256);
+            for (int row = 0; row < 16; ++row)
+                for (int col = 0; col < 16; ++col)
+                    result.append(table->item(row, col) ? table->item(row, col)->text() : QString());
+            return result;
+        };
+        history->current = snapshot();
+        const auto restore = [table, history](const QStringList &values) {
+            if (values.size() != 256) return;
+            history->restoring = true;
+            for (int row = 0; row < 16; ++row)
+                for (int col = 0; col < 16; ++col)
+                    if (auto *cell = table->item(row, col))
+                        cell->setText(values.at(row * 16 + col));
+            history->restoring = false;
+        };
+        const auto flush = [history, snapshot]() {
+            history->pending = false;
+            const QStringList next = snapshot();
+            if (next == history->current) return;
+            history->undo.append(history->current);
+            if (history->undo.size() > 50) history->undo.removeFirst();
+            history->redo.clear();
+            history->current = next;
+        };
+        connect(table, &QTableWidget::itemChanged, this, [this, history, flush](QTableWidgetItem *) {
+            if (history->restoring || history->pending) return;
+            history->pending = true;
+            QTimer::singleShot(0, this, [history, flush]() {
+                if (history->pending) flush();
+            });
+        });
+        auto *interpolate = new QPushButton(tr("Interpolate"), table);
+        auto *smooth = new QPushButton(tr("Smooth"), table);
+        auto *undo = new QPushButton(tr("Undo"), table);
+        auto *redo = new QPushButton(tr("Redo"), table);
+        for (auto *button : {interpolate, smooth, undo, redo}) bar->addWidget(button);
+        connect(interpolate, &QPushButton::clicked, this, [table, afr, editMapRegion, flush]() {
+            flush();
+            editMapRegion(table, false, afr);
+            flush();
+        });
+        connect(smooth, &QPushButton::clicked, this, [table, afr, editMapRegion, flush]() {
+            flush();
+            editMapRegion(table, true, afr);
+            flush();
+        });
+        connect(undo, &QPushButton::clicked, this, [history, flush, snapshot, restore]() {
+            flush();
+            if (history->undo.isEmpty()) return;
+            history->redo.append(history->current);
+            const QStringList previous = history->undo.takeLast();
+            restore(previous);
+            history->current = snapshot();
+        });
+        connect(redo, &QPushButton::clicked, this, [history, flush, snapshot, restore]() {
+            flush();
+            if (history->redo.isEmpty()) return;
+            history->undo.append(history->current);
+            const QStringList next = history->redo.takeLast();
+            restore(next);
+            history->current = snapshot();
+        });
+    };
     // Offline map persistence; never sends data to the ECU.
     auto installMapFileActions = [this](QTableWidget *table, const QString &mapId,
                                         const QStringList &rpmAxis, const QStringList &mapAxis,
@@ -671,6 +748,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     fillDefaultTable(maps, fuelDefaults, 1.0, fuelMapBins);
     installMapHeatmap(maps);
+    installTableEditControls(fuelActionsLayout, maps, false);
     const auto fuelFileActions = installMapFileActions(maps, QStringLiteral("fuel"), fuelRpmBins, fuelMapBins, 255.0);
     maps->setCornerButtonEnabled(false);
     maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
@@ -798,6 +876,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionMap->setAlternatingRowColors(true);
     fillDefaultTable(ignitionMap, ignitionDefaults, 1.0, ignitionMapBins);
     installMapHeatmap(ignitionMap);
+    installTableEditControls(ignitionActionsLayout, ignitionMap, false);
     const auto ignitionFileActions = installMapFileActions(ignitionMap, QStringLiteral("ignition"), ignitionRpmBins, ignitionMapBins, 90.0);
     ignitionMap->setCornerButtonEnabled(false);
     ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
@@ -931,6 +1010,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrMap->setVerticalHeaderLabels(loadHeaders);
     fillDefaultTable(afrMap, afrDefaults, 10.0, afrMapBins);
     installMapHeatmap(afrMap);
+    auto *afrEditBar = new QHBoxLayout();
+    installTableEditControls(afrEditBar, afrMap, true);
+    afrEditBar->addStretch();
+    afrLayout->addLayout(afrEditBar);
     const auto afrFileActions = installMapFileActions(afrMap, QStringLiteral("afr"), afrRpmBins, afrMapBins, 25.0);
     afrLayout->addWidget(afrMap, 1);
     auto *afrFoot = new QLabel(tr("RPM (columns) / MAP kPa (rows). AFR assumes gasoline stoichiometric 14.7. No ECU AFR table protocol exists yet."), afrPage);
@@ -2517,24 +2600,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fileMenu->addSeparator();
     auto *exitAction = fileMenu->addAction(tr("Exit"), this, &QWidget::close);
     exitAction->setShortcut(QKeySequence(QStringLiteral("Alt+X")));
-    auto *editMenu = menuBar()->addMenu(tr("Edit"));
-    const auto activeEditTable = [tabs, fuelPage, ignitionPage, afrPage, maps, ignitionMap, afrMap]() -> QTableWidget * {
-        const QWidget *page = tabs->currentWidget();
-        if (page == fuelPage) return maps;
-        if (page == ignitionPage) return ignitionMap;
-        if (page == afrPage) return afrMap;
-        return nullptr;
-    };
-    auto *interpolateAction = editMenu->addAction(tr("Interpolate selection"));
-    connect(interpolateAction, &QAction::triggered, this, [activeEditTable, editMapRegion, afrMap]() {
-        auto *table = activeEditTable();
-        editMapRegion(table, false, table == afrMap);
-    });
-    auto *smoothAction = editMenu->addAction(tr("Smooth selection"));
-    connect(smoothAction, &QAction::triggered, this, [activeEditTable, editMapRegion, afrMap]() {
-        auto *table = activeEditTable();
-        editMapRegion(table, true, table == afrMap);
-    });
     auto *baseMapsMenu = menuBar()->addMenu(tr("Base Maps"));
     auto *openBaseMaps = baseMapsMenu->addAction(tr("Open Base Maps"));
     connect(openBaseMaps, &QAction::triggered, this, [tabs, workspace, workspaceWindow]() {
