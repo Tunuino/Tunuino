@@ -239,6 +239,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             workspaceWindow->show();
             workspace->setActiveSubWindow(workspaceWindow);
             tabs->setCurrentIndex(index);
+            workspaceWindow->setWindowTitle(item->text(0));
         }
         else if (!item->parent()) item->setExpanded(!item->isExpanded());
     });
@@ -2202,6 +2203,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         workspaceWindow->show();
         workspace->setActiveSubWindow(workspaceWindow);
         tabs->setCurrentIndex(3);
+        workspaceWindow->setWindowTitle(QObject::tr("Base Maps"));
     });
     auto *viewMenu = menuBar()->addMenu(tr("View"));
     viewMenu->addAction(navigationDock->toggleViewAction());
