@@ -480,6 +480,85 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
         table->setVerticalHeaderLabels(verticalLabels);
     };
+    // Offline map persistence; never sends data to the ECU.
+    auto installMapFileActions = [this](QHBoxLayout *bar, QTableWidget *table, const QString &mapId,
+                                        const QStringList &rpmAxis, const QStringList &mapAxis,
+                                        double maximum) {
+        auto *openButton = new QPushButton(tr("Open map"), table);
+        auto *saveButton = new QPushButton(tr("Save map"), table);
+        bar->addWidget(openButton);
+        bar->addWidget(saveButton);
+        connect(saveButton, &QPushButton::clicked, this, [this, table, mapId, rpmAxis, mapAxis, maximum]() {
+            QJsonArray rows;
+            for (int row = 0; row < 16; ++row) {
+                QJsonArray values;
+                for (int col = 0; col < 16; ++col) {
+                    bool ok = false;
+                    const auto *item = table->item(row, col);
+                    const double value = item ? item->text().toDouble(&ok) : 0.0;
+                    if (!ok || !std::isfinite(value) || value < 0.0 || value > maximum) {
+                        QMessageBox::warning(this, tr("Invalid map"), tr("Invalid value at row %1, column %2.").arg(row+1).arg(col+1));
+                        return;
+                    }
+                    values.append(value);
+                }
+                rows.append(values);
+            }
+            QJsonArray rpms, loads;
+            for (const QString &value : rpmAxis) rpms.append(value.toDouble());
+            for (int row = 15; row >= 0; --row) loads.append(mapAxis.at(row).toDouble());
+            QJsonObject doc;
+            doc.insert(QStringLiteral("format"), QStringLiteral("tunuino-map-v1"));
+            doc.insert(QStringLiteral("map"), mapId);
+            doc.insert(QStringLiteral("rpm"), rpms);
+            doc.insert(QStringLiteral("mapKpa"), loads);
+            doc.insert(QStringLiteral("values"), rows);
+            const QString filename = QFileDialog::getSaveFileName(this, tr("Save map"), mapId + QStringLiteral(".json"), tr("Tunuino maps (*.json)"));
+            if (filename.isEmpty()) return;
+            QSaveFile file(filename);
+            if (!file.open(QIODevice::WriteOnly) || file.write(QJsonDocument(doc).toJson(QJsonDocument::Indented)) < 0 || !file.commit())
+                QMessageBox::warning(this, tr("Save failed"), tr("Could not save map."));
+        });
+        connect(openButton, &QPushButton::clicked, this, [this, table, mapId, rpmAxis, mapAxis, maximum]() {
+            const QString filename = QFileDialog::getOpenFileName(this, tr("Open map"), QString(), tr("Tunuino maps (*.json)"));
+            if (filename.isEmpty()) return;
+            QFile file(filename);
+            if (!file.open(QIODevice::ReadOnly)) {
+                QMessageBox::warning(this, tr("Open failed"), tr("Could not read map."));
+                return;
+            }
+            QJsonParseError error;
+            const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &error);
+            const QJsonObject obj = doc.object();
+            const QJsonArray rows = obj.value(QStringLiteral("values")).toArray();
+            const QJsonArray rpms = obj.value(QStringLiteral("rpm")).toArray();
+            const QJsonArray loads = obj.value(QStringLiteral("mapKpa")).toArray();
+            bool valid = error.error == QJsonParseError::NoError && doc.isObject()
+                && obj.value(QStringLiteral("format")).toString() == QStringLiteral("tunuino-map-v1")
+                && obj.value(QStringLiteral("map")).toString() == mapId
+                && rows.size() == 16 && rpms.size() == 16 && loads.size() == 16;
+            for (int i = 0; valid && i < 16; ++i) {
+                if (!rpms.at(i).isDouble() || !loads.at(i).isDouble()
+                    || std::abs(rpms.at(i).toDouble() - rpmAxis.at(i).toDouble()) > 0.01
+                    || std::abs(loads.at(i).toDouble() - mapAxis.at(15-i).toDouble()) > 0.01
+                    || !rows.at(i).isArray() || rows.at(i).toArray().size() != 16) { valid = false; break; }
+                const QJsonArray row = rows.at(i).toArray();
+                for (int j = 0; j < 16; ++j) {
+                    const QJsonValue v = row.at(j);
+                    if (!v.isDouble() || !std::isfinite(v.toDouble()) || v.toDouble() < 0.0 || v.toDouble() > maximum) {
+                        valid = false; break;
+                    }
+                }
+            }
+            if (!valid) {
+                QMessageBox::warning(this, tr("Invalid map"), tr("Map type, axes, dimensions or cell values are incompatible."));
+                return;
+            }
+            for (int i = 0; i < 16; ++i)
+                for (int j = 0; j < 16; ++j)
+                    table->item(i, j)->setText(QString::number(rows.at(i).toArray().at(j).toDouble(), 'f', mapId == QStringLiteral("afr") ? 1 : 0));
+        });
+    };
     auto *maps = new QTableWidget(16, 16, fuelPage);
     maps->setAlternatingRowColors(true);
     maps->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -495,6 +574,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     maps->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     fillDefaultTable(maps, fuelDefaults, 1.0, fuelMapBins);
+    installMapFileActions(fuelActionsLayout, maps, QStringLiteral("fuel"), fuelRpmBins, fuelMapBins, 255.0);
     maps->setCornerButtonEnabled(false);
     maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -620,6 +700,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionMap->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
     ignitionMap->setAlternatingRowColors(true);
     fillDefaultTable(ignitionMap, ignitionDefaults, 1.0, ignitionMapBins);
+    installMapFileActions(ignitionActionsLayout, ignitionMap, QStringLiteral("ignition"), ignitionRpmBins, ignitionMapBins, 90.0);
     ignitionMap->setCornerButtonEnabled(false);
     ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     ignitionMap->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -751,6 +832,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrMap->setHorizontalHeaderLabels(rpmHeaders);
     afrMap->setVerticalHeaderLabels(loadHeaders);
     fillDefaultTable(afrMap, afrDefaults, 10.0, afrMapBins);
+    auto *afrFileBar = new QHBoxLayout();
+    installMapFileActions(afrFileBar, afrMap, QStringLiteral("afr"), afrRpmBins, afrMapBins, 25.0);
+    afrFileBar->addStretch();
+    afrLayout->addLayout(afrFileBar);
     afrLayout->addWidget(afrMap, 1);
     auto *afrFoot = new QLabel(tr("RPM (columns) / MAP kPa (rows). AFR assumes gasoline stoichiometric 14.7. No ECU AFR table protocol exists yet."), afrPage);
     afrFoot->setWordWrap(true);
