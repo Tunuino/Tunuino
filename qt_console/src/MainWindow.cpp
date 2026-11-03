@@ -264,11 +264,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("DSG Gearbox"), {{tr("Gearbox settings"),-1}});
     addCategory(tr("CAN, Serial"), {{tr("Communication settings"),6}});
     addCategory(tr("Log"), {{tr("Datalogging"),4}});
-    addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
+    addCategory(tr("Gauges"), {{tr("Engine Status"),9},{tr("Runtime gauges"),-1}});
     addCategory(tr("Calibration & Setup"), {{tr("Sensor and engine calibration"),6}});
-    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, workspaceWindow, fuelGraphWindow, ignitionGraphWindow](QTreeWidgetItem *item, int) {
+    auto engineStatusDockRef = QSharedPointer<QPointer<QDockWidget>>::create();
+    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, workspaceWindow, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef](QTreeWidgetItem *item, int) {
         const int index = item->data(0, Qt::UserRole).toInt();
-        if (item->parent() && (index == 7 || index == 8)) {
+        if (item->parent() && index == 9) {
+            if (*engineStatusDockRef) { (*engineStatusDockRef)->show(); (*engineStatusDockRef)->raise(); }
+        } else if (item->parent() && (index == 7 || index == 8)) {
             auto window = (index == 7) ? *fuelGraphWindow : *ignitionGraphWindow;
             if (window) { window->showNormal(); workspace->setActiveSubWindow(window); }
         } else if (item->parent() && index >= 0 && index < tabs->count()) {
@@ -2161,6 +2164,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     dock->setMinimumWidth(245);
     dock->setMaximumWidth(400);
     addDockWidget(Qt::RightDockWidgetArea, dock);
+    *engineStatusDockRef = dock;
     auto *session = new tunuino::SerialSession(this);
     // The firmware runtime command is read-only: O + offset(U16 BE) + count(U16 BE).
     auto *liveTimer = new QTimer(this);
@@ -2250,6 +2254,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *viewMenu = menuBar()->addMenu(tr("View"));
     viewMenu->addAction(navigationDock->toggleViewAction());
     viewMenu->addAction(inspectorDock->toggleViewAction());
+    viewMenu->addAction(dock->toggleViewAction());
     auto *toolsMenu = menuBar()->addMenu(tr("Tools"));
     auto *validationAction = toolsMenu->addAction(tr("Check ECU configuration (read-only)"));
     validationAction->setEnabled(false);
