@@ -876,9 +876,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionActionsLayout->addStretch();
     ignitionLayout->addWidget(ignitionActions);
     auto *ignitionMap = new QTableWidget(16, 16, ignitionPage);
-    ignitionMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    ignitionMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     ignitionMap->horizontalHeader()->setDefaultSectionSize(62);
-    ignitionMap->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    ignitionMap->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     ignitionMap->verticalHeader()->setDefaultSectionSize(28);
     ignitionMap->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
     ignitionMap->setAlternatingRowColors(true);
@@ -908,7 +908,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionRpmAxis->setWordWrap(false);
     ignitionRpmAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     ignitionAxisRow->insertWidget(0, ignitionRpmAxis, 0, Qt::AlignVCenter);
-    ignitionGridLayout->addLayout(ignitionAxisRow);
+    ignitionGridLayout->addLayout(ignitionAxisRow, 1);
     ignitionMap->horizontalHeader()->hide();
     auto *ignitionRpmValues = new QTableWidget(1, 16, ignitionGridPanel);
     ignitionRpmValues->horizontalHeader()->hide();
@@ -954,9 +954,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             ignitionMap->setRowHeight(i, height);
             ignitionRpmValues->setColumnWidth(i, width);
         }
-        ignitionMap->setFixedSize(ignitionMap->verticalHeader()->width() + 16 * width + 6,
-                           16 * height + 6);
-        ignitionRpmValues->setFixedSize(16 * width + 6, 32);
+        ignitionMap->setMinimumSize(ignitionMap->verticalHeader()->width() + 16 * width + 6,
+                                    16 * height + 6);
     };
     connect(ignitionZoomIn, &QPushButton::clicked, ignitionPage, [resizeignitionGrid] { resizeignitionGrid(8); });
     connect(ignitionZoomOut, &QPushButton::clicked, ignitionPage, [resizeignitionGrid] { resizeignitionGrid(-8); });
@@ -971,7 +970,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if (ok) ignitionMap->verticalHeaderItem(row)->setText(QString::number(value, 'f', 1));
     });
     auto *ignitionWorkspace = new QHBoxLayout();
-    ignitionWorkspace->addWidget(ignitionGridPanel, 0, Qt::AlignTop);
+    ignitionWorkspace->addWidget(ignitionGridPanel, 1);
     auto *ignitionSurface = new MapSurfacePreview(ignitionMap, ignitionPage);
     // The 3D graph has its own MDI window; the table remains independently visible.
     auto *ignitionGraphSubWindow = workspace->addSubWindow(ignitionSurface);
@@ -985,8 +984,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionGraphSubWindow->show();
     boundsGuard->watch(ignitionGraphSubWindow);
     ignitionGraphSubWindow->move(75, 85);
-    ignitionLayout->addLayout(ignitionWorkspace);
-    ignitionLayout->addStretch(1);
+    ignitionLayout->addLayout(ignitionWorkspace, 1);
     auto *ignitionFooter = new QLabel(tr("Tunuino offline base values. Edit locally; ECU writing requires a validated protocol."), ignitionPage);
     ignitionFooter->setStyleSheet(QStringLiteral("color: #a9aaad;"));
     ignitionLayout->addWidget(ignitionFooter);
@@ -1003,12 +1001,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrWarning->setStyleSheet(QStringLiteral("color: #e6a750;"));
     afrLayout->addWidget(afrWarning);
     auto *afrMap = new QTableWidget(16, 16, afrPage);
-    afrMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    afrMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     afrMap->horizontalHeader()->setDefaultSectionSize(62);
-    afrMap->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    afrMap->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     afrMap->verticalHeader()->setDefaultSectionSize(28);
     afrMap->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
     afrMap->setAlternatingRowColors(true);
+    afrMap->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    afrMap->setMinimumSize(480, 420);
 
     QStringList rpmHeaders, loadHeaders;
     for (int i = 0; i < 16; ++i) {
