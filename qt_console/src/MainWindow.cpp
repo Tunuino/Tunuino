@@ -29,6 +29,7 @@
 #include <QGroupBox>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QInputDialog>
 #include <QRegularExpression>
 #include <QSplitter>
 #include <QAbstractItemView>
@@ -322,6 +323,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelActionsLayout->addWidget(fuelSave);
     fuelActionsLayout->addStretch();
     fuelLayout->addWidget(fuelActions);
+    const QStringList defaultRpmAxis = {QStringLiteral("200"), QStringLiteral("400"), QStringLiteral("600"), QStringLiteral("800"), QStringLiteral("1000"), QStringLiteral("1500"), QStringLiteral("2000"), QStringLiteral("2500"), QStringLiteral("3000"), QStringLiteral("3500"), QStringLiteral("4000"), QStringLiteral("4500"), QStringLiteral("5000"), QStringLiteral("5500"), QStringLiteral("6000"), QStringLiteral("7000")};
+    const QStringList defaultMapAxis = {QStringLiteral("105"), QStringLiteral("100"), QStringLiteral("90"), QStringLiteral("80"), QStringLiteral("75"), QStringLiteral("70"), QStringLiteral("65"), QStringLiteral("60"), QStringLiteral("55"), QStringLiteral("50"), QStringLiteral("45"), QStringLiteral("40"), QStringLiteral("35"), QStringLiteral("30"), QStringLiteral("25"), QStringLiteral("20")};
     auto *maps = new QTableWidget(16, 16, fuelPage);
     maps->setAlternatingRowColors(true);
     maps->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -342,7 +345,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             cell->setFlags(cell->flags() & ~Qt::ItemIsEditable);
             maps->setItem(row, col, cell);
         }
-    maps->setVerticalHeaderLabels(QStringList(16, QStringLiteral("—")));
+    maps->setVerticalHeaderLabels(defaultMapAxis);
     maps->setCornerButtonEnabled(false);
     maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -367,7 +370,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *fuelRpmValues = new QTableWidget(1, 16, fuelGridPanel);
     fuelRpmValues->horizontalHeader()->hide();
     fuelRpmValues->verticalHeader()->hide();
-    fuelRpmValues->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    fuelRpmValues->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
     fuelRpmValues->setFocusPolicy(Qt::NoFocus);
     fuelRpmValues->setSelectionMode(QAbstractItemView::NoSelection);
     fuelRpmValues->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -379,7 +382,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     fuelRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     for (int i = 0; i < 16; ++i) {
-        auto *cell = new QTableWidgetItem(QStringLiteral("—"));
+        auto *cell = new QTableWidgetItem(defaultRpmAxis.at(i));
         cell->setTextAlignment(Qt::AlignCenter);
         fuelRpmValues->setItem(0, i, cell);
     }
@@ -414,6 +417,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(fuelZoomIn, &QPushButton::clicked, fuelPage, [resizefuelGrid] { resizefuelGrid(8); });
     connect(fuelZoomOut, &QPushButton::clicked, fuelPage, [resizefuelGrid] { resizefuelGrid(-8); });
 
+    // Edit MAP breakpoints by double-clicking the vertical header.
+    connect(maps->verticalHeader(), &QHeaderView::sectionDoubleClicked, fuelPage,
+            [maps](int row) {
+        bool ok = false;
+        const double current = maps->verticalHeaderItem(row)->text().toDouble();
+        const double value = QInputDialog::getDouble(maps, QObject::tr("MAP breakpoint"),
+            QObject::tr("MAP (kPa)"), current, 0.0, 500.0, 1, &ok);
+        if (ok) maps->verticalHeaderItem(row)->setText(QString::number(value, 'f', 1));
+    });
     auto *fuelWorkspace = new QHBoxLayout();
     fuelWorkspace->addWidget(fuelGridPanel, 1);
     auto *fuelSurface = new MapSurfacePreview(maps, fuelPage);
@@ -463,7 +475,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             cell->setFlags(cell->flags() & ~Qt::ItemIsEditable);
             ignitionMap->setItem(row, col, cell);
         }
-    ignitionMap->setVerticalHeaderLabels(QStringList(16, QStringLiteral("—")));
+    ignitionMap->setVerticalHeaderLabels(defaultMapAxis);
     ignitionMap->setCornerButtonEnabled(false);
     ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     ignitionMap->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -489,7 +501,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *ignitionRpmValues = new QTableWidget(1, 16, ignitionGridPanel);
     ignitionRpmValues->horizontalHeader()->hide();
     ignitionRpmValues->verticalHeader()->hide();
-    ignitionRpmValues->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    ignitionRpmValues->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
     ignitionRpmValues->setFocusPolicy(Qt::NoFocus);
     ignitionRpmValues->setSelectionMode(QAbstractItemView::NoSelection);
     ignitionRpmValues->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -498,7 +510,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionRpmValues->verticalHeader()->setDefaultSectionSize(28);
     ignitionRpmValues->setFixedSize(16 * ignitionMap->horizontalHeader()->defaultSectionSize() + 4, 32);
     for (int i = 0; i < 16; ++i) {
-        auto *cell = new QTableWidgetItem(QStringLiteral("—"));
+        auto *cell = new QTableWidgetItem(defaultRpmAxis.at(i));
         cell->setTextAlignment(Qt::AlignCenter);
         ignitionRpmValues->setItem(0, i, cell);
     }
@@ -534,6 +546,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(ignitionZoomIn, &QPushButton::clicked, ignitionPage, [resizeignitionGrid] { resizeignitionGrid(8); });
     connect(ignitionZoomOut, &QPushButton::clicked, ignitionPage, [resizeignitionGrid] { resizeignitionGrid(-8); });
 
+    // Edit MAP breakpoints by double-clicking the vertical header.
+    connect(ignitionMap->verticalHeader(), &QHeaderView::sectionDoubleClicked, ignitionPage,
+            [ignitionMap](int row) {
+        bool ok = false;
+        const double current = ignitionMap->verticalHeaderItem(row)->text().toDouble();
+        const double value = QInputDialog::getDouble(ignitionMap, QObject::tr("MAP breakpoint"),
+            QObject::tr("MAP (kPa)"), current, 0.0, 500.0, 1, &ok);
+        if (ok) ignitionMap->verticalHeaderItem(row)->setText(QString::number(value, 'f', 1));
+    });
     auto *ignitionWorkspace = new QHBoxLayout();
     ignitionWorkspace->addWidget(ignitionGridPanel, 0, Qt::AlignTop);
     auto *ignitionSurface = new MapSurfacePreview(ignitionMap, ignitionPage);
