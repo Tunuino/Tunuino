@@ -484,6 +484,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // Heatmap for the 2D calibration grids. The color range follows the
     // actual numeric cells and is refreshed after edits or opening a map.
     auto installMapHeatmap = [this](QTableWidget *table) {
+        // Improve numeric readability without changing window geometry or cell sizes.
+        QFont valueFont = table->font();
+        valueFont.setPointSize(11);
+        valueFont.setWeight(QFont::Bold);
+        table->setFont(valueFont);
         const auto recolor = [table]() {
             double minimum = 1e100, maximum = -1e100;
             for (int row = 0; row < table->rowCount(); ++row)
