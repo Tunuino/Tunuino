@@ -328,8 +328,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     };
     addCategory(tr("Sensors and inputs"), {{tr("TPS Calibration"),6},{tr("MAP Calibration"),6},{tr("Temperature sensors"),6},{tr("Lambda / O2"),6}});
     addCategory(tr("Engine start"), {{tr("Cranking"),-1},{tr("Afterstart"),-1}});
-    addCategory(tr("Fueling"), {{tr("Fuel Table 16 x 16"),0},{tr("Fuel 3D Graph"),7},{tr("AFR Target 16 x 16"),2},{tr("Injector Dead Time"),6}});
-    addCategory(tr("Ignition"), {{tr("Ignition Table 16 x 16"),1},{tr("Ignition 3D Graph"),8},{tr("Trigger setup"),6}});
+    addCategory(tr("Fueling"), {{tr("Fuel Table"),0},{tr("Fuel 3D Graph"),7},{tr("AFR Target"),2},{tr("Injector Dead Time"),6}});
+    addCategory(tr("Ignition"), {{tr("Ignition Table"),1},{tr("Ignition 3D Graph"),8},{tr("Trigger setup"),6}});
     addCategory(tr("Overrun"), {{tr("Fuel cut"),-1}});
     addCategory(tr("Knock sensors"), {{tr("Knock settings"),-1}});
     addCategory(tr("Idle"), {{tr("Idle control"),6}});
@@ -408,8 +408,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addDockWidget(Qt::RightDockWidgetArea, inspectorDock);
     resizeDocks({navigationDock, inspectorDock}, {235, 260}, Qt::Horizontal);
     const QStringList inspectorNotes = {
-        tr("Fuel / VE table. 16 x 16 grid. ECU values must be read and verified before use."),
-        tr("Ignition advance table. 16 x 16 grid. Verify trigger configuration and timing before running an engine."),
+        tr("Fuel / VE table. ECU values must be read and verified before use."),
+        tr("Ignition advance table. Verify trigger configuration and timing before running an engine."),
         tr("AFR target table. Confirm sensor calibration and operating conditions."),
         tr("Offline base maps. Illustrative examples are not calibrated engine tunes."),
         tr("Datalogging. Runtime channels and capture status."),
@@ -430,7 +430,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *fuelToolbar = new QWidget(fuelPage);
     auto *fuelToolbarLayout = new QHBoxLayout(fuelToolbar);
     fuelToolbarLayout->setContentsMargins(0, 0, 0, 0);
-    auto *fuelHeading = new QLabel(tr("FUEL TABLE  |  16 x 16"), fuelToolbar);
+    auto *fuelHeading = new QLabel(tr("FUEL TABLE"), fuelToolbar);
     fuelHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     fuelToolbarLayout->addWidget(fuelHeading);
     fuelToolbarLayout->addStretch();
@@ -677,7 +677,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     tabs->addTab(fuelPage, tr("Fuel Table"));
     auto *ignitionPage = new QWidget(tabs);
     auto *ignitionLayout = new QVBoxLayout(ignitionPage);
-    auto *ignitionHeading = new QLabel(tr("IGNITION TABLE  |  16 x 16"), ignitionPage);
+    auto *ignitionHeading = new QLabel(tr("IGNITION TABLE"), ignitionPage);
     ignitionHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     ignitionLayout->addWidget(ignitionHeading);
     auto *ignitionActions = new QWidget(ignitionPage);
@@ -808,7 +808,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // implemented for this table, so it cannot be written to the ECU.
     auto *afrPage = new QWidget(tabs);
     auto *afrLayout = new QVBoxLayout(afrPage);
-    auto *afrTitle = new QLabel(tr("AFR TARGET  |  Tunuino base  |  16 x 16"), afrPage);
+    auto *afrTitle = new QLabel(tr("AFR TARGET"), afrPage);
     afrTitle->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     afrLayout->addWidget(afrTitle);
     auto *afrWarning = new QLabel(tr("Tunuino base values: offline editing only. Validate for the engine before use."), afrPage);
@@ -2761,5 +2761,5 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         statusBar()->showMessage(tr("ECU identity verified. Fuel and Ignition map reading available; ECU writes disabled."));
     });
     refreshPorts();
-    statusBar()->showMessage(tr("TUNUINO  |  ECU connection ready  |  Connect ECU to read 16x16 maps; map writing disabled"));
+    statusBar()->showMessage(tr("TUNUINO  |  ECU connection ready  |  Connect ECU to read maps; map writing disabled"));
 }
