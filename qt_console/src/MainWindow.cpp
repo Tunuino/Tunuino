@@ -230,7 +230,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             auto window = (index == 7) ? *fuelGraphWindow : *ignitionGraphWindow;
             if (window) { window->showNormal(); workspace->setActiveSubWindow(window); }
         } else if (item->parent() && index >= 0 && index < tabs->count()) {
+            // QMdiSubWindow::close() may hide its child widget as well.
+            // Restore both widgets when reopening from navigation.
             workspaceWindow->showNormal();
+            tabs->show();
+            workspaceWindow->show();
             workspace->setActiveSubWindow(workspaceWindow);
             tabs->setCurrentIndex(index);
         }
