@@ -92,7 +92,7 @@ public:
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override {
         if (event->type() == QEvent::Resize && watched == area_->viewport()) {
-            QTimer::singleShot(0, this, [this]() { for (auto *w : windows_) clamp(w); });
+            QTimer::singleShot(0, this, [this]() { for (const auto &w : windows_) clamp(w.data()); });
         } else if (event->type() == QEvent::Move || event->type() == QEvent::Resize) {
             if (auto *w = qobject_cast<QMdiSubWindow *>(watched)) clamp(w);
         }
