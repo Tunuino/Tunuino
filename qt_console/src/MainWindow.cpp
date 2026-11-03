@@ -338,7 +338,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->setCornerButtonEnabled(false);
     maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
-    maps->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    maps->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     maps->setFixedSize(maps->verticalHeader()->width() + 16 * maps->horizontalHeader()->defaultSectionSize() + 4,
                          16 * maps->verticalHeader()->defaultSectionSize() + 4);
     auto *fuelGridPanel = new QWidget(fuelPage);
@@ -382,6 +382,29 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelMapAxis->setAlignment(Qt::AlignHCenter);
     fuelMapAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     fuelGridLayout->addWidget(fuelMapAxis);
+    auto *fuelZoomOut = new QPushButton(tr("−"), fuelPage);
+    auto *fuelZoomIn = new QPushButton(tr("+"), fuelPage);
+    fuelZoomOut->setToolTip(tr("Reduce table cell size"));
+    fuelZoomIn->setToolTip(tr("Increase table cell size"));
+    fuelZoomOut->setFixedWidth(32);
+    fuelZoomIn->setFixedWidth(32);
+    fuelGridLayout->addWidget(fuelZoomOut);
+    fuelGridLayout->addWidget(fuelZoomIn);
+    auto resizefuelGrid = [maps, fuelRpmValues](int delta) {
+        const int width = std::clamp(maps->columnWidth(0) + delta, 48, 120);
+        const int height = std::clamp(maps->rowHeight(0) + delta / 2, 24, 48);
+        for (int i = 0; i < 16; ++i) {
+            maps->setColumnWidth(i, width);
+            maps->setRowHeight(i, height);
+            fuelRpmValues->setColumnWidth(i, width);
+        }
+        maps->setFixedSize(maps->verticalHeader()->width() + 16 * width + 6,
+                           16 * height + 6);
+        fuelRpmValues->setFixedSize(16 * width + 6, 32);
+    };
+    connect(fuelZoomIn, &QPushButton::clicked, fuelPage, [resizefuelGrid] { resizefuelGrid(8); });
+    connect(fuelZoomOut, &QPushButton::clicked, fuelPage, [resizefuelGrid] { resizefuelGrid(-8); });
+
     auto *fuelWorkspace = new QHBoxLayout();
     fuelWorkspace->addWidget(fuelGridPanel, 0, Qt::AlignTop);
     auto *fuelSurface = new MapSurfacePreview(maps, fuelPage);
@@ -395,6 +418,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelGraphSubWindow->resize(450, 420);
     *fuelGraphWindow = fuelGraphSubWindow;
     fuelGraphSubWindow->show();
+    fuelGraphSubWindow->move(35, 45);
     fuelLayout->addLayout(fuelWorkspace);
     fuelLayout->addStretch(1);
     auto *fuelFooter = new QLabel(tr("Values are intentionally blank until read from ECU. Editing and writing remain disabled."), fuelPage);
@@ -433,7 +457,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionMap->setCornerButtonEnabled(false);
     ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     ignitionMap->verticalHeader()->setToolTip(tr("MAP (kPa)"));
-    ignitionMap->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    ignitionMap->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     ignitionMap->setFixedSize(ignitionMap->verticalHeader()->width() + 16 * ignitionMap->horizontalHeader()->defaultSectionSize() + 4,
                          16 * ignitionMap->verticalHeader()->defaultSectionSize() + 4);
     auto *ignitionGridPanel = new QWidget(ignitionPage);
@@ -477,6 +501,29 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionMapAxis->setAlignment(Qt::AlignHCenter);
     ignitionMapAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     ignitionGridLayout->addWidget(ignitionMapAxis);
+    auto *ignitionZoomOut = new QPushButton(tr("−"), ignitionPage);
+    auto *ignitionZoomIn = new QPushButton(tr("+"), ignitionPage);
+    ignitionZoomOut->setToolTip(tr("Reduce table cell size"));
+    ignitionZoomIn->setToolTip(tr("Increase table cell size"));
+    ignitionZoomOut->setFixedWidth(32);
+    ignitionZoomIn->setFixedWidth(32);
+    ignitionGridLayout->addWidget(ignitionZoomOut);
+    ignitionGridLayout->addWidget(ignitionZoomIn);
+    auto resizeignitionGrid = [ignitionMap, ignitionRpmValues](int delta) {
+        const int width = std::clamp(ignitionMap->columnWidth(0) + delta, 48, 120);
+        const int height = std::clamp(ignitionMap->rowHeight(0) + delta / 2, 24, 48);
+        for (int i = 0; i < 16; ++i) {
+            ignitionMap->setColumnWidth(i, width);
+            ignitionMap->setRowHeight(i, height);
+            ignitionRpmValues->setColumnWidth(i, width);
+        }
+        ignitionMap->setFixedSize(ignitionMap->verticalHeader()->width() + 16 * width + 6,
+                           16 * height + 6);
+        ignitionRpmValues->setFixedSize(16 * width + 6, 32);
+    };
+    connect(ignitionZoomIn, &QPushButton::clicked, ignitionPage, [resizeignitionGrid] { resizeignitionGrid(8); });
+    connect(ignitionZoomOut, &QPushButton::clicked, ignitionPage, [resizeignitionGrid] { resizeignitionGrid(-8); });
+
     auto *ignitionWorkspace = new QHBoxLayout();
     ignitionWorkspace->addWidget(ignitionGridPanel, 0, Qt::AlignTop);
     auto *ignitionSurface = new MapSurfacePreview(ignitionMap, ignitionPage);
@@ -490,6 +537,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionGraphSubWindow->resize(450, 420);
     *ignitionGraphWindow = ignitionGraphSubWindow;
     ignitionGraphSubWindow->show();
+    ignitionGraphSubWindow->move(75, 85);
     ignitionLayout->addLayout(ignitionWorkspace);
     ignitionLayout->addStretch(1);
     auto *ignitionFooter = new QLabel(tr("Ignition values unavailable. ECU read/write protocol not yet integrated."), ignitionPage);
@@ -2372,10 +2420,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             auto *rpmValues = (table == maps) ? fuelRpmValues : ignitionRpmValues;
             for (int i = 0; i < 16; ++i)
                 rpmValues->item(0, i)->setText(rpmLabels.at(i));
+            std::reverse(loadLabels.begin(), loadLabels.end());
             table->setVerticalHeaderLabels(loadLabels);
             for (int row = 0; row < 16; ++row)
                 for (int col = 0; col < 16; ++col)
-                    table->item(row, col)->setText(QString::number(qint16(u16(64 + 2 * (row * 16 + col))) / 100.0, 'f', 2));
+                    table->item(15 - row, col)->setText(QString::number(qint16(u16(64 + 2 * (row * 16 + col))) / 100.0, 'f', 2));
             abortTransfer(tr("Map page %1 read from ECU (read-only)").arg(page));
             return;
         }
