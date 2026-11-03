@@ -160,6 +160,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     workspaceWindow->setAttribute(Qt::WA_DeleteOnClose, false);
     workspaceWindow->resize(1120, 720);
     workspaceWindow->show();
+    // Graph windows are independent from their map tables and can be closed
+    // and reopened from the navigation tree without discarding ECU data.
+    auto fuelGraphWindow = QSharedPointer<QPointer<QMdiSubWindow>>::create();
+    auto ignitionGraphWindow = QSharedPointer<QPointer<QMdiSubWindow>>::create();
     auto *navigationDock = new QDockWidget(tr("TUNUINO  |  Navigation"), this);
     navigationDock->setObjectName("NavigationDock");
     auto *navigationPanel = new QWidget(navigationDock);
@@ -197,8 +201,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     };
     addCategory(tr("Sensors and inputs"), {{tr("TPS Calibration"),6},{tr("MAP Calibration"),6},{tr("Temperature sensors"),6},{tr("Lambda / O2"),6}});
     addCategory(tr("Engine start"), {{tr("Cranking"),-1},{tr("Afterstart"),-1}});
-    addCategory(tr("Fueling"), {{tr("Fuel Table 16 x 16"),0},{tr("AFR Target 16 x 16"),2},{tr("Injector Dead Time"),6},{tr("Base Maps"),3}});
-    addCategory(tr("Ignition"), {{tr("Ignition Table 16 x 16"),1},{tr("Trigger setup"),6}});
+    addCategory(tr("Fueling"), {{tr("Fuel Table 16 x 16"),0},{tr("Fuel 3D Graph"),7},{tr("AFR Target 16 x 16"),2},{tr("Injector Dead Time"),6},{tr("Base Maps"),3}});
+    addCategory(tr("Ignition"), {{tr("Ignition Table 16 x 16"),1},{tr("Ignition 3D Graph"),8},{tr("Trigger setup"),6}});
     addCategory(tr("Overrun"), {{tr("Fuel cut"),-1}});
     addCategory(tr("Knock sensors"), {{tr("Knock settings"),-1}});
     addCategory(tr("Idle"), {{tr("Idle control"),6}});
@@ -217,9 +221,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("CAN, Serial"), {{tr("Communication settings"),6}});
     addCategory(tr("Log"), {{tr("Datalogging"),4}});
     addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
-    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, workspaceWindow](QTreeWidgetItem *item, int) {
+    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, workspaceWindow, fuelGraphWindow, ignitionGraphWindow](QTreeWidgetItem *item, int) {
         const int index = item->data(0, Qt::UserRole).toInt();
-        if (item->parent() && index >= 0 && index < tabs->count()) {
+        if (item->parent() && (index == 7 || index == 8)) {
+            auto window = (index == 7) ? *fuelGraphWindow : *ignitionGraphWindow;
+            if (window) { window->showNormal(); workspace->setActiveSubWindow(window); }
+        } else if (item->parent() && index >= 0 && index < tabs->count()) {
             workspaceWindow->showNormal();
             workspace->setActiveSubWindow(workspaceWindow);
             tabs->setCurrentIndex(index);
@@ -378,7 +385,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *fuelWorkspace = new QHBoxLayout();
     fuelWorkspace->addWidget(fuelGridPanel, 0, Qt::AlignTop);
     auto *fuelSurface = new MapSurfacePreview(maps, fuelPage);
-    fuelWorkspace->addWidget(fuelSurface, 1, Qt::AlignTop);
+    // The 3D graph has its own MDI window; the table remains independently visible.
+    auto *fuelGraphSubWindow = workspace->addSubWindow(fuelSurface);
+    fuelGraphSubWindow->setWindowTitle(tr("Fuel | 3D Graph"));
+    fuelGraphSubWindow->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
+                                      Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint |
+                                      Qt::WindowCloseButtonHint);
+    fuelGraphSubWindow->setAttribute(Qt::WA_DeleteOnClose, false);
+    fuelGraphSubWindow->resize(450, 420);
+    *fuelGraphWindow = fuelGraphSubWindow;
+    fuelGraphSubWindow->show();
     fuelLayout->addLayout(fuelWorkspace);
     fuelLayout->addStretch(1);
     auto *fuelFooter = new QLabel(tr("Values are intentionally blank until read from ECU. Editing and writing remain disabled."), fuelPage);
@@ -464,7 +480,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *ignitionWorkspace = new QHBoxLayout();
     ignitionWorkspace->addWidget(ignitionGridPanel, 0, Qt::AlignTop);
     auto *ignitionSurface = new MapSurfacePreview(ignitionMap, ignitionPage);
-    ignitionWorkspace->addWidget(ignitionSurface, 1, Qt::AlignTop);
+    // The 3D graph has its own MDI window; the table remains independently visible.
+    auto *ignitionGraphSubWindow = workspace->addSubWindow(ignitionSurface);
+    ignitionGraphSubWindow->setWindowTitle(tr("Ignition | 3D Graph"));
+    ignitionGraphSubWindow->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
+                                      Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint |
+                                      Qt::WindowCloseButtonHint);
+    ignitionGraphSubWindow->setAttribute(Qt::WA_DeleteOnClose, false);
+    ignitionGraphSubWindow->resize(450, 420);
+    *ignitionGraphWindow = ignitionGraphSubWindow;
+    ignitionGraphSubWindow->show();
     ignitionLayout->addLayout(ignitionWorkspace);
     ignitionLayout->addStretch(1);
     auto *ignitionFooter = new QLabel(tr("Ignition values unavailable. ECU read/write protocol not yet integrated."), ignitionPage);
