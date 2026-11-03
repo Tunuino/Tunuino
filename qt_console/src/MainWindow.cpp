@@ -370,12 +370,39 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelLayout->addWidget(fuelActions);
     const QStringList defaultRpmAxis = {QStringLiteral("200"), QStringLiteral("400"), QStringLiteral("600"), QStringLiteral("800"), QStringLiteral("1000"), QStringLiteral("1500"), QStringLiteral("2000"), QStringLiteral("2500"), QStringLiteral("3000"), QStringLiteral("3500"), QStringLiteral("4000"), QStringLiteral("4500"), QStringLiteral("5000"), QStringLiteral("5500"), QStringLiteral("6000"), QStringLiteral("7000")};
     const QStringList defaultMapAxis = {QStringLiteral("105"), QStringLiteral("100"), QStringLiteral("90"), QStringLiteral("80"), QStringLiteral("75"), QStringLiteral("70"), QStringLiteral("65"), QStringLiteral("60"), QStringLiteral("55"), QStringLiteral("50"), QStringLiteral("45"), QStringLiteral("40"), QStringLiteral("35"), QStringLiteral("30"), QStringLiteral("25"), QStringLiteral("20")};
+    // Tunuino default offline tables: 16x16 cells in ascending MAP order.
+    // Compact byte-packed values; AFR uses tenths. Display rows are reversed
+    // so MAP increases from bottom to top. No ECU write is performed here.
+    const QByteArray fuelDefaults = QByteArray::fromBase64("TExQNyUlIywqKiopKSkpKUxGUC4iJiMqMzIxMC8uLi5NTVUzKC4qNzQ0NDQ0NDQ0TE5RQTMzLz41NjY3Nzg4OFFZWj81OTU8NTY3ODk6OjpVWls4LzItNjs7Ozs7Ozs7V1pcQTU0NDtFREJBQD8+PlRZXUQ7NjU9RUVFRD5ERERWWWRFQTw7Qz09PDw8Ozs7SEtZR0JBQEM9PT4+Pj8/P01NWUZIRkRFP0JER0lMTU1OVFpITE1NUVZVVVRUU1NTTlZaTFhaWVZdXV1dXV1dXU5WXVFfYF9oYmNjZGVmZmZOVl5TY2ZrgI2JhYB8eHZ2T1RmYmttdIabjIeCeXh4eA==");
+    const QByteArray ignitionDefaults = QByteArray::fromBase64("Dw0PGBkcHyEiIyQlJiYnKA8NDxgZHB8hIiMkJSYmJygPDQ8YGRwfISIjJCUmJicoDw0PGBkcHyEiIiQlJSUmJw8NDxcYHB8gIiIkJSUlJicPDRAXGBwfICEiIyQkJCUmDw0RFxgbHh8gISIjJCQlJg8NEBcYGx4fICEiIyQkJSYODRAXGBodHyAhIiMjIyQkDg0QERIUHR4fICEiIiIjIw4NEBESFB0eHyAgISEhIiIODREREhQaGx8fICAgICEhDQ0RERIUGhseHh8fHx8gIA0OERESFBobHh4eHh4eHx8NDxEREhMZGh0dHR0dHR0dDQ8RERITGxwcHBwQHBwcHA==");
+    const QByteArray afrDefaults = QByteArray::fromBase64("k5OTlJeXlpOTk5OTk5OTk5OTk5SXl5aTk5OTk5OTk5OTk5OUl5eWk5OTk5OTk5OTlJaWlZOSkpKRkZCQkJOTk5SVlpSSkI+OjYyMjIyTk5OTlJWTko2Mi4mIh4eHj4+Pk5OTko6KioqIh4aGho6OjpOTk5GMiIiIhoWDg4ONjY6RkY+MiIOCgoKBgYGBjY2Ojo2MiYaCgoGBgYGBgY2NjouIiIaDgYGBgYCAgICMjIyHhoaEgoGBgYCAgICAiYmJgIGBgYCAgICAgICAgIaGhoCBgIB/f39/f39/f3+Dg4OAgH9+fn5+fn5+fn5+gICAgIB/fX19fX19fX19fQ==");
+    const QStringList fuelRpmAxis = QStringLiteral("500,700,900,1500,2100,2900,3800,4700,5500,5700,5900,6100,6300,6700,7000,7200").split(',');
+    const QStringList fuelMapAxis = QStringLiteral("16,26,30,36,40,46,50,56,60,66,70,76,86,90,96,100").split(',');
+    const QStringList ignitionRpmAxis = QStringLiteral("500,1000,1500,2000,2500,3000,3500,4000,4500,5000,5500,6000,6300,6700,7000,7200").split(',');
+    const QStringList ignitionMapAxis = QStringLiteral("10,16,20,26,30,36,40,46,50,56,66,74,80,88,96,100").split(',');
+    const QStringList afrRpmAxis = QStringLiteral("500,700,900,1500,2100,2900,3800,4700,5500,5700,5900,6100,6300,6500,6500,6500").split(',');
+    const QStringList afrMapAxis = fuelMapAxis;
+    auto fillDefaultTable = [](QTableWidget *table, const QByteArray &packed, double divisor, const QStringList &mapAxis) {
+        if (packed.size() != 256 || mapAxis.size() != 16) return;
+        QStringList verticalLabels;
+        for (int row = 0; row < 16; ++row) {
+            const int sourceRow = 15 - row;
+            verticalLabels.append(mapAxis.at(sourceRow));
+            for (int col = 0; col < 16; ++col) {
+                const int raw = static_cast<unsigned char>(packed.at(sourceRow * 16 + col));
+                auto *item = new QTableWidgetItem(QString::number(raw / divisor, 'f', divisor == 1.0 ? 0 : 1));
+                item->setTextAlignment(Qt::AlignCenter);
+                table->setItem(row, col, item);
+            }
+        }
+        table->setVerticalHeaderLabels(verticalLabels);
+    };
     auto *maps = new QTableWidget(16, 16, fuelPage);
     maps->setAlternatingRowColors(true);
     maps->setSelectionMode(QAbstractItemView::ExtendedSelection);
     maps->setSelectionBehavior(QAbstractItemView::SelectItems);
     maps->setCornerButtonEnabled(false);
-    maps->setToolTip(tr("Map values are unavailable until the ECU table-read protocol is implemented."));
+    maps->setToolTip(tr("Tunuino offline base map. Validate before use on a real engine."));
     maps->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     maps->horizontalHeader()->setDefaultSectionSize(62);
     maps->horizontalHeader()->setMinimumSectionSize(48);
@@ -384,13 +411,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
     maps->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     maps->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-    for (int row = 0; row < 16; ++row)
-        for (int col = 0; col < 16; ++col) {
-            auto *cell = new QTableWidgetItem();
-            cell->setFlags(cell->flags() & ~Qt::ItemIsEditable);
-            maps->setItem(row, col, cell);
-        }
-    maps->setVerticalHeaderLabels(defaultMapAxis);
+    fillDefaultTable(maps, fuelDefaults, 1.0, fuelMapAxis);
     maps->setCornerButtonEnabled(false);
     maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -427,7 +448,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     fuelRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     for (int i = 0; i < 16; ++i) {
-        auto *cell = new QTableWidgetItem(defaultRpmAxis.at(i));
+        auto *cell = new QTableWidgetItem(fuelRpmAxis.at(i));
         cell->setTextAlignment(Qt::AlignCenter);
         fuelRpmValues->setItem(0, i, cell);
     }
@@ -488,7 +509,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelGraphSubWindow->move(35, 45);
     fuelLayout->addLayout(fuelWorkspace);
     
-    auto *fuelFooter = new QLabel(tr("Values are intentionally blank until read from ECU. Editing and writing remain disabled."), fuelPage);
+    auto *fuelFooter = new QLabel(tr("Tunuino offline base values. Edit locally; ECU writing requires a validated protocol."), fuelPage);
     fuelFooter->setStyleSheet(QStringLiteral("color: #a9aaad;"));
     fuelLayout->addWidget(fuelFooter);
     tabs->addTab(fuelPage, tr("Fuel Table"));
@@ -515,13 +536,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionMap->verticalHeader()->setDefaultSectionSize(28);
     ignitionMap->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
     ignitionMap->setAlternatingRowColors(true);
-    for (int row = 0; row < 16; ++row)
-        for (int col = 0; col < 16; ++col) {
-            auto *cell = new QTableWidgetItem();
-            cell->setFlags(cell->flags() & ~Qt::ItemIsEditable);
-            ignitionMap->setItem(row, col, cell);
-        }
-    ignitionMap->setVerticalHeaderLabels(defaultMapAxis);
+    fillDefaultTable(ignitionMap, ignitionDefaults, 1.0, ignitionMapAxis);
     ignitionMap->setCornerButtonEnabled(false);
     ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     ignitionMap->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -555,15 +570,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionRpmValues->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     ignitionRpmValues->horizontalHeader()->setDefaultSectionSize(ignitionMap->horizontalHeader()->defaultSectionSize());
     ignitionRpmValues->verticalHeader()->setDefaultSectionSize(28);
-    ignitionRpmValues->setFixedSize(16 * ignitionMap->horizontalHeader()->defaultSectionSize() + 4, 32);
+    ignitionRpmValues->setMinimumHeight(32);
+    ignitionRpmValues->setMaximumHeight(32);
+    ignitionRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    ignitionRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     for (int i = 0; i < 16; ++i) {
-        auto *cell = new QTableWidgetItem(defaultRpmAxis.at(i));
+        auto *cell = new QTableWidgetItem(ignitionRpmAxis.at(i));
         cell->setTextAlignment(Qt::AlignCenter);
         ignitionRpmValues->setItem(0, i, cell);
     }
     auto *ignitionBottomAxis = new QHBoxLayout();
     ignitionBottomAxis->setContentsMargins(ignitionRpmAxis->sizeHint().width() + 5 + ignitionMap->verticalHeader()->width(), 0, 0, 0);
-    ignitionBottomAxis->addWidget(ignitionRpmValues, 0, Qt::AlignLeft);
+    ignitionBottomAxis->addWidget(ignitionRpmValues, 1);
     ignitionGridLayout->addLayout(ignitionBottomAxis);
 
     auto *ignitionMapAxis = new QLabel(tr("RPM (rev/min)"), ignitionGridPanel);
@@ -627,10 +645,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // implemented for this table, so it cannot be written to the ECU.
     auto *afrPage = new QWidget(tabs);
     auto *afrLayout = new QVBoxLayout(afrPage);
-    auto *afrTitle = new QLabel(tr("AFR TARGET  |  Generic reference  |  16 x 16"), afrPage);
+    auto *afrTitle = new QLabel(tr("AFR TARGET  |  Tunuino base  |  16 x 16"), afrPage);
     afrTitle->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     afrLayout->addWidget(afrTitle);
-    auto *afrWarning = new QLabel(tr("OFFLINE REFERENCE ONLY. Generic targets are not a validated engine tune and are never sent to the ECU."), afrPage);
+    auto *afrWarning = new QLabel(tr("Tunuino base values: offline editing only. Validate for the engine before use."), afrPage);
     afrWarning->setWordWrap(true);
     afrWarning->setStyleSheet(QStringLiteral("color: #e6a750;"));
     afrLayout->addWidget(afrWarning);
@@ -641,26 +659,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrMap->verticalHeader()->setDefaultSectionSize(28);
     afrMap->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
     afrMap->setAlternatingRowColors(true);
-    const int rpmAxis[16] = {500,750,1000,1250,1500,1750,2000,2500,3000,3500,4000,4500,5000,6000,7000,8000};
-    const int loadAxis[16] = {20,30,40,50,60,70,80,90,100,110,120,130,140,160,180,200};
+
     QStringList rpmHeaders, loadHeaders;
     for (int i = 0; i < 16; ++i) {
-        rpmHeaders.append(QString::number(rpmAxis[i]));
-        loadHeaders.append(QString::number(loadAxis[i]));
+        rpmHeaders.append(afrRpmAxis.at(i));
+        loadHeaders.append(afrMapAxis.at(15 - i));
     }
     afrMap->setHorizontalHeaderLabels(rpmHeaders);
     afrMap->setVerticalHeaderLabels(loadHeaders);
-    for (int row = 0; row < 16; ++row) {
-        for (int col = 0; col < 16; ++col) {
-            // Stoichiometric example at low load; richer illustrative targets
-            // under higher load. Never apply these values automatically.
-            const double afr = loadAxis[row] <= 80 ? 14.7
-                : loadAxis[row] <= 100 ? 13.8 : loadAxis[row] <= 140 ? 12.5 : 12.0;
-            auto *cell = new QTableWidgetItem(QString::number(afr, 'f', 2));
-            cell->setToolTip(tr("Generic gasoline AFR reference only; requires engine-specific validation."));
-            afrMap->setItem(row, col, cell);
-        }
-    }
+    fillDefaultTable(afrMap, afrDefaults, 10.0, afrMapAxis);
     afrLayout->addWidget(afrMap, 1);
     auto *afrFoot = new QLabel(tr("RPM (columns) / MAP kPa (rows). AFR assumes gasoline stoichiometric 14.7. No ECU AFR table protocol exists yet."), afrPage);
     afrFoot->setWordWrap(true);
