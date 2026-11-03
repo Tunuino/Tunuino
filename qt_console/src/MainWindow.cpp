@@ -2,6 +2,8 @@
 #include "NativeDfuFlash.h"
 #include <QPainter>
 #include <QPaintEvent>
+#include <QMouseEvent>
+#include <QWheelEvent>
 #include <QPolygonF>
 #include <QFrame>
 #include <QMdiArea>
@@ -119,16 +121,62 @@ private:
 
 // Read-only perspective surface. The plotted samples are taken directly from
 // the visible ECU map table; empty cells never generate synthetic map values.
+
 class MapSurfacePreview final : public QFrame {
 public:
     explicit MapSurfacePreview(QTableWidget *source, QWidget *parent = nullptr)
         : QFrame(parent), source_(source) {
         setMinimumSize(310, 340);
-        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
         setFrameShape(QFrame::StyledPanel);
+        setCursor(Qt::OpenHandCursor);
+        setToolTip(tr("Drag left/right/up/down to rotate; use mouse wheel to zoom; double-click to reset view."));
         connect(source_, &QTableWidget::itemChanged, this, [this](QTableWidgetItem *) { update(); });
     }
 protected:
+    void mousePressEvent(QMouseEvent *event) override {
+        if (event->button() == Qt::LeftButton) {
+            dragging_ = true;
+            lastPos_ = event->position();
+            setCursor(Qt::ClosedHandCursor);
+            event->accept();
+            return;
+        }
+        QFrame::mousePressEvent(event);
+    }
+    void mouseMoveEvent(QMouseEvent *event) override {
+        if (dragging_) {
+            const QPointF delta = event->position() - lastPos_;
+            yaw_ += delta.x() * 0.012;
+            pitch_ = qBound(0.12, pitch_ + delta.y() * 0.008, 1.48);
+            lastPos_ = event->position();
+            update();
+            event->accept();
+            return;
+        }
+        QFrame::mouseMoveEvent(event);
+    }
+    void mouseReleaseEvent(QMouseEvent *event) override {
+        if (event->button() == Qt::LeftButton) {
+            dragging_ = false;
+            setCursor(Qt::OpenHandCursor);
+            event->accept();
+            return;
+        }
+        QFrame::mouseReleaseEvent(event);
+    }
+    void mouseDoubleClickEvent(QMouseEvent *event) override {
+        yaw_ = 0.72;
+        pitch_ = 0.65;
+        zoom_ = 1.0;
+        update();
+        event->accept();
+    }
+    void wheelEvent(QWheelEvent *event) override {
+        zoom_ = qBound(0.4, zoom_ * (event->angleDelta().y() > 0 ? 1.12 : 1.0 / 1.12), 3.0);
+        update();
+        event->accept();
+    }
     void paintEvent(QPaintEvent *event) override {
         QFrame::paintEvent(event);
         QPainter painter(this);
@@ -144,7 +192,7 @@ protected:
                 if (!ok || !std::isfinite(value)) {
                     painter.setPen(QColor(185, 188, 192));
                     painter.drawText(rect(), Qt::AlignCenter | Qt::TextWordWrap,
-                                     tr("Read map from ECU to display 3D surface"));
+                                     tr("No valid map values available"));
                     return;
                 }
                 z[row][col] = value;
@@ -153,34 +201,69 @@ protected:
             }
         }
         const double span = (std::max)(0.001, maxValue - minValue);
-        const double scale = (std::min)((width() - 40.0) / 31.0, (height() - 65.0) / 23.0);
-        const QPointF origin(width() * 0.5, height() * 0.77);
-        auto point = [&](int row, int col) {
-            const double heightValue = (z[row][col] - minValue) / span;
-            return origin + QPointF((col - row) * scale, (col + row) * scale * 0.40
-                                      - heightValue * scale * 9.0);
+        const double cy = std::cos(yaw_), sy = std::sin(yaw_);
+        const double cp = std::cos(pitch_), sp = std::sin(pitch_);
+        struct Vertex { QPointF p; double depth; };
+        auto project = [&](int row, int col) -> Vertex {
+            const double x = (col - 7.5) / 7.5;
+            const double y = (row - 7.5) / 7.5;
+            const double h = ((z[row][col] - minValue) / span - 0.5) * 0.9;
+            const double rx = x * cy - y * sy;
+            const double ry = x * sy + y * cy;
+            return {QPointF(rx, ry * cp - h * sp), ry * sp + h * cp};
         };
-        // Draw distant polygons first to preserve a consistent perspective.
-        for (int sum = 2; sum <= 30; ++sum) {
-            for (int row = 0; row < 15; ++row) {
-                const int col = sum - row - 2;
-                if (col < 0 || col >= 15) continue;
-                const double avg = (z[row][col] + z[row+1][col] +
-                                    z[row][col+1] + z[row+1][col+1]) / 4.0;
-                const double level = (avg - minValue) / span;
-                const QColor color = QColor::fromHsvF(0.33 - level * 0.32, 0.76, 0.86);
-                painter.setBrush(color);
-                painter.setPen(QPen(color.darker(155), 0.6));
-                painter.drawPolygon(QPolygonF{point(row, col), point(row, col+1),
-                                               point(row+1, col+1), point(row+1, col)});
+        Vertex verts[16][16];
+        double left = 1e100, right = -1e100, top = 1e100, bottom = -1e100;
+        for (int row = 0; row < 16; ++row)
+            for (int col = 0; col < 16; ++col) {
+                verts[row][col] = project(row, col);
+                left = (std::min)(left, verts[row][col].p.x());
+                right = (std::max)(right, verts[row][col].p.x());
+                top = (std::min)(top, verts[row][col].p.y());
+                bottom = (std::max)(bottom, verts[row][col].p.y());
             }
+        const QRectF view = QRectF(rect()).adjusted(16, 38, -16, -16);
+        const double fit = (std::min)(view.width() / (std::max)(0.01, right-left),
+                                      view.height() / (std::max)(0.01, bottom-top));
+        const double scale = fit * 0.82 * zoom_;
+        const QPointF center = view.center();
+        const QPointF boundsCenter((left+right)*0.5, (top+bottom)*0.5);
+        auto screen = [&](const Vertex &v) { return center + (v.p - boundsCenter) * scale; };
+        struct Face { int row; int col; double depth; };
+        QVector<Face> faces;
+        faces.reserve(225);
+        for (int row = 0; row < 15; ++row)
+            for (int col = 0; col < 15; ++col)
+                faces.append({row, col, (verts[row][col].depth + verts[row+1][col].depth
+                    + verts[row][col+1].depth + verts[row+1][col+1].depth) * 0.25});
+        std::sort(faces.begin(), faces.end(), [](const Face &a, const Face &b) {
+            return a.depth < b.depth;
+        });
+        painter.save();
+        painter.setClipRect(view);
+        for (const Face &face : faces) {
+            const int row = face.row, col = face.col;
+            const double avg = (z[row][col] + z[row+1][col] +
+                                z[row][col+1] + z[row+1][col+1]) / 4.0;
+            const double level = (avg - minValue) / span;
+            const QColor color = QColor::fromHsvF(0.33 - level * 0.32, 0.76, 0.86);
+            painter.setBrush(color);
+            painter.setPen(QPen(color.darker(155), 0.6));
+            painter.drawPolygon(QPolygonF{screen(verts[row][col]), screen(verts[row][col+1]),
+                                           screen(verts[row+1][col+1]), screen(verts[row+1][col])});
         }
+        painter.restore();
         painter.setPen(QColor(220, 223, 225));
-        painter.drawText(QRect(8, 6, width()-16, 22), Qt::AlignLeft,
-                         tr("3D map preview (read-only)"));
+        painter.drawText(QRect(8, 6, width()-16, 24), Qt::AlignLeft,
+                         tr("3D map | drag to rotate | wheel to zoom | double-click to reset"));
     }
 private:
     QTableWidget *source_;
+    bool dragging_ = false;
+    QPointF lastPos_;
+    double yaw_ = 0.72;
+    double pitch_ = 0.65;
+    double zoom_ = 1.0;
 };
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
