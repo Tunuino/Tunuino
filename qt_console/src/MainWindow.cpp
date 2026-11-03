@@ -376,12 +376,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     const QByteArray fuelDefaults = QByteArray::fromBase64("TExQNyUlIywqKiopKSkpKUxGUC4iJiMqMzIxMC8uLi5NTVUzKC4qNzQ0NDQ0NDQ0TE5RQTMzLz41NjY3Nzg4OFFZWj81OTU8NTY3ODk6OjpVWls4LzItNjs7Ozs7Ozs7V1pcQTU0NDtFREJBQD8+PlRZXUQ7NjU9RUVFRD5ERERWWWRFQTw7Qz09PDw8Ozs7SEtZR0JBQEM9PT4+Pj8/P01NWUZIRkRFP0JER0lMTU1OVFpITE1NUVZVVVRUU1NTTlZaTFhaWVZdXV1dXV1dXU5WXVFfYF9oYmNjZGVmZmZOVl5TY2ZrgI2JhYB8eHZ2T1RmYmttdIabjIeCeXh4eA==");
     const QByteArray ignitionDefaults = QByteArray::fromBase64("Dw0PGBkcHyEiIyQlJiYnKA8NDxgZHB8hIiMkJSYmJygPDQ8YGRwfISIjJCUmJicoDw0PGBkcHyEiIiQlJSUmJw8NDxcYHB8gIiIkJSUlJicPDRAXGBwfICEiIyQkJCUmDw0RFxgbHh8gISIjJCQlJg8NEBcYGx4fICEiIyQkJSYODRAXGBodHyAhIiMjIyQkDg0QERIUHR4fICEiIiIjIw4NEBESFB0eHyAgISEhIiIODREREhQaGx8fICAgICEhDQ0RERIUGhseHh8fHx8gIA0OERESFBobHh4eHh4eHx8NDxEREhMZGh0dHR0dHR0dDQ8RERITGxwcHBwQHBwcHA==");
     const QByteArray afrDefaults = QByteArray::fromBase64("k5OTlJeXlpOTk5OTk5OTk5OTk5SXl5aTk5OTk5OTk5OTk5OUl5eWk5OTk5OTk5OTlJaWlZOSkpKRkZCQkJOTk5SVlpSSkI+OjYyMjIyTk5OTlJWTko2Mi4mIh4eHj4+Pk5OTko6KioqIh4aGho6OjpOTk5GMiIiIhoWDg4ONjY6RkY+MiIOCgoKBgYGBjY2Ojo2MiYaCgoGBgYGBgY2NjouIiIaDgYGBgYCAgICMjIyHhoaEgoGBgYCAgICAiYmJgIGBgYCAgICAgICAgIaGhoCBgIB/f39/f39/f3+Dg4OAgH9+fn5+fn5+fn5+gICAgIB/fX19fX19fX19fQ==");
-    const QStringList fuelRpmAxis = QStringLiteral("500,700,900,1500,2100,2900,3800,4700,5500,5700,5900,6100,6300,6700,7000,7200").split(',');
-    const QStringList fuelMapAxis = QStringLiteral("16,26,30,36,40,46,50,56,60,66,70,76,86,90,96,100").split(',');
-    const QStringList ignitionRpmAxis = QStringLiteral("500,1000,1500,2000,2500,3000,3500,4000,4500,5000,5500,6000,6300,6700,7000,7200").split(',');
-    const QStringList ignitionMapAxis = QStringLiteral("10,16,20,26,30,36,40,46,50,56,66,74,80,88,96,100").split(',');
-    const QStringList afrRpmAxis = QStringLiteral("500,700,900,1500,2100,2900,3800,4700,5500,5700,5900,6100,6300,6500,6500,6500").split(',');
-    const QStringList afrMapAxis = fuelMapAxis;
+    const QStringList fuelRpmBins = QStringLiteral("500,700,900,1500,2100,2900,3800,4700,5500,5700,5900,6100,6300,6700,7000,7200").split(',');
+    const QStringList fuelMapBins = QStringLiteral("16,26,30,36,40,46,50,56,60,66,70,76,86,90,96,100").split(',');
+    const QStringList ignitionRpmBins = QStringLiteral("500,1000,1500,2000,2500,3000,3500,4000,4500,5000,5500,6000,6300,6700,7000,7200").split(',');
+    const QStringList ignitionMapBins = QStringLiteral("10,16,20,26,30,36,40,46,50,56,66,74,80,88,96,100").split(',');
+    const QStringList afrRpmBins = QStringLiteral("500,700,900,1500,2100,2900,3800,4700,5500,5700,5900,6100,6300,6500,6500,6500").split(',');
+    const QStringList afrMapBins = fuelMapBins;
     auto fillDefaultTable = [](QTableWidget *table, const QByteArray &packed, double divisor, const QStringList &mapAxis) {
         if (packed.size() != 256 || mapAxis.size() != 16) return;
         QStringList verticalLabels;
@@ -411,7 +411,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
     maps->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     maps->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-    fillDefaultTable(maps, fuelDefaults, 1.0, fuelMapAxis);
+    fillDefaultTable(maps, fuelDefaults, 1.0, fuelMapBins);
     maps->setCornerButtonEnabled(false);
     maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -448,7 +448,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     fuelRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     for (int i = 0; i < 16; ++i) {
-        auto *cell = new QTableWidgetItem(fuelRpmAxis.at(i));
+        auto *cell = new QTableWidgetItem(fuelRpmBins.at(i));
         cell->setTextAlignment(Qt::AlignCenter);
         fuelRpmValues->setItem(0, i, cell);
     }
@@ -536,7 +536,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionMap->verticalHeader()->setDefaultSectionSize(28);
     ignitionMap->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
     ignitionMap->setAlternatingRowColors(true);
-    fillDefaultTable(ignitionMap, ignitionDefaults, 1.0, ignitionMapAxis);
+    fillDefaultTable(ignitionMap, ignitionDefaults, 1.0, ignitionMapBins);
     ignitionMap->setCornerButtonEnabled(false);
     ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     ignitionMap->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -575,7 +575,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     ignitionRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     for (int i = 0; i < 16; ++i) {
-        auto *cell = new QTableWidgetItem(ignitionRpmAxis.at(i));
+        auto *cell = new QTableWidgetItem(ignitionRpmBins.at(i));
         cell->setTextAlignment(Qt::AlignCenter);
         ignitionRpmValues->setItem(0, i, cell);
     }
@@ -662,12 +662,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
     QStringList rpmHeaders, loadHeaders;
     for (int i = 0; i < 16; ++i) {
-        rpmHeaders.append(afrRpmAxis.at(i));
-        loadHeaders.append(afrMapAxis.at(15 - i));
+        rpmHeaders.append(afrRpmBins.at(i));
+        loadHeaders.append(afrMapBins.at(15 - i));
     }
     afrMap->setHorizontalHeaderLabels(rpmHeaders);
     afrMap->setVerticalHeaderLabels(loadHeaders);
-    fillDefaultTable(afrMap, afrDefaults, 10.0, afrMapAxis);
+    fillDefaultTable(afrMap, afrDefaults, 10.0, afrMapBins);
     afrLayout->addWidget(afrMap, 1);
     auto *afrFoot = new QLabel(tr("RPM (columns) / MAP kPa (rows). AFR assumes gasoline stoichiometric 14.7. No ECU AFR table protocol exists yet."), afrPage);
     afrFoot->setWordWrap(true);
