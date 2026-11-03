@@ -342,6 +342,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             cell->setFlags(cell->flags() & ~Qt::ItemIsEditable);
             maps->setItem(row, col, cell);
         }
+    maps->setVerticalHeaderLabels(QStringList(16, QStringLiteral("—")));
     maps->setCornerButtonEnabled(false);
     maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -378,7 +379,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     fuelRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     for (int i = 0; i < 16; ++i) {
-        auto *cell = new QTableWidgetItem(QString::number(i + 1));
+        auto *cell = new QTableWidgetItem(QStringLiteral("—"));
         cell->setTextAlignment(Qt::AlignCenter);
         fuelRpmValues->setItem(0, i, cell);
     }
@@ -462,6 +463,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             cell->setFlags(cell->flags() & ~Qt::ItemIsEditable);
             ignitionMap->setItem(row, col, cell);
         }
+    ignitionMap->setVerticalHeaderLabels(QStringList(16, QStringLiteral("—")));
     ignitionMap->setCornerButtonEnabled(false);
     ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     ignitionMap->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -496,7 +498,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionRpmValues->verticalHeader()->setDefaultSectionSize(28);
     ignitionRpmValues->setFixedSize(16 * ignitionMap->horizontalHeader()->defaultSectionSize() + 4, 32);
     for (int i = 0; i < 16; ++i) {
-        auto *cell = new QTableWidgetItem(QString::number(i + 1));
+        auto *cell = new QTableWidgetItem(QStringLiteral("—"));
         cell->setTextAlignment(Qt::AlignCenter);
         ignitionRpmValues->setItem(0, i, cell);
     }
@@ -2433,6 +2435,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             for (int row = 0; row < 16; ++row)
                 for (int col = 0; col < 16; ++col)
                     table->item(15 - row, col)->setText(QString::number(qint16(u16(64 + 2 * (row * 16 + col))) / 100.0, 'f', 2));
+            // Force the independent 3D view to repaint after the complete ECU map arrives.
+            (page == 2 ? fuelSurface : ignitionSurface)->update();
             abortTransfer(tr("Map page %1 read from ECU (read-only)").arg(page));
             return;
         }
