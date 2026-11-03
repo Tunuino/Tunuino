@@ -205,7 +205,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     };
     addCategory(tr("Sensors and inputs"), {{tr("TPS Calibration"),6},{tr("MAP Calibration"),6},{tr("Temperature sensors"),6},{tr("Lambda / O2"),6}});
     addCategory(tr("Engine start"), {{tr("Cranking"),-1},{tr("Afterstart"),-1}});
-    addCategory(tr("Fueling"), {{tr("Fuel Table 16 x 16"),0},{tr("Fuel 3D Graph"),7},{tr("AFR Target 16 x 16"),2},{tr("Injector Dead Time"),6},{tr("Base Maps"),3}});
+    addCategory(tr("Fueling"), {{tr("Fuel Table 16 x 16"),0},{tr("Fuel 3D Graph"),7},{tr("AFR Target 16 x 16"),2},{tr("Injector Dead Time"),6}});
     addCategory(tr("Ignition"), {{tr("Ignition Table 16 x 16"),1},{tr("Ignition 3D Graph"),8},{tr("Trigger setup"),6}});
     addCategory(tr("Overrun"), {{tr("Fuel cut"),-1}});
     addCategory(tr("Knock sensors"), {{tr("Knock settings"),-1}});
@@ -225,6 +225,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("CAN, Serial"), {{tr("Communication settings"),6}});
     addCategory(tr("Log"), {{tr("Datalogging"),4}});
     addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
+    addCategory(tr("Calibration & Setup"), {{tr("Sensor and engine calibration"),6}});
     connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, workspaceWindow, fuelGraphWindow, ignitionGraphWindow](QTreeWidgetItem *item, int) {
         const int index = item->data(0, Qt::UserRole).toInt();
         if (item->parent() && (index == 7 || index == 8)) {
@@ -2082,6 +2083,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     splitter->setSizes({280, 900});
     calibrationLayout->addWidget(splitter);
     tabs->addTab(calibrationPage, tr("Calibration & Setup"));
+    // Navigation and the main menu select pages; do not duplicate them as inner tabs.
+    tabs->tabBar()->hide();
     if (auto *first = navigation->topLevelItem(0)) navigation->setCurrentItem(first->child(0));
     auto *dock = new QDockWidget(tr("Engine Status"), this);
     dock->setObjectName("EngineStatusDock");
@@ -2191,6 +2194,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *editMenu = menuBar()->addMenu(tr("Edit"));
     auto *editInfo = editMenu->addAction(tr("Edit offline base map"));
     connect(editInfo, &QAction::triggered, this, [tabs]() { tabs->setCurrentIndex(3); });
+    auto *baseMapsMenu = menuBar()->addMenu(tr("Base Maps"));
+    auto *openBaseMaps = baseMapsMenu->addAction(tr("Open Base Maps"));
+    connect(openBaseMaps, &QAction::triggered, this, [tabs, workspace, workspaceWindow]() {
+        workspaceWindow->showNormal();
+        tabs->show();
+        workspaceWindow->show();
+        workspace->setActiveSubWindow(workspaceWindow);
+        tabs->setCurrentIndex(3);
+    });
     auto *viewMenu = menuBar()->addMenu(tr("View"));
     viewMenu->addAction(navigationDock->toggleViewAction());
     viewMenu->addAction(inspectorDock->toggleViewAction());
