@@ -79,6 +79,44 @@
 #endif
 #include "ecu/SerialSession.h"
 
+// Keep floating MDI windows entirely within the central workspace viewport.
+class WorkspaceBoundsGuard final : public QObject {
+public:
+    explicit WorkspaceBoundsGuard(QMdiArea *area) : QObject(area), area_(area) {
+        area_->viewport()->installEventFilter(this);
+    }
+    void watch(QMdiSubWindow *window) {
+        window->installEventFilter(this);
+        windows_.append(window);
+    }
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override {
+        if (event->type() == QEvent::Resize && watched == area_->viewport()) {
+            QTimer::singleShot(0, this, [this]() { for (auto *w : windows_) clamp(w); });
+        } else if (event->type() == QEvent::Move || event->type() == QEvent::Resize) {
+            if (auto *w = qobject_cast<QMdiSubWindow *>(watched)) clamp(w);
+        }
+        return QObject::eventFilter(watched, event);
+    }
+private:
+    void clamp(QMdiSubWindow *w) {
+        if (!w || !w->isVisible() || w->isMaximized() || adjusting_) return;
+        const QRect bounds = area_->viewport()->rect();
+        if (bounds.isEmpty()) return;
+        adjusting_ = true;
+        if (w->width() > bounds.width() || w->height() > bounds.height())
+            w->resize(qMin(w->width(), bounds.width()), qMin(w->height(), bounds.height()));
+        const QPoint p = w->pos();
+        const QPoint bounded(qBound(0, p.x(), qMax(0, bounds.width() - w->width())),
+                             qBound(0, p.y(), qMax(0, bounds.height() - w->height())));
+        if (p != bounded) w->move(bounded);
+        adjusting_ = false;
+    }
+    QMdiArea *area_;
+    QList<QPointer<QMdiSubWindow>> windows_;
+    bool adjusting_ = false;
+};
+
 // Read-only perspective surface. The plotted samples are taken directly from
 // the visible ECU map table; empty cells never generate synthetic map values.
 class MapSurfacePreview final : public QFrame {
@@ -155,6 +193,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     workspace->setViewMode(QMdiArea::SubWindowView);
     workspace->setBackground(QBrush(QColor(43, 46, 51)));
     setCentralWidget(workspace);
+    auto *boundsGuard = new WorkspaceBoundsGuard(workspace);
     auto *tabs = new QTabWidget(workspace);
     auto *workspaceWindow = workspace->addSubWindow(tabs);
     workspaceWindow->setWindowTitle(tr("Tunuino | Tables and configuration"));
@@ -164,6 +203,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     workspaceWindow->setAttribute(Qt::WA_DeleteOnClose, false);
     workspaceWindow->resize(1120, 720);
     workspaceWindow->show();
+    boundsGuard->watch(workspaceWindow);
     // Graph windows are independent from their map tables and can be closed
     // and reopened from the navigation tree without discarding ECU data.
     auto fuelGraphWindow = QSharedPointer<QPointer<QMdiSubWindow>>::create();
@@ -441,6 +481,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelGraphSubWindow->resize(450, 420);
     *fuelGraphWindow = fuelGraphSubWindow;
     fuelGraphSubWindow->show();
+    boundsGuard->watch(fuelGraphSubWindow);
     fuelGraphSubWindow->move(35, 45);
     fuelLayout->addLayout(fuelWorkspace);
     
@@ -570,6 +611,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionGraphSubWindow->resize(450, 420);
     *ignitionGraphWindow = ignitionGraphSubWindow;
     ignitionGraphSubWindow->show();
+    boundsGuard->watch(ignitionGraphSubWindow);
     ignitionGraphSubWindow->move(75, 85);
     ignitionLayout->addLayout(ignitionWorkspace);
     ignitionLayout->addStretch(1);
