@@ -481,14 +481,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         table->setVerticalHeaderLabels(verticalLabels);
     };
     // Offline map persistence; never sends data to the ECU.
-    auto installMapFileActions = [this](QHBoxLayout *bar, QTableWidget *table, const QString &mapId,
+    auto installMapFileActions = [this](QTableWidget *table, const QString &mapId,
                                         const QStringList &rpmAxis, const QStringList &mapAxis,
                                         double maximum) {
-        auto *openButton = new QPushButton(tr("Open map"), table);
-        auto *saveButton = new QPushButton(tr("Save map"), table);
-        bar->addWidget(openButton);
-        bar->addWidget(saveButton);
-        connect(saveButton, &QPushButton::clicked, this, [this, table, mapId, rpmAxis, mapAxis, maximum]() {
+        auto *openAction = new QAction(tr("Open map"), this);
+        auto *saveAction = new QAction(tr("Save map"), this);
+        connect(saveAction, &QAction::triggered, this, [this, table, mapId, rpmAxis, mapAxis, maximum]() {
             QJsonArray rows;
             for (int row = 0; row < 16; ++row) {
                 QJsonArray values;
@@ -519,7 +517,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if (!file.open(QIODevice::WriteOnly) || file.write(QJsonDocument(doc).toJson(QJsonDocument::Indented)) < 0 || !file.commit())
                 QMessageBox::warning(this, tr("Save failed"), tr("Could not save map."));
         });
-        connect(openButton, &QPushButton::clicked, this, [this, table, mapId, rpmAxis, mapAxis, maximum]() {
+        connect(openAction, &QAction::triggered, this, [this, table, mapId, rpmAxis, mapAxis, maximum]() {
             const QString filename = QFileDialog::getOpenFileName(this, tr("Open map"), QString(), tr("Tunuino maps (*.json)"));
             if (filename.isEmpty()) return;
             QFile file(filename);
@@ -558,6 +556,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 for (int j = 0; j < 16; ++j)
                     table->item(i, j)->setText(QString::number(rows.at(i).toArray().at(j).toDouble(), 'f', mapId == QStringLiteral("afr") ? 1 : 0));
         });
+        return qMakePair(openAction, saveAction);
     };
     auto *maps = new QTableWidget(16, 16, fuelPage);
     maps->setAlternatingRowColors(true);
@@ -574,7 +573,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     maps->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     fillDefaultTable(maps, fuelDefaults, 1.0, fuelMapBins);
-    installMapFileActions(fuelActionsLayout, maps, QStringLiteral("fuel"), fuelRpmBins, fuelMapBins, 255.0);
+    const auto fuelFileActions = installMapFileActions(maps, QStringLiteral("fuel"), fuelRpmBins, fuelMapBins, 255.0);
     maps->setCornerButtonEnabled(false);
     maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -700,7 +699,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionMap->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
     ignitionMap->setAlternatingRowColors(true);
     fillDefaultTable(ignitionMap, ignitionDefaults, 1.0, ignitionMapBins);
-    installMapFileActions(ignitionActionsLayout, ignitionMap, QStringLiteral("ignition"), ignitionRpmBins, ignitionMapBins, 90.0);
+    const auto ignitionFileActions = installMapFileActions(ignitionMap, QStringLiteral("ignition"), ignitionRpmBins, ignitionMapBins, 90.0);
     ignitionMap->setCornerButtonEnabled(false);
     ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     ignitionMap->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -832,10 +831,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrMap->setHorizontalHeaderLabels(rpmHeaders);
     afrMap->setVerticalHeaderLabels(loadHeaders);
     fillDefaultTable(afrMap, afrDefaults, 10.0, afrMapBins);
-    auto *afrFileBar = new QHBoxLayout();
-    installMapFileActions(afrFileBar, afrMap, QStringLiteral("afr"), afrRpmBins, afrMapBins, 25.0);
-    afrFileBar->addStretch();
-    afrLayout->addLayout(afrFileBar);
+    const auto afrFileActions = installMapFileActions(afrMap, QStringLiteral("afr"), afrRpmBins, afrMapBins, 25.0);
     afrLayout->addWidget(afrMap, 1);
     auto *afrFoot = new QLabel(tr("RPM (columns) / MAP kPa (rows). AFR assumes gasoline stoichiometric 14.7. No ECU AFR table protocol exists yet."), afrPage);
     afrFoot->setWordWrap(true);
@@ -2398,12 +2394,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(fuelRead, &QPushButton::clicked, this, [=]() { startTransfer(2); });
     connect(ignitionRead, &QPushButton::clicked, this, [=]() { startTransfer(3); });
     auto *fileMenu = menuBar()->addMenu(tr("File"));
-    auto *openProject = fileMenu->addAction(tr("Open offline map..."));
+    auto *openProject = fileMenu->addAction(tr("Open Map..."));
     openProject->setShortcut(QKeySequence::Open);
-    connect(openProject, &QAction::triggered, openExample, &QPushButton::click);
-    auto *saveProject = fileMenu->addAction(tr("Save offline map as..."));
+    auto *saveProject = fileMenu->addAction(tr("Save Map..."));
     saveProject->setShortcut(QKeySequence::Save);
-    connect(saveProject, &QAction::triggered, saveExample, &QPushButton::click);
+    // File actions operate on the active map, never on the example preview.
+    const auto activeMapActions = [tabs, fuelPage, ignitionPage, afrPage, fuelFileActions, ignitionFileActions, afrFileActions]() {
+        const QWidget *page = tabs->currentWidget();
+        if (page == ignitionPage) return ignitionFileActions;
+        if (page == afrPage) return afrFileActions;
+        return fuelFileActions;
+    };
+    connect(openProject, &QAction::triggered, this, [activeMapActions]() { activeMapActions().first->trigger(); });
+    connect(saveProject, &QAction::triggered, this, [activeMapActions]() { activeMapActions().second->trigger(); });
     fileMenu->addSeparator();
     auto *fullScreen = fileMenu->addAction(tr("Full screen"));
     fullScreen->setShortcut(QKeySequence(QStringLiteral("Ctrl+F")));
