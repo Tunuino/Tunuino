@@ -459,7 +459,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // so MAP increases from bottom to top. No ECU write is performed here.
     const QByteArray fuelDefaults = QByteArray::fromBase64("TExQNyUlIywqKiopKSkpKUxGUC4iJiMqMzIxMC8uLi5NTVUzKC4qNzQ0NDQ0NDQ0TE5RQTMzLz41NjY3Nzg4OFFZWj81OTU8NTY3ODk6OjpVWls4LzItNjs7Ozs7Ozs7V1pcQTU0NDtFREJBQD8+PlRZXUQ7NjU9RUVFRD5ERERWWWRFQTw7Qz09PDw8Ozs7SEtZR0JBQEM9PT4+Pj8/P01NWUZIRkRFP0JER0lMTU1OVFpITE1NUVZVVVRUU1NTTlZaTFhaWVZdXV1dXV1dXU5WXVFfYF9oYmNjZGVmZmZOVl5TY2ZrgI2JhYB8eHZ2T1RmYmttdIabjIeCeXh4eA==");
     const QByteArray ignitionDefaults = QByteArray::fromBase64("Dw0PGBkcHyEiIyQlJiYnKA8NDxgZHB8hIiMkJSYmJygPDQ8YGRwfISIjJCUmJicoDw0PGBkcHyEiIiQlJSUmJw8NDxcYHB8gIiIkJSUlJicPDRAXGBwfICEiIyQkJCUmDw0RFxgbHh8gISIjJCQlJg8NEBcYGx4fICEiIyQkJSYODRAXGBodHyAhIiMjIyQkDg0QERIUHR4fICEiIiIjIw4NEBESFB0eHyAgISEhIiIODREREhQaGx8fICAgICEhDQ0RERIUGhseHh8fHx8gIA0OERESFBobHh4eHh4eHx8NDxEREhMZGh0dHR0dHR0dDQ8RERITGxwcHBwQHBwcHA==");
-    const QByteArray afrDefaults = QByteArray::fromBase64("k5OTlJeXlpOTk5OTk5OTk5OTk5SXl5aTk5OTk5OTk5OTk5OUl5eWk5OTk5OTk5OTlJaWlZOSkpKRkZCQkJOTk5SVlpSSkI+OjYyMjIyTk5OTlJWTko2Mi4mIh4eHj4+Pk5OTko6KioqIh4aGho6OjpOTk5GMiIiIhoWDg4ONjY6RkY+MiIOCgoKBgYGBjY2Ojo2MiYaCgoGBgYGBgY2NjouIiIaDgYGBgYCAgICMjIyHhoaEgoGBgYCAgICAiYmJgIGBgYCAgICAgICAgIaGhoCBgIB/f39/f39/f3+Dg4OAgH9+fn5+fn5+fn5+gICAgIB/fX19fX19fX19fQ==");
+    // Three trailing AFR samples were absent in the imported data; temporarily
+    // repeat the last supplied sample to complete the 16x16 display grid.
+    const QByteArray afrDefaults = QByteArray::fromBase64("k5OTlJeXlpOTk5OTk5OTk5OTk5SXl5aTk5OTk5OTk5OTk5OUl5eWk5OTk5OTk5OTlJaWlZOSkpKRkZCQkJOTk5SVlpSSkI+OjYyMjIyTk5OTlJWTko2Mi4mIh4eHj4+Pk5OTko6KioqIh4aGho6OjpOTk5GMiIiIhoWDg4ONjY6RkY+MiIOCgoKBgYGBjY2Ojo2MiYaCgoGBgYGBgY2NjouIiIaDgYGBgYCAgICMjIyHhoaEgoGBgYCAgICAiYmJgIGBgYCAgICAgICAgIaGhoCBgIB/f39/f39/f3+Dg4OAgH9+fn5+fn5+fn5+gICAgIB/fX19fX19fX19fX19fQ==");
     const QStringList fuelRpmBins = QStringLiteral("500,700,900,1500,2100,2900,3800,4700,5500,5700,5900,6100,6300,6700,7000,7200").split(',');
     const QStringList fuelMapBins = QStringLiteral("16,26,30,36,40,46,50,56,60,66,70,76,86,90,96,100").split(',');
     const QStringList ignitionRpmBins = QStringLiteral("500,1000,1500,2000,2500,3000,3500,4000,4500,5000,5500,6000,6300,6700,7000,7200").split(',');
@@ -753,6 +755,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     fillDefaultTable(maps, fuelDefaults, 1.0, fuelMapBins);
     installMapHeatmap(maps);
+    fuelActionsLayout->insertStretch(2, 1);
     installTableEditControls(fuelActionsLayout, maps, false);
     const auto fuelFileActions = installMapFileActions(maps, QStringLiteral("fuel"), fuelRpmBins, fuelMapBins, 255.0);
     maps->setCornerButtonEnabled(false);
@@ -881,6 +884,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionMap->setAlternatingRowColors(true);
     fillDefaultTable(ignitionMap, ignitionDefaults, 1.0, ignitionMapBins);
     installMapHeatmap(ignitionMap);
+    ignitionActionsLayout->insertStretch(2, 1);
     installTableEditControls(ignitionActionsLayout, ignitionMap, false);
     const auto ignitionFileActions = installMapFileActions(ignitionMap, QStringLiteral("ignition"), ignitionRpmBins, ignitionMapBins, 90.0);
     ignitionMap->setCornerButtonEnabled(false);
@@ -1011,16 +1015,54 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         rpmHeaders.append(afrRpmBins.at(i));
         loadHeaders.append(afrMapBins.at(15 - i));
     }
-    afrMap->setHorizontalHeaderLabels(rpmHeaders);
     afrMap->setVerticalHeaderLabels(loadHeaders);
+    afrMap->horizontalHeader()->hide();
     fillDefaultTable(afrMap, afrDefaults, 10.0, afrMapBins);
     installMapHeatmap(afrMap);
     auto *afrEditBar = new QHBoxLayout();
-    installTableEditControls(afrEditBar, afrMap, true);
     afrEditBar->addStretch();
+    installTableEditControls(afrEditBar, afrMap, true);
     afrLayout->addLayout(afrEditBar);
     const auto afrFileActions = installMapFileActions(afrMap, QStringLiteral("afr"), afrRpmBins, afrMapBins, 25.0);
-    afrLayout->addWidget(afrMap, 1);
+    auto *afrGridPanel = new QWidget(afrPage);
+    auto *afrGridLayout = new QVBoxLayout(afrGridPanel);
+    afrGridLayout->setContentsMargins(0, 0, 0, 0);
+    afrGridLayout->setSpacing(3);
+    auto *afrAxisRow = new QHBoxLayout();
+    afrAxisRow->setSpacing(5);
+    auto *afrMapAxisLabel = new QLabel(tr("M\nA\nP\n\nk\nP\na"), afrGridPanel);
+    afrMapAxisLabel->setAlignment(Qt::AlignCenter);
+    afrMapAxisLabel->setFixedWidth(34);
+    afrMapAxisLabel->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
+    afrAxisRow->addWidget(afrMapAxisLabel, 0, Qt::AlignVCenter);
+    afrAxisRow->addWidget(afrMap, 1);
+    afrGridLayout->addLayout(afrAxisRow, 1);
+    auto *afrRpmValues = new QTableWidget(1, 16, afrGridPanel);
+    afrRpmValues->horizontalHeader()->hide();
+    afrRpmValues->verticalHeader()->hide();
+    afrRpmValues->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    afrRpmValues->setFocusPolicy(Qt::NoFocus);
+    afrRpmValues->setSelectionMode(QAbstractItemView::NoSelection);
+    afrRpmValues->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    afrRpmValues->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    afrRpmValues->setMinimumHeight(32);
+    afrRpmValues->setMaximumHeight(32);
+    afrRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    afrRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    for (int i = 0; i < 16; ++i) {
+        auto *cell = new QTableWidgetItem(afrRpmBins.at(i));
+        cell->setTextAlignment(Qt::AlignCenter);
+        afrRpmValues->setItem(0, i, cell);
+    }
+    auto *afrBottomAxis = new QHBoxLayout();
+    afrBottomAxis->setContentsMargins(afrMapAxisLabel->width() + 5 + afrMap->verticalHeader()->width(), 0, 0, 0);
+    afrBottomAxis->addWidget(afrRpmValues, 1);
+    afrGridLayout->addLayout(afrBottomAxis);
+    auto *afrRpmLabel = new QLabel(tr("RPM (rev/min)"), afrGridPanel);
+    afrRpmLabel->setAlignment(Qt::AlignHCenter);
+    afrRpmLabel->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
+    afrGridLayout->addWidget(afrRpmLabel);
+    afrLayout->addWidget(afrGridPanel, 1);
     auto *afrFoot = new QLabel(tr("RPM (columns) / MAP kPa (rows). AFR assumes gasoline stoichiometric 14.7. No ECU AFR table protocol exists yet."), afrPage);
     afrFoot->setWordWrap(true);
     afrLayout->addWidget(afrFoot);
