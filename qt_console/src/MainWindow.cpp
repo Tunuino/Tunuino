@@ -324,10 +324,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->setSelectionBehavior(QAbstractItemView::SelectItems);
     maps->setCornerButtonEnabled(false);
     maps->setToolTip(tr("Map values are unavailable until the ECU table-read protocol is implemented."));
-    maps->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    maps->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     maps->horizontalHeader()->setDefaultSectionSize(62);
     maps->horizontalHeader()->setMinimumSectionSize(48);
-    maps->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    maps->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     maps->verticalHeader()->setDefaultSectionSize(28);
     maps->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
     maps->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
@@ -341,9 +341,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->setCornerButtonEnabled(false);
     maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
-    maps->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-    maps->setFixedSize(maps->verticalHeader()->width() + 16 * maps->horizontalHeader()->defaultSectionSize() + 4,
-                         16 * maps->verticalHeader()->defaultSectionSize() + 4);
+    maps->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    maps->setMinimumSize(480, 420);
     auto *fuelGridPanel = new QWidget(fuelPage);
     auto *fuelGridLayout = new QVBoxLayout(fuelGridPanel);
     fuelGridLayout->setContentsMargins(0, 0, 0, 0);
@@ -351,14 +350,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *fuelAxisRow = new QHBoxLayout();
     fuelAxisRow->setSpacing(5);
     // MAP axis label is positioned to the left of the grid.
-    fuelAxisRow->addWidget(maps, 0, Qt::AlignTop);
+    fuelAxisRow->addWidget(maps, 1);
     auto *fuelRpmAxis = new QLabel(tr("M\nA\nP\n\nk\nP\na"), fuelGridPanel);
     fuelRpmAxis->setAlignment(Qt::AlignCenter);
     fuelRpmAxis->setFixedWidth(34);
     fuelRpmAxis->setWordWrap(false);
     fuelRpmAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     fuelAxisRow->insertWidget(0, fuelRpmAxis, 0, Qt::AlignVCenter);
-    fuelGridLayout->addLayout(fuelAxisRow);
+    fuelGridLayout->addLayout(fuelAxisRow, 1);
     maps->horizontalHeader()->hide();
     auto *fuelRpmValues = new QTableWidget(1, 16, fuelGridPanel);
     fuelRpmValues->horizontalHeader()->hide();
@@ -370,7 +369,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelRpmValues->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     fuelRpmValues->horizontalHeader()->setDefaultSectionSize(maps->horizontalHeader()->defaultSectionSize());
     fuelRpmValues->verticalHeader()->setDefaultSectionSize(28);
-    fuelRpmValues->setFixedSize(16 * maps->horizontalHeader()->defaultSectionSize() + 4, 32);
+    fuelRpmValues->setMinimumHeight(32);
+    fuelRpmValues->setMaximumHeight(32);
+    fuelRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    fuelRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     for (int i = 0; i < 16; ++i) {
         auto *cell = new QTableWidgetItem(QString::number(i + 1));
         cell->setTextAlignment(Qt::AlignCenter);
@@ -378,7 +380,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     }
     auto *fuelBottomAxis = new QHBoxLayout();
     fuelBottomAxis->setContentsMargins(fuelRpmAxis->sizeHint().width() + 5 + maps->verticalHeader()->width(), 0, 0, 0);
-    fuelBottomAxis->addWidget(fuelRpmValues, 0, Qt::AlignLeft);
+    fuelBottomAxis->addWidget(fuelRpmValues, 1);
     fuelGridLayout->addLayout(fuelBottomAxis);
 
     auto *fuelMapAxis = new QLabel(tr("RPM (rev/min)"), fuelGridPanel);
@@ -401,15 +403,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             maps->setRowHeight(i, height);
             fuelRpmValues->setColumnWidth(i, width);
         }
-        maps->setFixedSize(maps->verticalHeader()->width() + 16 * width + 6,
-                           16 * height + 6);
-        fuelRpmValues->setFixedSize(16 * width + 6, 32);
+        maps->setMinimumSize(maps->verticalHeader()->width() + 16 * width + 6,
+                             16 * height + 6);
     };
     connect(fuelZoomIn, &QPushButton::clicked, fuelPage, [resizefuelGrid] { resizefuelGrid(8); });
     connect(fuelZoomOut, &QPushButton::clicked, fuelPage, [resizefuelGrid] { resizefuelGrid(-8); });
 
     auto *fuelWorkspace = new QHBoxLayout();
-    fuelWorkspace->addWidget(fuelGridPanel, 0, Qt::AlignTop);
+    fuelWorkspace->addWidget(fuelGridPanel, 1);
     auto *fuelSurface = new MapSurfacePreview(maps, fuelPage);
     // The 3D graph has its own MDI window; the table remains independently visible.
     auto *fuelGraphSubWindow = workspace->addSubWindow(fuelSurface);
@@ -423,7 +424,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelGraphSubWindow->show();
     fuelGraphSubWindow->move(35, 45);
     fuelLayout->addLayout(fuelWorkspace);
-    fuelLayout->addStretch(1);
+    
     auto *fuelFooter = new QLabel(tr("Values are intentionally blank until read from ECU. Editing and writing remain disabled."), fuelPage);
     fuelFooter->setStyleSheet(QStringLiteral("color: #a9aaad;"));
     fuelLayout->addWidget(fuelFooter);
