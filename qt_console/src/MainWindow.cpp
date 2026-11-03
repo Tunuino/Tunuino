@@ -525,9 +525,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionMap->setCornerButtonEnabled(false);
     ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     ignitionMap->verticalHeader()->setToolTip(tr("MAP (kPa)"));
-    ignitionMap->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-    ignitionMap->setFixedSize(ignitionMap->verticalHeader()->width() + 16 * ignitionMap->horizontalHeader()->defaultSectionSize() + 4,
-                         16 * ignitionMap->verticalHeader()->defaultSectionSize() + 4);
+    // Keep the ignition grid resizable inside its workspace window.
+    // A fixed 16-column pixel width previously prevented the user from resizing it.
+    ignitionMap->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    ignitionMap->setMinimumSize(480, 420);
     auto *ignitionGridPanel = new QWidget(ignitionPage);
     auto *ignitionGridLayout = new QVBoxLayout(ignitionGridPanel);
     ignitionGridLayout->setContentsMargins(0, 0, 0, 0);
@@ -535,7 +536,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *ignitionAxisRow = new QHBoxLayout();
     ignitionAxisRow->setSpacing(5);
     // MAP axis label is positioned to the left of the grid.
-    ignitionAxisRow->addWidget(ignitionMap, 0, Qt::AlignTop);
+    ignitionAxisRow->addWidget(ignitionMap, 1);
     auto *ignitionRpmAxis = new QLabel(tr("M\nA\nP\n\nk\nP\na"), ignitionGridPanel);
     ignitionRpmAxis->setAlignment(Qt::AlignCenter);
     ignitionRpmAxis->setFixedWidth(34);
