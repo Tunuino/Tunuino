@@ -264,7 +264,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("DSG Gearbox"), {{tr("Gearbox settings"),-1}});
     addCategory(tr("CAN, Serial"), {{tr("Communication settings"),6}});
     addCategory(tr("Log"), {{tr("Datalogging"),4}});
-    addCategory(tr("Gauges"), {{tr("Engine Status"),9},{tr("Runtime gauges"),-1}});
+    addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
     addCategory(tr("Calibration & Setup"), {{tr("Sensor and engine calibration"),6}});
     auto engineStatusDockRef = QSharedPointer<QPointer<QDockWidget>>::create();
     connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, workspaceWindow, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef](QTreeWidgetItem *item, int) {
