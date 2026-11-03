@@ -435,7 +435,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     fuelToolbarLayout->addWidget(fuelHeading);
     fuelToolbarLayout->addStretch();
-    auto *fuelState = new QLabel(tr("READ ONLY  -  Connect ECU to read map"), fuelToolbar);
+    auto *fuelState = new QLabel(tr("OFFLINE EDITING  -  ECU write unavailable"), fuelToolbar);
     fuelState->setStyleSheet(QStringLiteral("color: #bdbfc1;"));
     fuelToolbarLayout->addWidget(fuelState);
     fuelLayout->addWidget(fuelToolbar);
@@ -518,6 +518,64 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         };
         recolor();
         connect(table, &QTableWidget::itemChanged, this, [recolor](QTableWidgetItem *) { recolor(); });
+    };
+    // Edit the selected rectangular region of the active offline map.
+    // Read all source values before applying changes to avoid order-dependent smoothing.
+    auto editMapRegion = [this](QTableWidget *table, bool smooth, bool afr) {
+        if (!table) return;
+        const auto ranges = table->selectedRanges();
+        if (ranges.size() != 1) {
+            QMessageBox::information(this, tr("Select map cells"),
+                tr("Select one rectangular region of cells first."));
+            return;
+        }
+        const QTableWidgetSelectionRange area = ranges.first();
+        const int top = area.topRow(), bottom = area.bottomRow();
+        const int left = area.leftColumn(), right = area.rightColumn();
+        if (!smooth && (bottom == top || right == left)) {
+            QMessageBox::information(this, tr("Interpolation"),
+                tr("Select at least two rows and two columns to interpolate."));
+            return;
+        }
+        double values[16][16] = {};
+        for (int row = 0; row < 16; ++row)
+            for (int col = 0; col < 16; ++col) {
+                const auto *cell = table->item(row, col);
+                bool ok = false;
+                const double v = cell ? cell->text().toDouble(&ok) : 0.0;
+                if (!ok || !std::isfinite(v)) {
+                    QMessageBox::warning(this, tr("Invalid map"), tr("Correct invalid map values before editing."));
+                    return;
+                }
+                values[row][col] = v;
+            }
+        double output[16][16] = {};
+        for (int row = top; row <= bottom; ++row)
+            for (int col = left; col <= right; ++col) {
+                double value;
+                if (smooth) {
+                    // One pass, 3x3 weighted filter, constrained to the selection.
+                    double total = 0.0, weightSum = 0.0;
+                    for (int dy = -1; dy <= 1; ++dy)
+                        for (int dx = -1; dx <= 1; ++dx) {
+                            const int rr = row + dy, cc = col + dx;
+                            if (rr < top || rr > bottom || cc < left || cc > right) continue;
+                            const double weight = (dy == 0 ? 2.0 : 1.0) * (dx == 0 ? 2.0 : 1.0);
+                            total += values[rr][cc] * weight;
+                            weightSum += weight;
+                        }
+                    value = total / weightSum;
+                } else {
+                    const double x = double(col - left) / double(right - left);
+                    const double y = double(row - top) / double(bottom - top);
+                    value = (1.0-y)*((1.0-x)*values[top][left] + x*values[top][right])
+                          + y*((1.0-x)*values[bottom][left] + x*values[bottom][right]);
+                }
+                output[row][col] = value;
+            }
+        for (int row = top; row <= bottom; ++row)
+            for (int col = left; col <= right; ++col)
+                table->item(row, col)->setText(QString::number(output[row][col], 'f', afr ? 1 : 0));
     };
     // Offline map persistence; never sends data to the ECU.
     auto installMapFileActions = [this](QTableWidget *table, const QString &mapId,
@@ -841,7 +899,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionGraphSubWindow->move(75, 85);
     ignitionLayout->addLayout(ignitionWorkspace);
     ignitionLayout->addStretch(1);
-    auto *ignitionFooter = new QLabel(tr("Ignition values unavailable. ECU read/write protocol not yet integrated."), ignitionPage);
+    auto *ignitionFooter = new QLabel(tr("Tunuino offline base values. Edit locally; ECU writing requires a validated protocol."), ignitionPage);
     ignitionFooter->setStyleSheet(QStringLiteral("color: #a9aaad;"));
     ignitionLayout->addWidget(ignitionFooter);
     tabs->addTab(ignitionPage, tr("Ignition Table"));
@@ -2460,8 +2518,23 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *exitAction = fileMenu->addAction(tr("Exit"), this, &QWidget::close);
     exitAction->setShortcut(QKeySequence(QStringLiteral("Alt+X")));
     auto *editMenu = menuBar()->addMenu(tr("Edit"));
-    auto *editInfo = editMenu->addAction(tr("Edit offline base map"));
-    connect(editInfo, &QAction::triggered, this, [tabs]() { tabs->setCurrentIndex(3); });
+    const auto activeEditTable = [tabs, fuelPage, ignitionPage, afrPage, maps, ignitionMap, afrMap]() -> QTableWidget * {
+        const QWidget *page = tabs->currentWidget();
+        if (page == fuelPage) return maps;
+        if (page == ignitionPage) return ignitionMap;
+        if (page == afrPage) return afrMap;
+        return nullptr;
+    };
+    auto *interpolateAction = editMenu->addAction(tr("Interpolate selection"));
+    connect(interpolateAction, &QAction::triggered, this, [activeEditTable, editMapRegion, afrMap]() {
+        auto *table = activeEditTable();
+        editMapRegion(table, false, table == afrMap);
+    });
+    auto *smoothAction = editMenu->addAction(tr("Smooth selection"));
+    connect(smoothAction, &QAction::triggered, this, [activeEditTable, editMapRegion, afrMap]() {
+        auto *table = activeEditTable();
+        editMapRegion(table, true, table == afrMap);
+    });
     auto *baseMapsMenu = menuBar()->addMenu(tr("Base Maps"));
     auto *openBaseMaps = baseMapsMenu->addAction(tr("Open Base Maps"));
     connect(openBaseMaps, &QAction::triggered, this, [tabs, workspace, workspaceWindow]() {
