@@ -4,6 +4,10 @@
 #include <QPaintEvent>
 #include <QPolygonF>
 #include <QFrame>
+#include <QMdiArea>
+#include <QMdiSubWindow>
+#include <QPointer>
+#include <QSettings>
 #include <QDockWidget>
 #include <QLabel>
 #include <QMenuBar>
@@ -140,8 +144,22 @@ private:
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("Tunuino Console — Qt 6");
     resize(1400, 850);
-    auto *tabs = new QTabWidget(this);
-    setCentralWidget(tabs);
+    // First MDI migration stage: retain the existing tab controller and ECU
+    // connections, but host it in a movable, resizable, closable workspace window.
+    auto *workspace = new QMdiArea(this);
+    workspace->setObjectName(QStringLiteral("TunuinoWorkspace"));
+    workspace->setViewMode(QMdiArea::SubWindowView);
+    workspace->setBackground(QBrush(QColor(43, 46, 51)));
+    setCentralWidget(workspace);
+    auto *tabs = new QTabWidget(workspace);
+    auto *workspaceWindow = workspace->addSubWindow(tabs);
+    workspaceWindow->setWindowTitle(tr("Tunuino | Tables and configuration"));
+    workspaceWindow->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
+                                    Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint |
+                                    Qt::WindowCloseButtonHint);
+    workspaceWindow->setAttribute(Qt::WA_DeleteOnClose, false);
+    workspaceWindow->resize(1120, 720);
+    workspaceWindow->show();
     auto *navigationDock = new QDockWidget(tr("TUNUINO  |  Navigation"), this);
     navigationDock->setObjectName("NavigationDock");
     auto *navigationPanel = new QWidget(navigationDock);
@@ -199,10 +217,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("CAN, Serial"), {{tr("Communication settings"),6}});
     addCategory(tr("Log"), {{tr("Datalogging"),4}});
     addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
-    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs](QTreeWidgetItem *item, int) {
+    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, workspaceWindow](QTreeWidgetItem *item, int) {
         const int index = item->data(0, Qt::UserRole).toInt();
-        if (item->parent() && index >= 0 && index < tabs->count())
+        if (item->parent() && index >= 0 && index < tabs->count()) {
+            workspaceWindow->showNormal();
+            workspace->setActiveSubWindow(workspaceWindow);
             tabs->setCurrentIndex(index);
+        }
         else if (!item->parent()) item->setExpanded(!item->isExpanded());
     });
     connect(navigationSearch, &QLineEdit::textChanged, navigationTree, [navigationTree](const QString &query) {
