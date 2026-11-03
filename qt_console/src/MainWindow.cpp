@@ -109,12 +109,12 @@ protected:
                     return;
                 }
                 z[row][col] = value;
-                minValue = std::min(minValue, value);
-                maxValue = std::max(maxValue, value);
+                minValue = (std::min)(minValue, value);
+                maxValue = (std::max)(maxValue, value);
             }
         }
-        const double span = std::max(0.001, maxValue - minValue);
-        const double scale = std::min((width() - 40.0) / 31.0, (height() - 65.0) / 23.0);
+        const double span = (std::max)(0.001, maxValue - minValue);
+        const double scale = (std::min)((width() - 40.0) / 31.0, (height() - 65.0) / 23.0);
         const QPointF origin(width() * 0.5, height() * 0.77);
         auto point = [&](int row, int col) {
             const double heightValue = (z[row][col] - minValue) / span;
