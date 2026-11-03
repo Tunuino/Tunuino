@@ -68,6 +68,9 @@
 #include <cmath>
 #include <algorithm>
 #ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <setupapi.h>
 #include <winusb.h>
