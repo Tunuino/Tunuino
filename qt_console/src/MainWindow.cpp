@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "NativeDfuFlash.h"
 #include <QPainter>
+#include <QSignalBlocker>
 #include <QPaintEvent>
 #include <QMouseEvent>
 #include <QWheelEvent>
@@ -480,6 +481,44 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
         table->setVerticalHeaderLabels(verticalLabels);
     };
+    // Heatmap for the 2D calibration grids. The color range follows the
+    // actual numeric cells and is refreshed after edits or opening a map.
+    auto installMapHeatmap = [this](QTableWidget *table) {
+        const auto recolor = [table]() {
+            double minimum = 1e100, maximum = -1e100;
+            for (int row = 0; row < table->rowCount(); ++row)
+                for (int col = 0; col < table->columnCount(); ++col) {
+                    const auto *item = table->item(row, col);
+                    bool ok = false;
+                    const double value = item ? item->text().toDouble(&ok) : 0.0;
+                    if (!ok || !std::isfinite(value)) continue;
+                    minimum = (std::min)(minimum, value);
+                    maximum = (std::max)(maximum, value);
+                }
+            const double range = (std::max)(0.001, maximum - minimum);
+            QSignalBlocker blocker(table);
+            for (int row = 0; row < table->rowCount(); ++row)
+                for (int col = 0; col < table->columnCount(); ++col) {
+                    auto *item = table->item(row, col);
+                    if (!item) continue;
+                    bool ok = false;
+                    const double value = item->text().toDouble(&ok);
+                    if (!ok || !std::isfinite(value)) {
+                        item->setBackground(QColor(92, 45, 49));
+                        item->setForeground(QColor(255, 255, 255));
+                        continue;
+                    }
+                    const double level = qBound(0.0, (value - minimum) / range, 1.0);
+                    // Blue/green for lower values, yellow/orange/red for higher.
+                    const QColor color = QColor::fromHsvF(0.66 * (1.0 - level), 0.72, 0.86);
+                    item->setBackground(color);
+                    item->setForeground(color.lightnessF() < 0.48 ? QColor(255, 255, 255)
+                                                                      : QColor(20, 24, 28));
+                }
+        };
+        recolor();
+        connect(table, &QTableWidget::itemChanged, this, [recolor](QTableWidgetItem *) { recolor(); });
+    };
     // Offline map persistence; never sends data to the ECU.
     auto installMapFileActions = [this](QTableWidget *table, const QString &mapId,
                                         const QStringList &rpmAxis, const QStringList &mapAxis,
@@ -573,6 +612,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     maps->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     fillDefaultTable(maps, fuelDefaults, 1.0, fuelMapBins);
+    installMapHeatmap(maps);
     const auto fuelFileActions = installMapFileActions(maps, QStringLiteral("fuel"), fuelRpmBins, fuelMapBins, 255.0);
     maps->setCornerButtonEnabled(false);
     maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
@@ -699,6 +739,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionMap->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
     ignitionMap->setAlternatingRowColors(true);
     fillDefaultTable(ignitionMap, ignitionDefaults, 1.0, ignitionMapBins);
+    installMapHeatmap(ignitionMap);
     const auto ignitionFileActions = installMapFileActions(ignitionMap, QStringLiteral("ignition"), ignitionRpmBins, ignitionMapBins, 90.0);
     ignitionMap->setCornerButtonEnabled(false);
     ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
@@ -831,6 +872,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrMap->setHorizontalHeaderLabels(rpmHeaders);
     afrMap->setVerticalHeaderLabels(loadHeaders);
     fillDefaultTable(afrMap, afrDefaults, 10.0, afrMapBins);
+    installMapHeatmap(afrMap);
     const auto afrFileActions = installMapFileActions(afrMap, QStringLiteral("afr"), afrRpmBins, afrMapBins, 25.0);
     afrLayout->addWidget(afrMap, 1);
     auto *afrFoot = new QLabel(tr("RPM (columns) / MAP kPa (rows). AFR assumes gasoline stoichiometric 14.7. No ECU AFR table protocol exists yet."), afrPage);
