@@ -278,16 +278,36 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     workspace->setBackground(QBrush(QColor(43, 46, 51)));
     setCentralWidget(workspace);
     auto *boundsGuard = new WorkspaceBoundsGuard(workspace);
-    auto *tabs = new QTabWidget(workspace);
-    auto *workspaceWindow = workspace->addSubWindow(tabs);
-    workspaceWindow->setWindowTitle(tr("Settings"));
-    workspaceWindow->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
-                                    Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint |
-                                    Qt::WindowCloseButtonHint);
-    workspaceWindow->setAttribute(Qt::WA_DeleteOnClose, false);
-    workspaceWindow->resize(1120, 720);
-    // Keep settings available through navigation, but do not open it at startup.
-    boundsGuard->watch(workspaceWindow);
+    // Hidden page registry only; no legacy "Tables and configuration" MDI window.
+    auto *tabs = new QTabWidget(this);
+    tabs->hide();
+    auto settingsWindows = QSharedPointer<QVector<QPointer<QMdiSubWindow>>>::create(7);
+    const auto openSettingsPage = [this, workspace, tabs, settingsWindows, boundsGuard](int index) {
+        if (index < 3 || index >= tabs->count()) return;
+        auto &existing = (*settingsWindows)[index];
+        if (!existing) {
+            QWidget *page = tabs->widget(index);
+            if (!page) return;
+            const QString title = tabs->tabText(index);
+            tabs->removeTab(index);
+            page->setParent(nullptr);
+            tabs->insertTab(index, new QWidget(tabs), title);
+            auto *window = workspace->addSubWindow(page);
+            window->setWindowTitle(title);
+            window->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
+                                   Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint |
+                                   Qt::WindowCloseButtonHint);
+            window->setAttribute(Qt::WA_DeleteOnClose, false);
+            window->resize(1000, 740);
+            existing = window;
+            boundsGuard->watch(window);
+        }
+        existing->showNormal();
+        if (existing->widget()) existing->widget()->show();
+        existing->show();
+        workspace->setActiveSubWindow(existing);
+        existing->raise();
+    };
     // Graph windows are independent from their map tables and can be closed
     // and reopened from the navigation tree without discarding ECU data.
     auto fuelGraphWindow = QSharedPointer<QPointer<QMdiSubWindow>>::create();
@@ -352,7 +372,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
     addCategory(tr("Calibration & Setup"), {{tr("Sensor and engine calibration"),6}});
     auto engineStatusDockRef = QSharedPointer<QPointer<QDockWidget>>::create();
-    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, workspaceWindow, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows](QTreeWidgetItem *item, int) {
+    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, openSettingsPage, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows](QTreeWidgetItem *item, int) {
         const int index = item->data(0, Qt::UserRole).toInt();
         if (item->parent() && index == 9) {
             if (*engineStatusDockRef) { (*engineStatusDockRef)->show(); (*engineStatusDockRef)->raise(); }
@@ -367,14 +387,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             workspace->setActiveSubWindow(window);
             window->raise();
         } else if (item->parent() && index >= 0 && index < tabs->count()) {
-            // QMdiSubWindow::close() may hide its child widget as well.
-            // Restore both widgets when reopening from navigation.
-            workspaceWindow->showNormal();
-            tabs->show();
-            workspaceWindow->show();
-            workspace->setActiveSubWindow(workspaceWindow);
-            tabs->setCurrentIndex(index);
-            workspaceWindow->setWindowTitle(item->text(0));
+            openSettingsPage(index);
         }
         else if (!item->parent()) item->setExpanded(!item->isExpanded());
     });
@@ -1114,7 +1127,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     }
     // Startup: show Fuel Table only. All other maps and graphs remain available
     // through navigation, without creating the old configuration window.
-    workspaceWindow->hide();
     if (*fuelGraphWindow) (*fuelGraphWindow)->hide();
     if (*ignitionGraphWindow) (*ignitionGraphWindow)->hide();
     workspace->setActiveSubWindow((*mapWindows)[0]);
@@ -2700,14 +2712,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     exitAction->setShortcut(QKeySequence(QStringLiteral("Alt+X")));
     auto *baseMapsMenu = menuBar()->addMenu(tr("Base Maps"));
     auto *openBaseMaps = baseMapsMenu->addAction(tr("Open Base Maps"));
-    connect(openBaseMaps, &QAction::triggered, this, [tabs, workspace, workspaceWindow]() {
-        workspaceWindow->showNormal();
-        tabs->show();
-        workspaceWindow->show();
-        workspace->setActiveSubWindow(workspaceWindow);
-        tabs->setCurrentIndex(3);
-        workspaceWindow->setWindowTitle(QObject::tr("Base Maps"));
-    });
+    connect(openBaseMaps, &QAction::triggered, this, [openSettingsPage]() { openSettingsPage(3); });
     auto *viewMenu = menuBar()->addMenu(tr("View"));
     viewMenu->addAction(navigationDock->toggleViewAction());
     viewMenu->addAction(inspectorDock->toggleViewAction());
@@ -2726,7 +2731,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
     });
     auto *calibrationAction = toolsMenu->addAction(tr("Calibration and setup"));
-    connect(calibrationAction, &QAction::triggered, this, [tabs]() { tabs->setCurrentIndex(6); });
+    connect(calibrationAction, &QAction::triggered, this, [openSettingsPage]() { openSettingsPage(6); });
     auto *helpMenu = menuBar()->addMenu(tr("Help"));
     auto *checkUpdates = helpMenu->addAction(tr("Check for updates..."));
     connect(checkUpdates, &QAction::triggered, this, [this, checkUpdates]() {
