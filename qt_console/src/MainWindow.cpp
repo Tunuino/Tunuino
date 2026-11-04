@@ -292,6 +292,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // and reopened from the navigation tree without discarding ECU data.
     auto fuelGraphWindow = QSharedPointer<QPointer<QMdiSubWindow>>::create();
     auto ignitionGraphWindow = QSharedPointer<QPointer<QMdiSubWindow>>::create();
+    auto mapWindows = QSharedPointer<QVector<QPointer<QMdiSubWindow>>>::create(3);
     auto *navigationDock = new QDockWidget(tr("TUNUINO  |  Navigation"), this);
     navigationDock->setObjectName("NavigationDock");
     auto *navigationPanel = new QWidget(navigationDock);
@@ -351,13 +352,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
     addCategory(tr("Calibration & Setup"), {{tr("Sensor and engine calibration"),6}});
     auto engineStatusDockRef = QSharedPointer<QPointer<QDockWidget>>::create();
-    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, workspaceWindow, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef](QTreeWidgetItem *item, int) {
+    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, workspaceWindow, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows](QTreeWidgetItem *item, int) {
         const int index = item->data(0, Qt::UserRole).toInt();
         if (item->parent() && index == 9) {
             if (*engineStatusDockRef) { (*engineStatusDockRef)->show(); (*engineStatusDockRef)->raise(); }
         } else if (item->parent() && (index == 7 || index == 8)) {
             auto window = (index == 7) ? *fuelGraphWindow : *ignitionGraphWindow;
             if (window) { window->showNormal(); workspace->setActiveSubWindow(window); }
+        } else if (item->parent() && index >= 0 && index <= 2 && (*mapWindows)[index]) {
+            auto window = (*mapWindows)[index];
+            window->showNormal();
+            window->show();
+            workspace->setActiveSubWindow(window);
+            window->raise();
         } else if (item->parent() && index >= 0 && index < tabs->count()) {
             // QMdiSubWindow::close() may hide its child widget as well.
             // Restore both widgets when reopening from navigation.
@@ -1068,6 +1075,36 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrLayout->addWidget(afrFoot);
     tabs->addTab(afrPage, tr("AFR Target"));
 
+    // Each map is an independent MDI window. Keep its tab index reserved so
+    // existing navigation indices for the other configuration pages stay stable.
+    const QVector<QWidget *> mapPages{fuelPage, ignitionPage, afrPage};
+    const QStringList mapTitles{tr("Fuel Table"), tr("Ignition Table"), tr("AFR Target")};
+    for (int index = 2; index >= 0; --index) {
+        tabs->removeTab(index);
+        auto *placeholder = new QWidget(tabs);
+        auto *placeholderLayout = new QVBoxLayout(placeholder);
+        auto *openMap = new QPushButton(tr("Show %1").arg(mapTitles.at(index)), placeholder);
+        placeholderLayout->addWidget(openMap, 0, Qt::AlignCenter);
+        tabs->insertTab(index, placeholder, mapTitles.at(index));
+        QWidget *page = mapPages.at(index);
+        auto *window = workspace->addSubWindow(page);
+        window->setWindowTitle(mapTitles.at(index));
+        window->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
+                               Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint |
+                               Qt::WindowCloseButtonHint);
+        window->setAttribute(Qt::WA_DeleteOnClose, false);
+        window->resize(1000, 740);
+        window->move(35 + index * 35, 35 + index * 35);
+        (*mapWindows)[index] = window;
+        boundsGuard->watch(window);
+        connect(openMap, &QPushButton::clicked, this, [workspace, window]() {
+            window->showNormal();
+            window->show();
+            workspace->setActiveSubWindow(window);
+        });
+        window->show();
+    }
+    workspace->setActiveSubWindow((*mapWindows)[0]);
     // User-selected external tune preview. No network access or ECU write path.
     auto *importPage = new QWidget(tabs);
     auto *importLayout = new QVBoxLayout(importPage);
@@ -2629,8 +2666,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *saveProject = fileMenu->addAction(tr("Save Map..."));
     saveProject->setShortcut(QKeySequence::Save);
     // File actions operate on the active map, never on the example preview.
-    const auto activeMapActions = [tabs, fuelPage, ignitionPage, afrPage, fuelFileActions, ignitionFileActions, afrFileActions]() {
-        const QWidget *page = tabs->currentWidget();
+    const auto activeMapActions = [workspace, tabs, mapWindows, fuelPage, ignitionPage, afrPage, fuelFileActions, ignitionFileActions, afrFileActions]() {
+        const auto *active = workspace->activeSubWindow();
+        const QWidget *page = active ? active->widget() : tabs->currentWidget();
         if (page == ignitionPage) return ignitionFileActions;
         if (page == afrPage) return afrFileActions;
         return fuelFileActions;
