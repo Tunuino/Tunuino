@@ -70,6 +70,7 @@
 #include <QStringList>
 #include <QMap>
 #include <cmath>
+#include <limits>
 #include <algorithm>
 #ifdef Q_OS_WIN
 #ifndef NOMINMAX
@@ -81,6 +82,69 @@
 #include <usbiodef.h>
 #endif
 #include "ecu/SerialSession.h"
+
+// Live engine operating-point crosshair; visual overlay only, never edits cells.
+class LiveMapTable final : public QTableWidget {
+public:
+    explicit LiveMapTable(QWidget *parent) : QTableWidget(16, 16, parent) {}
+    void setOperatingPoint(double rpm, double kpa, const QStringList &rpmBins) {
+        if (!std::isfinite(rpm) || !std::isfinite(kpa) || rpmBins.size() != 16) {
+            clearOperatingPoint();
+            return;
+        }
+        auto nearest = [](double value, const QVector<double> &bins) {
+            int best = -1;
+            double distance = std::numeric_limits<double>::infinity();
+            for (int i = 0; i < bins.size(); ++i) {
+                if (!std::isfinite(bins[i])) continue;
+                const double d = std::abs(value - bins[i]);
+                if (d < distance) { distance = d; best = i; }
+            }
+            return best;
+        };
+        QVector<double> rpmAxis, loadAxis;
+        for (int col = 0; col < 16; ++col) {
+            bool ok = false;
+            const double v = rpmBins.at(col).toDouble(&ok);
+            rpmAxis.append(ok ? v : std::numeric_limits<double>::quiet_NaN());
+        }
+        for (int row = 0; row < 16; ++row) {
+            const auto *header = verticalHeaderItem(row);
+            bool ok = false;
+            const double v = header ? header->text().toDouble(&ok) : 0.0;
+            loadAxis.append(ok ? v : std::numeric_limits<double>::quiet_NaN());
+        }
+        column_ = nearest(rpm, rpmAxis);
+        row_ = nearest(kpa, loadAxis);
+        viewport()->update();
+    }
+    void clearOperatingPoint() {
+        if (row_ == -1 && column_ == -1) return;
+        row_ = column_ = -1;
+        viewport()->update();
+    }
+protected:
+    void paintEvent(QPaintEvent *event) override {
+        QTableWidget::paintEvent(event);
+        if (row_ < 0 || column_ < 0) return;
+        const QRect cell = visualRect(model()->index(row_, column_));
+        if (cell.isEmpty()) return;
+        QPainter painter(viewport());
+        painter.setRenderHint(QPainter::Antialiasing, false);
+        QPen dark(QColor(18, 18, 18, 220), 4);
+        painter.setPen(dark);
+        painter.drawLine(cell.center().x(), 0, cell.center().x(), viewport()->height());
+        painter.drawLine(0, cell.center().y(), viewport()->width(), cell.center().y());
+        painter.setPen(QPen(QColor(255, 255, 255, 245), 2));
+        painter.drawLine(cell.center().x(), 0, cell.center().x(), viewport()->height());
+        painter.drawLine(0, cell.center().y(), viewport()->width(), cell.center().y());
+        painter.setPen(QPen(QColor(255, 120, 25), 3));
+        painter.drawRect(cell.adjusted(2, 2, -2, -2));
+    }
+private:
+    int row_ = -1;
+    int column_ = -1;
+};
 
 // Keep floating MDI windows entirely within the central workspace viewport.
 class WorkspaceBoundsGuard final : public QObject {
@@ -760,7 +824,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         });
         return qMakePair(openAction, saveAction);
     };
-    auto *maps = new QTableWidget(16, 16, fuelPage);
+    auto *maps = new LiveMapTable(fuelPage);
     maps->setAlternatingRowColors(true);
     maps->setSelectionMode(QAbstractItemView::ExtendedSelection);
     maps->setSelectionBehavior(QAbstractItemView::SelectItems);
@@ -896,7 +960,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionActionsLayout->addWidget(ignitionSave);
     ignitionActionsLayout->addStretch();
     ignitionLayout->addWidget(ignitionActions);
-    auto *ignitionMap = new QTableWidget(16, 16, ignitionPage);
+    auto *ignitionMap = new LiveMapTable(ignitionPage);
     ignitionMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     ignitionMap->horizontalHeader()->setDefaultSectionSize(62);
     ignitionMap->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -1020,7 +1084,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrWarning->setWordWrap(true);
     afrWarning->setStyleSheet(QStringLiteral("color: #e6a750;"));
     afrLayout->addWidget(afrWarning);
-    auto *afrMap = new QTableWidget(16, 16, afrPage);
+    auto *afrMap = new LiveMapTable(afrPage);
     afrMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     afrMap->horizontalHeader()->setDefaultSectionSize(62);
     afrMap->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -2615,6 +2679,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         liveReadings->append(value);
     }
     statusLayout->addLayout(readings);
+    // Read only validated, real telemetry values from the Engine Status panel.
+    // Invalid or disconnected telemetry removes the crosshair rather than simulating it.
+    auto *operatingPointTimer = new QTimer(this);
+    operatingPointTimer->setInterval(150);
+    connect(operatingPointTimer, &QTimer::timeout, this,
+            [maps, ignitionMap, afrMap, liveReadings, fuelRpmBins, ignitionRpmBins, afrRpmBins]() {
+        bool rpmOk = false, mapOk = false;
+        const double rpm = liveReadings->at(0)->text().toDouble(&rpmOk);
+        const QString mapText = liveReadings->at(2)->text();
+        const double kpa = mapText.section(QLatin1Char(' '), 0, 0).toDouble(&mapOk);
+        if (!rpmOk || !mapOk) {
+            maps->clearOperatingPoint();
+            ignitionMap->clearOperatingPoint();
+            afrMap->clearOperatingPoint();
+            return;
+        }
+        maps->setOperatingPoint(rpm, kpa, fuelRpmBins);
+        ignitionMap->setOperatingPoint(rpm, kpa, ignitionRpmBins);
+        afrMap->setOperatingPoint(rpm, kpa, afrRpmBins);
+    });
+    operatingPointTimer->start();
+
     auto *identityTitle = new QLabel(tr("ECU CONNECTION"), statusPanel);
     identityTitle->setStyleSheet(QStringLiteral("font-weight: bold; color: #e69a32;"));
     statusLayout->addSpacing(12);
