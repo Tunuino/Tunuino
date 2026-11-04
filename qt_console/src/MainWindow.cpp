@@ -362,6 +362,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         } else if (item->parent() && index >= 0 && index <= 2 && (*mapWindows)[index]) {
             auto window = (*mapWindows)[index];
             window->showNormal();
+            if (window->widget()) window->widget()->show();
             window->show();
             workspace->setActiveSubWindow(window);
             window->raise();
@@ -1080,13 +1081,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     const QVector<QWidget *> mapPages{fuelPage, ignitionPage, afrPage};
     const QStringList mapTitles{tr("Fuel Table"), tr("Ignition Table"), tr("AFR Target")};
     for (int index = 2; index >= 0; --index) {
+        // QTabWidget hides the removed page. Detach it before handing
+        // ownership to QMdiSubWindow, then explicitly restore visibility.
         tabs->removeTab(index);
+        QWidget *page = mapPages.at(index);
+        page->setParent(nullptr);
         auto *placeholder = new QWidget(tabs);
         auto *placeholderLayout = new QVBoxLayout(placeholder);
         auto *openMap = new QPushButton(tr("Show %1").arg(mapTitles.at(index)), placeholder);
         placeholderLayout->addWidget(openMap, 0, Qt::AlignCenter);
         tabs->insertTab(index, placeholder, mapTitles.at(index));
-        QWidget *page = mapPages.at(index);
         auto *window = workspace->addSubWindow(page);
         window->setWindowTitle(mapTitles.at(index));
         window->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
@@ -1102,7 +1106,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             window->show();
             workspace->setActiveSubWindow(window);
         });
+        page->show();
         window->show();
+        if (window->widget()) window->widget()->show();
     }
     workspace->setActiveSubWindow((*mapWindows)[0]);
     // User-selected external tune preview. No network access or ECU write path.
