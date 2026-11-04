@@ -280,13 +280,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *boundsGuard = new WorkspaceBoundsGuard(workspace);
     auto *tabs = new QTabWidget(workspace);
     auto *workspaceWindow = workspace->addSubWindow(tabs);
-    workspaceWindow->setWindowTitle(tr("Tunuino | Tables and configuration"));
+    workspaceWindow->setWindowTitle(tr("Settings"));
     workspaceWindow->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
                                     Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint |
                                     Qt::WindowCloseButtonHint);
     workspaceWindow->setAttribute(Qt::WA_DeleteOnClose, false);
     workspaceWindow->resize(1120, 720);
-    workspaceWindow->show();
+    // Keep settings available through navigation, but do not open it at startup.
     boundsGuard->watch(workspaceWindow);
     // Graph windows are independent from their map tables and can be closed
     // and reopened from the navigation tree without discarding ECU data.
@@ -858,7 +858,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelGraphSubWindow->setAttribute(Qt::WA_DeleteOnClose, false);
     fuelGraphSubWindow->resize(450, 420);
     *fuelGraphWindow = fuelGraphSubWindow;
-    fuelGraphSubWindow->show();
+    // Graph windows open on demand from the navigation tree.
     boundsGuard->watch(fuelGraphSubWindow);
     fuelGraphSubWindow->move(35, 45);
     fuelLayout->addLayout(fuelWorkspace);
@@ -989,7 +989,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionGraphSubWindow->setAttribute(Qt::WA_DeleteOnClose, false);
     ignitionGraphSubWindow->resize(450, 420);
     *ignitionGraphWindow = ignitionGraphSubWindow;
-    ignitionGraphSubWindow->show();
     boundsGuard->watch(ignitionGraphSubWindow);
     ignitionGraphSubWindow->move(75, 85);
     ignitionLayout->addLayout(ignitionWorkspace, 1);
@@ -1106,10 +1105,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             window->show();
             workspace->setActiveSubWindow(window);
         });
-        page->show();
-        window->show();
-        if (window->widget()) window->widget()->show();
+        if (index == 0) {
+            page->show();
+            window->show();
+        } else {
+            window->hide();
+        }
     }
+    // Startup: show Fuel Table only. All other maps and graphs remain available
+    // through navigation, without creating the old configuration window.
+    workspaceWindow->hide();
+    if (*fuelGraphWindow) (*fuelGraphWindow)->hide();
+    if (*ignitionGraphWindow) (*ignitionGraphWindow)->hide();
     workspace->setActiveSubWindow((*mapWindows)[0]);
     // User-selected external tune preview. No network access or ECU write path.
     auto *importPage = new QWidget(tabs);
