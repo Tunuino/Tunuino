@@ -2686,7 +2686,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(operatingPointTimer, &QTimer::timeout, this,
             [maps, ignitionMap, afrMap, liveReadings, fuelRpmBins, ignitionRpmBins, afrRpmBins]() {
         bool rpmOk = false, mapOk = false;
-        const double rpm = liveReadings->at(0)->text().toDouble(&rpmOk);
+        const double rpm = liveReadings->at(0)->text().section(QLatin1Char(' '), 0, 0).toDouble(&rpmOk);
         const QString mapText = liveReadings->at(2)->text();
         const double kpa = mapText.section(QLatin1Char(' '), 0, 0).toDouble(&mapOk);
         if (!rpmOk || !mapOk) {
