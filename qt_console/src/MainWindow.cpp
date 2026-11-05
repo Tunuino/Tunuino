@@ -2797,7 +2797,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             const QVersionNumber installed = QVersionNumber::fromString(QCoreApplication::applicationVersion());
             if (installed.segmentCount() && QVersionNumber::compare(QVersionNumber::fromString(version), installed) <= 0) {
                 QMessageBox::information(this, tr("Console updates"),
-                    tr("No newer %1 update is published.\\nInstalled: %2\\nPublished: %3\\n\\nThe Windows Setup artifact may be newer than the public update feed.")
+                    tr("No newer %1 update is published.\nInstalled: %2\nPublished: %3\n\nThe Windows Setup artifact may be newer than the public update feed.")
                         .arg(channel, QCoreApplication::applicationVersion(), version));
                 network->deleteLater();
                 return;
