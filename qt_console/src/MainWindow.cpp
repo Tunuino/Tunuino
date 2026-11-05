@@ -2024,6 +2024,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         {"Engine Control", {"Idle Control", "Boost Control", "Launch Control", "ETB / Drive by Wire", nullptr}},
         {"Input / Output", {"Inputs", "Outputs", nullptr}}
     };
+    QPushButton *tpsReadButton = nullptr;
+    QLabel *tpsReadStatus = nullptr;
     for (const auto &category : categories) {
         auto *parentItem = new QTreeWidgetItem(navigation, {tr(category.title)});
         for (const char *name : category.items) {
@@ -2061,6 +2063,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 calibrate->setEnabled(false);
                 form->addRow(calibrate);
                 auto *readsaveTps = new QPushButton(tr("Read from ECU"), page);
+                tpsReadButton = readsaveTps;
+                tpsReadStatus = info;
                 readsaveTps->setEnabled(false);
                 readsaveTps->setToolTip(tr("Requires validated ECU configuration read protocol."));
                 form->addRow(readsaveTps);
@@ -2652,8 +2656,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     };
     auto transfer = QSharedPointer<MapTransfer>::create();
     auto sendChunk = [session, transfer]() -> bool {
-        if (!transfer->page || transfer->offset >= 576) return false;
-        const int count = qMin(64, 576 - transfer->offset);
+        const int total = transfer->page == 1 ? 256 : 576;
+        if (!transfer->page || transfer->offset >= total) return false;
+        const int count = qMin(64, total - transfer->offset);
         QByteArray command(7, char(0));
         command[0] = 'r';
         command[1] = char(0);
@@ -2671,6 +2676,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         transfer->bytes.clear();
         fuelRead->setEnabled(*identityVerified && session->isOpen());
         ignitionRead->setEnabled(*identityVerified && session->isOpen());
+        if (tpsReadButton) tpsReadButton->setEnabled(*identityVerified && session->isOpen());
         if (page == 2) fuelState->setText(message);
         statusBar()->showMessage(message, 10000);
         liveTimer->start();
@@ -2683,9 +2689,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         transfer->bytes.clear();
         fuelRead->setEnabled(false);
         ignitionRead->setEnabled(false);
+        if (tpsReadButton) tpsReadButton->setEnabled(false);
         if (page == 2) fuelState->setText(tr("READING ECU MAP..."));
         if (!sendChunk()) abortTransfer(tr("Unable to request map page"));
     };
+    if (tpsReadButton) connect(tpsReadButton, &QPushButton::clicked, this, [=]() { startTransfer(1); });
     connect(fuelRead, &QPushButton::clicked, this, [=]() { startTransfer(2); });
     connect(ignitionRead, &QPushButton::clicked, this, [=]() { startTransfer(3); });
     auto *fileMenu = menuBar()->addMenu(tr("File"));
@@ -2901,7 +2909,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     });
     connect(session, &tunuino::SerialSession::connectionChanged, this, [=](bool connected) {
         disconnectAction->setEnabled(connected);
-        if (!connected) { liveTimer->stop(); transfer->page = 0; *identityVerified = false; *validationPending = false; validationAction->setEnabled(false); fuelRead->setEnabled(false); ignitionRead->setEnabled(false); connectionStatus_->setText(tr("ECU disconnected")); }
+        if (!connected) { liveTimer->stop(); transfer->page = 0; *identityVerified = false; *validationPending = false; validationAction->setEnabled(false); fuelRead->setEnabled(false); ignitionRead->setEnabled(false); if (tpsReadButton) tpsReadButton->setEnabled(false); connectionStatus_->setText(tr("ECU disconnected")); }
     });
     connect(session, &tunuino::SerialSession::exchangeFailed, this, [=](const QString &error) {
         liveTimer->stop();
@@ -2911,6 +2919,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         validationAction->setEnabled(false);
         fuelRead->setEnabled(false);
         ignitionRead->setEnabled(false);
+        if (tpsReadButton) tpsReadButton->setEnabled(false);
         connectionStatus_->setText(tr("ECU communication failed: %1").arg(error));
         statusBar()->showMessage(error, 10000);
     });
@@ -2937,18 +2946,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             return;
         }
         if (transfer->page) {
-            const int count = qMin(64, 576 - transfer->offset);
+            const int total = transfer->page == 1 ? 256 : 576;
+            const int count = qMin(64, total - transfer->offset);
             if (data.size() != count + 1 || quint8(data[0]) != 0) {
                 abortTransfer(tr("Invalid map response; table not updated"));
                 return;
             }
             transfer->bytes.append(data.constData() + 1, count);
             transfer->offset += count;
-            if (transfer->offset < 576) {
+            if (transfer->offset < total) {
                 if (!sendChunk()) abortTransfer(tr("Map read interrupted"));
                 return;
             }
-            if (transfer->bytes.size() != 576) {
+            if (transfer->bytes.size() != total) {
                 abortTransfer(tr("Incomplete map read"));
                 return;
             }
@@ -2956,6 +2966,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 return (quint16(quint8(transfer->bytes[offset])) << 8)
                     | quint16(quint8(transfer->bytes[offset + 1]));
             };
+            if (transfer->page == 1) {
+                const bool schemaValid = u16(0) != 0;
+                if (tpsReadStatus) {
+                    tpsReadStatus->setText(schemaValid
+                        ? tr("ECU configuration page read successfully (schema %1). TPS closed/open calibration is not yet represented in firmware; reference fields remain local and unchanged.").arg(u16(0))
+                        : tr("ECU configuration schema invalid. TPS references unchanged."));
+                }
+                abortTransfer(schemaValid ? tr("ECU configuration read (read-only)") : tr("Invalid ECU configuration schema"));
+                return;
+            }
             bool valid = true;
             for (int i = 0; i < 16; ++i) {
                 if (u16(2 * i) > 20000 || u16(32 + 2 * i) > 50000 ||
