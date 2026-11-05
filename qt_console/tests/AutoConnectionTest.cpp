@@ -50,14 +50,14 @@ int main(int argc,char **argv) {
     CHECK(!power.update(runtime(12),600));
     CHECK(power.update(runtime(12),1000));
     CHECK(std::abs(power.voltage()-12)<0.01);
-    CHECK(power.update(runtime(5),1500)); // Cranking dip: keep online.
+    CHECK(power.update(runtime(6),1500)); // Cranking dip: keep online.
     CHECK(power.update(runtime(12),5000)); // Reads can pause polling; fresh supply remains valid.
-    CHECK(!power.update(runtime(0),5500)); // Key off even though USB still replies.
+    CHECK(!power.update(runtime(5),5500)); // Even USB-level backfeed must take an online ECU offline.
     CHECK(!power.update(runtime(12),6000));
     CHECK(power.update(runtime(12),6500)); // Key on again, no manual action.
     CHECK(!power.update(runtime(12,false),7000));
     CHECK(!power.update(runtime(12),7500));
-    CHECK(!power.update(runtime(5),8000)); // Voltage in deadband cannot establish online.
+    CHECK(!power.update(runtime(5.75),8000)); // Voltage in deadband cannot establish online.
     CHECK(!power.update(runtime(12),8500));
     CHECK(!power.update(runtime(12),11000)); // Stale confirmation cannot complete debounce.
     CHECK(power.update(runtime(12),11500));

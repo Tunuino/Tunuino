@@ -31,7 +31,7 @@ public:
         lastSample_=nowMs; voltage_=volts;
         // Hysteresis keeps normal cranking voltage dips from toggling the UI.
         // Two valid readings >=250 ms apart are required to enter online.
-        if (volts<=4.0) { online_=false; firstPowered_=-1; }
+        if (volts<=5.5) { online_=false; firstPowered_=-1; }
         else if (!online_) {
             if (volts<6.0) firstPowered_=-1;
             else if (firstPowered_<0) firstPowered_=nowMs;
