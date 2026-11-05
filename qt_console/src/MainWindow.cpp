@@ -3069,6 +3069,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         validationAction->setEnabled(true);
         fuelRead->setEnabled(true);
         ignitionRead->setEnabled(true);
+        if (tpsReadButton) tpsReadButton->setEnabled(true);
         liveTimer->start();
         statusBar()->showMessage(tr("ECU identity verified. Fuel and Ignition map reading available; ECU writes disabled."));
     });
