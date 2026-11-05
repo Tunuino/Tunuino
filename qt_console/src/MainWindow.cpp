@@ -2745,7 +2745,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const QUrl manifestUrl(QStringLiteral("https://tunuino.github.io/Tunuino/updates/") + channel + QStringLiteral(".json"));
         auto *network = new QNetworkAccessManager(this);
         checkUpdates->setEnabled(false);
-        auto *reply = network->get(QNetworkRequest(manifestUrl));
+        QNetworkRequest manifestRequest(manifestUrl);
+        manifestRequest.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::AlwaysNetwork);
+        manifestRequest.setRawHeader("Cache-Control", "no-cache, no-store, max-age=0");
+        manifestRequest.setRawHeader("Pragma", "no-cache");
+        auto *reply = network->get(manifestRequest);
         connect(reply, &QNetworkReply::finished, this, [this, reply, network, checkUpdates, channel]() {
             checkUpdates->setEnabled(true);
             reply->deleteLater();
@@ -2773,7 +2777,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             }
             const QVersionNumber installed = QVersionNumber::fromString(QCoreApplication::applicationVersion());
             if (installed.segmentCount() && QVersionNumber::compare(QVersionNumber::fromString(version), installed) <= 0) {
-                QMessageBox::information(this, tr("Console updates"), tr("The Console is up to date."));
+                QMessageBox::information(this, tr("Console updates"),
+                    tr("No newer %1 update is published.\\nInstalled: %2\\nPublished: %3\\n\\nThe Windows Setup artifact may be newer than the public update feed.")
+                        .arg(channel, QCoreApplication::applicationVersion(), version));
                 network->deleteLater();
                 return;
             }
