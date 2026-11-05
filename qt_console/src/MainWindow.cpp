@@ -58,6 +58,7 @@
 #include <QUrl>
 #include <QListWidget>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QSharedPointer>
 #include <QVector>
 #include <QByteArray>
@@ -90,6 +91,8 @@
 #include <usbiodef.h>
 #endif
 #include "ecu/SerialSession.h"
+#include "ecu/AutoConnection.h"
+#include "ecu/EcuPowerState.h"
 
 // Live engine operating-point crosshair; visual overlay only, never edits cells.
 class LiveMapTable final : public QTableWidget {
@@ -1745,6 +1748,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             : tr("BIN vector preflight FAILED. Do not flash this image."));
     });
     connect(detectDfu, &QPushButton::clicked, firmwarePage, [=]() {
+        if (property("ecuTransportOpen").toBool() || !firmwarePage->isVisible()) return;
         dfuPort->clear();
         flashDfu->setEnabled(true);
         dfuLog->clear();
@@ -2799,6 +2803,29 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addDockWidget(Qt::RightDockWidgetArea, dock);
     *engineStatusDockRef = dock;
     auto *session = new tunuino::SerialSession(this);
+    auto ecuOnline = QSharedPointer<bool>::create(false);
+    auto powerState = QSharedPointer<tunuino::EcuPowerState>::create();
+    auto ecuIdentity = QSharedPointer<QByteArray>::create();
+    auto connectionClock = QSharedPointer<QElapsedTimer>::create();
+    connectionClock->start();
+    auto *connectionBadge = new QLabel(tr("OFFLINE"), this);
+    connectionBadge->setObjectName(QStringLiteral("EcuConnectionBadge"));
+    statusBar()->addPermanentWidget(connectionBadge);
+    const auto setConnectionIndicator = [=](bool online) {
+        *ecuOnline = online;
+        connectionBadge->setText(online ? tr("ONLINE") : tr("OFFLINE"));
+        connectionBadge->setStyleSheet(online
+            ? QStringLiteral("color: #76d58a; font-weight: bold; padding: 4px 12px;")
+            : QStringLiteral("color: #aaaaaa; font-weight: bold; padding: 4px 12px;"));
+        if (!online) {
+            graphLog->setConnected(false);
+            for (auto *value : *liveReadings) value->setText(tr("Unavailable"));
+            maps->clearOperatingPoint();
+            ignitionMap->clearOperatingPoint();
+            afrMap->clearOperatingPoint();
+        }
+    };
+    setConnectionIndicator(false);
     // The firmware runtime command is read-only: O + offset(U16 BE) + count(U16 BE).
     auto *liveTimer = new QTimer(this);
     liveTimer->setInterval(500);
@@ -2838,15 +2865,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         transfer->page = 0;
         transfer->offset = 0;
         transfer->bytes.clear();
-        fuelRead->setEnabled(*identityVerified && session->isOpen());
-        ignitionRead->setEnabled(*identityVerified && session->isOpen());
-        if (tpsReadButton) tpsReadButton->setEnabled(*identityVerified && session->isOpen());
+        fuelRead->setEnabled(*ecuOnline && *identityVerified && session->isOpen());
+        ignitionRead->setEnabled(*ecuOnline && *identityVerified && session->isOpen());
+        if (tpsReadButton) tpsReadButton->setEnabled(*ecuOnline && *identityVerified && session->isOpen());
         // Transfer feedback is displayed in the status bar.
         statusBar()->showMessage(message, 10000);
         liveTimer->start();
     };
     auto startTransfer = [=](int page) {
-        if (!*identityVerified || !session->isOpen() || transfer->page) return;
+        if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page) return;
         liveTimer->stop();
         transfer->page = page;
         transfer->offset = 0;
@@ -2901,7 +2928,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     validationAction->setEnabled(false);
     auto validationPending = QSharedPointer<bool>::create(false);
     connect(validationAction, &QAction::triggered, this, [=]() {
-        if (!*identityVerified || !session->isOpen() || transfer->page || *validationPending) return;
+        if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page || *validationPending) return;
         liveTimer->stop();
         *validationPending = true;
         if (!session->exchange(QByteArray("TUNUINO:V"), 3000)) {
@@ -3004,9 +3031,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             tr("Tunuino Console — Qt 6\\nOffline map editing and ECU diagnostics.\\nFirmware writing and unverified ECU configuration operations are disabled."));
     });
     auto *ecuMenu = menuBar()->addMenu(tr("ECU"));
-    auto *connectMenu = ecuMenu->addMenu(tr("Connect to ECU"));
-    auto *disconnectAction = ecuMenu->addAction(tr("Disconnect"));
-    disconnectAction->setEnabled(false);
+
     auto *settingsMenu = menuBar()->addMenu(tr("Settings"));
     auto *updatesMenu = settingsMenu->addMenu(tr("Update channel"));
     auto *channelActions = new QActionGroup(this);
@@ -3029,60 +3054,55 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         QSettings(QStringLiteral("Tunuino"), QStringLiteral("TunuinoConsole"))
             .setValue(QStringLiteral("updates/channel"), QStringLiteral("stable"));
     });
-    auto *refreshAction = settingsMenu->addAction(tr("Refresh serial ports"));
     auto *openFirmware = ecuMenu->addAction(tr("Firmware / USB DFU"));
-    connect(openFirmware, &QAction::triggered, this, [tabs, firmwarePage]() {
-        tabs->setCurrentWidget(firmwarePage);
+    connect(openFirmware, &QAction::triggered, this, [=]() {
+        openSettingsPage(5);
+        session->close();
     });
     auto *dfuInfo = ecuMenu->addAction(tr("USB DFU status / instructions"));
     connect(dfuInfo, &QAction::triggered, this, [this]() {
         QMessageBox::information(this, tr("Firmware / DFU"),
             tr("Enter USB DFU bootloader mode, select a verified firmware image and detect the device. Flashing remains disabled pending hardware validation."));
     });
-    auto refreshPorts = [=]() {
-        connectMenu->clear();
-        const auto ports = QSerialPortInfo::availablePorts();
-        if (ports.isEmpty()) {
-            auto *none = connectMenu->addAction(tr("No serial ports detected"));
-            none->setEnabled(false);
-        }
-        for (const auto &port : ports) {
-            const QString name = port.portName();
-            auto *action = connectMenu->addAction(name + QStringLiteral(" — ") + port.description());
-            connect(action, &QAction::triggered, this, [=]() {
-                liveTimer->stop();
-                transfer->page = 0;
-                transfer->bytes.clear();
-                *identityVerified = false;
-                *autoSync = false;
-                session->close();
-                connectionStatus_->setText(tr("Connecting to %1...").arg(name));
-                if (!session->open(name, 115200)) return;
-                if (!session->exchange(QByteArray("TUNUINO?"), 3000)) {
-                    session->close();
-                    connectionStatus_->setText(tr("Identity request failed"));
-                }
-            });
-        }
+    tunuino::AutoConnection::Hooks autoConnectionHooks;
+    autoConnectionHooks.ports = [] {
+        QVector<tunuino::AutoPort> result;
+        for (const auto &port : QSerialPortInfo::availablePorts())
+            result.append({port.portName(), port.vendorIdentifier(), port.productIdentifier()});
+        return result;
     };
-    connect(refreshAction, &QAction::triggered, this, refreshPorts);
-    connect(connectMenu, &QMenu::aboutToShow, this, refreshPorts);
-    connect(disconnectAction, &QAction::triggered, this, [=]() {
+    autoConnectionHooks.isOpen = [session] { return session->isOpen(); };
+    autoConnectionHooks.suspended = [firmwarePage] { return firmwarePage->isVisible(); };
+    autoConnectionHooks.close = [session] { session->close(); };
+    autoConnectionHooks.begin = [=](const QString &name) {
         liveTimer->stop();
         transfer->page = 0;
+        transfer->offset = 0;
         transfer->bytes.clear();
         *identityVerified = false;
         *autoSync = false;
-        session->close();
-        connectionStatus_->setText(tr("ECU disconnected"));
-    });
+        powerState->reset();
+        ecuIdentity->clear();
+        connectionStatus_->setText(tr("Offline | Detecting ECU"));
+        if (!session->open(name, 115200)) return false;
+        if (!session->exchange(QByteArray("TUNUINO?"), 1500)) {
+            session->close();
+            return false;
+        }
+        return true;
+    };
+    auto *autoConnection = new tunuino::AutoConnection(autoConnectionHooks, this);
     connect(session, &tunuino::SerialSession::connectionChanged, this, [=](bool connected) {
-        disconnectAction->setEnabled(connected);
-        if (!connected) graphLog->setConnected(false);
-        if (!connected) { *autoSync = false; liveTimer->stop(); transfer->page = 0; *identityVerified = false; *validationPending = false; validationAction->setEnabled(false); fuelRead->setEnabled(false); ignitionRead->setEnabled(false); if (tpsReadButton) tpsReadButton->setEnabled(false); connectionStatus_->setText(tr("ECU disconnected")); }
+        setProperty("ecuTransportOpen", connected);
+        if (!connected) {
+            setConnectionIndicator(false);
+            powerState->reset();
+            ecuIdentity->clear();
+        }
+        if (!connected) { *autoSync = false; liveTimer->stop(); transfer->page = 0; *identityVerified = false; *validationPending = false; validationAction->setEnabled(false); fuelRead->setEnabled(false); ignitionRead->setEnabled(false); if (tpsReadButton) tpsReadButton->setEnabled(false); connectionStatus_->setText(tr("Offline | Waiting for ECU")); }
     });
     connect(session, &tunuino::SerialSession::exchangeFailed, this, [=](const QString &error) {
-        graphLog->setConnected(false);
+        setConnectionIndicator(false);
         liveTimer->stop();
         transfer->page = 0;
         *autoSync = false;
@@ -3092,7 +3112,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         fuelRead->setEnabled(false);
         ignitionRead->setEnabled(false);
         if (tpsReadButton) tpsReadButton->setEnabled(false);
-        connectionStatus_->setText(tr("ECU communication failed: %1").arg(error));
+        connectionStatus_->setText(tr("Offline | Waiting for ECU"));
         statusBar()->showMessage(error, 10000);
     });
     connect(session, &tunuino::SerialSession::responseReceived, this, [=](const QByteArray &data) {
@@ -3206,9 +3226,32 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             // Status + 100-byte runtime record; never treat invalid channels as zero readings.
             if (data.size() != 101 || quint8(data[0]) != 0) {
                 liveTimer->stop();
-                graphLog->setConnected(false);
-                statusBar()->showMessage(tr("ECU runtime read unsupported or invalid; polling stopped."));
+                session->close();
+                statusBar()->showMessage(tr("Offline | Invalid ECU runtime response; reconnecting automatically."));
                 return;
+            }
+            if (data.mid(1, 31) != ecuIdentity->mid(1, 31)) {
+                session->close();
+                return;
+            }
+            const bool wasOnline = *ecuOnline;
+            const bool powered = powerState->update(data, connectionClock->elapsed());
+            if (!powered) {
+                setConnectionIndicator(false);
+                validationAction->setEnabled(false);
+                fuelRead->setEnabled(false);
+                ignitionRead->setEnabled(false);
+                if (tpsReadButton) tpsReadButton->setEnabled(false);
+                connectionStatus_->setText(tr("Offline | Waiting for ECU power"));
+                statusBar()->showMessage(tr("OFFLINE | USB detected; waiting for external ECU power"));
+                return;
+            }
+            if (!wasOnline) {
+                setConnectionIndicator(true);
+                connectionStatus_->setText(tr("Online | ECU connected"));
+                validationAction->setEnabled(true);
+                *autoSync = true;
+                startTransfer(1);
             }
             const auto u32 = [&data](int at) -> quint32 {
                 return (quint32(quint8(data[at])) << 24) | (quint32(quint8(data[at+1])) << 16)
@@ -3252,26 +3295,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 .arg(triggerErrors));
             return;
         }
-        if (data.size() != 32 || data.mid(1, 7) != QByteArray("TUNUINO", 7)) {
-            connectionStatus_->setText(tr("Invalid ECU identity response"));
+        if (!tunuino::EcuPowerState::supportedIdentity(data)) {
             session->close();
+            connectionStatus_->setText(tr("Offline | Waiting for a supported Tunuino ECU"));
             return;
         }
-        const int protocol = quint8(data[8]);
-        const int board = quint8(data[9]);
-        const int mcu = quint8(data[10]);
-        const QString version = QStringLiteral("%1.%2.%3").arg(quint8(data[13])).arg(quint8(data[14])).arg(quint8(data[15]));
-        connectionStatus_->setText(tr("ECU connected | Protocol %1 | Board %2 | MCU %3 | Firmware %4")
-            .arg(protocol).arg(board).arg(mcu).arg(version));
+        *ecuIdentity = data;
         *identityVerified = true;
-        *autoSync = true;
-        validationAction->setEnabled(true);
-        fuelRead->setEnabled(true);
-        ignitionRead->setEnabled(true);
-        if (tpsReadButton) tpsReadButton->setEnabled(true);
-        startTransfer(1);
-        statusBar()->showMessage(tr("ECU identity verified. Fuel and Ignition map reading available; ECU writes disabled."));
+        powerState->reset();
+        connectionStatus_->setText(tr("Offline | Waiting for ECU power"));
+        liveTimer->start();
+        requestLive();
     });
-    refreshPorts();
-    statusBar()->showMessage(tr("TUNUINO  |  ECU connection ready  |  Connect ECU to read maps; map writing disabled"));
+    autoConnection->start();
+    statusBar()->showMessage(tr("OFFLINE | Waiting for ECU — automatic connection"));
 }
