@@ -526,7 +526,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *fuelState = new QLabel(tr("OFFLINE EDITING  -  ECU write unavailable"), fuelToolbar);
     fuelState->setStyleSheet(QStringLiteral("color: #bdbfc1;"));
     fuelToolbarLayout->addWidget(fuelState);
-    fuelLayout->addWidget(fuelToolbar);
+    // Status is maintained internally; no duplicate status strip inside the map.
     auto *fuelActions = new QWidget(fuelPage);
     auto *fuelActionsLayout = new QHBoxLayout(fuelActions);
     fuelActionsLayout->setContentsMargins(0, 0, 0, 0);
@@ -987,9 +987,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelGraphSubWindow->move(35, 45);
     fuelLayout->addLayout(fuelWorkspace);
     
-    auto *fuelFooter = new QLabel(tr("Tunuino offline base values. Edit locally; ECU writing requires a validated protocol."), fuelPage);
-    fuelFooter->setStyleSheet(QStringLiteral("color: #a9aaad;"));
-    fuelLayout->addWidget(fuelFooter);
     tabs->addTab(fuelPage, tr("Fuel Table"));
     auto *ignitionPage = new QWidget(tabs);
     auto *ignitionLayout = new QVBoxLayout(ignitionPage);
@@ -1092,19 +1089,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     boundsGuard->watch(ignitionGraphSubWindow);
     ignitionGraphSubWindow->move(75, 85);
     ignitionLayout->addLayout(ignitionWorkspace, 1);
-    auto *ignitionFooter = new QLabel(tr("Tunuino offline base values. Edit locally; ECU writing requires a validated protocol."), ignitionPage);
-    ignitionFooter->setStyleSheet(QStringLiteral("color: #a9aaad;"));
-    ignitionLayout->addWidget(ignitionFooter);
     tabs->addTab(ignitionPage, tr("Ignition Table"));
     // AFR Target is an editable OFFLINE template only. Firmware page storage is not
     // implemented for this table, so it cannot be written to the ECU.
     auto *afrPage = new QWidget(tabs);
     auto *afrLayout = new QVBoxLayout(afrPage);
     // Title is displayed by the MDI window.
-    auto *afrWarning = new QLabel(tr("Tunuino base values: offline editing only. Validate for the engine before use."), afrPage);
-    afrWarning->setWordWrap(true);
-    afrWarning->setStyleSheet(QStringLiteral("color: #e6a750;"));
-    afrLayout->addWidget(afrWarning);
     auto *afrMap = new LiveMapTable(afrPage);
     afrMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     afrMap->horizontalHeader()->setDefaultSectionSize(62);
