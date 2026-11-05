@@ -114,3 +114,71 @@ jobs:
             installer/output/SHA256SUMS.txt
           if-no-files-found: error
 
+  publish-beta-updates:
+    concurrency:
+      group: tunuino-beta-pages
+      # Queue deployments instead of cancelling an active GitHub Pages publication.
+      cancel-in-progress: false
+    # Automatically publish each successful master build; no run IDs to enter.
+    if: ${{ github.ref == 'refs/heads/master' }}
+    needs: windows-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check whether this is the latest master build
+        id: freshness
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=$(git ls-remote https://github.com/Tunuino/Tunuino.git refs/heads/master | cut -f1)
+          test -n "$latest"
+          if [ "$latest" != "$GITHUB_SHA" ]; then
+            echo "Skipping stale Beta deployment: run=$GITHUB_SHA current=$latest"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Download verified Console installer
+        if: ${{ steps.freshness.outputs.publish == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: TunuinoConsole-Setup-Windows-x64
+          path: installer
+      - name: Prepare public Beta update manifest
+        if: ${{ steps.freshness.outputs.publish == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public/updates
+          installer="Tunuino-Console-Setup-0.1.3.${{ github.run_number }}.exe"
+          test -s "installer/$installer"
+          cp "installer/$installer" "public/updates/$installer"
+          python3 - <<'PY'
+          import hashlib, json, pathlib
+          p = pathlib.Path('public/updates/Tunuino-Console-Setup-0.1.3.${{ github.run_number }}.exe')
+          sha = hashlib.sha256(p.read_bytes()).hexdigest()
+          data = {
+              'version': '0.1.3.${{ github.run_number }}',
+              'url': 'https://tunuino.github.io/Tunuino/updates/' + p.name,
+              'sha256': sha,
+          }
+          pathlib.Path('public/updates/beta.json').write_text(json.dumps(data, indent=2) + chr(10), encoding='utf-8')
+          PY
+      - name: Configure GitHub Pages
+        if: ${{ steps.freshness.outputs.publish == 'true' }}
+        uses: actions/configure-pages@v5
+      - name: Upload GitHub Pages artifact
+        if: ${{ steps.freshness.outputs.publish == 'true' }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - name: Publish public Beta updates
+        if: ${{ steps.freshness.outputs.publish == 'true' }}
+        id: deployment
+        uses: actions/deploy-pages@v4
