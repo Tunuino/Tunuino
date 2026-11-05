@@ -406,8 +406,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             auto *item = new QTreeWidgetItem(category, QStringList(child.first));
             item->setData(0, Qt::UserRole, child.second);
             if (child.second < 0) {
+                // Do not present unfinished ECU functions as clickable controls.
+                // They remain visible in the intended navigation structure.
+                item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
                 item->setForeground(0, QColor(QStringLiteral("#858585")));
-                item->setToolTip(0, tr("Not implemented yet"));
+                item->setToolTip(0, tr("Not available: ECU firmware and configuration protocol not implemented yet"));
             }
         }
         return category;
