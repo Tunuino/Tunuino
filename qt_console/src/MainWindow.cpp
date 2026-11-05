@@ -518,15 +518,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *fuelLayout = new QVBoxLayout(fuelPage);
     fuelLayout->setContentsMargins(10, 10, 10, 10);
     fuelLayout->setSpacing(8);
-    auto *fuelToolbar = new QWidget(fuelPage);
-    auto *fuelToolbarLayout = new QHBoxLayout(fuelToolbar);
-    fuelToolbarLayout->setContentsMargins(0, 0, 0, 0);
-    // The MDI title bar already identifies this table.
-    fuelToolbarLayout->addStretch();
-    auto *fuelState = new QLabel(tr("OFFLINE EDITING  -  ECU write unavailable"), fuelToolbar);
-    fuelState->setStyleSheet(QStringLiteral("color: #bdbfc1;"));
-    fuelToolbarLayout->addWidget(fuelState);
-    // Status is maintained internally; no duplicate status strip inside the map.
     auto *fuelActions = new QWidget(fuelPage);
     auto *fuelActionsLayout = new QHBoxLayout(fuelActions);
     fuelActionsLayout->setContentsMargins(0, 0, 0, 0);
@@ -985,6 +976,31 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // Graph windows open on demand from the navigation tree.
     boundsGuard->watch(fuelGraphSubWindow);
     fuelGraphSubWindow->move(35, 45);
+    // Compact view toolbar: editing commands remain on the table context menu.
+    auto *fuelViewBar = new QHBoxLayout();
+    auto *fuelTableView = new QPushButton(tr("2D Table"), fuelPage);
+    auto *fuelGraphView = new QPushButton(tr("3D Graph"), fuelPage);
+    auto *fuelSplitView = new QPushButton(tr("2D + 3D"), fuelPage);
+    fuelTableView->setToolTip(tr("Show the 2D fuel table"));
+    fuelGraphView->setToolTip(tr("Open the 3D fuel graph window"));
+    fuelSplitView->setToolTip(tr("Show both 2D fuel table and 3D graph"));
+    fuelViewBar->addWidget(fuelTableView);
+    fuelViewBar->addWidget(fuelGraphView);
+    fuelViewBar->addWidget(fuelSplitView);
+    fuelViewBar->addStretch();
+    fuelLayout->insertLayout(0, fuelViewBar);
+    connect(fuelTableView, &QPushButton::clicked, fuelPage, [fuelGraphSubWindow]() {
+        fuelGraphSubWindow->hide();
+    });
+    connect(fuelGraphView, &QPushButton::clicked, fuelPage, [fuelGraphSubWindow]() {
+        fuelGraphSubWindow->show();
+        fuelGraphSubWindow->raise();
+        fuelGraphSubWindow->setFocus();
+    });
+    connect(fuelSplitView, &QPushButton::clicked, fuelPage, [fuelGraphSubWindow]() {
+        fuelGraphSubWindow->show();
+        fuelGraphSubWindow->raise();
+    });
     fuelLayout->addLayout(fuelWorkspace);
     
     tabs->addTab(fuelPage, tr("Fuel Table"));
