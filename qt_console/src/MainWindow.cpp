@@ -903,6 +903,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelActionsLayout->insertStretch(2, 1);
     installTableEditControls(fuelActionsLayout, maps, false);
     const auto fuelFileActions = installMapFileActions(maps, QStringLiteral("fuel"), fuelRpmBins, fuelMapBins, 255.0);
+    // Ecumaster 3D toolbar: offline Open/Save; ECU Read/Write remain separate.
+    auto *fuelFileActionsBar = new QHBoxLayout();
+    auto *fuelFileActionsOpen = new QToolButton(fuelPage);
+    fuelFileActionsOpen->setDefaultAction(fuelFileActions.first);
+    fuelFileActionsOpen->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    fuelFileActions.first->setText(tr("Open 3D table"));
+    auto *fuelFileActionsSave = new QToolButton(fuelPage);
+    fuelFileActionsSave->setDefaultAction(fuelFileActions.second);
+    fuelFileActionsSave->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    fuelFileActions.second->setText(tr("Save 3D table"));
+    fuelFileActionsBar->addWidget(fuelFileActionsOpen);
+    fuelFileActionsBar->addWidget(fuelFileActionsSave);
+    fuelFileActionsBar->addStretch();
+    fuelLayout->insertLayout(0, fuelFileActionsBar);
     maps->setCornerButtonEnabled(false);
     maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -1007,6 +1021,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionActionsLayout->insertStretch(2, 1);
     installTableEditControls(ignitionActionsLayout, ignitionMap, false);
     const auto ignitionFileActions = installMapFileActions(ignitionMap, QStringLiteral("ignition"), ignitionRpmBins, ignitionMapBins, 90.0);
+    // Ecumaster 3D toolbar: offline Open/Save; ECU Read/Write remain separate.
+    auto *ignitionFileActionsBar = new QHBoxLayout();
+    auto *ignitionFileActionsOpen = new QToolButton(ignitionPage);
+    ignitionFileActionsOpen->setDefaultAction(ignitionFileActions.first);
+    ignitionFileActionsOpen->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    ignitionFileActions.first->setText(tr("Open 3D table"));
+    auto *ignitionFileActionsSave = new QToolButton(ignitionPage);
+    ignitionFileActionsSave->setDefaultAction(ignitionFileActions.second);
+    ignitionFileActionsSave->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    ignitionFileActions.second->setText(tr("Save 3D table"));
+    ignitionFileActionsBar->addWidget(ignitionFileActionsOpen);
+    ignitionFileActionsBar->addWidget(ignitionFileActionsSave);
+    ignitionFileActionsBar->addStretch();
+    ignitionLayout->insertLayout(0, ignitionFileActionsBar);
     ignitionMap->setCornerButtonEnabled(false);
     ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     ignitionMap->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -1112,6 +1140,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     installTableEditControls(afrEditBar, afrMap, true);
     // Context menu owns the editing actions; no right-side editing buttons.
     const auto afrFileActions = installMapFileActions(afrMap, QStringLiteral("afr"), afrRpmBins, afrMapBins, 25.0);
+    // Ecumaster 3D toolbar: offline Open/Save; ECU Read/Write remain separate.
+    auto *afrFileActionsBar = new QHBoxLayout();
+    auto *afrFileActionsOpen = new QToolButton(afrPage);
+    afrFileActionsOpen->setDefaultAction(afrFileActions.first);
+    afrFileActionsOpen->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    afrFileActions.first->setText(tr("Open 3D table"));
+    auto *afrFileActionsSave = new QToolButton(afrPage);
+    afrFileActionsSave->setDefaultAction(afrFileActions.second);
+    afrFileActionsSave->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    afrFileActions.second->setText(tr("Save 3D table"));
+    afrFileActionsBar->addWidget(afrFileActionsOpen);
+    afrFileActionsBar->addWidget(afrFileActionsSave);
+    afrFileActionsBar->addStretch();
+    afrLayout->insertLayout(0, afrFileActionsBar);
     auto *afrGridPanel = new QWidget(afrPage);
     auto *afrGridLayout = new QVBoxLayout(afrGridPanel);
     afrGridLayout->setContentsMargins(0, 0, 0, 0);
