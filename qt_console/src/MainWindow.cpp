@@ -619,7 +619,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     };
     // Edit the selected rectangular region of the active offline map.
     // Read all source values before applying changes to avoid order-dependent smoothing.
-    auto editMapRegion = [this](QTableWidget *table, bool smooth, bool afr) {
+    auto editMapRegion = [this](QTableWidget *table, int mode, bool afr) {
         if (!table) return;
         const auto ranges = table->selectedRanges();
         if (ranges.size() != 1) {
@@ -630,7 +630,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const QTableWidgetSelectionRange area = ranges.first();
         const int top = area.topRow(), bottom = area.bottomRow();
         const int left = area.leftColumn(), right = area.rightColumn();
-        if (!smooth && (bottom == top || right == left)) {
+        if (((mode == 0 || mode == 3) && (bottom == top || right == left)) ||
+            (mode == 1 && right == left) || (mode == 2 && bottom == top)) {
             QMessageBox::information(this, tr("Interpolation"),
                 tr("Select at least two rows and two columns to interpolate."));
             return;
@@ -651,7 +652,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         for (int row = top; row <= bottom; ++row)
             for (int col = left; col <= right; ++col) {
                 double value;
-                if (smooth) {
+                if (mode == 4) {
                     // One pass, 3x3 weighted filter, constrained to the selection.
                     double total = 0.0, weightSum = 0.0;
                     for (int dy = -1; dy <= 1; ++dy)
@@ -663,6 +664,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                             weightSum += weight;
                         }
                     value = total / weightSum;
+                } else if (mode == 1) {
+                    const double x = double(col - left) / double(right - left);
+                    value = (1.0-x)*values[row][left] + x*values[row][right];
+                } else if (mode == 2) {
+                    const double y = double(row - top) / double(bottom - top);
+                    value = (1.0-y)*values[top][col] + y*values[bottom][col];
                 } else {
                     const double x = double(col - left) / double(right - left);
                     const double y = double(row - top) / double(bottom - top);
@@ -728,12 +735,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         Q_UNUSED(bar);
         connect(interpolate, &QPushButton::clicked, this, [table, afr, editMapRegion, flush]() {
             flush();
-            editMapRegion(table, false, afr);
+            editMapRegion(table, 3, afr);
             flush();
         });
         connect(smooth, &QPushButton::clicked, this, [table, afr, editMapRegion, flush]() {
             flush();
-            editMapRegion(table, true, afr);
+            editMapRegion(table, 4, afr);
             flush();
         });
         connect(undo, &QPushButton::clicked, this, [history, flush, snapshot, restore]() {
@@ -756,10 +763,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         // The existing interpolation and smoothing handlers retain their undo history.
         table->setContextMenuPolicy(Qt::CustomContextMenu);
         connect(table, &QWidget::customContextMenuRequested, table,
-                [table, interpolate, smooth, undo, redo](const QPoint &point) {
+                [table, afr, editMapRegion, flush, interpolate, smooth, undo, redo](const QPoint &point) {
             QMenu menu(table);
-            auto *interpolateAction = menu.addAction(QObject::tr("Interpolate selection"));
-            auto *smoothAction = menu.addAction(QObject::tr("Equalize / Smooth selection"));
+            auto *horizontalAction = menu.addAction(QObject::tr("Interpolate horizontally\tCtrl+H"));
+            auto *verticalAction = menu.addAction(QObject::tr("Interpolate vertically\tCtrl+L"));
+            auto *diagonalAction = menu.addAction(QObject::tr("Interpolate diagonally\tCtrl+D"));
+            auto *smoothAction = menu.addAction(QObject::tr("Equalize selection\tE"));
             menu.addSeparator();
             auto *copyAction = menu.addAction(QObject::tr("Copy cells"));
             auto *pasteAction = menu.addAction(QObject::tr("Paste cells"));
@@ -767,7 +776,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             auto *undoAction = menu.addAction(QObject::tr("Undo"));
             auto *redoAction = menu.addAction(QObject::tr("Redo"));
             QAction *chosen = menu.exec(table->viewport()->mapToGlobal(point));
-            if (chosen == interpolateAction) interpolate->click();
+            if (chosen == horizontalAction || chosen == verticalAction || chosen == diagonalAction) {
+                flush();
+                editMapRegion(table, chosen == horizontalAction ? 1 : chosen == verticalAction ? 2 : 3, afr);
+                flush();
+            }
             else if (chosen == smoothAction) smooth->click();
             else if (chosen == undoAction) undo->click();
             else if (chosen == redoAction) redo->click();
