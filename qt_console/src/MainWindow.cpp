@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "NativeDfuFlash.h"
+#include "logging/GraphLogWidget.h"
 #include <QPainter>
 #include <QClipboard>
 #include <QApplication>
@@ -464,7 +465,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("Timers"), {{tr("Timers setup"),-1}});
     addCategory(tr("DSG Gearbox"), {{tr("Gearbox settings"),-1}});
     addCategory(tr("CAN, Serial"), {{tr("Communication settings"),6}});
-    addCategory(tr("Log"), {{tr("Datalogging"),4}});
+    addCategory(tr("Log"), {{tr("Graph Log"),4}});
     addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
     addCategory(tr("Calibration & Setup"), {{tr("Sensor and engine calibration"),6}});
     auto engineStatusDockRef = QSharedPointer<QPointer<QDockWidget>>::create();
@@ -1568,36 +1569,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     });
     tabs->addTab(importPage, tr("Base Maps"));
 
-    auto *loggingPage = new QWidget(tabs);
-    auto *loggingLayout = new QVBoxLayout(loggingPage);
-    auto *loggingHeading = new QLabel(tr("DATALOGGING  |  Live channels"), loggingPage);
-    loggingHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
-    loggingLayout->addWidget(loggingHeading);
-    auto *loggingInfo = new QLabel(tr("No live data stream available. ECU telemetry protocol must be implemented before recording."), loggingPage);
-    loggingInfo->setWordWrap(true);
-    loggingLayout->addWidget(loggingInfo);
-    auto *loggingChannels = new QTableWidget(7, 3, loggingPage);
-    loggingChannels->setHorizontalHeaderLabels({tr("Channel"), tr("Value"), tr("Unit")});
-    const char *channelNames[] = {"RPM", "TPS", "MAP", "Lambda", "CLT", "IAT", "Battery"};
-    const char *channelUnits[] = {"rpm", "%", "kPa", "lambda", "deg C", "deg C", "V"};
-    for (int i = 0; i < 7; ++i) {
-        auto *channel = new QTableWidgetItem(QString::fromLatin1(channelNames[i]));
-        auto *value = new QTableWidgetItem(tr("Unavailable"));
-        auto *unit = new QTableWidgetItem(QString::fromLatin1(channelUnits[i]));
-        for (auto *item : {channel, value, unit}) item->setFlags(item->flags() & ~Qt::ItemIsEditable);
-        loggingChannels->setItem(i, 0, channel);
-        loggingChannels->setItem(i, 1, value);
-        loggingChannels->setItem(i, 2, unit);
-    }
-    loggingChannels->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    loggingChannels->setMaximumHeight(300);
-    loggingLayout->addWidget(loggingChannels);
-    auto *loggingStart = new QPushButton(tr("Start logging"), loggingPage);
-    loggingStart->setEnabled(false);
-    loggingStart->setToolTip(tr("Requires verified ECU telemetry and timestamp handling."));
-    loggingLayout->addWidget(loggingStart, 0, Qt::AlignLeft);
-    loggingLayout->addStretch();
-    tabs->addTab(loggingPage, tr("Datalogging"));
+    auto *graphLog = new tunuino::GraphLogWidget(tabs);
+    tabs->addTab(graphLog, tr("Graph Log"));
 
     auto *firmwarePage = new QWidget(tabs);
     auto *firmwareLayout = new QVBoxLayout(firmwarePage);
@@ -2921,6 +2894,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     viewMenu->addAction(inspectorDock->toggleViewAction());
     viewMenu->addAction(dock->toggleViewAction());
     auto *toolsMenu = menuBar()->addMenu(tr("Tools"));
+    auto *graphLogAction = toolsMenu->addAction(tr("Graph Log"));
+    graphLogAction->setShortcut(QKeySequence(QStringLiteral("F6")));
+    connect(graphLogAction, &QAction::triggered, this, [openSettingsPage]() { openSettingsPage(4); });
     auto *validationAction = toolsMenu->addAction(tr("Check ECU configuration (read-only)"));
     validationAction->setEnabled(false);
     auto validationPending = QSharedPointer<bool>::create(false);
@@ -3102,9 +3078,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     });
     connect(session, &tunuino::SerialSession::connectionChanged, this, [=](bool connected) {
         disconnectAction->setEnabled(connected);
+        if (!connected) graphLog->setConnected(false);
         if (!connected) { *autoSync = false; liveTimer->stop(); transfer->page = 0; *identityVerified = false; *validationPending = false; validationAction->setEnabled(false); fuelRead->setEnabled(false); ignitionRead->setEnabled(false); if (tpsReadButton) tpsReadButton->setEnabled(false); connectionStatus_->setText(tr("ECU disconnected")); }
     });
     connect(session, &tunuino::SerialSession::exchangeFailed, this, [=](const QString &error) {
+        graphLog->setConnected(false);
         liveTimer->stop();
         transfer->page = 0;
         *autoSync = false;
@@ -3228,6 +3206,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             // Status + 100-byte runtime record; never treat invalid channels as zero readings.
             if (data.size() != 101 || quint8(data[0]) != 0) {
                 liveTimer->stop();
+                graphLog->setConnected(false);
                 statusBar()->showMessage(tr("ECU runtime read unsupported or invalid; polling stopped."));
                 return;
             }
@@ -3255,6 +3234,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             setReading(1, false, QString());
             setReading(5, false, QString());
             setReading(6, false, QString());
+            std::array<double, tunuino::LogChannelCount> logValues;
+            logValues.fill(std::numeric_limits<double>::quiet_NaN());
+            if ((mask & 1) || stoppedEngine) logValues[0] = rpmMilli / 1000.0;
+            if (mask & 2) logValues[2] = u32(1 + 44) / 1000.0;
+            if (mask & 4) logValues[3] = u32(1 + 48) / 1000000.0;
+            if (mask & 8) logValues[4] = qint32(u32(1 + 52)) / 1000.0;
+            graphLog->setConnected(true);
+            graphLog->appendRuntime(logValues);
             const quint8 flags = quint8(data[1 + 39]);
             const quint32 uptimeSeconds = u32(1 + 32);
             statusBar()->showMessage(tr("ECU live: uptime %1 s | ADC %2 | trigger %3 | valid channels 0x%4 | trigger errors %5")
