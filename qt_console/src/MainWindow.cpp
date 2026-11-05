@@ -536,12 +536,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *fuelSave = new QPushButton(tr("Write to ECU"), fuelActions);
     fuelRead->setEnabled(false);
     fuelSave->setEnabled(false);
-    fuelRead->setToolTip(tr("Connect to a compatible ECU to read its 16x16 map."));
+    fuelRead->setToolTip(QString());
     fuelSave->setToolTip(tr("Requires validated ECU map-write protocol and safety checks."));
     // Automatic ECU synchronization replaces the per-page read control.
-    fuelActionsLayout->addWidget(fuelSave);
+    // Write is unavailable until ECU persistence is verified.
     fuelActionsLayout->addStretch();
-    fuelLayout->addWidget(fuelActions);
+    // Editing is exposed by the table context menu, not a button row.
+    fuelActions->hide();
     const QStringList defaultRpmAxis = {QStringLiteral("200"), QStringLiteral("400"), QStringLiteral("600"), QStringLiteral("800"), QStringLiteral("1000"), QStringLiteral("1500"), QStringLiteral("2000"), QStringLiteral("2500"), QStringLiteral("3000"), QStringLiteral("3500"), QStringLiteral("4000"), QStringLiteral("4500"), QStringLiteral("5000"), QStringLiteral("5500"), QStringLiteral("6000"), QStringLiteral("7000")};
     const QStringList defaultMapAxis = {QStringLiteral("105"), QStringLiteral("100"), QStringLiteral("90"), QStringLiteral("80"), QStringLiteral("75"), QStringLiteral("70"), QStringLiteral("65"), QStringLiteral("60"), QStringLiteral("55"), QStringLiteral("50"), QStringLiteral("45"), QStringLiteral("40"), QStringLiteral("35"), QStringLiteral("30"), QStringLiteral("25"), QStringLiteral("20")};
     // Tunuino default offline tables: 16x16 cells in ascending MAP order.
@@ -723,7 +724,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         auto *smooth = new QPushButton(tr("Smooth"), table);
         auto *undo = new QPushButton(tr("Undo"), table);
         auto *redo = new QPushButton(tr("Redo"), table);
-        for (auto *button : {interpolate, smooth, undo, redo}) bar->addWidget(button);
+        // Keep action objects available for the context menu without visible buttons.
+        Q_UNUSED(bar);
         connect(interpolate, &QPushButton::clicked, this, [table, afr, editMapRegion, flush]() {
             flush();
             editMapRegion(table, false, afr);
@@ -1013,9 +1015,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionRead->setEnabled(false);
     ignitionSave->setEnabled(false);
     // Automatic ECU synchronization replaces the per-page read control.
-    ignitionActionsLayout->addWidget(ignitionSave);
+    // Write is unavailable until ECU persistence is verified.
     ignitionActionsLayout->addStretch();
-    ignitionLayout->addWidget(ignitionActions);
+    ignitionActions->hide();
     auto *ignitionMap = new LiveMapTable(ignitionPage);
     ignitionMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     ignitionMap->horizontalHeader()->setDefaultSectionSize(62);
@@ -1162,7 +1164,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *afrEditBar = new QHBoxLayout();
     afrEditBar->addStretch();
     installTableEditControls(afrEditBar, afrMap, true);
-    afrLayout->addLayout(afrEditBar);
+    // Context menu owns the editing actions; no right-side editing buttons.
     const auto afrFileActions = installMapFileActions(afrMap, QStringLiteral("afr"), afrRpmBins, afrMapBins, 25.0);
     auto *afrGridPanel = new QWidget(afrPage);
     auto *afrGridLayout = new QVBoxLayout(afrGridPanel);
