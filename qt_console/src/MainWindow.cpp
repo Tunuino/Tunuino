@@ -2058,6 +2058,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 calibrate->setEnabled(false);
                 form->addRow(calibrate);
                 auto *saveTps = new QPushButton(tr("Save offline TPS calibration..."), page);
+                saveTps->setText(tr("Write to ECU"));
+                saveTps->setEnabled(false);
+                saveTps->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
                 form->addRow(saveTps);
                 connect(saveTps, &QPushButton::clicked, page, [minVoltage, maxVoltage, page]() {
                     const double closed = minVoltage->value();
@@ -2257,6 +2260,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 apply->setEnabled(false);
                 form->addRow(apply);
                 auto *saveStrategy = new QPushButton(tr("Save offline strategy settings..."), page);
+                saveStrategy->setText(tr("Write to ECU"));
+                saveStrategy->setEnabled(false);
+                saveStrategy->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
                 form->addRow(saveStrategy);
                 connect(saveStrategy, &QPushButton::clicked, page, [=]() {
                     // Export is a draft only: it never enables an ECU output.
@@ -2466,6 +2472,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     connect(wheel, QOverload<int>::of(&QComboBox::currentIndexChanged), page, updateWheel);
                     updateWheel(wheel->currentIndex());
                     auto *saveWheel = new QPushButton(tr("Save offline trigger setup..."), page);
+                saveWheel->setText(tr("Write to ECU"));
+                saveWheel->setEnabled(false);
+                saveWheel->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
                     form->addRow(saveWheel);
                     connect(saveWheel, &QPushButton::clicked, page, [=]() {
                         if (wheel->currentIndex() == 0 || polarity->currentIndex() == 0 ||
@@ -2558,6 +2567,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 table->setMinimumHeight(220);
                 form->addRow(table);
                 auto *save = new QPushButton(tr("Save offline dead-time table..."), page);
+                save->setText(tr("Write to ECU"));
+                save->setEnabled(false);
+                save->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
                 form->addRow(save);
                 connect(save, &QPushButton::clicked, page, [table, page]() {
                     QJsonArray values;
