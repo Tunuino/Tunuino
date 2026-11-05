@@ -521,8 +521,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *fuelToolbar = new QWidget(fuelPage);
     auto *fuelToolbarLayout = new QHBoxLayout(fuelToolbar);
     fuelToolbarLayout->setContentsMargins(0, 0, 0, 0);
-    auto *fuelHeading = new QLabel(tr("FUEL TABLE"), fuelToolbar);
-    fuelHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     // The MDI title bar already identifies this table.
     fuelToolbarLayout->addStretch();
     auto *fuelState = new QLabel(tr("OFFLINE EDITING  -  ECU write unavailable"), fuelToolbar);
@@ -963,28 +961,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelMapAxis->setAlignment(Qt::AlignHCenter);
     fuelMapAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     fuelGridLayout->addWidget(fuelMapAxis);
-    auto *fuelZoomOut = new QPushButton(tr("−"), fuelPage);
-    auto *fuelZoomIn = new QPushButton(tr("+"), fuelPage);
-    fuelZoomOut->setToolTip(tr("Reduce table cell size"));
-    fuelZoomIn->setToolTip(tr("Increase table cell size"));
-    fuelZoomOut->setFixedWidth(32);
-    fuelZoomIn->setFixedWidth(32);
-    // No zoom buttons: table sizing follows the resizable window.
-    // Zoom controls removed from the visible layout.
-    auto resizefuelGrid = [maps, fuelRpmValues](int delta) {
-        const int width = std::clamp(maps->columnWidth(0) + delta, 48, 120);
-        const int height = std::clamp(maps->rowHeight(0) + delta / 2, 24, 48);
-        for (int i = 0; i < 16; ++i) {
-            maps->setColumnWidth(i, width);
-            maps->setRowHeight(i, height);
-            fuelRpmValues->setColumnWidth(i, width);
-        }
-        maps->setMinimumSize(maps->verticalHeader()->width() + 16 * width + 6,
-                             16 * height + 6);
-    };
-    Q_UNUSED(resizefuelGrid);
-    // Cell zoom actions are no longer wired to buttons.
-
     // Edit MAP breakpoints by double-clicking the vertical header.
     connect(maps->verticalHeader(), &QHeaderView::sectionDoubleClicked, fuelPage,
             [maps](int row) {
@@ -1017,8 +993,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     tabs->addTab(fuelPage, tr("Fuel Table"));
     auto *ignitionPage = new QWidget(tabs);
     auto *ignitionLayout = new QVBoxLayout(ignitionPage);
-    auto *ignitionHeading = new QLabel(tr("IGNITION TABLE"), ignitionPage);
-    ignitionHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     // Title is displayed by the MDI window.
     auto *ignitionActions = new QWidget(ignitionPage);
     auto *ignitionActionsLayout = new QHBoxLayout(ignitionActions);
@@ -1094,28 +1068,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionMapAxis->setAlignment(Qt::AlignHCenter);
     ignitionMapAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     ignitionGridLayout->addWidget(ignitionMapAxis);
-    auto *ignitionZoomOut = new QPushButton(tr("−"), ignitionPage);
-    auto *ignitionZoomIn = new QPushButton(tr("+"), ignitionPage);
-    ignitionZoomOut->setToolTip(tr("Reduce table cell size"));
-    ignitionZoomIn->setToolTip(tr("Increase table cell size"));
-    ignitionZoomOut->setFixedWidth(32);
-    ignitionZoomIn->setFixedWidth(32);
-    // No zoom buttons: table sizing follows the resizable window.
-    // Zoom controls removed from the visible layout.
-    auto resizeignitionGrid = [ignitionMap, ignitionRpmValues](int delta) {
-        const int width = std::clamp(ignitionMap->columnWidth(0) + delta, 48, 120);
-        const int height = std::clamp(ignitionMap->rowHeight(0) + delta / 2, 24, 48);
-        for (int i = 0; i < 16; ++i) {
-            ignitionMap->setColumnWidth(i, width);
-            ignitionMap->setRowHeight(i, height);
-            ignitionRpmValues->setColumnWidth(i, width);
-        }
-        ignitionMap->setMinimumSize(ignitionMap->verticalHeader()->width() + 16 * width + 6,
-                                    16 * height + 6);
-    };
-    Q_UNUSED(resizeignitionGrid);
-    // Cell zoom actions are no longer wired to buttons.
-
     // Edit MAP breakpoints by double-clicking the vertical header.
     connect(ignitionMap->verticalHeader(), &QHeaderView::sectionDoubleClicked, ignitionPage,
             [ignitionMap](int row) {
@@ -1148,8 +1100,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // implemented for this table, so it cannot be written to the ECU.
     auto *afrPage = new QWidget(tabs);
     auto *afrLayout = new QVBoxLayout(afrPage);
-    auto *afrTitle = new QLabel(tr("AFR TARGET"), afrPage);
-    afrTitle->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     // Title is displayed by the MDI window.
     auto *afrWarning = new QLabel(tr("Tunuino base values: offline editing only. Validate for the engine before use."), afrPage);
     afrWarning->setWordWrap(true);
