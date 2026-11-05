@@ -447,7 +447,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if (*engineStatusDockRef) { (*engineStatusDockRef)->show(); (*engineStatusDockRef)->raise(); }
         } else if (item->parent() && (index == 7 || index == 8)) {
             auto window = (index == 7) ? *fuelGraphWindow : *ignitionGraphWindow;
-            if (window) { window->showNormal(); workspace->setActiveSubWindow(window); }
+            if (window) { window->showNormal(); if (window->widget()) window->widget()->show(); window->update(); workspace->setActiveSubWindow(window); }
         } else if (item->parent() && index >= 0 && index <= 2 && (*mapWindows)[index]) {
             auto window = (*mapWindows)[index];
             window->showNormal();
@@ -976,31 +976,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // Graph windows open on demand from the navigation tree.
     boundsGuard->watch(fuelGraphSubWindow);
     fuelGraphSubWindow->move(35, 45);
-    // Compact view toolbar: editing commands remain on the table context menu.
-    auto *fuelViewBar = new QHBoxLayout();
-    auto *fuelTableView = new QPushButton(tr("2D Table"), fuelPage);
-    auto *fuelGraphView = new QPushButton(tr("3D Graph"), fuelPage);
-    auto *fuelSplitView = new QPushButton(tr("2D + 3D"), fuelPage);
-    fuelTableView->setToolTip(tr("Show the 2D fuel table"));
-    fuelGraphView->setToolTip(tr("Open the 3D fuel graph window"));
-    fuelSplitView->setToolTip(tr("Show both 2D fuel table and 3D graph"));
-    fuelViewBar->addWidget(fuelTableView);
-    fuelViewBar->addWidget(fuelGraphView);
-    fuelViewBar->addWidget(fuelSplitView);
-    fuelViewBar->addStretch();
-    fuelLayout->insertLayout(0, fuelViewBar);
-    connect(fuelTableView, &QPushButton::clicked, fuelPage, [fuelGraphSubWindow]() {
-        fuelGraphSubWindow->hide();
-    });
-    connect(fuelGraphView, &QPushButton::clicked, fuelPage, [fuelGraphSubWindow]() {
-        fuelGraphSubWindow->show();
-        fuelGraphSubWindow->raise();
-        fuelGraphSubWindow->setFocus();
-    });
-    connect(fuelSplitView, &QPushButton::clicked, fuelPage, [fuelGraphSubWindow]() {
-        fuelGraphSubWindow->show();
-        fuelGraphSubWindow->raise();
-    });
+    // Reopening a closed MDI subwindow must also re-show its contained graph widget.
+    // Qt can leave the child hidden after a QMdiSubWindow close/show cycle.
     fuelLayout->addLayout(fuelWorkspace);
     
     tabs->addTab(fuelPage, tr("Fuel Table"));
