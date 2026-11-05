@@ -523,7 +523,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelToolbarLayout->setContentsMargins(0, 0, 0, 0);
     auto *fuelHeading = new QLabel(tr("FUEL TABLE"), fuelToolbar);
     fuelHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
-    fuelToolbarLayout->addWidget(fuelHeading);
+    // The MDI title bar already identifies this table.
     fuelToolbarLayout->addStretch();
     auto *fuelState = new QLabel(tr("OFFLINE EDITING  -  ECU write unavailable"), fuelToolbar);
     fuelState->setStyleSheet(QStringLiteral("color: #bdbfc1;"));
@@ -969,8 +969,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelZoomIn->setToolTip(tr("Increase table cell size"));
     fuelZoomOut->setFixedWidth(32);
     fuelZoomIn->setFixedWidth(32);
-    fuelGridLayout->addWidget(fuelZoomOut);
-    fuelGridLayout->addWidget(fuelZoomIn);
+    // No zoom buttons: table sizing follows the resizable window.
+    // Zoom controls removed from the visible layout.
     auto resizefuelGrid = [maps, fuelRpmValues](int delta) {
         const int width = std::clamp(maps->columnWidth(0) + delta, 48, 120);
         const int height = std::clamp(maps->rowHeight(0) + delta / 2, 24, 48);
@@ -982,8 +982,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         maps->setMinimumSize(maps->verticalHeader()->width() + 16 * width + 6,
                              16 * height + 6);
     };
-    connect(fuelZoomIn, &QPushButton::clicked, fuelPage, [resizefuelGrid] { resizefuelGrid(8); });
-    connect(fuelZoomOut, &QPushButton::clicked, fuelPage, [resizefuelGrid] { resizefuelGrid(-8); });
+    Q_UNUSED(resizefuelGrid);
+    // Cell zoom actions are no longer wired to buttons.
 
     // Edit MAP breakpoints by double-clicking the vertical header.
     connect(maps->verticalHeader(), &QHeaderView::sectionDoubleClicked, fuelPage,
@@ -1019,7 +1019,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *ignitionLayout = new QVBoxLayout(ignitionPage);
     auto *ignitionHeading = new QLabel(tr("IGNITION TABLE"), ignitionPage);
     ignitionHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
-    ignitionLayout->addWidget(ignitionHeading);
+    // Title is displayed by the MDI window.
     auto *ignitionActions = new QWidget(ignitionPage);
     auto *ignitionActionsLayout = new QHBoxLayout(ignitionActions);
     ignitionActionsLayout->setContentsMargins(0, 0, 0, 0);
@@ -1100,8 +1100,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionZoomIn->setToolTip(tr("Increase table cell size"));
     ignitionZoomOut->setFixedWidth(32);
     ignitionZoomIn->setFixedWidth(32);
-    ignitionGridLayout->addWidget(ignitionZoomOut);
-    ignitionGridLayout->addWidget(ignitionZoomIn);
+    // No zoom buttons: table sizing follows the resizable window.
+    // Zoom controls removed from the visible layout.
     auto resizeignitionGrid = [ignitionMap, ignitionRpmValues](int delta) {
         const int width = std::clamp(ignitionMap->columnWidth(0) + delta, 48, 120);
         const int height = std::clamp(ignitionMap->rowHeight(0) + delta / 2, 24, 48);
@@ -1113,8 +1113,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         ignitionMap->setMinimumSize(ignitionMap->verticalHeader()->width() + 16 * width + 6,
                                     16 * height + 6);
     };
-    connect(ignitionZoomIn, &QPushButton::clicked, ignitionPage, [resizeignitionGrid] { resizeignitionGrid(8); });
-    connect(ignitionZoomOut, &QPushButton::clicked, ignitionPage, [resizeignitionGrid] { resizeignitionGrid(-8); });
+    Q_UNUSED(resizeignitionGrid);
+    // Cell zoom actions are no longer wired to buttons.
 
     // Edit MAP breakpoints by double-clicking the vertical header.
     connect(ignitionMap->verticalHeader(), &QHeaderView::sectionDoubleClicked, ignitionPage,
@@ -1150,7 +1150,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *afrLayout = new QVBoxLayout(afrPage);
     auto *afrTitle = new QLabel(tr("AFR TARGET"), afrPage);
     afrTitle->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
-    afrLayout->addWidget(afrTitle);
+    // Title is displayed by the MDI window.
     auto *afrWarning = new QLabel(tr("Tunuino base values: offline editing only. Validate for the engine before use."), afrPage);
     afrWarning->setWordWrap(true);
     afrWarning->setStyleSheet(QStringLiteral("color: #e6a750;"));
