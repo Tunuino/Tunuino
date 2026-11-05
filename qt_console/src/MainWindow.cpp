@@ -2655,6 +2655,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         QByteArray bytes;
     };
     auto transfer = QSharedPointer<MapTransfer>::create();
+    auto autoSync = QSharedPointer<bool>::create(false);
     auto sendChunk = [session, transfer]() -> bool {
         const int total = transfer->page == 1 ? 256 : 576;
         if (!transfer->page || transfer->offset >= total) return false;
@@ -2671,6 +2672,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     };
     auto abortTransfer = [=](const QString &message) {
         const int page = transfer->page;
+        *autoSync = false;
         transfer->page = 0;
         transfer->offset = 0;
         transfer->bytes.clear();
@@ -2691,6 +2693,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         ignitionRead->setEnabled(false);
         if (tpsReadButton) tpsReadButton->setEnabled(false);
         if (page == 2) fuelState->setText(tr("READING ECU MAP..."));
+        statusBar()->showMessage(tr("Reading ECU page %1...").arg(page));
         if (!sendChunk()) abortTransfer(tr("Unable to request map page"));
     };
     if (tpsReadButton) connect(tpsReadButton, &QPushButton::clicked, this, [=]() { startTransfer(1); });
@@ -2887,6 +2890,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 transfer->page = 0;
                 transfer->bytes.clear();
                 *identityVerified = false;
+                *autoSync = false;
                 session->close();
                 connectionStatus_->setText(tr("Connecting to %1...").arg(name));
                 if (!session->open(name, 115200)) return;
@@ -2904,16 +2908,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         transfer->page = 0;
         transfer->bytes.clear();
         *identityVerified = false;
+        *autoSync = false;
         session->close();
         connectionStatus_->setText(tr("ECU disconnected"));
     });
     connect(session, &tunuino::SerialSession::connectionChanged, this, [=](bool connected) {
         disconnectAction->setEnabled(connected);
-        if (!connected) { liveTimer->stop(); transfer->page = 0; *identityVerified = false; *validationPending = false; validationAction->setEnabled(false); fuelRead->setEnabled(false); ignitionRead->setEnabled(false); if (tpsReadButton) tpsReadButton->setEnabled(false); connectionStatus_->setText(tr("ECU disconnected")); }
+        if (!connected) { *autoSync = false; liveTimer->stop(); transfer->page = 0; *identityVerified = false; *validationPending = false; validationAction->setEnabled(false); fuelRead->setEnabled(false); ignitionRead->setEnabled(false); if (tpsReadButton) tpsReadButton->setEnabled(false); connectionStatus_->setText(tr("ECU disconnected")); }
     });
     connect(session, &tunuino::SerialSession::exchangeFailed, this, [=](const QString &error) {
         liveTimer->stop();
         transfer->page = 0;
+        *autoSync = false;
         *identityVerified = false;
         *validationPending = false;
         validationAction->setEnabled(false);
@@ -2973,7 +2979,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                         ? tr("ECU configuration page read successfully (schema %1). TPS closed/open calibration is not yet represented in firmware; reference fields remain local and unchanged.").arg(u16(0))
                         : tr("ECU configuration schema invalid. TPS references unchanged."));
                 }
-                abortTransfer(schemaValid ? tr("ECU configuration read (read-only)") : tr("Invalid ECU configuration schema"));
+                if (schemaValid && *autoSync) {
+                    transfer->page = 0;
+                    transfer->offset = 0;
+                    transfer->bytes.clear();
+                    QTimer::singleShot(0, this, [=]() { startTransfer(2); });
+                } else {
+                    abortTransfer(schemaValid ? tr("ECU configuration read (read-only)") : tr("Invalid ECU configuration schema"));
+                }
                 return;
             }
             bool valid = true;
@@ -3010,7 +3023,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     table->item(15 - row, col)->setText(QString::number(qint16(u16(64 + 2 * (row * 16 + col))) / 100.0, 'f', 2));
             // Force the independent 3D view to repaint after the complete ECU map arrives.
             (page == 2 ? fuelSurface : ignitionSurface)->update();
-            abortTransfer(tr("Map page %1 read from ECU (read-only)").arg(page));
+            if (*autoSync && page == 2) {
+                transfer->page = 0;
+                transfer->offset = 0;
+                transfer->bytes.clear();
+                QTimer::singleShot(0, this, [=]() { startTransfer(3); });
+            } else {
+                const bool completed = *autoSync && page == 3;
+                abortTransfer(completed
+                    ? tr("ECU synchronized: configuration, Fuel and Ignition maps. Other parameters are not yet supported.")
+                    : tr("Map page %1 read from ECU (read-only)").arg(page));
+            }
             return;
         }
         if (*identityVerified) {
@@ -3066,11 +3089,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         connectionStatus_->setText(tr("ECU connected | Protocol %1 | Board %2 | MCU %3 | Firmware %4")
             .arg(protocol).arg(board).arg(mcu).arg(version));
         *identityVerified = true;
+        *autoSync = true;
         validationAction->setEnabled(true);
         fuelRead->setEnabled(true);
         ignitionRead->setEnabled(true);
         if (tpsReadButton) tpsReadButton->setEnabled(true);
-        liveTimer->start();
+        startTransfer(1);
         statusBar()->showMessage(tr("ECU identity verified. Fuel and Ignition map reading available; ECU writes disabled."));
     });
     refreshPorts();
