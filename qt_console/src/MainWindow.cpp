@@ -1,6 +1,8 @@
 #include "MainWindow.h"
 #include "NativeDfuFlash.h"
 #include <QPainter>
+#include <QClipboard>
+#include <QApplication>
 #include <QSignalBlocker>
 #include <QPaintEvent>
 #include <QMouseEvent>
@@ -747,6 +749,57 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             const QStringList next = history->redo.takeLast();
             restore(next);
             history->current = snapshot();
+        });
+        // Context commands documented in EMU Black V3 Software Guide.
+        // The existing interpolation and smoothing handlers retain their undo history.
+        table->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(table, &QWidget::customContextMenuRequested, table,
+                [table, interpolate, smooth, undo, redo](const QPoint &point) {
+            QMenu menu(table);
+            auto *interpolateAction = menu.addAction(QObject::tr("Interpolate selection"));
+            auto *smoothAction = menu.addAction(QObject::tr("Equalize / Smooth selection"));
+            menu.addSeparator();
+            auto *copyAction = menu.addAction(QObject::tr("Copy cells"));
+            auto *pasteAction = menu.addAction(QObject::tr("Paste cells"));
+            menu.addSeparator();
+            auto *undoAction = menu.addAction(QObject::tr("Undo"));
+            auto *redoAction = menu.addAction(QObject::tr("Redo"));
+            QAction *chosen = menu.exec(table->viewport()->mapToGlobal(point));
+            if (chosen == interpolateAction) interpolate->click();
+            else if (chosen == smoothAction) smooth->click();
+            else if (chosen == undoAction) undo->click();
+            else if (chosen == redoAction) redo->click();
+            else if (chosen == copyAction) {
+                QStringList rows;
+                const auto range = table->selectedRanges();
+                if (range.isEmpty()) return;
+                const auto area = range.first();
+                for (int row = area.topRow(); row <= area.bottomRow(); ++row) {
+                    QStringList cells;
+                    for (int col = area.leftColumn(); col <= area.rightColumn(); ++col) {
+                        const auto *item = table->item(row, col);
+                        cells << (item ? item->text() : QString());
+                    }
+                    rows << cells.join(QLatin1Char('\t'));
+                }
+                QApplication::clipboard()->setText(rows.join(QLatin1Char('\n')));
+            } else if (chosen == pasteAction) {
+                const auto selected = table->selectedRanges();
+                if (selected.isEmpty()) return;
+                const QString clipboard = QApplication::clipboard()->text();
+                const QStringList rows = clipboard.split(QLatin1Char('\n'));
+                const int top = selected.first().topRow();
+                const int left = selected.first().leftColumn();
+                for (int r = 0; r < rows.size() && top + r < table->rowCount(); ++r) {
+                    const QStringList cells = rows.at(r).split(QLatin1Char('\t'));
+                    for (int c = 0; c < cells.size() && left + c < table->columnCount(); ++c) {
+                        bool ok = false;
+                        const double value = cells.at(c).trimmed().toDouble(&ok);
+                        if (ok && std::isfinite(value) && table->item(top + r, left + c))
+                            table->item(top + r, left + c)->setText(QString::number(value));
+                    }
+                }
+            }
         });
     };
     // Offline map persistence; never sends data to the ECU.
