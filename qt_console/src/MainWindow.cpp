@@ -32,6 +32,8 @@
 #include <QSpinBox>
 #include <QPushButton>
 #include <QToolButton>
+#include <QResizeEvent>
+#include <QFontMetrics>
 #include <QStyle>
 #include <functional>
 #include <QGroupBox>
@@ -130,6 +132,27 @@ public:
         viewport()->update();
     }
 protected:
+    void resizeEvent(QResizeEvent *event) override {
+        QTableWidget::resizeEvent(event);
+        // Adapt typography to actual cell width, not the MDI window size.
+        // A fixed 9pt bold font was eliding values as "..." in compact maps.
+        const int cellWidth = (std::max)(1, viewport()->width() / (std::max)(1, columnCount()));
+        const int cellHeight = (std::max)(1, viewport()->height() / (std::max)(1, rowCount()));
+        QFont valueFont = font();
+        valueFont.setBold(true);
+        int points = 11;
+        for (; points > 4; --points) {
+            valueFont.setPointSize(points);
+            const QFontMetrics fm(valueFont);
+            if (fm.horizontalAdvance(QStringLiteral("9999")) + 3 <= cellWidth &&
+                fm.height() + 2 <= cellHeight) break;
+        }
+        valueFont.setPointSize((std::max)(4, points));
+        if (font().pointSize() != valueFont.pointSize()) setFont(valueFont);
+        QFont headerFont = verticalHeader()->font();
+        headerFont.setPointSize((std::max)(5, (std::min)(9, valueFont.pointSize())));
+        verticalHeader()->setFont(headerFont);
+    }
     void paintEvent(QPaintEvent *event) override {
         QTableWidget::paintEvent(event);
         if (row_ < 0 || column_ < 0) return;
@@ -1033,6 +1056,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelRpmValues->setMaximumHeight(32);
     fuelRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     fuelRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    QFont fuelRpmValuesFont = fuelRpmValues->font();
+    fuelRpmValuesFont.setPointSize(6);
+    fuelRpmValues->setFont(fuelRpmValuesFont);
     for (int i = 0; i < 16; ++i) {
         auto *cell = new QTableWidgetItem(fuelRpmBins.at(i));
         cell->setTextAlignment(Qt::AlignCenter);
@@ -1142,6 +1168,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionRpmValues->setMaximumHeight(32);
     ignitionRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     ignitionRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    QFont ignitionRpmValuesFont = ignitionRpmValues->font();
+    ignitionRpmValuesFont.setPointSize(6);
+    ignitionRpmValues->setFont(ignitionRpmValuesFont);
     for (int i = 0; i < 16; ++i) {
         auto *cell = new QTableWidgetItem(ignitionRpmBins.at(i));
         cell->setTextAlignment(Qt::AlignCenter);
@@ -1238,6 +1267,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrRpmValues->setMaximumHeight(32);
     afrRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     afrRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    QFont afrRpmValuesFont = afrRpmValues->font();
+    afrRpmValuesFont.setPointSize(6);
+    afrRpmValues->setFont(afrRpmValuesFont);
     for (int i = 0; i < 16; ++i) {
         auto *cell = new QTableWidgetItem(afrRpmBins.at(i));
         cell->setTextAlignment(Qt::AlignCenter);
