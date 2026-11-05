@@ -2068,31 +2068,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 saveTps->setEnabled(false);
                 saveTps->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
                 form->addRow(saveTps);
-                connect(saveTps, &QPushButton::clicked, page, [minVoltage, maxVoltage, page]() {
-                    const double closed = minVoltage->value();
-                    const double open = maxVoltage->value();
-                    if (open - closed < 0.2) {
-                        QMessageBox::warning(page, QObject::tr("Invalid TPS calibration"),
-                            QObject::tr("Open throttle voltage must exceed closed throttle voltage by at least 0.2 V."));
-                        return;
-                    }
-                    const QString path = QFileDialog::getSaveFileName(page, QObject::tr("Save offline TPS calibration"),
-                        QStringLiteral("tps-calibration.json"), QObject::tr("JSON files (*.json)"));
-                    if (path.isEmpty()) return;
-                    QJsonObject root;
-                    root.insert(QStringLiteral("format"), QStringLiteral("tunuino-tps-calibration-v1"));
-                    root.insert(QStringLiteral("closed_voltage_v"), closed);
-                    root.insert(QStringLiteral("open_voltage_v"), open);
-                    root.insert(QStringLiteral("source"), QStringLiteral("manual-reference-not-measured"));
-                    QSaveFile file(path);
-                    if (!file.open(QIODevice::WriteOnly)) {
-                        QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
-                        return;
-                    }
-                    const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Indented);
-                    if (file.write(data) != data.size() || !file.commit())
-                        QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
-                });
+                // ECU write action is deliberately unavailable until the persistent
+                // configuration protocol has been implemented and validated.
             }
             if (QString::fromLatin1(name) == QStringLiteral("Lambda")) {
                 auto *brand = new QComboBox(page);
@@ -2273,46 +2250,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 saveStrategy->setEnabled(false);
                 saveStrategy->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
                 form->addRow(saveStrategy);
-                connect(saveStrategy, &QPushButton::clicked, page, [=]() {
-                    // Export is a draft only: it never enables an ECU output.
-                    if (mode->currentIndex() == 0) {
-                        QMessageBox::warning(page, QObject::tr("Strategy not configured"),
-                            QObject::tr("Select a strategy mode before saving the offline draft."));
-                        return;
-                    }
-                    if (modeName == QStringLiteral("Launch Control") &&
-                        (rpm->value() <= 0 || threshold->value() <= 0 || hysteresis->value() <= 0)) {
-                        QMessageBox::warning(page, QObject::tr("Launch limits incomplete"),
-                            QObject::tr("Set RPM, minimum TPS and maximum activation duration."));
-                        return;
-                    }
-                    if (modeName != QStringLiteral("Launch Control") && output->currentIndex() == 0) {
-                        QMessageBox::warning(page, QObject::tr("Output not selected"),
-                            QObject::tr("Select an output for this offline strategy draft."));
-                        return;
-                    }
-                    const QString path = QFileDialog::getSaveFileName(page, QObject::tr("Save offline strategy draft"),
-                        QStringLiteral("engine-strategy.json"), QObject::tr("JSON files (*.json)"));
-                    if (path.isEmpty()) return;
-                    QJsonObject root;
-                    root.insert(QStringLiteral("format"), QStringLiteral("tunuino-strategy-draft-v1"));
-                    root.insert(QStringLiteral("strategy"), modeName);
-                    root.insert(QStringLiteral("mode"), mode->currentText());
-                    root.insert(QStringLiteral("rpm_reference"), rpm->value());
-                    root.insert(QStringLiteral("threshold_reference"), threshold->value());
-                    root.insert(QStringLiteral("secondary_reference"), hysteresis->value());
-                    root.insert(QStringLiteral("output_reference"), output->currentText());
-                    root.insert(QStringLiteral("ecu_activation_enabled"), false);
-                    root.insert(QStringLiteral("offline_only"), true);
-                    QSaveFile file(path);
-                    if (!file.open(QIODevice::WriteOnly)) {
-                        QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
-                        return;
-                    }
-                    const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Indented);
-                    if (file.write(data) != data.size() || !file.commit())
-                        QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
-                });
+                // ECU write action is deliberately unavailable until the persistent
+                // configuration protocol has been implemented and validated.
                 // Preview controls must never imply that a live ECU strategy is enabled.
                 enabled->setEnabled(false);
             }
@@ -2488,33 +2427,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 saveWheel->setEnabled(false);
                 saveWheel->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
                     form->addRow(saveWheel);
-                    connect(saveWheel, &QPushButton::clicked, page, [=]() {
-                        if (wheel->currentIndex() == 0 || polarity->currentIndex() == 0 ||
-                            missing->value() >= teeth->value()) {
-                            QMessageBox::warning(page, QObject::tr("Incomplete trigger setup"),
-                                QObject::tr("Select a wheel and trigger edge; missing teeth must be fewer than nominal teeth."));
-                            return;
-                        }
-                        const QString path = QFileDialog::getSaveFileName(page, QObject::tr("Save offline trigger setup"),
-                            QStringLiteral("trigger-setup.json"), QObject::tr("JSON files (*.json)"));
-                        if (path.isEmpty()) return;
-                        QJsonObject root;
-                        root.insert(QStringLiteral("format"), QStringLiteral("tunuino-trigger-v1"));
-                        root.insert(QStringLiteral("wheel"), wheel->currentText());
-                        root.insert(QStringLiteral("nominal_teeth"), teeth->value());
-                        root.insert(QStringLiteral("missing_teeth"), missing->value());
-                        root.insert(QStringLiteral("trigger_angle_deg_unverified"), triggerAngle->value());
-                        root.insert(QStringLiteral("trigger_edge"), polarity->currentText());
-                        root.insert(QStringLiteral("offline_only"), true);
-                        QSaveFile file(path);
-                        if (!file.open(QIODevice::WriteOnly)) {
-                            QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
-                            return;
-                        }
-                        const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Indented);
-                        if (file.write(data) != data.size() || !file.commit())
-                            QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
-                    });
+                    // ECU write action is deliberately unavailable until the persistent
+                    // configuration protocol has been implemented and validated.
                 } else if (section == QStringLiteral("Injectors")) {
                     profile->addItems({tr("Select injector type"), tr("High impedance"), tr("Low impedance (driver required)")});
                     channel->addItem(tr("Select injector channel"));
@@ -2586,36 +2500,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 save->setEnabled(false);
                 save->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
                 form->addRow(save);
-                connect(save, &QPushButton::clicked, page, [table, page]() {
-                    QJsonArray values;
-                    for (int i = 0; i < table->rowCount(); ++i) {
-                        const auto *spin = qobject_cast<QDoubleSpinBox *>(table->cellWidget(i, 1));
-                        if (!spin || spin->value() <= 0.0) {
-                            QMessageBox::warning(page, QObject::tr("Incomplete dead-time table"),
-                                QObject::tr("Enter a verified nonzero dead time for every battery-voltage row before saving."));
-                            return;
-                        }
-                        QJsonObject entry;
-                        entry.insert(QStringLiteral("voltage_v"), table->item(i, 0)->text().toInt());
-                        entry.insert(QStringLiteral("dead_time_ms"), spin->value());
-                        values.append(entry);
-                    }
-                    const QString path = QFileDialog::getSaveFileName(page, QObject::tr("Save offline dead-time table"),
-                        QStringLiteral("injector-dead-time.json"), QObject::tr("JSON files (*.json)"));
-                    if (path.isEmpty()) return;
-                    QSaveFile file(path);
-                    if (!file.open(QIODevice::WriteOnly)) {
-                        QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
-                        return;
-                    }
-                    QJsonObject root;
-                    root.insert(QStringLiteral("format"), QStringLiteral("tunuino-injector-dead-time-v1"));
-                    root.insert(QStringLiteral("units"), QStringLiteral("ms"));
-                    root.insert(QStringLiteral("values"), values);
-                    const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Indented);
-                    if (file.write(data) != data.size() || !file.commit())
-                        QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
-                });
+                // ECU write action is deliberately unavailable until the persistent
+                // configuration protocol has been implemented and validated.
                 auto *read = new QPushButton(tr("Read from ECU"), page);
                 read->setEnabled(false);
                 read->setToolTip(tr("Requires validated ECU configuration read protocol."));
