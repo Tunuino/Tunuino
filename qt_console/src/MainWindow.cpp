@@ -727,23 +727,23 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 if (history->pending) flush();
             });
         });
-        auto *interpolate = new QPushButton(tr("Interpolate"), table);
-        auto *smooth = new QPushButton(tr("Smooth"), table);
-        auto *undo = new QPushButton(tr("Undo"), table);
-        auto *redo = new QPushButton(tr("Redo"), table);
-        // Keep action objects available for the context menu without visible buttons.
+        auto *interpolate = new QAction(tr("Interpolate"), table);
+        auto *smooth = new QAction(tr("Smooth"), table);
+        auto *undo = new QAction(tr("Undo"), table);
+        auto *redo = new QAction(tr("Redo"), table);
+        // QAction objects have no visual widget: editing is available only through the context menu.
         Q_UNUSED(bar);
-        connect(interpolate, &QPushButton::clicked, this, [table, afr, editMapRegion, flush]() {
+        connect(interpolate, &QAction::triggered, this, [table, afr, editMapRegion, flush]() {
             flush();
             editMapRegion(table, 3, afr);
             flush();
         });
-        connect(smooth, &QPushButton::clicked, this, [table, afr, editMapRegion, flush]() {
+        connect(smooth, &QAction::triggered, this, [table, afr, editMapRegion, flush]() {
             flush();
             editMapRegion(table, 4, afr);
             flush();
         });
-        connect(undo, &QPushButton::clicked, this, [history, flush, snapshot, restore]() {
+        connect(undo, &QAction::triggered, this, [history, flush, snapshot, restore]() {
             flush();
             if (history->undo.isEmpty()) return;
             history->redo.append(history->current);
@@ -751,7 +751,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             restore(previous);
             history->current = snapshot();
         });
-        connect(redo, &QPushButton::clicked, this, [history, flush, snapshot, restore]() {
+        connect(redo, &QAction::triggered, this, [history, flush, snapshot, restore]() {
             flush();
             if (history->redo.isEmpty()) return;
             history->undo.append(history->current);
@@ -781,9 +781,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 editMapRegion(table, chosen == horizontalAction ? 1 : chosen == verticalAction ? 2 : 3, afr);
                 flush();
             }
-            else if (chosen == smoothAction) smooth->click();
-            else if (chosen == undoAction) undo->click();
-            else if (chosen == redoAction) redo->click();
+            else if (chosen == smoothAction) smooth->trigger();
+            else if (chosen == undoAction) undo->trigger();
+            else if (chosen == redoAction) redo->trigger();
             else if (chosen == copyAction) {
                 QStringList rows;
                 const auto range = table->selectedRanges();
