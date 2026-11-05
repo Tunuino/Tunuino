@@ -2057,8 +2057,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 auto *calibrate = new QPushButton(tr("Auto Calibrate (not connected)"), page);
                 calibrate->setEnabled(false);
                 form->addRow(calibrate);
-                auto *saveTps = new QPushButton(tr("Save offline TPS calibration..."), page);
-                saveTps->setText(tr("Write to ECU"));
+                auto *readsaveTps = new QPushButton(tr("Read from ECU"), page);
+                readsaveTps->setEnabled(false);
+                readsaveTps->setToolTip(tr("Requires validated ECU configuration read protocol."));
+                form->addRow(readsaveTps);
+                auto *saveTps = new QPushButton(tr("Write to ECU"), page);
                 saveTps->setEnabled(false);
                 saveTps->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
                 form->addRow(saveTps);
@@ -2259,8 +2262,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 auto *apply = new QPushButton(tr("Apply to ECU (not connected)"), page);
                 apply->setEnabled(false);
                 form->addRow(apply);
-                auto *saveStrategy = new QPushButton(tr("Save offline strategy settings..."), page);
-                saveStrategy->setText(tr("Write to ECU"));
+                auto *readsaveStrategy = new QPushButton(tr("Read from ECU"), page);
+                readsaveStrategy->setEnabled(false);
+                readsaveStrategy->setToolTip(tr("Requires validated ECU configuration read protocol."));
+                form->addRow(readsaveStrategy);
+                auto *saveStrategy = new QPushButton(tr("Write to ECU"), page);
                 saveStrategy->setEnabled(false);
                 saveStrategy->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
                 form->addRow(saveStrategy);
@@ -2471,8 +2477,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     };
                     connect(wheel, QOverload<int>::of(&QComboBox::currentIndexChanged), page, updateWheel);
                     updateWheel(wheel->currentIndex());
-                    auto *saveWheel = new QPushButton(tr("Save offline trigger setup..."), page);
-                saveWheel->setText(tr("Write to ECU"));
+                    auto *readsaveWheel = new QPushButton(tr("Read from ECU"), page);
+                readsaveWheel->setEnabled(false);
+                readsaveWheel->setToolTip(tr("Requires validated ECU configuration read protocol."));
+                form->addRow(readsaveWheel);
+                auto *saveWheel = new QPushButton(tr("Write to ECU"), page);
                 saveWheel->setEnabled(false);
                 saveWheel->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
                     form->addRow(saveWheel);
@@ -2566,8 +2575,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 table->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
                 table->setMinimumHeight(220);
                 form->addRow(table);
-                auto *save = new QPushButton(tr("Save offline dead-time table..."), page);
-                save->setText(tr("Write to ECU"));
+                auto *readsave = new QPushButton(tr("Read from ECU"), page);
+                readsave->setEnabled(false);
+                readsave->setToolTip(tr("Requires validated ECU configuration read protocol."));
+                form->addRow(readsave);
+                auto *save = new QPushButton(tr("Write to ECU"), page);
                 save->setEnabled(false);
                 save->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
                 form->addRow(save);
@@ -2601,7 +2613,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     if (file.write(data) != data.size() || !file.commit())
                         QMessageBox::warning(page, QObject::tr("Save failed"), file.errorString());
                 });
-                auto *apply = new QPushButton(tr("Write to ECU (protocol not validated)"), page);
+                auto *read = new QPushButton(tr("Read from ECU"), page);
+                read->setEnabled(false);
+                read->setToolTip(tr("Requires validated ECU configuration read protocol."));
+                form->addRow(read);
+                auto *apply = new QPushButton(tr("Write to ECU"), page);
                 apply->setEnabled(false);
                 form->addRow(apply);
             }
