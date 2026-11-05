@@ -131,22 +131,27 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Reject obsolete master builds before publishing
+      - name: Check whether this is the latest master build
+        id: freshness
         shell: bash
         run: |
           set -euo pipefail
           latest=$(git ls-remote https://github.com/Tunuino/Tunuino.git refs/heads/master | cut -f1)
           test -n "$latest"
           if [ "$latest" != "$GITHUB_SHA" ]; then
-            echo "Refusing stale Beta deployment: run=$GITHUB_SHA current=$latest"
-            exit 1
+            echo "Skipping stale Beta deployment: run=$GITHUB_SHA current=$latest"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Download verified Console installer
+        if: ${{ steps.freshness.outputs.publish == 'true' }}
         uses: actions/download-artifact@v4
         with:
           name: TunuinoConsole-Setup-Windows-x64
           path: installer
       - name: Prepare public Beta update manifest
+        if: ${{ steps.freshness.outputs.publish == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -166,11 +171,14 @@ jobs:
           pathlib.Path('public/updates/beta.json').write_text(json.dumps(data, indent=2) + chr(10), encoding='utf-8')
           PY
       - name: Configure GitHub Pages
+        if: ${{ steps.freshness.outputs.publish == 'true' }}
         uses: actions/configure-pages@v5
       - name: Upload GitHub Pages artifact
+        if: ${{ steps.freshness.outputs.publish == 'true' }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
       - name: Publish public Beta updates
+        if: ${{ steps.freshness.outputs.publish == 'true' }}
         id: deployment
         uses: actions/deploy-pages@v4
