@@ -1055,7 +1055,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelRpmValues->setMinimumHeight(32);
     fuelRpmValues->setMaximumHeight(32);
     fuelRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    fuelRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    fuelRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    // Match the 16 RPM breakpoints to the exact 16 map column widths.
+    // Independent Stretch headers drift apart as the MDI window shrinks.
+    for (int col = 0; col < 16; ++col)
+        fuelRpmValues->setColumnWidth(col, maps->columnWidth(col));
+    connect(maps->horizontalHeader(), &QHeaderView::sectionResized,
+            fuelRpmValues, [fuelRpmValues](int column, int, int width) {
+                fuelRpmValues->setColumnWidth(column, width);
+            });
+    connect(maps->verticalHeader(), &QHeaderView::sectionResized,
+            maps, [maps](int, int, int) {
+                const int rowHeight = maps->rowHeight(0);
+                QFont f = maps->verticalHeader()->font();
+                f.setPointSize((std::max)(5, (std::min)(9, rowHeight / 3)));
+                maps->verticalHeader()->setFont(f);
+            });
     QFont fuelRpmValuesFont = fuelRpmValues->font();
     fuelRpmValuesFont.setPointSize(6);
     fuelRpmValues->setFont(fuelRpmValuesFont);
@@ -1167,7 +1182,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionRpmValues->setMinimumHeight(32);
     ignitionRpmValues->setMaximumHeight(32);
     ignitionRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    ignitionRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    ignitionRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    // Match the 16 RPM breakpoints to the exact 16 map column widths.
+    // Independent Stretch headers drift apart as the MDI window shrinks.
+    for (int col = 0; col < 16; ++col)
+        ignitionRpmValues->setColumnWidth(col, ignitionMap->columnWidth(col));
+    connect(ignitionMap->horizontalHeader(), &QHeaderView::sectionResized,
+            ignitionRpmValues, [ignitionRpmValues](int column, int, int width) {
+                ignitionRpmValues->setColumnWidth(column, width);
+            });
+    connect(ignitionMap->verticalHeader(), &QHeaderView::sectionResized,
+            ignitionMap, [ignitionMap](int, int, int) {
+                const int rowHeight = ignitionMap->rowHeight(0);
+                QFont f = ignitionMap->verticalHeader()->font();
+                f.setPointSize((std::max)(5, (std::min)(9, rowHeight / 3)));
+                ignitionMap->verticalHeader()->setFont(f);
+            });
     QFont ignitionRpmValuesFont = ignitionRpmValues->font();
     ignitionRpmValuesFont.setPointSize(6);
     ignitionRpmValues->setFont(ignitionRpmValuesFont);
@@ -1266,7 +1296,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrRpmValues->setMinimumHeight(32);
     afrRpmValues->setMaximumHeight(32);
     afrRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    afrRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    afrRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    // Match the 16 RPM breakpoints to the exact 16 map column widths.
+    // Independent Stretch headers drift apart as the MDI window shrinks.
+    for (int col = 0; col < 16; ++col)
+        afrRpmValues->setColumnWidth(col, afrMap->columnWidth(col));
+    connect(afrMap->horizontalHeader(), &QHeaderView::sectionResized,
+            afrRpmValues, [afrRpmValues](int column, int, int width) {
+                afrRpmValues->setColumnWidth(column, width);
+            });
+    connect(afrMap->verticalHeader(), &QHeaderView::sectionResized,
+            afrMap, [afrMap](int, int, int) {
+                const int rowHeight = afrMap->rowHeight(0);
+                QFont f = afrMap->verticalHeader()->font();
+                f.setPointSize((std::max)(5, (std::min)(9, rowHeight / 3)));
+                afrMap->verticalHeader()->setFont(f);
+            });
     QFont afrRpmValuesFont = afrRpmValues->font();
     afrRpmValuesFont.setPointSize(6);
     afrRpmValues->setFont(afrRpmValuesFont);
