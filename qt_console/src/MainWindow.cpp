@@ -92,6 +92,7 @@ class LiveMapTable final : public QTableWidget {
 public:
     explicit LiveMapTable(QWidget *parent) : QTableWidget(16, 16, parent) {}
     void setOperatingPoint(double rpm, double kpa, const QStringList &rpmBins) {
+        if (property("followCursorEnabled").isValid() && !property("followCursorEnabled").toBool()) { clearOperatingPoint(); return; }
         if (!std::isfinite(rpm) || !std::isfinite(kpa) || rpmBins.size() != 16) {
             clearOperatingPoint();
             return;
@@ -931,7 +932,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         auto *follow = add(tr("Follow"), tr("Follow cursor (F)"), []() {});
         follow->setCheckable(true);
         follow->setChecked(true);
-        // Live operating-point tracking is already managed by LiveMapTable.
+        table->setProperty("followCursorEnabled", true);
+        QObject::connect(follow, &QToolButton::toggled, page, [table](bool enabled) {
+            table->setProperty("followCursorEnabled", enabled);
+            if (!enabled) if (auto *live = dynamic_cast<LiveMapTable *>(table)) live->clearOperatingPoint();
+        });
+        // Live operating-point tracking is managed by LiveMapTable.
         auto *modify = add(tr("Auto above"), tr("Automodify above (D)"), []() {});
         modify->setCheckable(true);
         QObject::connect(table, &QTableWidget::itemChanged, page, [table, modify](QTableWidgetItem *item) {
