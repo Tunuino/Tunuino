@@ -32,6 +32,7 @@
 #include <QSpinBox>
 #include <QPushButton>
 #include <QToolButton>
+#include <QStyle>
 #include <functional>
 #include <QGroupBox>
 #include <QLineEdit>
@@ -894,20 +895,24 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         QMdiSubWindow *graph, const QString &name) {
         auto *bar = new QHBoxLayout();
         bar->setSpacing(2);
-        auto add = [bar, page](const QString &label, const QString &tip, const std::function<void()> &fn) {
+        auto add = [bar, page](QStyle::StandardPixmap glyph, const QString &tip, const std::function<void()> &fn) {
             auto *button = new QToolButton(page);
-            button->setText(label);
+            button->setIcon(page->style()->standardIcon(glyph));
             button->setToolTip(tip);
-            button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+            button->setAccessibleName(tip);
+            button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+            button->setIconSize(QSize(20, 20));
+            button->setFixedSize(30, 30);
             button->setAutoRaise(true);
             QObject::connect(button, &QToolButton::clicked, page, [fn]() { fn(); });
             bar->addWidget(button);
             return button;
         };
-        add(tr("Open"), tr("Open 3D table (offline)"), [files]() { files.first->trigger(); });
-        add(tr("Save"), tr("Save 3D table (offline)"), [files]() { files.second->trigger(); });
-        add(tr("Table"), tr("Only 3D table"), [graph]() { graph->hide(); });
-        add(tr("Graph"), tr("Only 3D graph"), [graph, workspace]() {
+        add(QStyle::SP_DirOpenIcon, tr("Open 3D table (offline)"), [files]() { files.first->trigger(); });
+        add(QStyle::SP_DialogSaveButton, tr("Save 3D table (offline)"), [files]() { files.second->trigger(); });
+        add(QStyle::SP_FileDialogDetailedView, tr("Only 3D table"), [graph, page]() { graph->hide(); if (auto *w = qobject_cast<QMdiSubWindow *>(page->parentWidget())) w->showNormal(); });
+        add(QStyle::SP_ComputerIcon, tr("Only 3D graph"), [graph, workspace, page]() {
+            if (auto *w = qobject_cast<QMdiSubWindow *>(page->parentWidget())) w->hide();
             graph->showNormal(); if (graph->widget()) graph->widget()->show();
             workspace->setActiveSubWindow(graph);
         });
@@ -927,9 +932,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if (graph->widget()) graph->widget()->show();
             tableWindow->raise();
         };
-        add(tr("Split V"), tr("Split vertically: table above graph"), [split]() { split(true); });
-        add(tr("Split H"), tr("Split horizontally: table beside graph"), [split]() { split(false); });
-        auto *follow = add(tr("Follow"), tr("Follow cursor (F)"), []() {});
+        add(QStyle::SP_TitleBarNormalButton, tr("Split vertically: table above graph"), [split]() { split(true); });
+        add(QStyle::SP_TitleBarMaxButton, tr("Split horizontally: table beside graph"), [split]() { split(false); });
+        auto *follow = add(QStyle::SP_ArrowRight, tr("Follow cursor (F)"), []() {});
         follow->setCheckable(true);
         follow->setChecked(true);
         table->setProperty("followCursorEnabled", true);
@@ -938,7 +943,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if (!enabled) if (auto *live = dynamic_cast<LiveMapTable *>(table)) live->clearOperatingPoint();
         });
         // Live operating-point tracking is managed by LiveMapTable.
-        auto *modify = add(tr("Auto above"), tr("Automodify above (D)"), []() {});
+        auto *modify = add(QStyle::SP_ArrowUp, tr("Automodify above (D)"), []() {});
         modify->setCheckable(true);
         QObject::connect(table, &QTableWidget::itemChanged, page, [table, modify](QTableWidgetItem *item) {
             if (!modify->isChecked() || !item) return;
@@ -954,9 +959,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 if (valid && old < value) above->setText(item->text());
             }
         });
-        add(tr("?"), tr("Help: 3D table"), [this, name]() {
+        add(QStyle::SP_DialogHelpButton, tr("Help: 3D table"), [this, name]() {
             QMessageBox::information(this, tr("3D table help"),
-                tr("%1\\nOpen/Save: offline map files. Table/Graph: switch views. "
+                tr("%1\nOpen/Save: offline map files. Table/Graph: switch views. "
                    "Split V/H: arrange table and graph. Follow: ECU operating-point cursor. "
                    "Auto above: raise lower values above the edited cell. "
                    "Right-click cells for interpolation and editing.").arg(name));
