@@ -536,7 +536,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelSave->setEnabled(false);
     fuelRead->setToolTip(tr("Connect to a compatible ECU to read its 16x16 map."));
     fuelSave->setToolTip(tr("Requires validated ECU map-write protocol and safety checks."));
-    fuelActionsLayout->addWidget(fuelRead);
+    // Automatic ECU synchronization replaces the per-page read control.
     fuelActionsLayout->addWidget(fuelSave);
     fuelActionsLayout->addStretch();
     fuelLayout->addWidget(fuelActions);
@@ -959,7 +959,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *ignitionSave = new QPushButton(tr("Write to ECU"), ignitionActions);
     ignitionRead->setEnabled(false);
     ignitionSave->setEnabled(false);
-    ignitionActionsLayout->addWidget(ignitionRead);
+    // Automatic ECU synchronization replaces the per-page read control.
     ignitionActionsLayout->addWidget(ignitionSave);
     ignitionActionsLayout->addStretch();
     ignitionLayout->addWidget(ignitionActions);
@@ -2067,7 +2067,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 tpsReadStatus = info;
                 readsaveTps->setEnabled(false);
                 readsaveTps->setToolTip(tr("Requires validated ECU configuration read protocol."));
-                form->addRow(readsaveTps);
+    // Automatic ECU synchronization replaces the per-page read control.
                 auto *saveTps = new QPushButton(tr("Write to ECU"), page);
                 saveTps->setEnabled(false);
                 saveTps->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
