@@ -117,7 +117,8 @@ jobs:
   publish-beta-updates:
     concurrency:
       group: tunuino-beta-pages
-      cancel-in-progress: true
+      # Queue deployments instead of cancelling an active GitHub Pages publication.
+      cancel-in-progress: false
     # Enable after configuring Settings > Pages > Source: GitHub Actions.
     # Repository variable ENABLE_BETA_UPDATES must be set to true.
     if: ${{ github.ref == 'refs/heads/master' && vars.ENABLE_BETA_UPDATES == 'true' }}
