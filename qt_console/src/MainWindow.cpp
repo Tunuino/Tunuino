@@ -2703,7 +2703,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         fuelRead->setEnabled(*identityVerified && session->isOpen());
         ignitionRead->setEnabled(*identityVerified && session->isOpen());
         if (tpsReadButton) tpsReadButton->setEnabled(*identityVerified && session->isOpen());
-        if (page == 2) fuelState->setText(message);
+        // Transfer feedback is displayed in the status bar.
         statusBar()->showMessage(message, 10000);
         liveTimer->start();
     };
@@ -2716,7 +2716,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         fuelRead->setEnabled(false);
         ignitionRead->setEnabled(false);
         if (tpsReadButton) tpsReadButton->setEnabled(false);
-        if (page == 2) fuelState->setText(tr("READING ECU MAP..."));
+        // Transfer progress is displayed in the status bar.
         statusBar()->showMessage(tr("Reading ECU page %1...").arg(page));
         if (!sendChunk()) abortTransfer(tr("Unable to request map page"));
     };
