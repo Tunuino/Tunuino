@@ -2873,12 +2873,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             .setValue(QStringLiteral("updates/channel"), QStringLiteral("stable"));
     });
     auto *refreshAction = settingsMenu->addAction(tr("Refresh serial ports"));
-    auto *firmwareMenu = menuBar()->addMenu(tr("Firmware"));
-    auto *openFirmware = firmwareMenu->addAction(tr("Firmware / USB DFU"));
+    auto *openFirmware = ecuMenu->addAction(tr("Firmware / USB DFU"));
     connect(openFirmware, &QAction::triggered, this, [tabs, firmwarePage]() {
         tabs->setCurrentWidget(firmwarePage);
     });
-    auto *dfuInfo = firmwareMenu->addAction(tr("USB DFU status / instructions"));
+    auto *dfuInfo = ecuMenu->addAction(tr("USB DFU status / instructions"));
     connect(dfuInfo, &QAction::triggered, this, [this]() {
         QMessageBox::information(this, tr("Firmware / DFU"),
             tr("Enter USB DFU bootloader mode, select a verified firmware image and detect the device. Flashing remains disabled pending hardware validation."));
