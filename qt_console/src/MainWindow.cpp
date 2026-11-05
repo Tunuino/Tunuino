@@ -31,6 +31,7 @@
 #include <QDoubleSpinBox>
 #include <QSpinBox>
 #include <QPushButton>
+#include <QToolButton>
 #include <QGroupBox>
 #include <QLineEdit>
 #include <QMessageBox>
