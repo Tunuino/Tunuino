@@ -32,6 +32,7 @@
 #include <QSpinBox>
 #include <QPushButton>
 #include <QToolButton>
+#include <functional>
 #include <QGroupBox>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -885,6 +886,78 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         });
         return qMakePair(openAction, saveAction);
     };
+    // EMU Black V3: nine documented 3D-table toolbar actions.
+    // Graph is a separate MDI window; split commands tile the table and graph.
+    auto installEcumasterToolbar = [this, workspace](QVBoxLayout *layout, QWidget *page,
+        QTableWidget *table, const QPair<QAction *, QAction *> &files,
+        QMdiSubWindow *graph, const QString &name) {
+        auto *bar = new QHBoxLayout();
+        bar->setSpacing(2);
+        auto add = [bar, page](const QString &label, const QString &tip, const std::function<void()> &fn) {
+            auto *button = new QToolButton(page);
+            button->setText(label);
+            button->setToolTip(tip);
+            button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+            button->setAutoRaise(true);
+            QObject::connect(button, &QToolButton::clicked, page, [fn]() { fn(); });
+            bar->addWidget(button);
+            return button;
+        };
+        add(tr("Open"), tr("Open 3D table (offline)"), [files]() { files.first->trigger(); });
+        add(tr("Save"), tr("Save 3D table (offline)"), [files]() { files.second->trigger(); });
+        add(tr("Table"), tr("Only 3D table"), [graph]() { graph->hide(); });
+        add(tr("Graph"), tr("Only 3D graph"), [graph, workspace]() {
+            graph->showNormal(); if (graph->widget()) graph->widget()->show();
+            workspace->setActiveSubWindow(graph);
+        });
+        auto split = [graph, workspace, page](bool vertical) {
+            auto *tableWindow = qobject_cast<QMdiSubWindow *>(page->parentWidget());
+            if (!tableWindow) return;
+            const QSize area = workspace->viewport()->size();
+            if (vertical) {
+                const int half = (std::max)(180, area.height() / 2);
+                tableWindow->showNormal(); tableWindow->setGeometry(0, 0, area.width(), half);
+                graph->showNormal(); graph->setGeometry(0, half, area.width(), area.height() - half);
+            } else {
+                const int half = (std::max)(280, area.width() / 2);
+                tableWindow->showNormal(); tableWindow->setGeometry(0, 0, half, area.height());
+                graph->showNormal(); graph->setGeometry(half, 0, area.width() - half, area.height());
+            }
+            if (graph->widget()) graph->widget()->show();
+            tableWindow->raise();
+        };
+        add(tr("Split V"), tr("Split vertically: table above graph"), [split]() { split(true); });
+        add(tr("Split H"), tr("Split horizontally: table beside graph"), [split]() { split(false); });
+        auto *follow = add(tr("Follow"), tr("Follow cursor (F)"), []() {});
+        follow->setCheckable(true);
+        follow->setChecked(true);
+        // Live operating-point tracking is already managed by LiveMapTable.
+        auto *modify = add(tr("Auto above"), tr("Automodify above (D)"), []() {});
+        modify->setCheckable(true);
+        QObject::connect(table, &QTableWidget::itemChanged, page, [table, modify](QTableWidgetItem *item) {
+            if (!modify->isChecked() || !item) return;
+            bool ok = false;
+            const double value = item->text().toDouble(&ok);
+            if (!ok || !std::isfinite(value)) return;
+            QSignalBlocker block(table);
+            for (int row = item->row() - 1; row >= 0; --row) {
+                auto *above = table->item(row, item->column());
+                if (!above) continue;
+                bool valid = false;
+                const double old = above->text().toDouble(&valid);
+                if (valid && old < value) above->setText(item->text());
+            }
+        });
+        add(tr("?"), tr("Help: 3D table"), [this, name]() {
+            QMessageBox::information(this, tr("3D table help"),
+                tr("%1\\nOpen/Save: offline map files. Table/Graph: switch views. "
+                   "Split V/H: arrange table and graph. Follow: ECU operating-point cursor. "
+                   "Auto above: raise lower values above the edited cell. "
+                   "Right-click cells for interpolation and editing.").arg(name));
+        });
+        bar->addStretch();
+        layout->insertLayout(0, bar);
+    };
     auto *maps = new LiveMapTable(fuelPage);
     maps->setAlternatingRowColors(true);
     maps->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -904,20 +977,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelActionsLayout->insertStretch(2, 1);
     installTableEditControls(fuelActionsLayout, maps, false);
     const auto fuelFileActions = installMapFileActions(maps, QStringLiteral("fuel"), fuelRpmBins, fuelMapBins, 255.0);
-    // Ecumaster 3D toolbar: offline Open/Save; ECU Read/Write remain separate.
-    auto *fuelFileActionsBar = new QHBoxLayout();
-    auto *fuelFileActionsOpen = new QToolButton(fuelPage);
-    fuelFileActionsOpen->setDefaultAction(fuelFileActions.first);
-    fuelFileActionsOpen->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    fuelFileActions.first->setText(tr("Open 3D table"));
-    auto *fuelFileActionsSave = new QToolButton(fuelPage);
-    fuelFileActionsSave->setDefaultAction(fuelFileActions.second);
-    fuelFileActionsSave->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    fuelFileActions.second->setText(tr("Save 3D table"));
-    fuelFileActionsBar->addWidget(fuelFileActionsOpen);
-    fuelFileActionsBar->addWidget(fuelFileActionsSave);
-    fuelFileActionsBar->addStretch();
-    fuelLayout->insertLayout(0, fuelFileActionsBar);
     maps->setCornerButtonEnabled(false);
     maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -993,6 +1052,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelGraphSubWindow->move(35, 45);
     // Reopening a closed MDI subwindow must also re-show its contained graph widget.
     // Qt can leave the child hidden after a QMdiSubWindow close/show cycle.
+    installEcumasterToolbar(fuelLayout, fuelPage, maps, fuelFileActions, fuelGraphSubWindow, tr("Fuel Table"));
     fuelLayout->addLayout(fuelWorkspace);
     
     tabs->addTab(fuelPage, tr("Fuel Table"));
@@ -1022,20 +1082,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionActionsLayout->insertStretch(2, 1);
     installTableEditControls(ignitionActionsLayout, ignitionMap, false);
     const auto ignitionFileActions = installMapFileActions(ignitionMap, QStringLiteral("ignition"), ignitionRpmBins, ignitionMapBins, 90.0);
-    // Ecumaster 3D toolbar: offline Open/Save; ECU Read/Write remain separate.
-    auto *ignitionFileActionsBar = new QHBoxLayout();
-    auto *ignitionFileActionsOpen = new QToolButton(ignitionPage);
-    ignitionFileActionsOpen->setDefaultAction(ignitionFileActions.first);
-    ignitionFileActionsOpen->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    ignitionFileActions.first->setText(tr("Open 3D table"));
-    auto *ignitionFileActionsSave = new QToolButton(ignitionPage);
-    ignitionFileActionsSave->setDefaultAction(ignitionFileActions.second);
-    ignitionFileActionsSave->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    ignitionFileActions.second->setText(tr("Save 3D table"));
-    ignitionFileActionsBar->addWidget(ignitionFileActionsOpen);
-    ignitionFileActionsBar->addWidget(ignitionFileActionsSave);
-    ignitionFileActionsBar->addStretch();
-    ignitionLayout->insertLayout(0, ignitionFileActionsBar);
     ignitionMap->setCornerButtonEnabled(false);
     ignitionMap->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     ignitionMap->verticalHeader()->setToolTip(tr("MAP (kPa)"));
@@ -1110,6 +1156,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     *ignitionGraphWindow = ignitionGraphSubWindow;
     boundsGuard->watch(ignitionGraphSubWindow);
     ignitionGraphSubWindow->move(75, 85);
+    installEcumasterToolbar(ignitionLayout, ignitionPage, ignitionMap, ignitionFileActions, ignitionGraphSubWindow, tr("Ignition Table"));
     ignitionLayout->addLayout(ignitionWorkspace, 1);
     tabs->addTab(ignitionPage, tr("Ignition Table"));
     // AFR Target is an editable OFFLINE template only. Firmware page storage is not
@@ -1141,20 +1188,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     installTableEditControls(afrEditBar, afrMap, true);
     // Context menu owns the editing actions; no right-side editing buttons.
     const auto afrFileActions = installMapFileActions(afrMap, QStringLiteral("afr"), afrRpmBins, afrMapBins, 25.0);
-    // Ecumaster 3D toolbar: offline Open/Save; ECU Read/Write remain separate.
-    auto *afrFileActionsBar = new QHBoxLayout();
-    auto *afrFileActionsOpen = new QToolButton(afrPage);
-    afrFileActionsOpen->setDefaultAction(afrFileActions.first);
-    afrFileActionsOpen->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    afrFileActions.first->setText(tr("Open 3D table"));
-    auto *afrFileActionsSave = new QToolButton(afrPage);
-    afrFileActionsSave->setDefaultAction(afrFileActions.second);
-    afrFileActionsSave->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    afrFileActions.second->setText(tr("Save 3D table"));
-    afrFileActionsBar->addWidget(afrFileActionsOpen);
-    afrFileActionsBar->addWidget(afrFileActionsSave);
-    afrFileActionsBar->addStretch();
-    afrLayout->insertLayout(0, afrFileActionsBar);
     auto *afrGridPanel = new QWidget(afrPage);
     auto *afrGridLayout = new QVBoxLayout(afrGridPanel);
     afrGridLayout->setContentsMargins(0, 0, 0, 0);
@@ -1193,6 +1226,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrRpmLabel->setAlignment(Qt::AlignHCenter);
     afrRpmLabel->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     afrGridLayout->addWidget(afrRpmLabel);
+    auto *afrSurface = new MapSurfacePreview(afrMap, afrPage);
+    auto *afrGraphWindow = workspace->addSubWindow(afrSurface);
+    afrGraphWindow->setWindowTitle(tr("AFR Target | 3D Graph"));
+    afrGraphWindow->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
+        Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
+    afrGraphWindow->setAttribute(Qt::WA_DeleteOnClose, false);
+    afrGraphWindow->resize(450, 420);
+    boundsGuard->watch(afrGraphWindow);
+    afrGraphWindow->hide();
+    installEcumasterToolbar(afrLayout, afrPage, afrMap, afrFileActions, afrGraphWindow, tr("AFR Target"));
     afrLayout->addWidget(afrGridPanel, 1);
     auto *afrFoot = new QLabel(tr("RPM (columns) / MAP kPa (rows). AFR assumes gasoline stoichiometric 14.7. No ECU AFR table protocol exists yet."), afrPage);
     afrFoot->setWordWrap(true);
