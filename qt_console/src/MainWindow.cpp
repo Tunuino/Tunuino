@@ -919,17 +919,25 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         auto split = [graph, workspace, page](bool vertical) {
             auto *tableWindow = qobject_cast<QMdiSubWindow *>(page->parentWidget());
             if (!tableWindow) return;
-            const QSize area = workspace->viewport()->size();
-            if (vertical) {
-                const int half = (std::max)(180, area.height() / 2);
-                tableWindow->showNormal(); tableWindow->setGeometry(0, 0, area.width(), half);
-                graph->showNormal(); graph->setGeometry(0, half, area.width(), area.height() - half);
-            } else {
-                const int half = (std::max)(280, area.width() / 2);
-                tableWindow->showNormal(); tableWindow->setGeometry(0, 0, half, area.height());
-                graph->showNormal(); graph->setGeometry(half, 0, area.width() - half, area.height());
-            }
+            tableWindow->showNormal();
+            graph->showNormal();
             if (graph->widget()) graph->widget()->show();
+            const QSize area = workspace->viewport()->size();
+            const int availableWidth = (std::max)(1, area.width() - 8);
+            const int availableHeight = (std::max)(1, area.height() - 8);
+            if (vertical) {
+                const int tableHeight = (std::max)(1, availableHeight * 3 / 5);
+                tableWindow->setGeometry(0, 0, availableWidth, tableHeight);
+                graph->setGeometry(0, tableHeight, availableWidth,
+                                   (std::max)(1, availableHeight - tableHeight));
+            } else {
+                // A 16-column calibration grid needs more width than the 3D preview.
+                // Equal halves cause clipped cells and RPM breakpoints.
+                const int tableWidth = (std::max)(1, availableWidth * 3 / 5);
+                tableWindow->setGeometry(0, 0, tableWidth, availableHeight);
+                graph->setGeometry(tableWidth, 0,
+                                   (std::max)(1, availableWidth - tableWidth), availableHeight);
+            }
             tableWindow->raise();
         };
         add(QStyle::SP_TitleBarNormalButton, tr("Split vertically: table above graph"), [split]() { split(true); });
@@ -992,7 +1000,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
     maps->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    maps->setMinimumSize(480, 420);
+    maps->setMinimumSize(320, 280);
     auto *fuelGridPanel = new QWidget(fuelPage);
     auto *fuelGridLayout = new QVBoxLayout(fuelGridPanel);
     fuelGridLayout->setContentsMargins(0, 0, 0, 0);
@@ -1099,7 +1107,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // Keep the ignition grid resizable inside its workspace window.
     // A fixed 16-column pixel width previously prevented the user from resizing it.
     ignitionMap->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    ignitionMap->setMinimumSize(480, 420);
+    ignitionMap->setMinimumSize(320, 280);
     auto *ignitionGridPanel = new QWidget(ignitionPage);
     auto *ignitionGridLayout = new QVBoxLayout(ignitionGridPanel);
     ignitionGridLayout->setContentsMargins(0, 0, 0, 0);
@@ -1183,7 +1191,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrMap->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
     afrMap->setAlternatingRowColors(true);
     afrMap->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    afrMap->setMinimumSize(480, 420);
+    afrMap->setMinimumSize(320, 280);
 
     QStringList rpmHeaders, loadHeaders;
     for (int i = 0; i < 16; ++i) {
