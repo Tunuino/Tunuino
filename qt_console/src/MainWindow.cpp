@@ -572,7 +572,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto installMapHeatmap = [this](QTableWidget *table) {
         // Improve numeric readability without changing window geometry or cell sizes.
         QFont valueFont = table->font();
-        valueFont.setPointSize(11);
+        valueFont.setPointSize(9);
         valueFont.setWeight(QFont::Bold);
         table->setFont(valueFont);
         const auto recolor = [table]() {
@@ -984,8 +984,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->setCornerButtonEnabled(false);
     maps->setToolTip(tr("Tunuino offline base map. Validate before use on a real engine."));
     maps->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    maps->horizontalHeader()->setDefaultSectionSize(62);
-    maps->horizontalHeader()->setMinimumSectionSize(48);
+    maps->horizontalHeader()->setDefaultSectionSize(38);
+    maps->horizontalHeader()->setMinimumSectionSize(18);
+    maps->verticalHeader()->setMinimumSectionSize(16);
+    maps->horizontalHeader()->setMinimumSectionSize(18);
     maps->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     maps->verticalHeader()->setDefaultSectionSize(28);
     maps->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
@@ -1000,7 +1002,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->horizontalHeader()->setToolTip(tr("RPM (rev/min)"));
     maps->verticalHeader()->setToolTip(tr("MAP (kPa)"));
     maps->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    maps->setMinimumSize(320, 280);
+    maps->setMinimumSize(220, 180);
     auto *fuelGridPanel = new QWidget(fuelPage);
     auto *fuelGridLayout = new QVBoxLayout(fuelGridPanel);
     fuelGridLayout->setContentsMargins(0, 0, 0, 0);
@@ -1011,7 +1013,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelAxisRow->addWidget(maps, 1);
     auto *fuelRpmAxis = new QLabel(tr("M\nA\nP\n\nk\nP\na"), fuelGridPanel);
     fuelRpmAxis->setAlignment(Qt::AlignCenter);
-    fuelRpmAxis->setFixedWidth(34);
+    fuelRpmAxis->setFixedWidth(24);
     fuelRpmAxis->setWordWrap(false);
     fuelRpmAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     fuelAxisRow->insertWidget(0, fuelRpmAxis, 0, Qt::AlignVCenter);
@@ -1091,7 +1093,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionActions->hide();
     auto *ignitionMap = new LiveMapTable(ignitionPage);
     ignitionMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    ignitionMap->horizontalHeader()->setDefaultSectionSize(62);
+    ignitionMap->horizontalHeader()->setDefaultSectionSize(38);
+    ignitionMap->horizontalHeader()->setMinimumSectionSize(18);
+    ignitionMap->verticalHeader()->setMinimumSectionSize(16);
     ignitionMap->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     ignitionMap->verticalHeader()->setDefaultSectionSize(28);
     ignitionMap->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
@@ -1107,7 +1111,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // Keep the ignition grid resizable inside its workspace window.
     // A fixed 16-column pixel width previously prevented the user from resizing it.
     ignitionMap->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    ignitionMap->setMinimumSize(320, 280);
+    ignitionMap->setMinimumSize(220, 180);
     auto *ignitionGridPanel = new QWidget(ignitionPage);
     auto *ignitionGridLayout = new QVBoxLayout(ignitionGridPanel);
     ignitionGridLayout->setContentsMargins(0, 0, 0, 0);
@@ -1118,7 +1122,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionAxisRow->addWidget(ignitionMap, 1);
     auto *ignitionRpmAxis = new QLabel(tr("M\nA\nP\n\nk\nP\na"), ignitionGridPanel);
     ignitionRpmAxis->setAlignment(Qt::AlignCenter);
-    ignitionRpmAxis->setFixedWidth(34);
+    ignitionRpmAxis->setFixedWidth(24);
     ignitionRpmAxis->setWordWrap(false);
     ignitionRpmAxis->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     ignitionAxisRow->insertWidget(0, ignitionRpmAxis, 0, Qt::AlignVCenter);
@@ -1185,13 +1189,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // Title is displayed by the MDI window.
     auto *afrMap = new LiveMapTable(afrPage);
     afrMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    afrMap->horizontalHeader()->setDefaultSectionSize(62);
+    afrMap->horizontalHeader()->setDefaultSectionSize(38);
+    afrMap->horizontalHeader()->setMinimumSectionSize(18);
+    afrMap->verticalHeader()->setMinimumSectionSize(16);
     afrMap->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     afrMap->verticalHeader()->setDefaultSectionSize(28);
     afrMap->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
     afrMap->setAlternatingRowColors(true);
     afrMap->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    afrMap->setMinimumSize(320, 280);
+    afrMap->setMinimumSize(220, 180);
 
     QStringList rpmHeaders, loadHeaders;
     for (int i = 0; i < 16; ++i) {
@@ -1215,7 +1221,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrAxisRow->setSpacing(5);
     auto *afrMapAxisLabel = new QLabel(tr("M\nA\nP\n\nk\nP\na"), afrGridPanel);
     afrMapAxisLabel->setAlignment(Qt::AlignCenter);
-    afrMapAxisLabel->setFixedWidth(34);
+    afrMapAxisLabel->setFixedWidth(24);
     afrMapAxisLabel->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     afrAxisRow->addWidget(afrMapAxisLabel, 0, Qt::AlignVCenter);
     afrAxisRow->addWidget(afrMap, 1);
