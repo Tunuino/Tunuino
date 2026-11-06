@@ -95,6 +95,7 @@
 #include "ecu/EcuPowerState.h"
 #include "ecu/MapWriteTransaction.h"
 #include "protocol/MapPageCodec.h"
+#include "calibration/SensorCalibrationWidget.h"
 #include <QDateTime>
 #include <QUuid>
 #include <QCloseEvent>
@@ -526,7 +527,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *inspectorDescription = new QLabel(inspectorBody);
     inspectorDescription->setWordWrap(true);
     inspectorLayout->addWidget(inspectorDescription);
-    auto *inspectorSafety = new QLabel(tr("Fuel and Ignition writes require a fresh ECU read, stopped engine and disarmed outputs."), inspectorBody);
+    auto *inspectorSafety = new QLabel(tr("Calibration writes require a fresh ECU read, stopped engine and disarmed outputs."), inspectorBody);
     inspectorSafety->setWordWrap(true);
     inspectorSafety->setStyleSheet(QStringLiteral("color: #b8b8b8;"));
     inspectorLayout->addWidget(inspectorSafety);
@@ -2151,6 +2152,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         {"Engine Control", {"Idle Control", "Boost Control", "Launch Control", "ETB / Drive by Wire", nullptr}},
         {"Input / Output", {"Inputs", "Outputs", nullptr}}
     };
+    auto sensorPanels=QSharedPointer<QVector<tunuino::SensorCalibrationWidget*>>::create();
     QPushButton *tpsReadButton = nullptr;
     QLabel *tpsReadStatus = nullptr;
     for (const auto &category : categories) {
@@ -2165,147 +2167,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             auto *info = new QLabel(tr("Configuration preview only. ECU read/write and automatic calibration are not connected."), page);
             info->setWordWrap(true);
             form->addRow(info);
-            if (QString::fromLatin1(name) == QStringLiteral("TPS")) {
-                auto *minVoltage = new QDoubleSpinBox(page);
-                auto *maxVoltage = new QDoubleSpinBox(page);
-                for (auto *spin : {minVoltage, maxVoltage}) {
-                    spin->setRange(0.0, 5.0);
-                    spin->setDecimals(3);
-                    spin->setSuffix(tr(" V"));
-                }
-                maxVoltage->setValue(5.0);
-                form->addRow(tr("Closed throttle reference"), minVoltage);
-                form->addRow(tr("Wide open throttle reference"), maxVoltage);
-                auto *rangeStatus = new QLabel(tr("Reference values only — no sensor measurement"), page);
-                form->addRow(rangeStatus);
-                auto validate = [minVoltage, maxVoltage, rangeStatus]() {
-                    const bool valid = maxVoltage->value() - minVoltage->value() >= 0.2;
-                    rangeStatus->setText(valid ? QObject::tr("Valid reference range (not calibrated)") : QObject::tr("Invalid: open throttle must exceed closed throttle by 0.2 V"));
-                    rangeStatus->setStyleSheet(valid ? QString() : QStringLiteral("color: #c0392b;"));
-                };
-                connect(minVoltage, QOverload<double>::of(&QDoubleSpinBox::valueChanged), page, [validate](double) { validate(); });
-                connect(maxVoltage, QOverload<double>::of(&QDoubleSpinBox::valueChanged), page, [validate](double) { validate(); });
-                validate();
-                auto *calibrate = new QPushButton(tr("Auto Calibrate (not connected)"), page);
-                calibrate->setEnabled(false);
-                form->addRow(calibrate);
-                auto *readsaveTps = new QPushButton(tr("Read from ECU"), page);
-                tpsReadButton = readsaveTps;
-                tpsReadStatus = info;
-                readsaveTps->setEnabled(false);
-                readsaveTps->setToolTip(tr("Requires validated ECU configuration read protocol."));
-    // Automatic ECU synchronization replaces the per-page read control.
-                auto *saveTps = new QPushButton(tr("Write to ECU"), page);
-                saveTps->setEnabled(false);
-                saveTps->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
-                form->addRow(saveTps);
-                // ECU write action is deliberately unavailable until the persistent
-                // configuration protocol has been implemented and validated.
+            const QString sensorName=QString::fromLatin1(name);
+            if(sensorName==QStringLiteral("TPS")||sensorName==QStringLiteral("MAP")||sensorName==QStringLiteral("CLT")||sensorName==QStringLiteral("Lambda")){
+                const auto kind=sensorName==QStringLiteral("TPS")?tunuino::SensorKind::Tps:sensorName==QStringLiteral("MAP")?tunuino::SensorKind::Map:
+                    sensorName==QStringLiteral("CLT")?tunuino::SensorKind::Clt:tunuino::SensorKind::Lambda;
+                info->hide();auto *sensor=new tunuino::SensorCalibrationWidget(kind,page);sensorPanels->append(sensor);form->addRow(sensor);
+                pages->addWidget(page);item->setData(0,Qt::UserRole,pages->count()-1);continue;
             }
-            if (QString::fromLatin1(name) == QStringLiteral("Lambda")) {
-                auto *brand = new QComboBox(page);
-                brand->addItems({tr("Select wideband manufacturer"), "AEM", "Innovate Motorsports", "14point7", "PLX Devices", tr("Other / Custom")});
-                auto *model = new QComboBox(page);
-                auto *input = new QComboBox(page);
-                input->addItem(tr("Select analog input"));
-                for (int i = 1; i <= 8; ++i) input->addItem(tr("Analog Input %1").arg(i));
-                auto *vLow = new QDoubleSpinBox(page);
-                auto *vHigh = new QDoubleSpinBox(page);
-                auto *afrLow = new QDoubleSpinBox(page);
-                auto *afrHigh = new QDoubleSpinBox(page);
-                for (auto *v : {vLow, vHigh}) { v->setRange(0, 5); v->setDecimals(3); v->setSuffix(" V"); }
-                for (auto *a : {afrLow, afrHigh}) { a->setRange(5, 30); a->setDecimals(2); a->setSuffix(" AFR"); }
-                auto *note = new QLabel(page);
-                note->setWordWrap(true);
-                auto *curveStatus = new QLabel(tr("Calibration: not configured"), page);
-                curveStatus->setWordWrap(true);
-                form->addRow(tr("Wideband manufacturer"), brand);
-                form->addRow(tr("Controller / model"), model);
-                form->addRow(tr("ECU input"), input);
-                form->addRow(tr("Voltage at first calibration point"), vLow);
-                form->addRow(tr("AFR at first calibration point"), afrLow);
-                form->addRow(tr("Voltage at second calibration point"), vHigh);
-                form->addRow(tr("AFR at second calibration point"), afrHigh);
-                form->addRow(note);
-                form->addRow(tr("Calibration status"), curveStatus);
-                auto update = [=]() {
-                    const bool custom = brand->currentIndex() == brand->count() - 1;
-                    const bool aem = brand->currentIndex() == 1 && model->currentIndex() == 0;
-                    const bool lc2 = brand->currentIndex() == 2 && model->currentIndex() == 0;
-                    const bool spartan2 = brand->currentIndex() == 3 && model->currentIndex() == 0;
-                    const bool spartan3v2 = brand->currentIndex() == 3 && model->currentIndex() == 1;
-                    const bool plxGen2 = brand->currentIndex() == 4 && model->currentIndex() == 0;
-                    for (auto *field : {vLow, vHigh, afrLow, afrHigh})
-                        field->setEnabled(custom);
-                    if (aem) {
-                        vLow->setValue(0.5); afrLow->setValue(8.5);
-                        vHigh->setValue(4.5); afrHigh->setValue(18.0);
-                        note->setText(tr("Verified AEM 30-0300: AFR = 2.3750 * V + 7.3125. Below 0.50 V = not ready; above 4.50 V = sensor error. Check exact part number. Source: documents.aemelectronics.com/techlibrary_30-0300.pdf"));
-                    } else if (lc2) {
-                        vLow->setValue(0.0); afrLow->setValue(7.35);
-                        vHigh->setValue(5.0); afrHigh->setValue(22.39);
-                        note->setText(tr("Verified Innovate LC-2 factory Analog Output 1 (yellow), gasoline AFR: 0 V = 7.35, 5 V = 22.39. Programmable outputs may differ. Source: innovatemotorsports.com LC-2 manual."));
-                    } else if (spartan2 || spartan3v2 || plxGen2) {
-                        vLow->setValue(0.0); afrLow->setValue(10.0);
-                        vHigh->setValue(5.0); afrHigh->setValue(20.0);
-                        note->setText(spartan2
-                            ? tr("14point7 Spartan 2 green linear output: 0–5 V = 10–20 gasoline AFR. Startup 1.66 V / 3.33 V are calibration signals, not live AFR. Confirm hardware revision.")
-                            : spartan3v2
-                            ? tr("14point7 Spartan 3 v2 GREEN high-performance output, factory default: 0–5 V = 0.68–1.36 lambda (approximately 10–20 gasoline AFR). Programmable scaling may differ. Do not use the brown status output.")
-                            : tr("PLX SM-AFR Gen2 wideband analog output: 0–5 V corresponds to approximately 10–20 gasoline AFR. Verify Gen2 hardware; other generations are not covered."));
-                    } else {
-                        note->setText(custom
-                            ? tr("Enter two points from your controller manual. Confirm the configured analog output and AFR fuel reference.")
-                            : tr("No verified analog scaling for this exact model. Do not use another controller's curve."));
-                    }
-                    const bool valid = custom && vLow->value() < vHigh->value() && afrLow->value() != afrHigh->value();
-                    const bool preset = aem || lc2 || spartan2 || spartan3v2 || plxGen2;
-                    curveStatus->setText(preset ? tr("Manufacturer profile loaded for review (not saved)") :
-                        valid ? tr("Custom two-point curve: valid for review (not saved)") : tr("Calibration: not configured / invalid points"));
-                    curveStatus->setStyleSheet(preset || valid ? QStringLiteral("color: #15803d;") : QStringLiteral("color: #b45309;"));
-                };
-                connect(brand, QOverload<int>::of(&QComboBox::currentIndexChanged), page, [=](int) {
-                    model->clear();
-                    if (brand->currentIndex() == 0) model->addItem(tr("Select manufacturer first"));
-                    else if (brand->currentIndex() == 1) model->addItems({"AEM X-Series 30-0300 (verified)", "Other AEM model (unverified)"});
-                    else if (brand->currentIndex() == 2) model->addItems({"Innovate LC-2 Output 1 (verified)", "Other Innovate model/output (unverified)"});
-                    else if (brand->currentIndex() == 3) model->addItems({"14point7 Spartan 2 (linear output)", "14point7 Spartan 3 v2 (factory green output)", "Other Spartan variant (unverified)"});
-                    else if (brand->currentIndex() == 4) model->addItems({"PLX SM-AFR Gen2 (verified analog output)", "Other PLX generation (unverified)"});
-                    else model->addItem(tr("Custom analog output"));
-                    update();
-                });
-                connect(model, QOverload<int>::of(&QComboBox::currentIndexChanged), page, [update](int) { update(); });
-                for (auto *field : {vLow, vHigh, afrLow, afrHigh})
-                    connect(field, QOverload<double>::of(&QDoubleSpinBox::valueChanged), page, [update](double) { update(); });
-                model->addItem(tr("Select manufacturer first"));
-                update();
-                auto *save = new QPushButton(tr("Apply to ECU (not connected)"), page);
-                save->setEnabled(false);
-                form->addRow(save);
-            }
-            if (QString::fromLatin1(name) == QStringLiteral("MAP") ||
-                QString::fromLatin1(name) == QStringLiteral("CLT") ||
-                QString::fromLatin1(name) == QStringLiteral("IAT")) {
-                auto *sensor = new QComboBox(page);
-                sensor->addItems({tr("Select sensor type"), tr("OEM / Manufacturer curve"), tr("Custom calibration")});
-                form->addRow(tr("Sensor profile"), sensor);
-                auto *input = new QComboBox(page);
-                input->addItem(tr("Select input"));
-                for (int i = 1; i <= 8; ++i) input->addItem(tr("Analog Input %1").arg(i));
-                form->addRow(tr("ECU analog input"), input);
-                auto *curve = new QComboBox(page);
-                if (QString::fromLatin1(name) == QStringLiteral("MAP")) {
-                    curve->addItems({tr("Select MAP sensor calibration"), tr("Manufacturer-specific curve"), tr("Custom 2-point voltage / kPa")});
-                } else {
-                    curve->addItems({tr("Select temperature calibration"), tr("Manufacturer thermistor curve"), tr("Custom resistance / temperature table")});
-                }
-                form->addRow(tr("Calibration curve"), curve);
-                auto *help = new QLabel(tr("Choose the exact sensor and calibration curve before applying values to the ECU. No generic transfer curve is assumed."), page);
-                help->setWordWrap(true);
-                form->addRow(help);
-                auto *apply = new QPushButton(tr("Apply to ECU (not connected)"), page);
-                apply->setEnabled(false);
-                form->addRow(apply);
+            if(sensorName==QStringLiteral("IAT")){
+                info->setText(tr("IAT calibration is not connected to this interface yet."));
             }
             if (QString::fromLatin1(name) == QStringLiteral("Idle Control") ||
                 QString::fromLatin1(name) == QStringLiteral("Boost Control") ||
@@ -2776,16 +2646,24 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto ecuGeneration = QSharedPointer<quint32>::create(0);
     struct MapBase { QByteArray bytes, identity; quint32 generation=0; };
     auto mapBases = QSharedPointer<std::array<MapBase,2>>::create();
+    struct SensorBase { QByteArray header,aux,identity;quint32 generation=0; };
+    auto sensorBase=QSharedPointer<SensorBase>::create();
+    auto activeSensorWrite=QSharedPointer<int>::create(-1);
     auto writeActionRef = QSharedPointer<QPointer<QAction>>::create();
     const auto updateWriteAvailability = [=]() {
         const bool ready = *ecuOnline && *ecuClean && *identityVerified && session->isOpen() && !writer->busy() && !*writePending && !*readBusy && !*validationPending;
         const auto &fuelBase=(*mapBases)[0]; const auto &ignitionBase=(*mapBases)[1];
         fuelSave->setEnabled(ready && !fuelBase.bytes.isEmpty() && fuelBase.identity==*ecuIdentity && fuelBase.generation!=0 && fuelBase.generation==*ecuGeneration);
         ignitionSave->setEnabled(ready && !ignitionBase.bytes.isEmpty() && ignitionBase.identity==*ecuIdentity && ignitionBase.generation!=0 && ignitionBase.generation==*ecuGeneration);
+        const bool sensorReady=ready&&sensorBase->header.size()==256&&sensorBase->aux.size()==256
+            &&sensorBase->identity==*ecuIdentity&&sensorBase->generation==*ecuGeneration;
+        bool sensorVisible=false;
+        for(auto *panel:*sensorPanels){panel->setAvailable(sensorReady);sensorVisible|=panel->isVisible();}
         if (*writeActionRef) {
             const auto *window=workspace->activeSubWindow(); const auto *page=window?window->widget():nullptr;
             (*writeActionRef)->setEnabled(((page==fuelPage || page==fuelSurface) && fuelSave->isEnabled())
-                || ((page==ignitionPage || page==ignitionSurface) && ignitionSave->isEnabled()));
+                || ((page==ignitionPage || page==ignitionSurface) && ignitionSave->isEnabled())
+                || (page==calibrationPage&&sensorVisible&&sensorReady));
         }
     };
     auto connectionClock = QSharedPointer<QElapsedTimer>::create();
@@ -2800,6 +2678,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             ? QStringLiteral("color: #76d58a; font-weight: bold; padding: 4px 12px;")
             : QStringLiteral("color: #aaaaaa; font-weight: bold; padding: 4px 12px;"));
         if (!online) {
+            for(auto *panel:*sensorPanels)panel->setAvailable(false);
             graphLog->setConnected(false);
             for (auto *value : *liveReadings) value->setText(tr("Unavailable"));
             maps->clearOperatingPoint();
@@ -2827,7 +2706,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto transfer = QSharedPointer<MapTransfer>::create();
     auto autoSync = QSharedPointer<bool>::create(false);
     auto sendChunk = [session, transfer]() -> bool {
-        const int total = transfer->page == 1 ? 256 : 576;
+        const int total = (transfer->page == 1 || transfer->page == 4) ? 256 : 576;
         if (!transfer->page || transfer->offset >= total) return false;
         const int count = qMin(64, total - transfer->offset);
         QByteArray command(7, char(0));
@@ -2860,6 +2739,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         liveTimer->stop();
         transfer->page = page;
         *readBusy = true;
+        updateWriteAvailability();
         transfer->offset = 0;
         transfer->bytes.clear();
         fuelSave->setEnabled(false); ignitionSave->setEnabled(false);
@@ -2941,13 +2821,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     };
     const auto freezeMapEditing = [=](bool frozen) {
         openProject->setEnabled(!frozen);saveProject->setEnabled(!frozen);
-        fuelPage->setEnabled(!frozen); ignitionPage->setEnabled(!frozen);
+        fuelPage->setEnabled(!frozen); ignitionPage->setEnabled(!frozen);calibrationPage->setEnabled(!frozen);
         for (auto *action : {fuelFileActions.first,fuelFileActions.second,ignitionFileActions.first,ignitionFileActions.second})
             action->setEnabled(!frozen);
     };
     writer->completed = [=](bool success,bool uncertain,const QString &message) {
         *writePending=false; setProperty("mapWriteBusy",false); freezeMapEditing(false);
-        (*mapBases)[0]={}; (*mapBases)[1]={};
+        (*mapBases)[0]={}; (*mapBases)[1]={}; *sensorBase={};
+        if(success&&*activeSensorWrite>=0)for(auto *panel:*sensorPanels)if(int(panel->kind())==*activeSensorWrite)panel->saved();
         statusBar()->showMessage(message,30000);
         if (success) {
             *ecuGeneration=writer->generation(); *ecuClean=true;
@@ -2969,7 +2850,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
         updateWriteAvailability();
     };
-    struct PendingMapWrite { int page=0; QByteArray desired,base,identity; quint32 generation=0; };
+    struct PendingMapWrite { int page=0,sensor=-1; QByteArray desired,base,identity; quint32 generation=0; };
     auto pendingWrite = QSharedPointer<PendingMapWrite>::create();
     auto *writeLaunch = new QTimer(this); writeLaunch->setInterval(25);
     auto writeWait = QSharedPointer<QElapsedTimer>::create();
@@ -2985,7 +2866,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
         if (session->isBusy()) return;
         writeLaunch->stop(); *writePending=false;
-        if (!writer->start(pendingWrite->page,pendingWrite->desired,pendingWrite->base,pendingWrite->identity,pendingWrite->generation)) {
+        const bool started=pendingWrite->sensor>=0?writer->startSensor(tunuino::SensorKind(pendingWrite->sensor),pendingWrite->desired,pendingWrite->base,pendingWrite->identity,pendingWrite->generation):
+            writer->start(pendingWrite->page,pendingWrite->desired,pendingWrite->base,pendingWrite->identity,pendingWrite->generation);
+        if (!started) {
             setProperty("mapWriteBusy",false); freezeMapEditing(false); liveTimer->start();
             validationAction->setEnabled(*ecuOnline);
             fuelRead->setEnabled(*ecuOnline);ignitionRead->setEnabled(*ecuOnline);if(tpsReadButton)tpsReadButton->setEnabled(*ecuOnline);
@@ -3017,6 +2900,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             || *ecuIdentity!=base.identity || *ecuGeneration!=base.generation) {
             statusBar()->showMessage(tr("ECU changed while confirming. Wait for a fresh read before writing."),15000);return;
         }
+        pendingWrite->sensor=-1;*activeSensorWrite=-1;
         pendingWrite->page=page;pendingWrite->desired=desired;pendingWrite->base=base.bytes;
         pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
         *writePending=true;setProperty("mapWriteBusy",true);writeWait->start();liveTimer->stop();validationAction->setEnabled(false);
@@ -3024,6 +2908,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         freezeMapEditing(true);updateWriteAvailability();writeLaunch->start();
         statusBar()->showMessage(tr("Checking ECU and preparing %1 write...").arg(name));
     };
+    for(auto *panel:*sensorPanels)panel->writeRequested=[=](tunuino::SensorKind kind,const QByteArray &desired){
+        if(!*ecuOnline||!*ecuClean||!*identityVerified||!session->isOpen()||transfer->page||*validationPending||writer->busy()||*writePending)return;
+        const auto base=*sensorBase;
+        if(base.header.size()!=256||base.aux.size()!=256||base.identity!=*ecuIdentity||base.generation!=*ecuGeneration)return;
+        const QString name=tunuino::SensorCalibrationCodec::name(kind);
+        if(QMessageBox::question(this,tr("Write sensor to ECU"),tr("Save %1 calibration to the ECU? Engine must be stopped and outputs disarmed. Other calibrations and maps will be preserved.").arg(name),QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel)!=QMessageBox::Yes)return;
+        if(!*ecuOnline||!*identityVerified||!session->isOpen()||transfer->page||*ecuIdentity!=base.identity||*ecuGeneration!=base.generation)return;
+        pendingWrite->sensor=int(kind);*activeSensorWrite=int(kind);pendingWrite->page=tunuino::SensorCalibrationCodec::page(kind);
+        pendingWrite->desired=desired;pendingWrite->base=kind==tunuino::SensorKind::Tps?base.aux:base.header;
+        pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
+        *writePending=true;setProperty("mapWriteBusy",true);writeWait->start();liveTimer->stop();validationAction->setEnabled(false);
+        fuelRead->setEnabled(false);ignitionRead->setEnabled(false);if(tpsReadButton)tpsReadButton->setEnabled(false);
+        freezeMapEditing(true);updateWriteAvailability();writeLaunch->start();
+        statusBar()->showMessage(tr("Checking ECU and preparing %1 calibration...").arg(name));
+    };
+    connect(pages,&QStackedWidget::currentChanged,this,[=](int){updateWriteAvailability();});
     connect(fuelSave,&QPushButton::clicked,this,[=] { queueMapWrite(2); });
     connect(ignitionSave,&QPushButton::clicked,this,[=] { queueMapWrite(3); });
     connect(workspace,&QMdiArea::subWindowActivated,this,[=](QMdiSubWindow*) { updateWriteAvailability(); });
@@ -3122,7 +3022,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *aboutAction = helpMenu->addAction(tr("About Tunuino Console"));
     connect(aboutAction, &QAction::triggered, this, [this]() {
         QMessageBox::about(this, tr("About Tunuino Console"),
-            tr("Tunuino Console — Qt 6\\nMap editing, ECU monitoring and verified Fuel/Ignition map writes."));
+            tr("Tunuino Console — Qt 6\\nMap editing, ECU monitoring and verified map/sensor calibration writes."));
     });
     auto *ecuMenu = menuBar()->addMenu(tr("ECU"));
     auto *writeActiveMap=ecuMenu->addAction(tr("Write to ECU"));
@@ -3132,6 +3032,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const auto *window=workspace->activeSubWindow();const auto *page=window?window->widget():nullptr;
         if(page==fuelPage || page==fuelSurface)fuelSave->click();
         else if(page==ignitionPage || page==ignitionSurface)ignitionSave->click();
+        else if(page==calibrationPage)for(auto *panel:*sensorPanels)if(panel->isVisible()){panel->save();break;}
     });
 
     auto *settingsMenu = menuBar()->addMenu(tr("Settings"));
@@ -3199,7 +3100,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         setProperty("ecuTransportOpen", connected);
         if (!connected) {
             *writePending=false; *readBusy=false; setProperty("mapWriteBusy",false); freezeMapEditing(false);
-            (*mapBases)[0]={}; (*mapBases)[1]={}; *ecuGeneration=0; *ecuClean=false;
+            (*mapBases)[0]={}; (*mapBases)[1]={}; *sensorBase={}; *ecuGeneration=0; *ecuClean=false;
             writer->transportFailed(tr("ECU disconnected during map write."));
             setConnectionIndicator(false);
             powerState->reset();
@@ -3247,7 +3148,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             return;
         }
         if (transfer->page) {
-            const int total = transfer->page == 1 ? 256 : 576;
+            const int total = (transfer->page == 1 || transfer->page == 4) ? 256 : 576;
             const int count = qMin(64, total - transfer->offset);
             if (data.size() != count + 1 || quint8(data[0]) != 0) {
                 abortTransfer(tr("Invalid map response; table not updated"));
@@ -3268,21 +3169,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     | quint16(quint8(transfer->bytes[offset + 1]));
             };
             if (transfer->page == 1) {
-                const bool schemaValid = u16(0) != 0;
-                if (tpsReadStatus) {
-                    tpsReadStatus->setText(schemaValid
-                        ? tr("ECU configuration page read successfully (schema %1). TPS closed/open calibration is not yet represented in firmware; reference fields remain local and unchanged.").arg(u16(0))
-                        : tr("ECU configuration schema invalid. TPS references unchanged."));
-                }
-                if (schemaValid && *autoSync) {
-                    transfer->page = 0;
-                    transfer->offset = 0;
-                    transfer->bytes.clear();
-                    QTimer::singleShot(0, this, [=]() { startTransfer(2); });
-                } else {
-                    abortTransfer(schemaValid ? tr("ECU configuration read (read-only)") : tr("Invalid ECU configuration schema"));
-                }
+                const bool schemaValid=u16(0)==2;
+                if(schemaValid)sensorBase->header=transfer->bytes;
+                if(schemaValid&&*autoSync){transfer->page=0;transfer->offset=0;transfer->bytes.clear();QTimer::singleShot(0,this,[=]{startTransfer(2);});}
+                else abortTransfer(schemaValid?tr("Configuration page read"):tr("Unsupported ECU calibration schema"));
                 return;
+            }
+            if(transfer->page==4){
+                sensorBase->aux=transfer->bytes;sensorBase->identity=*ecuIdentity;sensorBase->generation=*ecuGeneration;
+                if(sensorBase->header.size()==256)for(auto *panel:*sensorPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);
+                abortTransfer(tr("ECU synchronized: Fuel, Ignition and sensor calibrations."));return;
             }
             bool valid = true;
             for (int i = 0; i < 16; ++i) {
@@ -3319,11 +3215,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     table->item(15 - row, col)->setText(QString::number(qint16(u16(64 + 2 * (row * 16 + col))) / 100.0, 'f', 2));
             // Force the independent 3D view to repaint after the complete ECU map arrives.
             (page == 2 ? fuelSurface : ignitionSurface)->update();
-            if (*autoSync && page == 2) {
+            if (*autoSync && (page == 2 || page == 3)) {
                 transfer->page = 0;
                 transfer->offset = 0;
                 transfer->bytes.clear();
-                QTimer::singleShot(0, this, [=]() { startTransfer(3); });
+                QTimer::singleShot(0, this, [=]() { startTransfer(page+1); });
             } else {
                 const bool completed = *autoSync && page == 3;
                 abortTransfer(completed
@@ -3370,7 +3266,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             }
             if (*ecuClean && !previouslyClean) connectionStatus_->setText(tr("Online | ECU connected"));
             if (!*ecuClean) {
-                (*mapBases)[0]={}; (*mapBases)[1]={};
+                (*mapBases)[0]={}; (*mapBases)[1]={};*sensorBase={};
                 connectionStatus_->setText(tr("Online | Temporary ECU changes; reset ECU before writing"));
             }
             const auto u32 = [&data](int at) -> quint32 {
@@ -3392,21 +3288,26 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             setReading(2, mask & 2, QString::number(u32(1 + 44) / 1000.0, 'f', 1) + QStringLiteral(" kPa"));
             setReading(3, mask & 4, QString::number(u32(1 + 48) / 1000000.0, 'f', 3));
             setReading(4, mask & 8, QString::number(qint32(u32(1 + 52)) / 1000.0, 'f', 1) + QStringLiteral(" C"));
-            // The current runtime protocol has no calibrated TPS, IAT or battery fields.
+            // TPS uses the stored calibration and the real selected ADC input. IAT and battery remain unavailable.
             // Never manufacture these readings from unrelated raw ADC channels.
-            setReading(1, false, QString());
+            double calibratedTps=0;
+            const bool tpsValid=sensorBase->generation==*ecuGeneration&&sensorBase->identity==*ecuIdentity
+                &&tunuino::SensorCalibrationCodec::tpsPercent(sensorBase->aux,data,calibratedTps);
+            setReading(1,tpsValid,QString::number(calibratedTps,'f',2)+QStringLiteral(" %"));
             setReading(5, false, QString());
             setReading(6, false, QString());
             std::array<double, tunuino::LogChannelCount> logValues;
             logValues.fill(std::numeric_limits<double>::quiet_NaN());
             if ((mask & 1) || stoppedEngine) logValues[0] = rpmMilli / 1000.0;
+            if(tpsValid)logValues[1]=calibratedTps;
             if (mask & 2) logValues[2] = u32(1 + 44) / 1000.0;
             if (mask & 4) logValues[3] = u32(1 + 48) / 1000000.0;
             if (mask & 8) logValues[4] = qint32(u32(1 + 52)) / 1000.0;
             graphLog->setConnected(true);
             graphLog->appendRuntime(logValues);
+            for(auto *panel:*sensorPanels)panel->updateRaw(data);
             if (*ecuClean && previousGeneration && (previousGeneration!=*ecuGeneration || !previouslyClean || *autoSync) && !transfer->page && !*writePending) {
-                (*mapBases)[0]={}; (*mapBases)[1]={}; *autoSync=true;
+                (*mapBases)[0]={}; (*mapBases)[1]={}; *sensorBase={}; *autoSync=true;
                 QTimer::singleShot(0,this,[=] { startTransfer(1); });
             }
             if (!transfer->page) updateWriteAvailability();

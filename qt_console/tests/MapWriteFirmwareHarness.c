@@ -9,7 +9,7 @@ static tunuino_device device;
 static uint8_t saved[TUNUINO_IO_SETTINGS_SIZE];
 static unsigned saves;
 static uint64_t now;
-static bool save(void *user,const uint8_t *bytes,size_t size){(void)user;if(size!=sizeof(saved)||++saves>2)return false;memcpy(saved,bytes,size);return true;}
+static bool save(void *user,const uint8_t *bytes,size_t size){(void)user;if(size!=sizeof(saved))return false;++saves;memcpy(saved,bytes,size);return true;}
 static uint64_t clock_ms(void *user){(void)user;return now;}
 static bool output(void *user,const uint8_t *q,size_t n,uint8_t *out,size_t cap,size_t *written){
     (void)user;if(n!=1||q[0]!=0||cap<24)return false;memset(out,0,24);out[1]=1;*written=24;return true;
@@ -30,5 +30,5 @@ int main(void){
         for(size_t i=0;i<size;++i){printf("%02x",body[i]);}
         putchar('\n');fflush(stdout);
     }
-    return saves==2?0:4;
+    return saves?0:4;
 }

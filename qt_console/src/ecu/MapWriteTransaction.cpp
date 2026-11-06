@@ -27,9 +27,18 @@ quint32 MapWriteTransaction::crc32(const QByteArray &bytes) {
 }
 bool MapWriteTransaction::start(int page,const QByteArray &desired,const QByteArray &baseMap,
     const QByteArray &identity,quint32 generation) {
+    if(busy() || !MapPageCodec::valid(page,desired) || !MapPageCodec::valid(page,baseMap))return false;
+    sensor_=-1;return begin(page,desired,baseMap,identity,generation);
+}
+bool MapWriteTransaction::startSensor(SensorKind kind,const QByteArray &desired,const QByteArray &base,
+    const QByteArray &identity,quint32 generation) {
+    if(busy() || int(kind)<0 || int(kind)>3 || desired.size()!=256 || base.size()!=256)return false;
+    sensor_=int(kind);return begin(SensorCalibrationCodec::page(kind),desired,base,identity,generation);
+}
+bool MapWriteTransaction::begin(int page,const QByteArray &desired,const QByteArray &baseMap,
+    const QByteArray &identity,quint32 generation) {
     if(busy() || !send || !savePrevious || !completed || generation==0
-        || !EcuPowerState::supportedIdentity(identity) || !(quint8(identity[19])&8) || !MapPageCodec::valid(page,desired)
-        || !MapPageCodec::valid(page,baseMap))return false;
+        || !EcuPowerState::supportedIdentity(identity) || !(quint8(identity[19])&8))return false;
     page_=page;desired_=desired;baseMap_=baseMap;identity_=identity;generation_=resultGeneration_=generation;
     burnRequested_=writeRequested_=identityMatched_=false;base_={};expected_={};read_={};
     issue(Phase::Identity,QByteArray("TUNUINO?"));return true;
@@ -51,7 +60,7 @@ void MapWriteTransaction::transportFailed(const QString &reason){if(busy())fail(
 bool MapWriteTransaction::validation(const QByteArray &b,bool dirty,bool persisted,quint32 generation,bool checkCrc) const {
     return b.size()==16 && quint8(b[0])==0 && quint8(b[1])==1 && quint8(b[2])==unsigned(dirty) && quint8(b[3])<=1
         && (!persisted || quint8(b[3])==1) && u32(b,4)==0 && u32(b,8)==generation
-        && (!checkCrc || u32(b,12)==crc32(base_[0]));
+        && (!checkCrc || u32(b,12)==crc32(expected_[0].isEmpty()?base_[0]:expected_[0]));
 }
 bool MapWriteTransaction::outputsIdle(const QByteArray &b) {
     return b.size()==24 && quint8(b[0])==0 && quint8(b[1])==1
@@ -102,6 +111,8 @@ void MapWriteTransaction::receive(const QByteArray &b) {
             base_=read_;
             if(base_[size_t(page_-1)]!=baseMap_ || quint8(base_[0][0])!=0 || quint8(base_[0][1])!=2
                 || !MapPageCodec::valid(2,base_[1]) || !MapPageCodec::valid(3,base_[2])){reject();return;}
+            if(sensor_>=0){QString error;
+                if(!SensorCalibrationCodec::permitted(SensorKind(sensor_),baseMap_,desired_,base_[0],base_[3],error)){fail(error);return;}}
             issue(Phase::ConfirmBase,QByteArray("TUNUINO:V"));
         } else {
             if(read_!=expected_){fail(QStringLiteral("ECU readback differs from the requested map or an untouched configuration page."));return;}
@@ -142,7 +153,7 @@ void MapWriteTransaction::receive(const QByteArray &b) {
         issue(Phase::OutputsFinal,outputQuery());return;
     case Phase::OutputsFinal:
         if(!outputsIdle(b)){reject();return;}
-        finish(true,QStringLiteral("Map saved to ECU and all configuration pages verified. Outputs remain disarmed."));return;
+        finish(true,QStringLiteral("Calibration saved to ECU and all configuration pages verified. Outputs remain disarmed."));return;
     case Phase::Idle:return;
     }
 }

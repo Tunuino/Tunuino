@@ -363,7 +363,7 @@ void GraphLogWidget::refresh() {
         channels_->item(i,1)->setText(std::isfinite(value)?QString::number(value,'g',8):tr("Unavailable"));
     }
     const QString cursor=index>=0 && index<int(samples_.size())?QString::number(samples_[size_t(index)].seconds,'f',3):QStringLiteral("—");
-    status_->setText(tr("%1 | %2 samples | C=%3 s | %4 | ECU polling: 500 ms nominal; actual receive timestamps. TPS, IAT and Battery unavailable in current protocol.")
+    status_->setText(tr("%1 | %2 samples | C=%3 s | %4 | ECU polling: 500 ms nominal; actual receive timestamps. TPS uses stored ECU calibration; IAT and Battery unavailable.")
         .arg(recording_?tr("Recording"):tr("Stopped")).arg(qulonglong(samples_.size())).arg(cursor)
         .arg(view_.paused?tr("Display paused — collection continues while recording"):tr("Live display")));
     if(samples_.size()>=MaxLogSamples)status_->setText(tr("Log full: recording stopped at 100000 samples. Save CSV before starting a new log."));

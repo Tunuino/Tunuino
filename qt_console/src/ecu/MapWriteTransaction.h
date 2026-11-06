@@ -4,6 +4,7 @@
 #include <QString>
 #include <array>
 #include <functional>
+#include "../protocol/SensorCalibrationCodec.h"
 
 namespace tunuino {
 // A single explicit write operation owns the session until completion. Requests
@@ -17,6 +18,8 @@ public:
     std::function<void(bool,bool,const QString&)> completed; // success, uncertain permanent save, message.
     bool start(int page,const QByteArray &desired,const QByteArray &baseMap,
                const QByteArray &identity,quint32 generation);
+    bool startSensor(SensorKind kind,const QByteArray &desired,const QByteArray &base,
+        const QByteArray &identity,quint32 generation);
     void receive(const QByteArray &body);
     void transportFailed(const QString &reason);
     bool busy() const {return phase_!=Phase::Idle;}
@@ -29,6 +32,7 @@ private:
     enum class Phase {Idle,Identity,ValidateBase,OutputsBase,RuntimeBase,ReadBase,ConfirmBase,
         OutputsStage,RuntimeStage,Write,ReadStage,ValidateStage,OutputsBurn,RuntimeBurn,
         Burn,ReadPersisted,ValidatePersisted,RuntimeFinal,OutputsFinal};
+    bool begin(int page,const QByteArray &desired,const QByteArray &base,const QByteArray &identity,quint32 generation);
     void issue(Phase phase,const QByteArray &request,int timeout=3000);
     void finish(bool success,const QString &message);
     void fail(const QString &message);
@@ -43,7 +47,7 @@ private:
     static QByteArray pageCommand(char command,int page);
     static QByteArray readCommand(int page,int offset,int count);
     Phase phase_=Phase::Idle;
-    int page_=0,offset_=0,readPage_=0;
+    int page_=0,offset_=0,readPage_=0,sensor_=-1;
     quint32 generation_=0,resultGeneration_=0;
     bool burnRequested_=false,writeRequested_=false,identityMatched_=false;
     QByteArray desired_,baseMap_,identity_;

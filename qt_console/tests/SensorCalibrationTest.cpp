@@ -1,0 +1,81 @@
+#include "calibration/SensorCalibrationWidget.h"
+#include "ecu/MapWriteTransaction.h"
+#include <QApplication>
+#include <QDoubleSpinBox>
+#include <QPushButton>
+#include <QComboBox>
+#include <QLabel>
+#include <QProcess>
+#include <QQueue>
+#include <QTest>
+#include <iostream>
+#include <cstdlib>
+#define CHECK(x) do{if(!(x)){std::cerr<<"Failed: "<<#x<<" at "<<__LINE__<<std::endl;std::exit(1);}}while(false)
+using Codec=tunuino::SensorCalibrationCodec;using Kind=tunuino::SensorKind;using Writer=tunuino::MapWriteTransaction;
+static quint32 u32(const QByteArray &b,int at){return (quint32(Codec::u16(b,at))<<16)|quint32(Codec::u16(b,at+2));}
+static void put32(QByteArray &b,int at,quint32 v){Codec::put(b,at,int(v>>16));Codec::put(b,at+2,int(v));}
+static QByteArray read(int page,int at,int count){QByteArray q(7,0);q[0]='r';Codec::put(q,1,page);Codec::put(q,3,at);Codec::put(q,5,count);return q;}
+static tunuino::SensorCalibration calibration(Kind kind){
+    tunuino::SensorCalibration c;c.channel=kind==Kind::Lambda?2:kind==Kind::Tps?3:1;
+    c.raw={0,2000,3977};c.values={120,50,-20};
+    if(kind==Kind::Map){c.raw={0,3977,0};c.values={0,400,0};}
+    if(kind==Kind::Lambda){c.raw={0,3977,0};c.values={.68,1.36,0};}
+    if(kind==Kind::Tps)c.raw={300,3500,0};return c;
+}
+static void nativeFirmware(){
+    const QString executable=qEnvironmentVariable("TUNUINO_FIRMWARE_HARNESS");if(executable.isEmpty())return;
+    QProcess process;process.start(executable,QStringList{});CHECK(process.waitForStarted(3000));
+    const auto exchange=[&](const QByteArray &q){const auto line=q.toHex()+"\n";CHECK(process.write(line)==line.size());CHECK(process.waitForBytesWritten(3000));while(!process.canReadLine())CHECK(process.waitForReadyRead(3000));return QByteArray::fromHex(process.readLine().trimmed());};
+    const auto identity=exchange("TUNUINO?");quint32 generation=u32(exchange("TUNUINO:V"),8);int totalBurns=0;
+    for(const Kind kind:{Kind::Map,Kind::Clt,Kind::Lambda,Kind::Tps}){
+        Writer::Pages base;
+        for(int p=1;p<=4;++p)for(int at=0;at<(p==1||p==4?256:576);at+=64)base[size_t(p-1)]+=exchange(read(p,at,64)).mid(1);
+        QString error;const auto desired=Codec::apply(kind,calibration(kind),base[0],base[3],error);CHECK(!desired.isEmpty());
+        const int page=Codec::page(kind);CHECK(Codec::permitted(kind,base[size_t(page-1)],desired,base[0],base[3],error));
+        Writer writer;QQueue<QByteArray> pending;bool success=false;int copies=0,burns=0;
+        writer.send=[&](const QByteArray &q,int){pending.enqueue(q);return true;};
+        writer.savePrevious=[&](const QByteArray &id,quint32 gen,const Writer::Pages &pages){CHECK(id==identity&&gen==generation&&pages==base);++copies;return true;};
+        writer.completed=[&](bool ok,bool uncertain,const QString &message){if(!ok)std::cerr<<message.toStdString()<<std::endl;CHECK(!uncertain);success=ok;};
+        CHECK(writer.startSensor(kind,desired,base[size_t(page-1)],identity,generation));
+        while(writer.busy()){CHECK(!pending.isEmpty());const auto q=pending.dequeue();if(q[0]=='b')++burns;writer.receive(exchange(q));}
+        CHECK(success&&copies==1&&burns==1&&writer.generation()==generation+1);generation=writer.generation();totalBurns+=burns;
+        for(int p=1;p<=4;++p){QByteArray actual;for(int at=0;at<(p==1||p==4?256:576);at+=64)actual+=exchange(read(p,at,64)).mid(1);CHECK(actual==(p==page?desired:base[size_t(p-1)]));}
+    }
+    CHECK(totalBurns==4);process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
+    std::cout<<"MAP, CLT, Lambda and TPS writes against real firmware, all pages preserved: passed (host simulation)\n";
+}
+int main(int argc,char **argv){
+    QApplication app(argc,argv);QByteArray header(256,char(0x55)),aux(256,0);Codec::put(header,0,2);Codec::put(header,100,3300);header[6]=1;header[7]=2;header[8]=1;
+    QString error;
+    for(const Kind kind:{Kind::Map,Kind::Clt,Kind::Lambda,Kind::Tps}){
+        const auto c=calibration(kind);auto desired=Codec::apply(kind,c,header,aux,error);CHECK(!desired.isEmpty());
+        CHECK(Codec::permitted(kind,kind==Kind::Tps?aux:header,desired,header,aux,error));
+        const auto roundTrip=Codec::decode(kind,kind==Kind::Tps?header:desired,kind==Kind::Tps?desired:aux);
+        CHECK(roundTrip.channel==c.channel&&roundTrip.raw==c.raw);
+        if(kind!=Kind::Tps)for(int i=0;i<(kind==Kind::Clt?3:2);++i)CHECK(roundTrip.values[i]==c.values[i]);
+        desired[200]=char(quint8(desired[200])^1);CHECK(!Codec::permitted(kind,kind==Kind::Tps?aux:header,desired,header,aux,error));
+    }
+    auto conflict=calibration(Kind::Lambda);conflict.channel=1;auto desired=Codec::apply(Kind::Lambda,conflict,header,aux,error);CHECK(!Codec::permitted(Kind::Lambda,header,desired,header,aux,error));
+    auto temps=calibration(Kind::Clt);auto iat=aux;iat[68]=1;Codec::put(iat,70,1);iat[72]=1;
+    desired=Codec::apply(Kind::Clt,temps,header,iat,error);CHECK(!Codec::permitted(Kind::Clt,header,desired,header,iat,error));
+    auto reverse=calibration(Kind::Tps);std::swap(reverse.raw[0],reverse.raw[1]);CHECK(Codec::validate(Kind::Tps,reverse,error));
+    auto tps=Codec::apply(Kind::Tps,reverse,header,aux,error);QByteArray live(101,0);live[40]=1;Codec::put(live,65,1900);double percent=0;CHECK(Codec::tpsPercent(tps,live,percent)&&percent==50);
+    Codec::put(live,65,4095);CHECK(!Codec::tpsPercent(tps,live,percent));live[40]=0;CHECK(!Codec::tpsPercent(tps,live,percent));
+    for(int raw:{0,300,1500,2048,3977,4095})CHECK(Codec::raw(Codec::voltage(raw,header),header)==raw);
+    auto bad=calibration(Kind::Map);bad.raw[1]=0;CHECK(!Codec::validate(Kind::Map,bad,error));bad=calibration(Kind::Tps);bad.raw[1]=bad.raw[0]+20;CHECK(!Codec::validate(Kind::Tps,bad,error));
+    header=QByteArray(256,0);Codec::put(header,0,2);Codec::put(header,100,3300);
+    header=Codec::apply(Kind::Map,calibration(Kind::Map),header,aux,error);CHECK(!header.isEmpty());
+    QByteArray identity(32,0);identity.replace(1,7,"TUNUINO");identity[8]=1;identity[9]=1;identity[10]=1;identity[12]=7;identity[19]=15;identity[20]=42;
+    tunuino::SensorCalibrationWidget widget(Kind::Map);widget.load(header,aux,identity,42);widget.setAvailable(true);
+    auto *capture=widget.findChild<QPushButton*>("sensorCapture0");auto *volts=widget.findChild<QDoubleSpinBox*>("sensorVoltage0");CHECK(capture&&!capture->isEnabled());
+    live=QByteArray(101,0);live.replace(1,31,identity.mid(1));live[40]=1;put32(live,57,42);Codec::put(live,61,1500);
+    widget.updateRaw(live);CHECK(capture->isEnabled());capture->click();CHECK(std::abs(volts->value()-Codec::voltage(1500,header))<.0001);
+    int requested=0;widget.writeRequested=[&](Kind kind,const QByteArray &page){CHECK(kind==Kind::Map&&Codec::u16(page,10)==1500&&page[102]==header[102]);++requested;};widget.save();CHECK(requested==1);
+    widget.load(header,aux,identity,43);CHECK(!capture->isEnabled());CHECK(std::abs(volts->value()-Codec::voltage(1500,header))<.0001); // Unsaved edit preserved, old generation rejected.
+    put32(live,57,43);widget.updateRaw(live);CHECK(capture->isEnabled());
+    live[40]=0;widget.updateRaw(live);CHECK(!capture->isEnabled());live[40]=1;widget.updateRaw(live);
+    QTest::qWait(2101);const double old=volts->value();capture->click();CHECK(volts->value()==old);
+    auto other=identity;other[20]=43;widget.load(header,aux,other,43);CHECK(!capture->isEnabled());
+    widget.setAvailable(false);CHECK(!widget.findChild<QPushButton*>("sensorSave")->isEnabled());
+    nativeFirmware();std::cout<<"Sensor encoding, input conflicts, reserved settings, reverse TPS, real ADC capture and stale samples: passed\n";
+}
