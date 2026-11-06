@@ -481,8 +481,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("Timers"), {{tr("Timers setup"),-1}});
     addCategory(tr("DSG Gearbox"), {{tr("Gearbox settings"),-1}});
     addCategory(tr("CAN, Serial"), {{tr("Communication settings"),6}});
-    addCategory(tr("Log"), {{tr("Graph Log"),4}});
-    addCategory(tr("Gauges"), {{tr("Tune Display"),10},{tr("Runtime gauges"),-1}});
+    addCategory(tr("Log"), {{tr("Graph Log"),4},{tr("Tune Display"),10}});
+    addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
     addCategory(tr("Calibration & Setup"), {{tr("Sensor and engine calibration"),6}});
     auto engineStatusDockRef = QSharedPointer<QPointer<QDockWidget>>::create();
     connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, openSettingsPage, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows, openTuneDisplay](QTreeWidgetItem *item, int) {
