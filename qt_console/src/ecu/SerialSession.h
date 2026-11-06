@@ -14,6 +14,7 @@ public:
     bool open(const QString &portName, qint32 baudRate = 115200);
     void close();
     bool isOpen() const;
+    bool isBusy() const { return busy_; }
     bool exchange(const QByteArray &body, int timeoutMs = 1000);
 signals:
     void responseReceived(const QByteArray &body);

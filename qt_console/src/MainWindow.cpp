@@ -93,6 +93,11 @@
 #include "ecu/SerialSession.h"
 #include "ecu/AutoConnection.h"
 #include "ecu/EcuPowerState.h"
+#include "ecu/MapWriteTransaction.h"
+#include "protocol/MapPageCodec.h"
+#include <QDateTime>
+#include <QUuid>
+#include <QCloseEvent>
 
 // Live engine operating-point crosshair; visual overlay only, never edits cells.
 class LiveMapTable final : public QTableWidget {
@@ -521,7 +526,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *inspectorDescription = new QLabel(inspectorBody);
     inspectorDescription->setWordWrap(true);
     inspectorLayout->addWidget(inspectorDescription);
-    auto *inspectorSafety = new QLabel(tr("ECU writes require a validated protocol and explicit user confirmation."), inspectorBody);
+    auto *inspectorSafety = new QLabel(tr("Fuel and Ignition writes require a fresh ECU read, stopped engine and disarmed outputs."), inspectorBody);
     inspectorSafety->setWordWrap(true);
     inspectorSafety->setStyleSheet(QStringLiteral("color: #b8b8b8;"));
     inspectorLayout->addWidget(inspectorSafety);
@@ -544,7 +549,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     });
     inspectorDescription->setText(inspectorNotes.first());
 
-    // Compact calibration workspace with explicit read-only state.
+    // Calibration workspace; explicit map writes are provided by the ECU menu.
     auto *fuelPage = new QWidget(tabs);
     auto *fuelLayout = new QVBoxLayout(fuelPage);
     fuelLayout->setContentsMargins(10, 10, 10, 10);
@@ -557,9 +562,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelRead->setEnabled(false);
     fuelSave->setEnabled(false);
     fuelRead->setToolTip(QString());
-    fuelSave->setToolTip(tr("Requires validated ECU map-write protocol and safety checks."));
+    fuelSave->setToolTip(tr("Write the active Fuel Table through ECU > Write to ECU (F2)."));
     // Automatic ECU synchronization replaces the per-page read control.
-    // Write is unavailable until ECU persistence is verified.
+    // Writing is owned by the verified map transaction in the ECU menu.
     fuelActionsLayout->addStretch();
     // Editing is exposed by the table context menu, not a button row.
     fuelActions->hide();
@@ -1133,7 +1138,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionRead->setEnabled(false);
     ignitionSave->setEnabled(false);
     // Automatic ECU synchronization replaces the per-page read control.
-    // Write is unavailable until ECU persistence is verified.
+    // Writing is owned by the verified map transaction in the ECU menu.
     ignitionActionsLayout->addStretch();
     ignitionActions->hide();
     auto *ignitionMap = new LiveMapTable(ignitionPage);
@@ -2759,9 +2764,30 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addDockWidget(Qt::RightDockWidgetArea, dock);
     *engineStatusDockRef = dock;
     auto *session = new tunuino::SerialSession(this);
+    auto identityVerified = QSharedPointer<bool>::create(false);
     auto ecuOnline = QSharedPointer<bool>::create(false);
+    auto ecuClean = QSharedPointer<bool>::create(false);
     auto powerState = QSharedPointer<tunuino::EcuPowerState>::create();
     auto ecuIdentity = QSharedPointer<QByteArray>::create();
+    auto *writer = new tunuino::MapWriteTransaction(this);
+    auto readBusy = QSharedPointer<bool>::create(false);
+    auto validationPending = QSharedPointer<bool>::create(false);
+    auto writePending = QSharedPointer<bool>::create(false);
+    auto ecuGeneration = QSharedPointer<quint32>::create(0);
+    struct MapBase { QByteArray bytes, identity; quint32 generation=0; };
+    auto mapBases = QSharedPointer<std::array<MapBase,2>>::create();
+    auto writeActionRef = QSharedPointer<QPointer<QAction>>::create();
+    const auto updateWriteAvailability = [=]() {
+        const bool ready = *ecuOnline && *ecuClean && *identityVerified && session->isOpen() && !writer->busy() && !*writePending && !*readBusy && !*validationPending;
+        const auto &fuelBase=(*mapBases)[0]; const auto &ignitionBase=(*mapBases)[1];
+        fuelSave->setEnabled(ready && !fuelBase.bytes.isEmpty() && fuelBase.identity==*ecuIdentity && fuelBase.generation!=0 && fuelBase.generation==*ecuGeneration);
+        ignitionSave->setEnabled(ready && !ignitionBase.bytes.isEmpty() && ignitionBase.identity==*ecuIdentity && ignitionBase.generation!=0 && ignitionBase.generation==*ecuGeneration);
+        if (*writeActionRef) {
+            const auto *window=workspace->activeSubWindow(); const auto *page=window?window->widget():nullptr;
+            (*writeActionRef)->setEnabled(((page==fuelPage || page==fuelSurface) && fuelSave->isEnabled())
+                || ((page==ignitionPage || page==ignitionSurface) && ignitionSave->isEnabled()));
+        }
+    };
     auto connectionClock = QSharedPointer<QElapsedTimer>::create();
     connectionClock->start();
     auto *connectionBadge = new QLabel(tr("OFFLINE"), this);
@@ -2785,9 +2811,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // The firmware runtime command is read-only: O + offset(U16 BE) + count(U16 BE).
     auto *liveTimer = new QTimer(this);
     liveTimer->setInterval(500);
-    auto identityVerified = QSharedPointer<bool>::create(false);
-    auto requestLive = [session, identityVerified]() {
-        if (!*identityVerified || !session->isOpen()) return;
+    auto requestLive = [session, identityVerified, writer, writePending]() {
+        if (!*identityVerified || !session->isOpen() || writer->busy() || *writePending) return;
         QByteArray command(5, char(0));
         command[0] = 'O';
         command[4] = char(100);
@@ -2817,6 +2842,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     };
     auto abortTransfer = [=](const QString &message) {
         const int page = transfer->page;
+        *readBusy = false;
         *autoSync = false;
         transfer->page = 0;
         transfer->offset = 0;
@@ -2827,13 +2853,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         // Transfer feedback is displayed in the status bar.
         statusBar()->showMessage(message, 10000);
         liveTimer->start();
+        updateWriteAvailability();
     };
     auto startTransfer = [=](int page) {
-        if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page) return;
+        if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page || writer->busy() || *writePending) return;
         liveTimer->stop();
         transfer->page = page;
+        *readBusy = true;
         transfer->offset = 0;
         transfer->bytes.clear();
+        fuelSave->setEnabled(false); ignitionSave->setEnabled(false);
+        if (*writeActionRef) (*writeActionRef)->setEnabled(false);
         fuelRead->setEnabled(false);
         ignitionRead->setEnabled(false);
         if (tpsReadButton) tpsReadButton->setEnabled(false);
@@ -2882,16 +2912,121 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(graphLogAction, &QAction::triggered, this, [openSettingsPage]() { openSettingsPage(4); });
     auto *validationAction = toolsMenu->addAction(tr("Check ECU configuration (read-only)"));
     validationAction->setEnabled(false);
-    auto validationPending = QSharedPointer<bool>::create(false);
     connect(validationAction, &QAction::triggered, this, [=]() {
-        if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page || *validationPending) return;
+        if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page || *validationPending || writer->busy() || *writePending) return;
         liveTimer->stop();
         *validationPending = true;
+        updateWriteAvailability();
         if (!session->exchange(QByteArray("TUNUINO:V"), 3000)) {
             *validationPending = false;
-            liveTimer->start();
+            liveTimer->start(); updateWriteAvailability();
         }
     });
+    writer->send = [session](const QByteArray &request,int timeout) { return session->exchange(request,timeout); };
+    writer->savePrevious = [](const QByteArray &identity,quint32 generation,const tunuino::MapWriteTransaction::Pages &pages) {
+        const QString directory=QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)+QStringLiteral("/ecu-history");
+        if (!QDir().mkpath(directory)) return false;
+        QJsonArray data; QByteArray all;
+        for (const auto &page:pages) { data.append(QString::fromLatin1(page.toHex())); all+=page; }
+        const QJsonObject object{{QStringLiteral("format"),QStringLiteral("tunuino-ecu-snapshot-v1")},
+            {QStringLiteral("identity"),QString::fromLatin1(identity.toHex())},
+            {QStringLiteral("generation"),double(generation)},{QStringLiteral("pages"),data},
+            {QStringLiteral("sha256"),QString::fromLatin1(QCryptographicHash::hash(all,QCryptographicHash::Sha256).toHex())}};
+        const QString name=QString::fromLatin1(identity.mid(20,12).toHex())+QStringLiteral("-")
+            +QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMdd-HHmmss-zzz"))+QStringLiteral("-")
+            +QUuid::createUuid().toString(QUuid::WithoutBraces)+QStringLiteral(".json");
+        QSaveFile file(directory+QStringLiteral("/")+name);
+        const QByteArray bytes=QJsonDocument(object).toJson(QJsonDocument::Compact);
+        return file.open(QIODevice::WriteOnly) && file.write(bytes)==bytes.size() && file.commit();
+    };
+    const auto freezeMapEditing = [=](bool frozen) {
+        openProject->setEnabled(!frozen);saveProject->setEnabled(!frozen);
+        fuelPage->setEnabled(!frozen); ignitionPage->setEnabled(!frozen);
+        for (auto *action : {fuelFileActions.first,fuelFileActions.second,ignitionFileActions.first,ignitionFileActions.second})
+            action->setEnabled(!frozen);
+    };
+    writer->completed = [=](bool success,bool uncertain,const QString &message) {
+        *writePending=false; setProperty("mapWriteBusy",false); freezeMapEditing(false);
+        (*mapBases)[0]={}; (*mapBases)[1]={};
+        statusBar()->showMessage(message,30000);
+        if (success) {
+            *ecuGeneration=writer->generation(); *ecuClean=true;
+            validationAction->setEnabled(*ecuOnline);
+            if (*ecuOnline && *identityVerified && session->isOpen()) {
+                *autoSync=true;
+                QTimer::singleShot(0,this,[=] { startTransfer(1); });
+            }
+        } else {
+            // A failed or uncertain operation is never repeated. Reconnect only
+            // performs the normal read path; the next write needs an explicit action.
+            if (!writer->writeRequested() && writer->identityMatched() && session->isOpen() && *identityVerified) {
+                *autoSync=true;liveTimer->start();requestLive();
+                validationAction->setEnabled(*ecuOnline);
+            } else session->close();
+            QTimer::singleShot(0,this,[this,uncertain,message] {
+                QMessageBox::warning(this,uncertain?tr("ECU save requires verification"):tr("ECU map write stopped"),message);
+            });
+        }
+        updateWriteAvailability();
+    };
+    struct PendingMapWrite { int page=0; QByteArray desired,base,identity; quint32 generation=0; };
+    auto pendingWrite = QSharedPointer<PendingMapWrite>::create();
+    auto *writeLaunch = new QTimer(this); writeLaunch->setInterval(25);
+    auto writeWait = QSharedPointer<QElapsedTimer>::create();
+    connect(writeLaunch,&QTimer::timeout,this,[=] {
+        if (!*writePending) { writeLaunch->stop(); return; }
+        if (!*ecuOnline || !*identityVerified || !session->isOpen() || writeWait->elapsed()>3000) {
+            writeLaunch->stop(); *writePending=false; setProperty("mapWriteBusy",false); freezeMapEditing(false);
+            if (*identityVerified && session->isOpen())liveTimer->start();
+            validationAction->setEnabled(*ecuOnline);
+            fuelRead->setEnabled(*ecuOnline);ignitionRead->setEnabled(*ecuOnline);if(tpsReadButton)tpsReadButton->setEnabled(*ecuOnline);
+            updateWriteAvailability();
+            statusBar()->showMessage(tr("Map write cancelled: ECU unavailable or communication busy."),10000);return;
+        }
+        if (session->isBusy()) return;
+        writeLaunch->stop(); *writePending=false;
+        if (!writer->start(pendingWrite->page,pendingWrite->desired,pendingWrite->base,pendingWrite->identity,pendingWrite->generation)) {
+            setProperty("mapWriteBusy",false); freezeMapEditing(false); liveTimer->start();
+            validationAction->setEnabled(*ecuOnline);
+            fuelRead->setEnabled(*ecuOnline);ignitionRead->setEnabled(*ecuOnline);if(tpsReadButton)tpsReadButton->setEnabled(*ecuOnline);
+            updateWriteAvailability();
+            QMessageBox::warning(this,tr("ECU map write"),tr("Map write could not start. Re-read the ECU and check map values."));
+        }
+    });
+    const auto queueMapWrite = [=](int page) {
+        if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page || *validationPending || writer->busy() || *writePending) return;
+        auto *table=page==2?maps:ignitionMap; auto *rpm=page==2?fuelRpmValues:ignitionRpmValues;
+        const auto base=(*mapBases)[size_t(page-2)];
+        if (base.bytes.isEmpty() || base.identity!=*ecuIdentity) return;
+        tunuino::MapPageValues values;
+        bool valid=true;
+        for (int i=0;i<16;++i) {
+            bool ok=false; values.rpm[i]=rpm->item(0,i)->text().toDouble(&ok); valid &= ok;
+            const auto *load=table->verticalHeaderItem(15-i); ok=false;
+            values.load[i]=load?load->text().toDouble(&ok):0; valid &= ok;
+        }
+        for (int row=0;row<16;++row) for(int col=0;col<16;++col) {
+            const auto *cell=table->item(15-row,col);bool ok=false;
+            values.cells[size_t(row*16+col)]=cell?cell->text().toDouble(&ok):0;valid &= ok;
+        }
+        QString error;const QByteArray desired=tunuino::MapPageCodec::encode(page,values,error);
+        if (!valid || desired.isEmpty()) { QMessageBox::warning(this,tr("Invalid ECU map"),error.isEmpty()?tr("All map values must be numeric."):error);return; }
+        const QString name=page==2?tr("Fuel Table"):tr("Ignition Table");
+        if (QMessageBox::question(this,tr("Write to ECU"),tr("Save %1 to the connected ECU? The engine must be stopped and outputs disarmed. Other settings will be preserved.").arg(name),QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel)!=QMessageBox::Yes) return;
+        if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page
+            || *ecuIdentity!=base.identity || *ecuGeneration!=base.generation) {
+            statusBar()->showMessage(tr("ECU changed while confirming. Wait for a fresh read before writing."),15000);return;
+        }
+        pendingWrite->page=page;pendingWrite->desired=desired;pendingWrite->base=base.bytes;
+        pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
+        *writePending=true;setProperty("mapWriteBusy",true);writeWait->start();liveTimer->stop();validationAction->setEnabled(false);
+        fuelRead->setEnabled(false);ignitionRead->setEnabled(false);if(tpsReadButton)tpsReadButton->setEnabled(false);
+        freezeMapEditing(true);updateWriteAvailability();writeLaunch->start();
+        statusBar()->showMessage(tr("Checking ECU and preparing %1 write...").arg(name));
+    };
+    connect(fuelSave,&QPushButton::clicked,this,[=] { queueMapWrite(2); });
+    connect(ignitionSave,&QPushButton::clicked,this,[=] { queueMapWrite(3); });
+    connect(workspace,&QMdiArea::subWindowActivated,this,[=](QMdiSubWindow*) { updateWriteAvailability(); });
     auto *calibrationAction = toolsMenu->addAction(tr("Calibration and setup"));
     connect(calibrationAction, &QAction::triggered, this, [openSettingsPage]() { openSettingsPage(6); });
     auto *helpMenu = menuBar()->addMenu(tr("Help"));
@@ -2973,6 +3108,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 if (QMessageBox::question(this, tr("Install Console update"),
                         tr("The verified installer is ready. Close the Console and launch installation now?"))
                     == QMessageBox::Yes) {
+                    if (property("mapWriteBusy").toBool()) {
+                        QMessageBox::information(this,tr("Console update"),tr("Wait for the ECU map write to finish before installing an update."));return;
+                    }
                     if (QProcess::startDetached(installer, QStringList()))
                         QCoreApplication::quit();
                     else
@@ -2984,9 +3122,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *aboutAction = helpMenu->addAction(tr("About Tunuino Console"));
     connect(aboutAction, &QAction::triggered, this, [this]() {
         QMessageBox::about(this, tr("About Tunuino Console"),
-            tr("Tunuino Console — Qt 6\\nOffline map editing and ECU diagnostics.\\nFirmware writing and unverified ECU configuration operations are disabled."));
+            tr("Tunuino Console — Qt 6\\nMap editing, ECU monitoring and verified Fuel/Ignition map writes."));
     });
     auto *ecuMenu = menuBar()->addMenu(tr("ECU"));
+    auto *writeActiveMap=ecuMenu->addAction(tr("Write to ECU"));
+    *writeActionRef=writeActiveMap;writeActiveMap->setShortcut(QKeySequence(QStringLiteral("F2")));
+    writeActiveMap->setEnabled(false);
+    connect(writeActiveMap,&QAction::triggered,this,[=] {
+        const auto *window=workspace->activeSubWindow();const auto *page=window?window->widget():nullptr;
+        if(page==fuelPage || page==fuelSurface)fuelSave->click();
+        else if(page==ignitionPage || page==ignitionSurface)ignitionSave->click();
+    });
 
     auto *settingsMenu = menuBar()->addMenu(tr("Settings"));
     auto *updatesMenu = settingsMenu->addMenu(tr("Update channel"));
@@ -3012,13 +3158,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     });
     auto *openFirmware = ecuMenu->addAction(tr("Firmware / USB DFU"));
     connect(openFirmware, &QAction::triggered, this, [=]() {
+        if (writer->busy() || *writePending) return;
         openSettingsPage(5);
         session->close();
     });
     auto *dfuInfo = ecuMenu->addAction(tr("USB DFU status / instructions"));
     connect(dfuInfo, &QAction::triggered, this, [this]() {
         QMessageBox::information(this, tr("Firmware / DFU"),
-            tr("Enter USB DFU bootloader mode, select a verified firmware image and detect the device. Flashing remains disabled pending hardware validation."));
+            tr("Enter USB DFU bootloader mode, select a verified firmware image and detect the device. Flash and verify programs the selected image and verifies it by reading it back."));
     });
     tunuino::AutoConnection::Hooks autoConnectionHooks;
     autoConnectionHooks.ports = [] {
@@ -3051,14 +3198,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(session, &tunuino::SerialSession::connectionChanged, this, [=](bool connected) {
         setProperty("ecuTransportOpen", connected);
         if (!connected) {
+            *writePending=false; *readBusy=false; setProperty("mapWriteBusy",false); freezeMapEditing(false);
+            (*mapBases)[0]={}; (*mapBases)[1]={}; *ecuGeneration=0; *ecuClean=false;
+            writer->transportFailed(tr("ECU disconnected during map write."));
             setConnectionIndicator(false);
             powerState->reset();
             ecuIdentity->clear();
         }
-        if (!connected) { *autoSync = false; liveTimer->stop(); transfer->page = 0; *identityVerified = false; *validationPending = false; validationAction->setEnabled(false); fuelRead->setEnabled(false); ignitionRead->setEnabled(false); if (tpsReadButton) tpsReadButton->setEnabled(false); connectionStatus_->setText(tr("Offline | Waiting for ECU")); }
+        if (!connected) { *autoSync = false; liveTimer->stop(); transfer->page = 0; *identityVerified = false; *validationPending = false; validationAction->setEnabled(false); fuelRead->setEnabled(false); ignitionRead->setEnabled(false); if (tpsReadButton) tpsReadButton->setEnabled(false); connectionStatus_->setText(tr("Offline | Waiting for ECU")); updateWriteAvailability(); }
     });
     connect(session, &tunuino::SerialSession::exchangeFailed, this, [=](const QString &error) {
+        writer->transportFailed(error);
         setConnectionIndicator(false);
+        updateWriteAvailability();
         liveTimer->stop();
         transfer->page = 0;
         *autoSync = false;
@@ -3072,9 +3224,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         statusBar()->showMessage(error, 10000);
     });
     connect(session, &tunuino::SerialSession::responseReceived, this, [=](const QByteArray &data) {
+        if (writer->busy()) { writer->receive(data); return; }
         if (*validationPending) {
             *validationPending = false;
-            liveTimer->start();
+            liveTimer->start(); updateWriteAvailability();
             if (data.size() != 16 || quint8(data[0]) != 0 || quint8(data[1]) != 1) {
                 QMessageBox::warning(this, tr("ECU configuration"),
                     tr("Invalid validation response. No ECU settings changed."));
@@ -3147,6 +3300,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 abortTransfer(tr("Map axes or cells failed validation; table unchanged"));
                 return;
             }
+            (*mapBases)[size_t(page-2)]={transfer->bytes,*ecuIdentity,*ecuGeneration};
             auto *table = page == 2 ? maps : ignitionMap;
             QStringList rpmLabels, loadLabels;
             for (int i = 0; i < 16; ++i) {
@@ -3190,6 +3344,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 session->close();
                 return;
             }
+            const bool previouslyClean=*ecuClean;
+            *ecuClean=(quint8(data[40])&2)==0;
+            const quint32 previousGeneration=*ecuGeneration;
+            *ecuGeneration=(quint32(quint8(data[57]))<<24)|(quint32(quint8(data[58]))<<16)
+                |(quint32(quint8(data[59]))<<8)|quint32(quint8(data[60]));
             const bool wasOnline = *ecuOnline;
             const bool powered = powerState->update(data, connectionClock->elapsed());
             if (!powered) {
@@ -3198,6 +3357,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 fuelRead->setEnabled(false);
                 ignitionRead->setEnabled(false);
                 if (tpsReadButton) tpsReadButton->setEnabled(false);
+                updateWriteAvailability();
                 connectionStatus_->setText(tr("Offline | Waiting for ECU power"));
                 statusBar()->showMessage(tr("OFFLINE | USB detected; waiting for external ECU power"));
                 return;
@@ -3206,8 +3366,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 setConnectionIndicator(true);
                 connectionStatus_->setText(tr("Online | ECU connected"));
                 validationAction->setEnabled(true);
-                *autoSync = true;
-                startTransfer(1);
+                if (*ecuClean) { *autoSync = true; startTransfer(1); }
+            }
+            if (*ecuClean && !previouslyClean) connectionStatus_->setText(tr("Online | ECU connected"));
+            if (!*ecuClean) {
+                (*mapBases)[0]={}; (*mapBases)[1]={};
+                connectionStatus_->setText(tr("Online | Temporary ECU changes; reset ECU before writing"));
             }
             const auto u32 = [&data](int at) -> quint32 {
                 return (quint32(quint8(data[at])) << 24) | (quint32(quint8(data[at+1])) << 16)
@@ -3241,6 +3405,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if (mask & 8) logValues[4] = qint32(u32(1 + 52)) / 1000.0;
             graphLog->setConnected(true);
             graphLog->appendRuntime(logValues);
+            if (*ecuClean && previousGeneration && (previousGeneration!=*ecuGeneration || !previouslyClean || *autoSync) && !transfer->page && !*writePending) {
+                (*mapBases)[0]={}; (*mapBases)[1]={}; *autoSync=true;
+                QTimer::singleShot(0,this,[=] { startTransfer(1); });
+            }
+            if (!transfer->page) updateWriteAvailability();
             const quint8 flags = quint8(data[1 + 39]);
             const quint32 uptimeSeconds = u32(1 + 32);
             statusBar()->showMessage(tr("ECU live: uptime %1 s | ADC %2 | trigger %3 | valid channels 0x%4 | trigger errors %5")
@@ -3265,4 +3434,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     });
     autoConnection->start();
     statusBar()->showMessage(tr("OFFLINE | Waiting for ECU — automatic connection"));
+}
+
+void MainWindow::closeEvent(QCloseEvent *event) {
+    if (property("mapWriteBusy").toBool()) {
+        statusBar()->showMessage(tr("Wait for the ECU map write to finish before closing the Console."));
+        event->ignore();return;
+    }
+    QMainWindow::closeEvent(event);
 }
