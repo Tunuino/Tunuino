@@ -2836,6 +2836,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     const auto changeToolBusy=[=](bool busy){*toolBusy=busy;setProperty("ecuToolBusy",busy);updateWriteAvailability();};
     scopeTool->busyChanged=changeToolBusy;outputTestTool->busyChanged=changeToolBusy;autotuneTool->busyChanged=changeToolBusy;
     scopeTool->ready=[=]{const auto base=tools->snapshot();return base.valid()&&(quint8(base.identity[19])&16)&&(!*toolBusy||scopeTool->busy());};
+    scopeTool->snapshot=tools->snapshot;
     outputTestTool->snapshot=tools->snapshot;autotuneTool->snapshot=tools->snapshot;
     outputTestTool->canStart=[=]{return !*toolBusy&&!*toolReply;};autotuneTool->canStart=outputTestTool->canStart;
     const auto toolExchange=[=](const QByteArray &request,std::function<void(const QByteArray&)> reply){
