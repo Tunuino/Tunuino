@@ -5,18 +5,15 @@
 #include <winusb.h>
 #include <usbiodef.h>
 #include <QByteArray>
-#include <QFile>
-#include <QFileInfo>
-#include <QCryptographicHash>
 #include <QtEndian>
 #include <QString>
 #include <functional>
 
 // STM32 ROM DfuSe, Windows WinUSB. This routine is deliberately synchronous.
-// No erase is sent until the complete sector backup matches a fresh ECU read.
+// The written firmware is read back and compared byte for byte.
 namespace TunuinoDfu {
 using Log = std::function<void(const QString &)>;
-inline bool flash(const QByteArray &image, const QByteArray &backup, const Log &log) {
+inline bool flash(const QByteArray &image, const Log &log) {
     constexpr quint32 base = 0x08000000u;
     constexpr int blockSize = 2048;
     constexpr quint32 ends[] = {16384,32768,49152,65536,131072,262144,
@@ -33,9 +30,6 @@ inline bool flash(const QByteArray &image, const QByteArray &backup, const Log &
     while (count < 12 && ends[count] < quint32(image.size())) ++count;
     if (count == 12) return false;
     ++count;
-    if (backup.size() != int(ends[count-1])) {
-        log(QStringLiteral("BLOCKED: full erase-footprint backup required.")); return false;
-    }
     const GUID guid = {0xA5DCBF10,0x6530,0x11D2,{0x90,0x1F,0x00,0xC0,0x4F,0xB9,0x51,0xED}};
     HDEVINFO devices = SetupDiGetClassDevsW(&guid,nullptr,nullptr,DIGCF_PRESENT|DIGCF_DEVICEINTERFACE);
     if (devices == INVALID_HANDLE_VALUE) { log(QStringLiteral("WinUSB enumeration failed.")); return false; }
@@ -130,13 +124,7 @@ inline bool flash(const QByteArray &image, const QByteArray &backup, const Log &
         if (config[p]==9 && config[p+1]==4 && config[p+5]==0xfe && config[p+6]==1 && config[p+7]==2) dfu=true;
     }
     if (!dfu) {log(QStringLiteral("BLOCKED: incompatible DFU interface."));cleanup();return false;}
-    QByteArray live;
-    log(QStringLiteral("Reading live ECU Flash before erase..."));
-    if (!read(backup.size(),live) || live!=backup) {
-        log(QStringLiteral("BLOCKED: live Flash does not match saved sector backup. No erase attempted."));
-        cleanup();return false;
-    }
-    log(QStringLiteral("Live backup comparison PASS. Beginning sector erase."));
+    log(QStringLiteral("Beginning sector erase."));
     bool ok=idle();
     for(int i=0;ok && i<count;++i) {
         const quint32 address=base+(i?ends[i-1]:0);

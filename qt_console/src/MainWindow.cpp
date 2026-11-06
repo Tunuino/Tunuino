@@ -1580,7 +1580,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *firmwareHeading = new QLabel(tr("FIRMWARE  |  Device management"), firmwarePage);
     firmwareHeading->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 11pt; color: #e69a32;"));
     firmwareLayout->addWidget(firmwareHeading);
-    auto *firmwareInfo = new QLabel(tr("USB DFU device management. Windows bootloader detection is available without external tools. Native DFU flashing is experimental. Always verify the firmware and preserve a full ECU backup before programming."), firmwarePage);
+    auto *firmwareInfo = new QLabel(tr("USB DFU device management. Windows bootloader detection is available without external tools. Native DFU flashing is experimental. Firmware is read back and verified after programming."), firmwarePage);
     firmwareInfo->setWordWrap(true);
     firmwareLayout->addWidget(firmwareInfo);
     auto *dfuForm = new QFormLayout();
@@ -1609,7 +1609,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     dfuButtons->addWidget(flashDfu);
     dfuButtons->addStretch();
     firmwareLayout->addLayout(dfuButtons);
-    auto *dfuStatus = new QLabel(tr("Select the firmware .bin and detect USB DFU. Flash and verify requires a verified sector backup."), firmwarePage);
+    auto *dfuStatus = new QLabel(tr("Select the firmware .bin and detect USB DFU, then use Flash and verify."), firmwarePage);
     dfuStatus->setWordWrap(true);
     firmwareLayout->addWidget(dfuStatus);
     auto *dfuLog = new QPlainTextEdit(firmwarePage);
@@ -1632,35 +1632,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             dfuLog->appendPlainText(tr("FLASH BLOCKED: invalid firmware size."));
             return;
         }
-        const QString backupPath = QFileDialog::getOpenFileName(firmwarePage,
-            tr("Select verified ECU sector backup"), QString(),
-            tr("Binary backup (*.bin)"));
-        if (backupPath.isEmpty()) return;
-        if (QFileInfo(backupPath).absoluteFilePath() == QFileInfo(imagePath->text()).absoluteFilePath()) {
-            dfuLog->appendPlainText(tr("FLASH BLOCKED: firmware and backup must be different files."));
-            return;
-        }
-        QFile backupFile(backupPath);
-        if (!backupFile.open(QIODevice::ReadOnly)) return;
-        const QByteArray backup = backupFile.readAll();
         const QString imageHash = QString::fromLatin1(QCryptographicHash::hash(image,
             QCryptographicHash::Sha256).toHex());
-        const QString backupHash = QString::fromLatin1(QCryptographicHash::hash(backup,
-            QCryptographicHash::Sha256).toHex());
-        const QString warning = tr("DANGER: This operation ERASES ECU Flash sectors and replaces the firmware.\n\n"
+        const QString warning = tr("This operation erases ECU Flash sectors and replaces the firmware.\n\n"
             "Firmware: %1\nBytes: %2\nSHA256: %3\n\n"
-            "Backup: %4\nBytes: %5\nSHA256: %6\n\n"
-            "Confirm that the firmware is intended for this ECU, that the engine and actuators are disconnected, "
-            "and that the backup is stored safely. The ECU may require DFU recovery if interrupted.")
-            .arg(QFileInfo(imagePath->text()).fileName()).arg(image.size()).arg(imageHash)
-            .arg(QFileInfo(backupPath).fileName()).arg(backup.size()).arg(backupHash);
+            "Confirm that the firmware is intended for this ECU and that the engine and actuators are disconnected. "
+            "The ECU may require DFU recovery if interrupted.")
+            .arg(QFileInfo(imagePath->text()).fileName()).arg(image.size()).arg(imageHash);
         if (QMessageBox::warning(firmwarePage, tr("Confirm destructive ECU Flash operation"),
             warning, QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes)
             return;
         flashDfu->setEnabled(false);
         detectDfu->setEnabled(false);
         dfuLog->appendPlainText(tr("Starting native DFU flash; do not disconnect power or USB."));
-        const bool success = TunuinoDfu::flash(image, backup,
+        const bool success = TunuinoDfu::flash(image,
             [dfuLog](const QString &message) { dfuLog->appendPlainText(message); });
         dfuStatus->setText(success ? tr("Flash and verify PASS.")
             : tr("Flash blocked or failed. See DFU log; do not assume ECU is programmed."));
@@ -1710,11 +1695,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             dfuLog->appendPlainText(tr("  Sector %1: 0x%2")
                 .arg(i).arg(0x08000000u + offset, 8, 16, QLatin1Char('0')));
         }
-        dfuLog->appendPlainText(tr("Preparation is read-only. Backup selection and verification occur during Flash and verify."));
+        dfuLog->appendPlainText(tr("Preparation is read-only. Flash and verify programs the image and verifies it by reading it back."));
         dfuLog->appendPlainText(tr("Firmware SHA256: %1")
             .arg(QString::fromLatin1(QCryptographicHash::hash(bytes,
                 QCryptographicHash::Sha256).toHex())));
-        dfuLog->appendPlainText(tr("Preparation only: no erase/write attempted. This plan does not prove board compatibility or backup completeness."));
+        dfuLog->appendPlainText(tr("Preparation only: no erase/write attempted. This plan does not prove board compatibility."));
     });
     connect(inspectBin, &QPushButton::clicked, firmwarePage, [=]() {
         const QString path = imagePath->text();
@@ -2036,18 +2021,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                                         QFile reference(imagePath->text());
                                         const bool referenceOpen = !imagePath->text().isEmpty()
                                             && reference.open(QIODevice::ReadOnly);
-                                        // Backup the entire erase footprint, not just the
-                                        // firmware length: otherwise the last sector's
-                                        // trailing bytes would be lost on erase.
                                         const qint64 firmwareSize = referenceOpen ? reference.size() : 256;
-                                        const qint64 sectorEnds[] = {16384,32768,49152,65536,
-                                            131072,262144,393216,524288,655360,786432,917504,1048576};
-                                        qint64 targetSize = firmwareSize;
-                                        if (referenceOpen && firmwareSize >= 8 && firmwareSize <= 1048576) {
-                                            for (const qint64 end : sectorEnds) {
-                                                if (firmwareSize <= end) { targetSize = end; break; }
-                                            }
-                                        }
+                                        const qint64 targetSize = firmwareSize;
                                         if (targetSize < 8 || targetSize > 1024 * 1024) {
                                             dfuLog->appendPlainText(tr("Flash read skipped: invalid selected firmware size."));
                                         } else {
@@ -2096,25 +2071,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                                                         dfuLog->appendPlainText(tr("Firmware comparison DIFFERENT at offset 0x%1.")
                                                             .arg(mismatch, 8, 16, QLatin1Char('0')));
                                                     }
-                                                    dfuLog->appendPlainText(tr("Erase-footprint backup: %1 bytes read, firmware length %2 bytes.")
-                                                        .arg(flash.size()).arg(firmwareSize));
-                                                }
-                                                const QString backupPath = QFileDialog::getSaveFileName(firmwarePage,
-                                                    tr("Save ECU Flash backup"), QStringLiteral("ecu-flash-sector-backup.bin"),
-                                                    tr("Binary firmware (*.bin)"));
-                                                if (!backupPath.isEmpty()) {
-                                                    if (QFileInfo(backupPath).absoluteFilePath()
-                                                            == QFileInfo(imagePath->text()).absoluteFilePath()) {
-                                                        dfuLog->appendPlainText(tr("Backup refused: destination is the selected firmware file."));
-                                                    } else {
-                                                        QSaveFile backup(backupPath);
-                                                        if (backup.open(QIODevice::WriteOnly)
-                                                                && backup.write(flash) == flash.size()
-                                                                && backup.commit())
-                                                            dfuLog->appendPlainText(tr("ECU Flash backup saved: %1").arg(backupPath));
-                                                        else
-                                                            dfuLog->appendPlainText(tr("ECU Flash backup save FAILED."));
-                                                    }
                                                 }
                                             }
                                         }
@@ -2155,7 +2111,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
         SetupDiDestroyDeviceInfoList(devices);
         dfuStatus->setText(dfuPort->count() > 0
-            ? tr("STM32 USB DFU bootloader detected by Windows. Flash and verify requires a verified backup.")
+            ? tr("STM32 USB DFU bootloader detected by Windows. Select the firmware and use Flash and verify.")
             : tr("No STM32 DFU bootloader (VID 0483 / PID DF11) found. Check bootloader mode and USB driver."));
 #else
         dfuStatus->setText(tr("Native DFU detection is available on Windows only."));
