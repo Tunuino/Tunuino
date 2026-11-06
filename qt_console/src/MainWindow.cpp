@@ -101,6 +101,7 @@
 #include "tools/ScopeWidget.h"
 #include "tools/OutputTestWidget.h"
 #include "tools/AutotuneWidget.h"
+#include "tools/ServiceDataWidget.h"
 #include <QDateTime>
 #include <QUuid>
 #include <QCloseEvent>
@@ -1599,13 +1600,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *graphLog = new tunuino::GraphLogWidget(tabs);
     tabs->addTab(graphLog, tr("Graph Log"));
     auto *tools=new tunuino::ToolsSuite(this,navigationTree);
+    auto *serviceTool=new tunuino::ServiceDataWidget;
     auto *scopeTool=new tunuino::ScopeWidget;
     auto *outputTestTool=new tunuino::OutputTestWidget;
     auto *autotuneTool=new tunuino::AutotuneWidget;
     const auto toolWindow=[=](QWidget *widget,const QString &title){auto *window=workspace->addSubWindow(widget);window->setWindowTitle(title);window->setAttribute(Qt::WA_DeleteOnClose,false);window->resize(900,640);boundsGuard->watch(window);window->hide();return window;};
+    auto *serviceWindow=toolWindow(serviceTool,tr("ECU information and Logbook"));
     auto *scopeWindow=toolWindow(scopeTool,tr("Scope"));auto *outputTestWindow=toolWindow(outputTestTool,tr("Test outputs"));auto *autotuneWindow=toolWindow(autotuneTool,tr("Autotune"));
     const auto showTool=[=](QMdiSubWindow *window){window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
     *toolNavigation=[=](int index){showTool(index==11?scopeWindow:autotuneWindow);};
+    tools->openServiceData=[=](int page){showTool(serviceWindow);serviceTool->showPage(page);};
     tools->openScope=[=]{showTool(scopeWindow);};tools->openOutputTest=[=]{showTool(outputTestWindow);};tools->openAutotune=[=]{showTool(autotuneWindow);};
     auto *tuneDisplay=new tunuino::TuneDisplayWidget;
     auto *tuneSubWindow=workspace->addSubWindow(tuneDisplay);
@@ -2834,17 +2838,21 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         result.identity=*ecuIdentity;result.generation=*ecuGeneration;result.pages={sensorBase->header,(*mapBases)[0].bytes,(*mapBases)[1].bytes,sensorBase->aux};return result;
     };
     const auto changeToolBusy=[=](bool busy){*toolBusy=busy;setProperty("ecuToolBusy",busy);updateWriteAvailability();};
+    serviceTool->busyChanged=changeToolBusy;
     scopeTool->busyChanged=changeToolBusy;outputTestTool->busyChanged=changeToolBusy;autotuneTool->busyChanged=changeToolBusy;
     scopeTool->ready=[=]{const auto base=tools->snapshot();return base.valid()&&(quint8(base.identity[19])&16)&&(!*toolBusy||scopeTool->busy());};
+    serviceTool->snapshot=tools->snapshot;serviceTool->canStart=[=]{return !*toolBusy&&!*toolReply;};
     scopeTool->snapshot=tools->snapshot;
     outputTestTool->snapshot=tools->snapshot;autotuneTool->snapshot=tools->snapshot;
     outputTestTool->canStart=[=]{return !*toolBusy&&!*toolReply;};autotuneTool->canStart=outputTestTool->canStart;
     const auto toolExchange=[=](const QByteArray &request,std::function<void(const QByteArray&)> reply){
         if(!*ecuOnline||!*identityVerified||!session->isOpen()||session->isBusy()||*toolReply||writer->busy()||*writePending||*readBusy||*validationPending)return false;
         *toolReply=std::move(reply);*toolRuntime=!request.isEmpty()&&request[0]=='O';const auto lease=++*toolLease;
-        if(!session->exchange(request,1500)){*toolReply={};return false;}
-        QTimer::singleShot(1800,this,[=]{if(*toolReply&&*toolLease==lease){auto callback=std::move(*toolReply);*toolReply={};callback({});}});return true;
+        const int timeout=request.startsWith("TUNUINO:N")&&request.size()>9&&quint8(request[9])>=2?15000:1500;
+        if(!session->exchange(request,timeout)){*toolReply={};return false;}
+        QTimer::singleShot(timeout+300,this,[=]{if(*toolReply&&*toolLease==lease){auto callback=std::move(*toolReply);*toolReply={};callback({});}});return true;
     };
+    serviceTool->exchange=toolExchange;
     scopeTool->exchange=toolExchange;outputTestTool->exchange=toolExchange;
     autotuneTool->applyToEditor=[=](const tunuino::ToolSnapshot &base,const QByteArray &desired){
         const auto current=tools->snapshot();if(current.identity!=base.identity||current.generation!=base.generation||current.pages!=base.pages||!tunuino::MapPageCodec::valid(2,desired))return false;

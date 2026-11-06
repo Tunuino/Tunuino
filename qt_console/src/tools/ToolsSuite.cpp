@@ -53,7 +53,7 @@ void ToolsSuite::populate(QMenu *menu,QAction *graph,QAction *tune){
     unsupported(tr("Diff. oil bleed"),tr("Requires the vehicle differential pump/CAN service protocol, which is not implemented in this firmware."));
     auto *autotune=menu->addAction(tr("Autotune"));connect(autotune,&QAction::triggered,this,[this]{if(openAutotune)openAutotune();});
     menu->addSeparator();
-    unsupported(tr("Logbook"),tr("Requires ECU-side retained statistics in nonvolatile memory; PC session maxima are not an ECU logbook."));
+    menu->addAction(tr("Logbook"),this,[this]{if(openServiceData)openServiceData(2);});
     unsupported(tr("User defined CAN stream"),tr("Requires CAN transport and persistent frame mappings in the ECU firmware."));
     unsupported(tr("Set EDL-1 datalogger time"),tr("No EDL-1 transport or clock protocol is implemented for this ECU."));
     menu->addAction(tr("Show assigned outputs"),this,[this]{assignments(true);});menu->addAction(tr("Show assigned inputs"),this,[this]{assignments(false);});
@@ -62,7 +62,7 @@ void ToolsSuite::populate(QMenu *menu,QAction *graph,QAction *tune){
     menu->addAction(graph);menu->addAction(tune);menu->addSeparator();
     menu->addAction(tr("Customize keys"),this,[this]{customizeKeys();});menu->addAction(tr("General options"),this,[this]{generalOptions();});menu->addAction(tr("Available strategies"),this,[this]{strategies();});
     menu->addSeparator();unsupported(tr("Decode VW coding..."),tr("Vehicle-specific CAN coding definitions and capture transport are not implemented."));
-    menu->addSeparator();unsupported(tr("Vehicle VIN..."),tr("Requires dedicated ECU VIN storage and diagnostic transport."));unsupported(tr("Project comment..."),tr("Requires ECU/project comment storage. No comment will be stored only in the PC as if it were in the ECU."));
+    menu->addSeparator();menu->addAction(tr("Vehicle VIN..."),this,[this]{if(openServiceData)openServiceData(0);});menu->addAction(tr("Project comment..."),this,[this]{if(openServiceData)openServiceData(1);});
 }
 QString ToolsSuite::alias(const QString &id,const ToolSnapshot &base)const{return QSettings().value(namesKey(base,id)).toString().left(16);}
 void ToolsSuite::assignments(bool outputs){
