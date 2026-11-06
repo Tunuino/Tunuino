@@ -96,6 +96,7 @@
 #include "ecu/MapWriteTransaction.h"
 #include "protocol/MapPageCodec.h"
 #include "calibration/SensorCalibrationWidget.h"
+#include "parameters/ParameterWidget.h"
 #include "display/TuneDisplayWidget.h"
 #include "tools/ToolsSuite.h"
 #include "tools/ScopeWidget.h"
@@ -394,7 +395,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // Hidden page registry only; no legacy "Tables and configuration" MDI window.
     auto *tabs = new QTabWidget(this);
     tabs->hide();
-    auto settingsWindows = QSharedPointer<QVector<QPointer<QMdiSubWindow>>>::create(7);
+    auto settingsWindows = QSharedPointer<QVector<QPointer<QMdiSubWindow>>>::create(6);
     const auto openSettingsPage = [this, workspace, tabs, settingsWindows, boundsGuard](int index) {
         if (index < 3 || index >= tabs->count()) return;
         auto &existing = (*settingsWindows)[index];
@@ -424,6 +425,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // Graph windows are independent from their map tables and can be closed
     // and reopened from the navigation tree without discarding ECU data.
     auto tuneWindow=QSharedPointer<QPointer<QMdiSubWindow>>::create();
+    auto parameterNavigation=QSharedPointer<std::function<void(QString)>>::create();
     auto toolNavigation=QSharedPointer<std::function<void(int)>>::create();
     const auto openTuneDisplay=[=]{
         if(!*tuneWindow)return;auto *window=tuneWindow->data();
@@ -444,6 +446,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     navigationSearch->setClearButtonEnabled(true);
     navigationLayout->addWidget(navigationSearch);
     auto *navigationTree = new QTreeWidget(navigationPanel);
+    navigationTree->setObjectName("MainNavigation");navigationTree->setStyleSheet("QTreeWidget::item:selected{background:#168bd2;color:white;}");
     navigationTree->setHeaderHidden(true);
     navigationTree->setIndentation(16);
     navigationTree->setMinimumWidth(200);
@@ -471,17 +474,38 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
         return category;
     };
-    addCategory(tr("Sensors and inputs"), {{tr("TPS Calibration"),6},{tr("MAP Calibration"),6},{tr("Temperature sensors"),6},{tr("Lambda / O2"),6}});
+    auto *sensorsCategory=addCategory(tr("Sensors and inputs"),{});
+    const auto parameterItem=[=](QTreeWidgetItem *parent,const QString &name,const QString &key){auto *item=new QTreeWidgetItem(parent,{name});item->setIcon(0,style()->standardIcon(QStyle::SP_FileDialogDetailedView));item->setData(0,Qt::UserRole,100);item->setData(0,Qt::UserRole+1,key);return item;};
+    for(const QString &sensor:{QString("TPS"),QString("MAP"),QString("CLT"),QString("IAT"),QString("Lambda"),QString("Battery")})parameterItem(sensorsCategory,sensor,"sensor:"+sensor);
     addCategory(tr("Engine start"), {{tr("Cranking"),-1},{tr("Afterstart"),-1}});
-    addCategory(tr("Fueling"), {{tr("Fuel Table"),0},{tr("Fuel 3D Graph"),7},{tr("AFR Target"),2},{tr("Injector Dead Time"),6}});
-    addCategory(tr("Ignition"), {{tr("Ignition Table"),1},{tr("Ignition 3D Graph"),8},{tr("Trigger setup"),6}});
+    auto *fuelingCategory=addCategory(tr("Fueling"),{{tr("Autotune"),12}});
+    parameterItem(fuelingCategory,tr("General"),"fuel.general");parameterItem(fuelingCategory,tr("Fuel cut"),"fuel.cut");
+    const auto unavailable=[=](QTreeWidgetItem *parent,const QString &title,const QString &reason){auto *item=new QTreeWidgetItem(parent,{title});item->setFlags(item->flags()&~Qt::ItemIsEnabled);item->setToolTip(0,reason);return item;};
+    unavailable(fuelingCategory,tr("Lambda guard"),tr("Not implemented: independent lambda-deviation guard strategy."));
+    parameterItem(fuelingCategory,tr("Acceleration"),"fuel.acceleration");
+    auto *fuelCorrections=new QTreeWidgetItem(fuelingCategory,{tr("Corrections")});parameterItem(fuelCorrections,tr("Warmup"),"fuel.corrections");
+    parameterItem(fuelingCategory,tr("Cylinders trim"),"fuel.trim");parameterItem(fuelingCategory,tr("Short term trim"),"fuel.shortterm");
+    auto *fuelTables=new QTreeWidgetItem(fuelingCategory,{tr("Fuel tables")});
+    auto *ve=new QTreeWidgetItem(fuelTables,{tr("Fuel Table")});ve->setData(0,Qt::UserRole,0);
+    auto *fuelGraphItem=new QTreeWidgetItem(fuelTables,{tr("Fuel 3D Graph")});fuelGraphItem->setData(0,Qt::UserRole,7);
+    parameterItem(fuelTables,tr("Target lambda"),"fuel.target");auto *afrItem=new QTreeWidgetItem(fuelTables,{tr("AFR Target (offline)")});afrItem->setData(0,Qt::UserRole,2);
+    parameterItem(fuelingCategory,tr("Flex fuel"),"fuel.flex");
+    auto *injectors=new QTreeWidgetItem(fuelingCategory,{tr("Injectors")});parameterItem(injectors,tr("Injector outputs"),"injectors.outputs");parameterItem(injectors,tr("Injector dead time"),"injectors.deadtime");parameterItem(injectors,tr("Voltage compensation"),"voltage.compensation");
+    unavailable(fuelingCategory,tr("Secondary injectors"),tr("Not implemented: staged secondary injection."));
+    auto *ignitionCategory=addCategory(tr("Ignition"),{});
+    unavailable(ignitionCategory,tr("Trigger wizard"),tr("Not implemented: trigger configuration assistant. Use Triggers and Scope."));
+    parameterItem(ignitionCategory,tr("Firing order"),"ignition.firing");
+    auto *coils=new QTreeWidgetItem(ignitionCategory,{tr("Coils")});parameterItem(coils,tr("Ignition outputs"),"coils.outputs");parameterItem(coils,tr("Dwell"),"coils.dwell");parameterItem(coils,tr("Voltage compensation"),"voltage.compensation");
+    auto *sparkCorrections=new QTreeWidgetItem(ignitionCategory,{tr("Corrections")});parameterItem(sparkCorrections,tr("IAT"),"ignition.iat");parameterItem(sparkCorrections,tr("Cylinders trim"),"ignition.trim");
+    auto *ignTables=new QTreeWidgetItem(ignitionCategory,{tr("Ign. tables")});auto *ignTable=new QTreeWidgetItem(ignTables,{tr("Ignition Table")});ignTable->setData(0,Qt::UserRole,1);auto *ignGraphItem=new QTreeWidgetItem(ignTables,{tr("Ignition 3D Graph")});ignGraphItem->setData(0,Qt::UserRole,8);
+    parameterItem(ignitionCategory,tr("Rev limiters"),"ignition.limit");auto *triggers=new QTreeWidgetItem(ignitionCategory,{tr("Triggers")});parameterItem(triggers,tr("Primary trigger"),"ignition.primary");parameterItem(triggers,tr("Phase"),"ignition.phase");
     addCategory(tr("Overrun"), {{tr("Fuel cut"),-1}});
     addCategory(tr("Knock sensors"), {{tr("Knock settings"),-1}});
-    addCategory(tr("Idle"), {{tr("Idle control"),6}});
+    addCategory(tr("Idle"), {{tr("Idle control"),-1}});
     addCategory(tr("Functions"), {{tr("General functions"),-1}});
-    addCategory(tr("Outputs"), {{tr("Output configuration"),6}});
-    addCategory(tr("Boost"), {{tr("Boost control"),6}});
-    addCategory(tr("DBW"), {{tr("Electronic throttle"),6}});
+    addCategory(tr("Outputs"), {{tr("Output configuration"),-1}});
+    addCategory(tr("Boost"), {{tr("Boost control"),-1}});
+    addCategory(tr("DBW"), {{tr("Electronic throttle"),-1}});
     addCategory(tr("Traction control"), {{tr("Traction settings"),-1}});
     addCategory(tr("VVT"), {{tr("Cam timing"),-1}});
     addCategory(tr("Sport"), {{tr("Sport mode"),-1}});
@@ -490,14 +514,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("Engine protection"), {{tr("Protection settings"),-1}});
     addCategory(tr("Timers"), {{tr("Timers setup"),-1}});
     addCategory(tr("DSG Gearbox"), {{tr("Gearbox settings"),-1}});
-    addCategory(tr("CAN, Serial"), {{tr("Communication settings"),6}});
+    addCategory(tr("CAN, Serial"), {{tr("Communication settings"),-1}});
     addCategory(tr("Log"), {{tr("Scope"),11},{tr("Graph Log"),4},{tr("Tune Display"),10},{tr("Autotune"),12}});
     addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
-    addCategory(tr("Calibration & Setup"), {{tr("Sensor and engine calibration"),6}});
     auto engineStatusDockRef = QSharedPointer<QPointer<QDockWidget>>::create();
-    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, openSettingsPage, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows, openTuneDisplay, toolNavigation](QTreeWidgetItem *item, int) {
+    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, openSettingsPage, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows, openTuneDisplay, toolNavigation, parameterNavigation](QTreeWidgetItem *item, int) {
+        if(!item->data(0,Qt::UserRole).isValid()){item->setExpanded(!item->isExpanded());return;}
         const int index = item->data(0, Qt::UserRole).toInt();
-        if(item->parent()&&(index==11||index==12)){if(*toolNavigation)(*toolNavigation)(index);}
+        if(item->data(0,Qt::UserRole+1).isValid()){if(*parameterNavigation)(*parameterNavigation)(item->data(0,Qt::UserRole+1).toString());}
+        else if(item->parent()&&(index==11||index==12)){if(*toolNavigation)(*toolNavigation)(index);}
         else if(item->parent()&&index==10){openTuneDisplay();}
         else if (item->parent() && index == 9) {
             if (*engineStatusDockRef) { (*engineStatusDockRef)->show(); (*engineStatusDockRef)->raise(); }
@@ -518,19 +543,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     });
     connect(navigationSearch, &QLineEdit::textChanged, navigationTree, [navigationTree](const QString &query) {
         const QString term = query.trimmed();
-        for (int i = 0; i < navigationTree->topLevelItemCount(); ++i) {
-            auto *category = navigationTree->topLevelItem(i);
-            const bool categoryMatch = category->text(0).contains(term, Qt::CaseInsensitive);
-            bool any = categoryMatch;
-            for (int j = 0; j < category->childCount(); ++j) {
-                auto *child = category->child(j);
-                const bool match = term.isEmpty() || categoryMatch || child->text(0).contains(term, Qt::CaseInsensitive);
-                child->setHidden(!match);
-                any |= match;
-            }
-            category->setHidden(!any||!QSettings().value("tools/strategies/"+category->text(0),true).toBool());
-            if (!term.isEmpty() && any) category->setExpanded(true);
-        }
+        std::function<bool(QTreeWidgetItem*,bool)> filter=[&](QTreeWidgetItem *item,bool inherited){const bool own=inherited||term.isEmpty()||item->text(0).contains(term,Qt::CaseInsensitive);bool match=own;for(int i=0;i<item->childCount();++i)match=filter(item->child(i),own)||match;item->setHidden(!match);if(!term.isEmpty()&&match)item->setExpanded(true);return match;};
+        for(int i=0;i<navigationTree->topLevelItemCount();++i){auto *category=navigationTree->topLevelItem(i);const bool match=filter(category,false);category->setHidden(!match||!QSettings().value("tools/strategies/"+category->text(0),true).toBool());}
     });
     navigationTree->topLevelItem(2)->setExpanded(true);
     // Context inspector on the right; dockable and resizable independently of map grids.
@@ -2165,454 +2179,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     tabs->addTab(firmwarePage, tr("Firmware"));
     const int firmwareTabIndex = tabs->indexOf(firmwarePage);
     tabs->tabBar()->setTabVisible(firmwareTabIndex, false);
-    // Calibration navigation is independent of the legacy Java UI.
-    auto *calibrationPage = new QWidget(tabs);
-    auto *calibrationLayout = new QHBoxLayout(calibrationPage);
-    auto *navigation = new QTreeWidget(calibrationPage);
-    navigation->setHeaderHidden(true);
-    navigation->setMinimumWidth(230);
-    navigation->setMaximumWidth(380);
-    navigation->setUniformRowHeights(true);
-    auto *pages = new QStackedWidget(calibrationPage);
-    auto *leftPanel = new QWidget(calibrationPage);
-    auto *leftLayout = new QVBoxLayout(leftPanel);
-    auto *search = new QLineEdit(leftPanel);
-    search->setPlaceholderText(tr("Search settings..."));
-    search->setClearButtonEnabled(true);
-    leftLayout->addWidget(search);
-    leftLayout->addWidget(navigation, 1);
-    struct Category { const char *title; const char *items[8]; };
-    const Category categories[] = {
-        {"Sensor Calibration", {"TPS", "MAP", "CLT", "IAT", "Lambda", "Battery", "Analog Inputs", nullptr}},
-        {"Fuel System", {"Injector Dead Time", "Fuel Pressure", "Injectors", nullptr}},
-        {"Ignition System", {"Coils", "Dwell", "Trigger", nullptr}},
-        {"Engine Control", {"Idle Control", "Boost Control", "Launch Control", "ETB / Drive by Wire", nullptr}},
-        {"Input / Output", {"Inputs", "Outputs", nullptr}}
-    };
-    auto sensorPanels=QSharedPointer<QVector<tunuino::SensorCalibrationWidget*>>::create();
-    QPushButton *tpsReadButton = nullptr;
-    QLabel *tpsReadStatus = nullptr;
-    for (const auto &category : categories) {
-        auto *parentItem = new QTreeWidgetItem(navigation, {tr(category.title)});
-        for (const char *name : category.items) {
-            if (!name) break;
-            auto *item = new QTreeWidgetItem(parentItem, {tr(name)});
-            auto *page = new QWidget(pages);
-            auto *form = new QFormLayout(page);
-            auto *title = new QLabel(QStringLiteral("<h2>%1</h2>").arg(tr(name).toHtmlEscaped()), page);
-            form->addRow(title);
-            auto *info = new QLabel(tr("Configuration preview only. ECU read/write and automatic calibration are not connected."), page);
-            info->setWordWrap(true);
-            form->addRow(info);
-            const QString sensorName=QString::fromLatin1(name);
-            if(sensorName==QStringLiteral("TPS")||sensorName==QStringLiteral("MAP")||sensorName==QStringLiteral("CLT")||sensorName==QStringLiteral("Lambda")||sensorName==QStringLiteral("IAT")||sensorName==QStringLiteral("Battery")){
-                const auto kind=sensorName==QStringLiteral("TPS")?tunuino::SensorKind::Tps:sensorName==QStringLiteral("MAP")?tunuino::SensorKind::Map:
-                    sensorName==QStringLiteral("CLT")?tunuino::SensorKind::Clt:sensorName==QStringLiteral("IAT")?tunuino::SensorKind::Iat:
-                    sensorName==QStringLiteral("Battery")?tunuino::SensorKind::Battery:tunuino::SensorKind::Lambda;
-                info->hide();auto *sensor=new tunuino::SensorCalibrationWidget(kind,page);sensorPanels->append(sensor);form->addRow(sensor);
-                pages->addWidget(page);item->setData(0,Qt::UserRole,pages->count()-1);continue;
-            }
-            if (QString::fromLatin1(name) == QStringLiteral("Idle Control") ||
-                QString::fromLatin1(name) == QStringLiteral("Boost Control") ||
-                QString::fromLatin1(name) == QStringLiteral("Launch Control")) {
-                const QString modeName = QString::fromLatin1(name);
-                auto *enabled = new QCheckBox(tr("Enable strategy (preview only)"), page);
-                enabled->setChecked(false);
-                auto *mode = new QComboBox(page);
-                auto *rpm = new QDoubleSpinBox(page);
-                rpm->setRange(0, 12000);
-                rpm->setDecimals(0);
-                rpm->setSingleStep(50);
-                rpm->setSuffix(tr(" rpm"));
-                auto *threshold = new QDoubleSpinBox(page);
-                auto *hysteresis = new QDoubleSpinBox(page);
-                auto *output = new QComboBox(page);
-                output->addItems({tr("Not assigned"), "PWM 1", "PWM 2", "PWM 3"});
-                auto *description = new QLabel(page);
-                description->setWordWrap(true);
-                if (modeName == QStringLiteral("Idle Control")) {
-                    mode->addItems({tr("Disabled"), tr("Open Loop"), tr("Closed Loop PID")});
-                    rpm->setValue(850);
-                    threshold->setRange(0, 100);
-                    threshold->setSuffix(" %");
-                    threshold->setValue(20);
-                    hysteresis->setRange(0, 50);
-                    hysteresis->setSuffix(" %");
-                    hysteresis->setValue(3);
-                    form->addRow(tr("Idle mode"), mode);
-                    form->addRow(tr("Target Idle RPM (reference)"), rpm);
-                    form->addRow(tr("Base valve duty (reference)"), threshold);
-                    form->addRow(tr("Duty limit / hysteresis (reference)"), hysteresis);
-                    form->addRow(tr("Idle valve output"), output);
-                    description->setText(tr("Target RPM is a starting reference, not a verified engine setting. PID tuning and coolant-temperature tables are not connected."));
-                } else if (modeName == QStringLiteral("Boost Control")) {
-                    mode->addItems({tr("Disabled"), tr("Open Loop Duty"), tr("Closed Loop Target")});
-                    threshold->setRange(0, 400);
-                    threshold->setSuffix(" kPa abs");
-                    threshold->setValue(100);
-                    hysteresis->setRange(0, 100);
-                    hysteresis->setSuffix(" %");
-                    hysteresis->setValue(0);
-                    form->addRow(tr("Boost mode"), mode);
-                    form->addRow(tr("Target MAP (reference)"), threshold);
-                    form->addRow(tr("Solenoid duty (reference)"), hysteresis);
-                    form->addRow(tr("Boost solenoid output"), output);
-                    description->setText(tr("100 kPa absolute is approximately atmospheric pressure, NOT a safe boost target. Overboost protection and control maps must be configured before use."));
-                } else {
-                    mode->addItems({tr("Disabled"), tr("Clutch switch"), tr("Digital input")});
-                    rpm->setValue(0);
-                    threshold->setRange(0, 100);
-                    threshold->setSuffix(" % TPS");
-                    threshold->setValue(0);
-                    hysteresis->setRange(0, 30);
-                    hysteresis->setSuffix(" s");
-                    hysteresis->setDecimals(1);
-                    form->addRow(tr("Activation source"), mode);
-                    form->addRow(tr("Launch RPM (unset)"), rpm);
-                    form->addRow(tr("Minimum TPS (unset)"), threshold);
-                    form->addRow(tr("Maximum activation duration (unset)"), hysteresis);
-                    description->setText(tr("Launch limits are intentionally unset. Input wiring, RPM cut strategy and safety conditions must be validated before activation."));
-                }
-                form->addRow(enabled);
-                form->addRow(description);
-                auto *apply = new QPushButton(tr("Apply to ECU (not connected)"), page);
-                apply->setEnabled(false);
-                form->addRow(apply);
-                auto *readsaveStrategy = new QPushButton(tr("Read from ECU"), page);
-                readsaveStrategy->setEnabled(false);
-                readsaveStrategy->setToolTip(tr("Requires validated ECU configuration read protocol."));
-                form->addRow(readsaveStrategy);
-                auto *saveStrategy = new QPushButton(tr("Write to ECU"), page);
-                saveStrategy->setEnabled(false);
-                saveStrategy->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
-                form->addRow(saveStrategy);
-                // ECU write action is deliberately unavailable until the persistent
-                // configuration protocol has been implemented and validated.
-                // Preview controls must never imply that a live ECU strategy is enabled.
-                enabled->setEnabled(false);
-            }
-            if (QString::fromLatin1(name) == QStringLiteral("ETB / Drive by Wire")) {
-                auto *mode = new QComboBox(page);
-                mode->addItems({tr("Disabled (default)"), tr("ETB / Drive by Wire (requires verified ECU support)")});
-                auto *pedal = new QComboBox(page);
-                pedal->addItems({tr("Select pedal sensor"), "APP 1 + APP 2"});
-                auto *throttle = new QComboBox(page);
-                throttle->addItems({tr("Select throttle sensor"), "TPS 1 + TPS 2"});
-                auto *driver = new QComboBox(page);
-                driver->addItems({tr("Select motor driver"), tr("Not configured")});
-                auto *pidP = new QDoubleSpinBox(page);
-                auto *pidI = new QDoubleSpinBox(page);
-                auto *pidD = new QDoubleSpinBox(page);
-                for (auto *spin : {pidP, pidI, pidD}) {
-                    spin->setRange(0.0, 1000.0);
-                    spin->setDecimals(3);
-                    spin->setSingleStep(0.01);
-                    spin->setValue(0.0);
-                }
-                auto *step1 = new QPushButton(tr("1. Calibrate pedal released / pressed"), page);
-                auto *step2 = new QPushButton(tr("2. Calibrate throttle closed / open"), page);
-                auto *step3 = new QPushButton(tr("3. Verify redundant sensors and motor direction"), page);
-                auto *step4 = new QPushButton(tr("4. Validate safety limits and save"), page);
-                for (auto *button : {step1, step2, step3, step4}) button->setEnabled(false);
-                auto *warning = new QLabel(tr("SAFETY: Electronic throttle actuation is locked. Calibration requires redundant APP/TPS plausibility checks, motor current and position limits, watchdog/fault shutdown, and a verified ECU driver. Never run an actuator sweep with the engine running."), page);
-                warning->setWordWrap(true);
-                warning->setStyleSheet(QStringLiteral("color: #b45309;"));
-                form->addRow(tr("ETB control"), mode);
-                form->addRow(tr("Accelerator pedal"), pedal);
-                form->addRow(tr("Throttle position"), throttle);
-                form->addRow(tr("H-bridge motor driver"), driver);
-                form->addRow(tr("PID P (unset)"), pidP);
-                form->addRow(tr("PID I (unset)"), pidI);
-                form->addRow(tr("PID D (unset)"), pidD);
-                form->addRow(step1);
-                form->addRow(step2);
-                form->addRow(step3);
-                form->addRow(step4);
-                form->addRow(warning);
-                auto *diagnostics = new QGroupBox(tr("ETB Safety Diagnostics"), page);
-                auto *diagnosticsLayout = new QFormLayout(diagnostics);
-                auto *status = new QLabel(tr("NOT MONITORED — ECU disconnected"), diagnostics);
-                status->setStyleSheet(QStringLiteral("font-weight: bold; color: #b45309;"));
-                auto *appStatus = new QLabel(tr("APP1 / APP2: no live data"), diagnostics);
-                auto *tpsStatus = new QLabel(tr("TPS1 / TPS2: no live data"), diagnostics);
-                auto *motorStatus = new QLabel(tr("Motor driver: not verified"), diagnostics);
-                auto *faultStatus = new QLabel(tr("Fault handling: not verified"), diagnostics);
-                diagnosticsLayout->addRow(tr("ETB status"), status);
-                diagnosticsLayout->addRow(tr("Pedal correlation"), appStatus);
-                diagnosticsLayout->addRow(tr("Throttle correlation"), tpsStatus);
-                diagnosticsLayout->addRow(tr("Motor and current limits"), motorStatus);
-                diagnosticsLayout->addRow(tr("Fail-safe / watchdog"), faultStatus);
-                form->addRow(diagnostics);
-                auto *safetyInfo = new QLabel(tr("When live telemetry is implemented, mismatched redundant sensors, out-of-range voltage, motor overcurrent, actuator timeout or watchdog faults must produce a clear alarm and trigger the firmware fail-safe. The console cannot replace ECU-side protection."), page);
-                safetyInfo->setWordWrap(true);
-                form->addRow(safetyInfo);
-                // No ECU capabilities or live feedback are available yet. Keep the controls
-                // non-operational to avoid implying that drive-by-wire is safe to enable.
-                for (auto *control : {mode, pedal, throttle, driver}) control->setEnabled(false);
-                for (auto *spin : {pidP, pidI, pidD}) spin->setEnabled(false);
-            }
-            if (QString::fromLatin1(name) == QStringLiteral("Inputs") ||
-                QString::fromLatin1(name) == QStringLiteral("Outputs")) {
-                const bool isOutput = QString::fromLatin1(name) == QStringLiteral("Outputs");
-                auto *channel = new QComboBox(page);
-                auto *function = new QComboBox(page);
-                auto *polarity = new QComboBox(page);
-                auto *help = new QLabel(page);
-                help->setWordWrap(true);
-                if (isOutput) {
-                    channel->addItem(tr("Select output"));
-                    for (int i = 1; i <= 12; ++i) channel->addItem(tr("Output %1").arg(i));
-                    function->addItems({tr("Unassigned"), tr("Injector 1"), tr("Injector 2"), tr("Injector 3"),
-                        tr("Injector 4"), tr("Injector 5"), tr("Injector 6"), tr("Injector 7"), tr("Injector 8"),
-                        tr("Ignition 1"), tr("Ignition 2"), tr("Ignition 3"), tr("Ignition 4"),
-                        tr("Ignition 5"), tr("Ignition 6"), tr("Ignition 7"), tr("Ignition 8"),
-                        tr("Fuel Pump"), tr("Cooling Fan 1"), tr("Cooling Fan 2"),
-                        tr("Idle Valve"), tr("Boost Solenoid"), tr("Tachometer")});
-                    polarity->addItems({tr("Active High"), tr("Active Low")});
-                    help->setText(tr("Choose an output and its function. The physical pin and available drivers depend on the detected ECU board; no pin is assigned automatically."));
-                } else {
-                    channel->addItem(tr("Select input"));
-                    for (int i = 1; i <= 12; ++i) channel->addItem(tr("Digital Input %1").arg(i));
-                    for (int i = 1; i <= 8; ++i) channel->addItem(tr("Analog Input %1").arg(i));
-                    function->addItems({tr("Unassigned"), tr("Clutch Switch"), tr("Brake Switch"),
-                        tr("Launch Enable"), tr("Flex Fuel"), tr("Oil Pressure"),
-                        tr("Fuel Pressure"), tr("External MAP"), tr("Wideband 1"),
-                        tr("Wideband 2"), tr("Switchable Map")});
-                    polarity->addItems({tr("Active High"), tr("Active Low")});
-                    help->setText(tr("Choose a physical input and function. Analog/digital compatibility and pin mapping require ECU board validation."));
-                }
-                form->addRow(isOutput ? tr("Output channel") : tr("Input channel"), channel);
-                form->addRow(tr("Assigned function"), function);
-                form->addRow(tr("Signal polarity"), polarity);
-                form->addRow(help);
-                auto *apply = new QPushButton(tr("Apply to ECU (not connected)"), page);
-                apply->setEnabled(false);
-                form->addRow(apply);
-                auto update = [=]() {
-                    const bool selected = channel->currentIndex() > 0;
-                    function->setEnabled(selected);
-                    polarity->setEnabled(selected);
-                    if (!selected) function->setCurrentIndex(0);
-                };
-                connect(channel, QOverload<int>::of(&QComboBox::currentIndexChanged), page,
-                    [update](int) { update(); });
-                update();
-            }
-            if (QString::fromLatin1(name) == QStringLiteral("Coils") ||
-                QString::fromLatin1(name) == QStringLiteral("Dwell") ||
-                QString::fromLatin1(name) == QStringLiteral("Trigger") ||
-                QString::fromLatin1(name) == QStringLiteral("Injectors") ||
-                QString::fromLatin1(name) == QStringLiteral("Fuel Pressure")) {
-                const QString section = QString::fromLatin1(name);
-                auto *profile = new QComboBox(page);
-                auto *channel = new QComboBox(page);
-                auto *note = new QLabel(page);
-                note->setWordWrap(true);
-                if (section == QStringLiteral("Coils")) {
-                    profile->addItems({tr("Select coil type"), tr("Smart coil (built-in igniter)"), tr("Dumb coil (external igniter)")});
-                    channel->addItem(tr("Select ignition channel"));
-                    for (int i = 1; i <= 8; ++i) channel->addItem(tr("Ignition %1").arg(i));
-                    note->setText(tr("Coil type and driver compatibility must be verified before enabling outputs."));
-                } else if (section == QStringLiteral("Dwell")) {
-                    profile->addItems({tr("Select dwell strategy"), tr("Battery voltage compensation table"), tr("Fixed dwell (reference only)")});
-                    channel->addItem(tr("Select ignition channel"));
-                    for (int i = 1; i <= 8; ++i) channel->addItem(tr("Ignition %1").arg(i));
-                    note->setText(tr("Dwell values require the coil manufacturer's data. No default firing dwell is applied."));
-                } else if (section == QStringLiteral("Trigger")) {
-                    profile->addItems({tr("Select trigger pattern"), tr("Missing tooth"), tr("Dual wheel"), tr("Cam + crank"), tr("Custom / verify with oscilloscope")});
-                    channel->addItems({tr("Select trigger input"), "Crank", "Cam 1", "Cam 2"});
-                    note->setText(tr("Trigger polarity, tooth count and sync angle require verification before engine operation."));
-                    auto *wheel = new QComboBox(page);
-                    wheel->addItems({tr("Select wheel pattern"), "60-2", "36-1", "36-2", "24-1", "12-1", "12-0", tr("Custom")});
-                    auto *teeth = new QSpinBox(page);
-                    teeth->setRange(1, 360);
-                    teeth->setValue(60);
-                    auto *missing = new QSpinBox(page);
-                    missing->setRange(0, 12);
-                    missing->setValue(2);
-                    auto *triggerAngle = new QDoubleSpinBox(page);
-                    triggerAngle->setRange(-360.0, 360.0);
-                    triggerAngle->setDecimals(1);
-                    triggerAngle->setSuffix(QStringLiteral(" deg"));
-                    auto *polarity = new QComboBox(page);
-                    polarity->addItems({tr("Not selected"), tr("Rising edge"), tr("Falling edge")});
-                    form->addRow(tr("Trigger wheel"), wheel);
-                    form->addRow(tr("Nominal teeth"), teeth);
-                    form->addRow(tr("Missing teeth"), missing);
-                    form->addRow(tr("Trigger angle (unverified)"), triggerAngle);
-                    form->addRow(tr("Trigger edge"), polarity);
-                    const auto updateWheel = [=](int index) {
-                        const bool custom = index == wheel->count() - 1;
-                        teeth->setEnabled(custom);
-                        missing->setEnabled(custom);
-                        if (!custom) {
-                            const QStringList parts = wheel->currentText().split(QLatin1Char('-'));
-                            if (parts.size() == 2) {
-                                teeth->setValue(parts.at(0).toInt());
-                                missing->setValue(parts.at(1).toInt());
-                            }
-                        }
-                    };
-                    connect(wheel, QOverload<int>::of(&QComboBox::currentIndexChanged), page, updateWheel);
-                    updateWheel(wheel->currentIndex());
-                    auto *readsaveWheel = new QPushButton(tr("Read from ECU"), page);
-                readsaveWheel->setEnabled(false);
-                readsaveWheel->setToolTip(tr("Requires validated ECU configuration read protocol."));
-                form->addRow(readsaveWheel);
-                auto *saveWheel = new QPushButton(tr("Write to ECU"), page);
-                saveWheel->setEnabled(false);
-                saveWheel->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
-                    form->addRow(saveWheel);
-                    // ECU write action is deliberately unavailable until the persistent
-                    // configuration protocol has been implemented and validated.
-                } else if (section == QStringLiteral("Injectors")) {
-                    profile->addItems({tr("Select injector type"), tr("High impedance"), tr("Low impedance (driver required)")});
-                    channel->addItem(tr("Select injector channel"));
-                    for (int i = 1; i <= 8; ++i) channel->addItem(tr("Injector %1").arg(i));
-                    note->setText(tr("Injector impedance, flow rate and driver compatibility must be confirmed."));
-                } else {
-                    profile->addItems({tr("Select pressure sensor"), tr("Analog 0–5 V"), tr("Digital / CAN (requires support)"), tr("Custom calibration")});
-                    channel->addItem(tr("Select analog input"));
-                    for (int i = 1; i <= 8; ++i) channel->addItem(tr("Analog Input %1").arg(i));
-                    note->setText(tr("Choose the exact sensor pressure range and transfer curve before calibration."));
-                }
-                form->addRow(tr("Configuration"), profile);
-                form->addRow(tr("Channel / Input"), channel);
-                form->addRow(note);
-                auto *apply = new QPushButton(tr("Apply to ECU (not connected)"), page);
-                apply->setEnabled(false);
-                form->addRow(apply);
-            }
-            if (QString::fromLatin1(name) == QStringLiteral("Analog Inputs")) {
-                auto *channel = new QComboBox(page);
-                channel->addItem(tr("Select analog input"));
-                for (int i = 1; i <= 8; ++i) channel->addItem(tr("Analog Input %1").arg(i));
-                auto *sensor = new QComboBox(page);
-                sensor->addItems({tr("Unassigned"), tr("Oil Pressure"), tr("Fuel Pressure"),
-                    tr("Wideband 1"), tr("Wideband 2"), tr("External MAP"),
-                    tr("Oil Temperature"), tr("Exhaust Pressure"), tr("Custom Sensor")});
-                auto *profile = new QComboBox(page);
-                profile->addItems({tr("Select sensor profile"), tr("0–5 V linear (requires range)"),
-                    tr("Manufacturer curve"), tr("Custom two-point calibration")});
-                auto *note = new QLabel(tr("Select the channel, sensor and its verified calibration curve. A generic 0–5 V input does not define engineering units."), page);
-                note->setWordWrap(true);
-                form->addRow(tr("Input channel"), channel);
-                form->addRow(tr("Sensor function"), sensor);
-                form->addRow(tr("Calibration profile"), profile);
-                form->addRow(note);
-                auto *apply = new QPushButton(tr("Apply to ECU (not connected)"), page);
-                apply->setEnabled(false);
-                form->addRow(apply);
-            }
-            if (QString::fromLatin1(name) == QStringLiteral("Injector Dead Time")) {
-                auto *note = new QLabel(tr("Enter verified injector manufacturer dead-time values in milliseconds. Zero means not configured. Offline only; nothing is sent to the ECU."), page);
-                note->setWordWrap(true);
-                form->addRow(note);
-                auto *table = new QTableWidget(5, 2, page);
-                table->setHorizontalHeaderLabels({tr("Battery voltage (V)"), tr("Dead Time (ms)")});
-                const QStringList volts = {"8", "10", "12", "14", "16"};
-                for (int i = 0; i < volts.size(); ++i) {
-                    auto *voltage = new QTableWidgetItem(volts[i]);
-                    voltage->setFlags(voltage->flags() & ~Qt::ItemIsEditable);
-                    table->setItem(i, 0, voltage);
-                    auto *deadTime = new QDoubleSpinBox(table);
-                    deadTime->setRange(0.0, 10.0);
-                    deadTime->setDecimals(3);
-                    deadTime->setSingleStep(0.025);
-                    deadTime->setSuffix(QStringLiteral(" ms"));
-                    deadTime->setSpecialValueText(tr("Not configured"));
-                    deadTime->setValue(0.0);
-                    table->setCellWidget(i, 1, deadTime);
-                }
-                table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-                table->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
-                table->setMinimumHeight(220);
-                form->addRow(table);
-                auto *readsave = new QPushButton(tr("Read from ECU"), page);
-                readsave->setEnabled(false);
-                readsave->setToolTip(tr("Requires validated ECU configuration read protocol."));
-                form->addRow(readsave);
-                auto *save = new QPushButton(tr("Write to ECU"), page);
-                save->setEnabled(false);
-                save->setToolTip(tr("Not available: ECU configuration write and persistent storage protocol must be implemented and validated. This control does not save to the PC."));
-                form->addRow(save);
-                // ECU write action is deliberately unavailable until the persistent
-                // configuration protocol has been implemented and validated.
-                auto *read = new QPushButton(tr("Read from ECU"), page);
-                read->setEnabled(false);
-                read->setToolTip(tr("Requires validated ECU configuration read protocol."));
-                form->addRow(read);
-                auto *apply = new QPushButton(tr("Write to ECU"), page);
-                apply->setEnabled(false);
-                form->addRow(apply);
-            }
-            pages->addWidget(page);
-            item->setData(0, Qt::UserRole, pages->count() - 1);
-        }
-        parentItem->setExpanded(true);
-    }
-    // Route the main motorsport navigation directly to the corresponding real
-    // configuration panel instead of opening an unrelated default panel.
-    const QMap<QString, QString> mainNavigationTargets = {
-        {tr("TPS Calibration"), tr("TPS")},
-        {tr("MAP Calibration"), tr("MAP")},
-        {tr("Temperature sensors"), tr("CLT")},
-        {tr("Lambda / O2"), tr("Lambda")},
-        {tr("Injector Dead Time"), tr("Injector Dead Time")},
-        {tr("Trigger setup"), tr("Trigger")},
-        {tr("Idle control"), tr("Idle Control")},
-        {tr("Boost control"), tr("Boost Control")},
-        {tr("Electronic throttle"), tr("ETB / Drive by Wire")},
-        {tr("Output configuration"), tr("Outputs")},
-        {tr("Communication settings"), tr("Inputs")}
-    };
-    connect(navigationTree, &QTreeWidget::itemClicked, calibrationPage,
-            [navigation, mainNavigationTargets](QTreeWidgetItem *selected, int) {
-        if (!selected || !selected->parent()) return;
-        const QString target = mainNavigationTargets.value(selected->text(0));
-        if (target.isEmpty()) return;
-        for (int i = 0; i < navigation->topLevelItemCount(); ++i) {
-            auto *category = navigation->topLevelItem(i);
-            for (int j = 0; j < category->childCount(); ++j) {
-                auto *child = category->child(j);
-                if (child->text(0) == target) {
-                    navigation->setCurrentItem(child);
-                    return;
-                }
-            }
-        }
-    });
-    connect(navigation, &QTreeWidget::currentItemChanged, pages,
-        [pages](QTreeWidgetItem *current, QTreeWidgetItem *) {
-            if (current && current->data(0, Qt::UserRole).isValid())
-                pages->setCurrentIndex(current->data(0, Qt::UserRole).toInt());
-        });
-    connect(search, &QLineEdit::textChanged, navigation, [navigation](const QString &query) {
-        for (int i = 0; i < navigation->topLevelItemCount(); ++i) {
-            auto *category = navigation->topLevelItem(i);
-            const bool parentMatch = category->text(0).contains(query, Qt::CaseInsensitive);
-            bool visibleChild = false;
-            for (int j = 0; j < category->childCount(); ++j) {
-                auto *child = category->child(j);
-                const bool show = parentMatch || child->text(0).contains(query, Qt::CaseInsensitive);
-                child->setHidden(!show);
-                visibleChild |= show;
-            }
-            category->setHidden(!visibleChild);
-            if (!query.isEmpty() && visibleChild) category->setExpanded(true);
-        }
-    });
-    auto *splitter = new QSplitter(Qt::Horizontal, calibrationPage);
-    splitter->addWidget(leftPanel);
-    splitter->addWidget(pages);
-    splitter->setStretchFactor(0, 0);
-    splitter->setStretchFactor(1, 1);
-    splitter->setSizes({280, 900});
-    calibrationLayout->addWidget(splitter);
-    tabs->addTab(calibrationPage, tr("Calibration & Setup"));
-    // Navigation and the main menu select pages; do not duplicate them as inner tabs.
+    // Each calibration has one persistent MDI window. No second navigation tree.
     tabs->tabBar()->hide();
-    if (auto *first = navigation->topLevelItem(0)) navigation->setCurrentItem(first->child(0));
+    auto sensorPanels=QSharedPointer<QVector<tunuino::SensorCalibrationWidget*>>::create();
+    auto parameterPanels=QSharedPointer<QVector<tunuino::ParameterWidget*>>::create();
+    auto parameterWindows=QSharedPointer<QMap<QString,QPointer<QMdiSubWindow>>>::create();
+    QPushButton *tpsReadButton=nullptr;QLabel *tpsReadStatus=nullptr;
+    for(auto kind:{tunuino::SensorKind::Tps,tunuino::SensorKind::Map,tunuino::SensorKind::Clt,tunuino::SensorKind::Iat,tunuino::SensorKind::Lambda,tunuino::SensorKind::Battery}){
+        auto *panel=new tunuino::SensorCalibrationWidget(kind);sensorPanels->append(panel);const auto name=tunuino::SensorCalibrationCodec::name(kind);
+        (*parameterWindows)["sensor:"+name]=toolWindow(panel,tr("Sensors and inputs - %1").arg(name));
+    }
+    for(const auto &block:tunuino::ParameterCatalog::blocks()){auto *panel=new tunuino::ParameterWidget(block);parameterPanels->append(panel);auto *window=toolWindow(panel,block.title);window->resize(720,block.key=="ignition.firing"?520:560);(*parameterWindows)[block.key]=window;}
+    *parameterNavigation=[=](const QString &key){auto *window=(*parameterWindows).value(key).data();if(!window)return;window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
     auto *dock = new QDockWidget(tr("Engine Status"), this);
     dock->setObjectName("EngineStatusDock");
     auto *statusPanel = new QWidget(dock);
@@ -2684,6 +2262,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     struct SensorBase { QByteArray header,aux,identity;quint32 generation=0; };
     auto sensorBase=QSharedPointer<SensorBase>::create();
     auto activeSensorWrite=QSharedPointer<int>::create(-1);
+    auto activeParameterWrite=QSharedPointer<QPointer<tunuino::ParameterWidget>>::create();
     auto writeActionRef = QSharedPointer<QPointer<QAction>>::create();
     const auto updateWriteAvailability = [=]() {
         const bool ready = *ecuOnline && *ecuClean && *identityVerified && session->isOpen() && !writer->busy() && !*writePending && !*readBusy && !*validationPending && !*toolBusy && !*toolReply;
@@ -2692,13 +2271,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         ignitionSave->setEnabled(ready && !ignitionBase.bytes.isEmpty() && ignitionBase.identity==*ecuIdentity && ignitionBase.generation!=0 && ignitionBase.generation==*ecuGeneration);
         const bool sensorReady=ready&&sensorBase->header.size()==256&&sensorBase->aux.size()==256
             &&sensorBase->identity==*ecuIdentity&&sensorBase->generation==*ecuGeneration;
-        bool sensorVisible=false;
-        for(auto *panel:*sensorPanels){panel->setAvailable(sensorReady);sensorVisible|=panel->isVisible();}
+        for(auto *panel:*sensorPanels)panel->setAvailable(sensorReady);
+        for(auto *panel:*parameterPanels)panel->setAvailable(sensorReady);
         if (*writeActionRef) {
-            const auto *window=workspace->activeSubWindow(); const auto *page=window?window->widget():nullptr;
+            const auto *window=workspace->activeSubWindow(); auto *page=window?window->widget():nullptr;
             (*writeActionRef)->setEnabled(((page==fuelPage || page==fuelSurface) && fuelSave->isEnabled())
                 || ((page==ignitionPage || page==ignitionSurface) && ignitionSave->isEnabled())
-                || (page==calibrationPage&&sensorVisible&&sensorReady));
+                || (sensorReady&&(dynamic_cast<const tunuino::SensorCalibrationWidget*>(page)||dynamic_cast<const tunuino::ParameterWidget*>(page))));
         }
     };
     auto connectionClock = QSharedPointer<QElapsedTimer>::create();
@@ -2714,6 +2293,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             : QStringLiteral("color: #aaaaaa; font-weight: bold; padding: 4px 12px;"));
         if (!online) {
             for(auto *panel:*sensorPanels)panel->setAvailable(false);
+            for(auto *panel:*parameterPanels)panel->setAvailable(false);
             graphLog->setConnected(false);
             tuneDisplay->setConnected(false);
             autotuneTool->disconnected();
@@ -2893,13 +2473,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     };
     const auto freezeMapEditing = [=](bool frozen) {
         openProject->setEnabled(!frozen);saveProject->setEnabled(!frozen);
-        fuelPage->setEnabled(!frozen); ignitionPage->setEnabled(!frozen);calibrationPage->setEnabled(!frozen);
+        fuelPage->setEnabled(!frozen); ignitionPage->setEnabled(!frozen);
+        for(auto *panel:*sensorPanels)panel->setEnabled(!frozen);for(auto *panel:*parameterPanels)panel->setEnabled(!frozen);
         for (auto *action : {fuelFileActions.first,fuelFileActions.second,ignitionFileActions.first,ignitionFileActions.second})
             action->setEnabled(!frozen);
     };
     writer->completed = [=](bool success,bool uncertain,const QString &message) {
         *writePending=false; setProperty("mapWriteBusy",false); freezeMapEditing(false);
         (*mapBases)[0]={}; (*mapBases)[1]={}; *sensorBase={};
+        if(success&&*activeParameterWrite)(*activeParameterWrite)->saved();*activeParameterWrite=nullptr;
         if(success&&*activeSensorWrite>=0)for(auto *panel:*sensorPanels)if(int(panel->kind())==*activeSensorWrite)panel->saved();
         statusBar()->showMessage(message,30000);
         if (success) {
@@ -2922,7 +2504,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
         updateWriteAvailability();
     };
-    struct PendingMapWrite { int page=0,sensor=-1; QByteArray desired,base,identity; quint32 generation=0; };
+    struct PendingMapWrite { int page=0,sensor=-1; QByteArray desired,base,identity,mask; quint32 generation=0; };
     auto pendingWrite = QSharedPointer<PendingMapWrite>::create();
     auto *writeLaunch = new QTimer(this); writeLaunch->setInterval(25);
     auto writeWait = QSharedPointer<QElapsedTimer>::create();
@@ -2938,7 +2520,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
         if (session->isBusy()) return;
         writeLaunch->stop(); *writePending=false;
-        const bool started=pendingWrite->sensor>=0?writer->startSensor(tunuino::SensorKind(pendingWrite->sensor),pendingWrite->desired,pendingWrite->base,pendingWrite->identity,pendingWrite->generation):
+        const bool started=pendingWrite->sensor==-2?writer->startParameters(pendingWrite->page,pendingWrite->desired,pendingWrite->base,pendingWrite->identity,pendingWrite->generation,pendingWrite->mask):pendingWrite->sensor>=0?writer->startSensor(tunuino::SensorKind(pendingWrite->sensor),pendingWrite->desired,pendingWrite->base,pendingWrite->identity,pendingWrite->generation):
             writer->start(pendingWrite->page,pendingWrite->desired,pendingWrite->base,pendingWrite->identity,pendingWrite->generation);
         if (!started) {
             setProperty("mapWriteBusy",false); freezeMapEditing(false); liveTimer->start();
@@ -2972,7 +2554,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             || *ecuIdentity!=base.identity || *ecuGeneration!=base.generation) {
             statusBar()->showMessage(tr("ECU changed while confirming. Wait for a fresh read before writing."),15000);return;
         }
-        pendingWrite->sensor=-1;*activeSensorWrite=-1;
+        pendingWrite->sensor=-1;*activeSensorWrite=-1;*activeParameterWrite=nullptr;
         pendingWrite->page=page;pendingWrite->desired=desired;pendingWrite->base=base.bytes;
         pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
         *writePending=true;setProperty("mapWriteBusy",true);writeWait->start();liveTimer->stop();validationAction->setEnabled(false);
@@ -2987,7 +2569,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const QString name=tunuino::SensorCalibrationCodec::name(kind);
         if(QMessageBox::question(this,tr("Write sensor to ECU"),tr("Save %1 calibration to the ECU? Engine must be stopped and outputs disarmed. Other calibrations and maps will be preserved.").arg(name),QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel)!=QMessageBox::Yes)return;
         if(!*ecuOnline||!*identityVerified||!session->isOpen()||transfer->page||*ecuIdentity!=base.identity||*ecuGeneration!=base.generation)return;
-        pendingWrite->sensor=int(kind);*activeSensorWrite=int(kind);pendingWrite->page=tunuino::SensorCalibrationCodec::page(kind);
+        pendingWrite->sensor=int(kind);*activeSensorWrite=int(kind);*activeParameterWrite=nullptr;pendingWrite->page=tunuino::SensorCalibrationCodec::page(kind);
         pendingWrite->desired=desired;pendingWrite->base=tunuino::SensorCalibrationCodec::auxiliary(kind)?base.aux:base.header;
         pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
         *writePending=true;setProperty("mapWriteBusy",true);writeWait->start();liveTimer->stop();validationAction->setEnabled(false);
@@ -2995,12 +2577,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         freezeMapEditing(true);updateWriteAvailability();writeLaunch->start();
         statusBar()->showMessage(tr("Checking ECU and preparing %1 calibration...").arg(name));
     };
-    connect(pages,&QStackedWidget::currentChanged,this,[=](int){updateWriteAvailability();});
+    for(auto *panel:*parameterPanels)panel->writeRequested=[=](int page,const QByteArray &desired,const QByteArray &mask){
+        if(!*ecuOnline||!*ecuClean||!*identityVerified||!session->isOpen()||transfer->page||*validationPending||writer->busy()||*writePending||*toolBusy||*toolReply)return;
+        const auto base=*sensorBase;if(base.identity!=*ecuIdentity||base.generation!=*ecuGeneration)return;
+        if(QMessageBox::question(this,tr("Write parameters to ECU"),tr("Save %1? Engine must be stopped and outputs disarmed. Only this block is written; other window edits are separate.").arg(panel->block().title),QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel)!=QMessageBox::Yes)return;
+        if(!*ecuOnline||!*identityVerified||!session->isOpen()||transfer->page||*ecuIdentity!=base.identity||*ecuGeneration!=base.generation)return;
+        pendingWrite->sensor=-2;*activeSensorWrite=-1;*activeParameterWrite=panel;pendingWrite->page=page;pendingWrite->desired=desired;pendingWrite->mask=mask;pendingWrite->base=page==1?base.header:base.aux;pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
+        *writePending=true;setProperty("mapWriteBusy",true);writeWait->start();liveTimer->stop();validationAction->setEnabled(false);freezeMapEditing(true);updateWriteAvailability();writeLaunch->start();
+    };
     connect(fuelSave,&QPushButton::clicked,this,[=] { queueMapWrite(2); });
     connect(ignitionSave,&QPushButton::clicked,this,[=] { queueMapWrite(3); });
     connect(workspace,&QMdiArea::subWindowActivated,this,[=](QMdiSubWindow*) { updateWriteAvailability(); });
-    auto *calibrationAction = toolsMenu->addAction(tr("Calibration and setup"));
-    connect(calibrationAction, &QAction::triggered, this, [openSettingsPage]() { openSettingsPage(6); });
     auto *helpMenu = menuBar()->addMenu(tr("Help"));
     auto *checkUpdates = helpMenu->addAction(tr("Check for updates..."));
     connect(checkUpdates, &QAction::triggered, this, [this, checkUpdates]() {
@@ -3102,10 +2689,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     *writeActionRef=writeActiveMap;writeActiveMap->setShortcut(QKeySequence(QStringLiteral("F2")));
     writeActiveMap->setEnabled(false);
     connect(writeActiveMap,&QAction::triggered,this,[=] {
-        const auto *window=workspace->activeSubWindow();const auto *page=window?window->widget():nullptr;
+        const auto *window=workspace->activeSubWindow();auto *page=window?window->widget():nullptr;
         if(page==fuelPage || page==fuelSurface)fuelSave->click();
         else if(page==ignitionPage || page==ignitionSurface)ignitionSave->click();
-        else if(page==calibrationPage)for(auto *panel:*sensorPanels)if(panel->isVisible()){panel->save();break;}
+        else if(auto *sensor=dynamic_cast<tunuino::SensorCalibrationWidget*>(page))sensor->save();
+        else if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(page))parameters->save();
     });
 
     auto *settingsMenu = menuBar()->addMenu(tr("Settings"));
@@ -3251,7 +2839,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             }
             if(transfer->page==4){
                 sensorBase->aux=transfer->bytes;sensorBase->identity=*ecuIdentity;sensorBase->generation=*ecuGeneration;
-                if(sensorBase->header.size()==256)for(auto *panel:*sensorPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);
+                if(sensorBase->header.size()==256){for(auto *panel:*sensorPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*parameterPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);}
                 abortTransfer(tr("ECU synchronized: Fuel, Ignition and sensor calibrations."));return;
             }
             bool valid = true;

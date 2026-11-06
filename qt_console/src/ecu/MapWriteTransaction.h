@@ -20,6 +20,8 @@ public:
                const QByteArray &identity,quint32 generation);
     bool startSensor(SensorKind kind,const QByteArray &desired,const QByteArray &base,
         const QByteArray &identity,quint32 generation);
+    bool startParameters(int page,const QByteArray &desired,const QByteArray &base,
+        const QByteArray &identity,quint32 generation,const QByteArray &mask);
     void receive(const QByteArray &body);
     void transportFailed(const QString &reason);
     bool busy() const {return phase_!=Phase::Idle;}
