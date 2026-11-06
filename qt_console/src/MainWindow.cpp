@@ -97,6 +97,10 @@
 #include "protocol/MapPageCodec.h"
 #include "calibration/SensorCalibrationWidget.h"
 #include "display/TuneDisplayWidget.h"
+#include "tools/ToolsSuite.h"
+#include "tools/ScopeWidget.h"
+#include "tools/OutputTestWidget.h"
+#include "tools/AutotuneWidget.h"
 #include <QDateTime>
 #include <QUuid>
 #include <QCloseEvent>
@@ -382,6 +386,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     workspace->setBackground(QBrush(QColor(43, 46, 51)));
     setCentralWidget(workspace);
     auto *boundsGuard = new WorkspaceBoundsGuard(workspace);
+    auto toolBusy=QSharedPointer<bool>::create(false);
+    auto toolReply=QSharedPointer<std::function<void(const QByteArray&)>>::create();
+    auto toolRuntime=QSharedPointer<bool>::create(false);
+    auto toolLease=QSharedPointer<quint64>::create(0);
     // Hidden page registry only; no legacy "Tables and configuration" MDI window.
     auto *tabs = new QTabWidget(this);
     tabs->hide();
@@ -415,6 +423,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // Graph windows are independent from their map tables and can be closed
     // and reopened from the navigation tree without discarding ECU data.
     auto tuneWindow=QSharedPointer<QPointer<QMdiSubWindow>>::create();
+    auto toolNavigation=QSharedPointer<std::function<void(int)>>::create();
     const auto openTuneDisplay=[=]{
         if(!*tuneWindow)return;auto *window=tuneWindow->data();
         if(window->isMinimized())window->showNormal();else window->show();
@@ -481,13 +490,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("Timers"), {{tr("Timers setup"),-1}});
     addCategory(tr("DSG Gearbox"), {{tr("Gearbox settings"),-1}});
     addCategory(tr("CAN, Serial"), {{tr("Communication settings"),6}});
-    addCategory(tr("Log"), {{tr("Graph Log"),4},{tr("Tune Display"),10}});
+    addCategory(tr("Log"), {{tr("Scope"),11},{tr("Graph Log"),4},{tr("Tune Display"),10},{tr("Autotune"),12}});
     addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
     addCategory(tr("Calibration & Setup"), {{tr("Sensor and engine calibration"),6}});
     auto engineStatusDockRef = QSharedPointer<QPointer<QDockWidget>>::create();
-    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, openSettingsPage, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows, openTuneDisplay](QTreeWidgetItem *item, int) {
+    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, openSettingsPage, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows, openTuneDisplay, toolNavigation](QTreeWidgetItem *item, int) {
         const int index = item->data(0, Qt::UserRole).toInt();
-        if(item->parent()&&index==10){openTuneDisplay();}
+        if(item->parent()&&(index==11||index==12)){if(*toolNavigation)(*toolNavigation)(index);}
+        else if(item->parent()&&index==10){openTuneDisplay();}
         else if (item->parent() && index == 9) {
             if (*engineStatusDockRef) { (*engineStatusDockRef)->show(); (*engineStatusDockRef)->raise(); }
         } else if (item->parent() && (index == 7 || index == 8)) {
@@ -517,7 +527,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 child->setHidden(!match);
                 any |= match;
             }
-            category->setHidden(!any);
+            category->setHidden(!any||!QSettings().value("tools/strategies/"+category->text(0),true).toBool());
             if (!term.isEmpty() && any) category->setExpanded(true);
         }
     });
@@ -1588,6 +1598,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
     auto *graphLog = new tunuino::GraphLogWidget(tabs);
     tabs->addTab(graphLog, tr("Graph Log"));
+    auto *tools=new tunuino::ToolsSuite(this,navigationTree);
+    auto *scopeTool=new tunuino::ScopeWidget;
+    auto *outputTestTool=new tunuino::OutputTestWidget;
+    auto *autotuneTool=new tunuino::AutotuneWidget;
+    const auto toolWindow=[=](QWidget *widget,const QString &title){auto *window=workspace->addSubWindow(widget);window->setWindowTitle(title);window->setAttribute(Qt::WA_DeleteOnClose,false);window->resize(900,640);boundsGuard->watch(window);window->hide();return window;};
+    auto *scopeWindow=toolWindow(scopeTool,tr("Scope"));auto *outputTestWindow=toolWindow(outputTestTool,tr("Test outputs"));auto *autotuneWindow=toolWindow(autotuneTool,tr("Autotune"));
+    const auto showTool=[=](QMdiSubWindow *window){window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
+    *toolNavigation=[=](int index){showTool(index==11?scopeWindow:autotuneWindow);};
+    tools->openScope=[=]{showTool(scopeWindow);};tools->openOutputTest=[=]{showTool(outputTestWindow);};tools->openAutotune=[=]{showTool(autotuneWindow);};
     auto *tuneDisplay=new tunuino::TuneDisplayWidget;
     auto *tuneSubWindow=workspace->addSubWindow(tuneDisplay);
     tuneSubWindow->setWindowTitle(tr("Tune Display"));
@@ -2663,7 +2682,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto activeSensorWrite=QSharedPointer<int>::create(-1);
     auto writeActionRef = QSharedPointer<QPointer<QAction>>::create();
     const auto updateWriteAvailability = [=]() {
-        const bool ready = *ecuOnline && *ecuClean && *identityVerified && session->isOpen() && !writer->busy() && !*writePending && !*readBusy && !*validationPending;
+        const bool ready = *ecuOnline && *ecuClean && *identityVerified && session->isOpen() && !writer->busy() && !*writePending && !*readBusy && !*validationPending && !*toolBusy && !*toolReply;
         const auto &fuelBase=(*mapBases)[0]; const auto &ignitionBase=(*mapBases)[1];
         fuelSave->setEnabled(ready && !fuelBase.bytes.isEmpty() && fuelBase.identity==*ecuIdentity && fuelBase.generation!=0 && fuelBase.generation==*ecuGeneration);
         ignitionSave->setEnabled(ready && !ignitionBase.bytes.isEmpty() && ignitionBase.identity==*ecuIdentity && ignitionBase.generation!=0 && ignitionBase.generation==*ecuGeneration);
@@ -2693,6 +2712,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             for(auto *panel:*sensorPanels)panel->setAvailable(false);
             graphLog->setConnected(false);
             tuneDisplay->setConnected(false);
+            autotuneTool->disconnected();
             for (auto *value : *liveReadings) value->setText(tr("Unavailable"));
             maps->clearOperatingPoint();
             ignitionMap->clearOperatingPoint();
@@ -2805,10 +2825,38 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *graphLogAction = toolsMenu->addAction(tr("Graph Log"));
     graphLogAction->setShortcut(QKeySequence(QStringLiteral("F6")));
     connect(graphLogAction, &QAction::triggered, this, [openSettingsPage]() { openSettingsPage(4); });
-    auto *validationAction = toolsMenu->addAction(tr("Check ECU configuration (read-only)"));
+    tools->populate(toolsMenu,graphLogAction,tuneDisplayAction);
+    tools->snapshot=[=]{
+        tunuino::ToolSnapshot result;
+        if(!*ecuOnline||!*ecuClean||!*identityVerified||!session->isOpen()||*readBusy||*validationPending||writer->busy()||*writePending)return result;
+        if(sensorBase->identity!=*ecuIdentity||sensorBase->generation!=*ecuGeneration)return result;
+        for(const auto &base:*mapBases)if(base.identity!=*ecuIdentity||base.generation!=*ecuGeneration)return result;
+        result.identity=*ecuIdentity;result.generation=*ecuGeneration;result.pages={sensorBase->header,(*mapBases)[0].bytes,(*mapBases)[1].bytes,sensorBase->aux};return result;
+    };
+    const auto changeToolBusy=[=](bool busy){*toolBusy=busy;setProperty("ecuToolBusy",busy);updateWriteAvailability();};
+    scopeTool->busyChanged=changeToolBusy;outputTestTool->busyChanged=changeToolBusy;autotuneTool->busyChanged=changeToolBusy;
+    scopeTool->ready=[=]{const auto base=tools->snapshot();return base.valid()&&(quint8(base.identity[19])&16)&&(!*toolBusy||scopeTool->busy());};
+    outputTestTool->snapshot=tools->snapshot;autotuneTool->snapshot=tools->snapshot;
+    outputTestTool->canStart=[=]{return !*toolBusy&&!*toolReply;};autotuneTool->canStart=outputTestTool->canStart;
+    const auto toolExchange=[=](const QByteArray &request,std::function<void(const QByteArray&)> reply){
+        if(!*ecuOnline||!*identityVerified||!session->isOpen()||session->isBusy()||*toolReply||writer->busy()||*writePending||*readBusy||*validationPending)return false;
+        *toolReply=std::move(reply);*toolRuntime=!request.isEmpty()&&request[0]=='O';const auto lease=++*toolLease;
+        if(!session->exchange(request,1500)){*toolReply={};return false;}
+        QTimer::singleShot(1800,this,[=]{if(*toolReply&&*toolLease==lease){auto callback=std::move(*toolReply);*toolReply={};callback({});}});return true;
+    };
+    scopeTool->exchange=toolExchange;outputTestTool->exchange=toolExchange;
+    autotuneTool->applyToEditor=[=](const tunuino::ToolSnapshot &base,const QByteArray &desired){
+        const auto current=tools->snapshot();if(current.identity!=base.identity||current.generation!=base.generation||current.pages!=base.pages||!tunuino::MapPageCodec::valid(2,desired))return false;
+        tunuino::MapPageValues values;bool valid=true;
+        for(int i=0;i<16;++i){bool ok=false;values.rpm[i]=fuelRpmValues->item(0,i)->text().toDouble(&ok);valid&=ok;values.load[i]=maps->verticalHeaderItem(15-i)->text().toDouble(&ok);valid&=ok;}
+        for(int r=0;r<16;++r)for(int c=0;c<16;++c){bool ok=false;values.cells[r*16+c]=maps->item(15-r,c)->text().toDouble(&ok);valid&=ok;}
+        QString error;if(!valid||tunuino::MapPageCodec::encode(2,values,error)!=base.pages[1])return false;
+        for(int r=0;r<16;++r)for(int c=0;c<16;++c)maps->item(15-r,c)->setText(QString::number(tunuino::SensorCalibrationCodec::u16(desired,64+2*(r*16+c))/100.0,'f',2));return true;
+    };
+    auto *validationAction = new QAction(tr("Check ECU configuration (read-only)"),this);
     validationAction->setEnabled(false);
     connect(validationAction, &QAction::triggered, this, [=]() {
-        if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page || *validationPending || writer->busy() || *writePending) return;
+        if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page || *validationPending || writer->busy() || *writePending || *toolBusy || *toolReply) return;
         liveTimer->stop();
         *validationPending = true;
         updateWriteAvailability();
@@ -2892,7 +2940,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
     });
     const auto queueMapWrite = [=](int page) {
-        if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page || *validationPending || writer->busy() || *writePending) return;
+        if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page || *validationPending || writer->busy() || *writePending || *toolBusy || *toolReply) return;
         auto *table=page==2?maps:ignitionMap; auto *rpm=page==2?fuelRpmValues:ignitionRpmValues;
         const auto base=(*mapBases)[size_t(page-2)];
         if (base.bytes.isEmpty() || base.identity!=*ecuIdentity) return;
@@ -2924,7 +2972,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         statusBar()->showMessage(tr("Checking ECU and preparing %1 write...").arg(name));
     };
     for(auto *panel:*sensorPanels)panel->writeRequested=[=](tunuino::SensorKind kind,const QByteArray &desired){
-        if(!*ecuOnline||!*ecuClean||!*identityVerified||!session->isOpen()||transfer->page||*validationPending||writer->busy()||*writePending)return;
+        if(!*ecuOnline||!*ecuClean||!*identityVerified||!session->isOpen()||transfer->page||*validationPending||writer->busy()||*writePending||*toolBusy||*toolReply)return;
         const auto base=*sensorBase;
         if(base.header.size()!=256||base.aux.size()!=256||base.identity!=*ecuIdentity||base.generation!=*ecuGeneration)return;
         const QString name=tunuino::SensorCalibrationCodec::name(kind);
@@ -3023,8 +3071,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 if (QMessageBox::question(this, tr("Install Console update"),
                         tr("The verified installer is ready. Close the Console and launch installation now?"))
                     == QMessageBox::Yes) {
-                    if (property("mapWriteBusy").toBool()) {
-                        QMessageBox::information(this,tr("Console update"),tr("Wait for the ECU map write to finish before installing an update."));return;
+                    if (property("mapWriteBusy").toBool()||property("ecuToolBusy").toBool()) {
+                        QMessageBox::information(this,tr("Console update"),tr("Finish or stop the active ECU tool/write before installing an update."));return;
                     }
                     if (QProcess::startDetached(installer, QStringList()))
                         QCoreApplication::quit();
@@ -3040,6 +3088,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             tr("Tunuino Console — Qt 6\\nMap editing, ECU monitoring and verified map/sensor calibration writes."));
     });
     auto *ecuMenu = menuBar()->addMenu(tr("ECU"));
+    ecuMenu->addAction(validationAction);
     auto *writeActiveMap=ecuMenu->addAction(tr("Write to ECU"));
     *writeActionRef=writeActiveMap;writeActiveMap->setShortcut(QKeySequence(QStringLiteral("F2")));
     writeActiveMap->setEnabled(false);
@@ -3140,6 +3189,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         statusBar()->showMessage(error, 10000);
     });
     connect(session, &tunuino::SerialSession::responseReceived, this, [=](const QByteArray &data) {
+        if(*toolReply){auto callback=std::move(*toolReply);*toolReply={};const bool runtime=*toolRuntime;callback(data);if(!runtime)return;}
         if (writer->busy()) { writer->receive(data); return; }
         if (*validationPending) {
             *validationPending = false;
@@ -3329,6 +3379,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             tuneDisplay->setConnected(true);
             const double tuneTarget=sameSensorBase?tunuino::ecuTargetLambda(sensorBase->aux,data):std::numeric_limits<double>::quiet_NaN();
             tuneDisplay->setReadings(logValues,tuneTarget);
+            autotuneTool->sample(logValues,tuneTarget);
             for(auto *panel:*sensorPanels)panel->updateRaw(data);
             if (*ecuClean && previousGeneration && (previousGeneration!=*ecuGeneration || !previouslyClean || *autoSync) && !transfer->page && !*writePending) {
                 (*mapBases)[0]={}; (*mapBases)[1]={}; *sensorBase={}; *autoSync=true;
@@ -3362,8 +3413,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
-    if (property("mapWriteBusy").toBool()) {
-        statusBar()->showMessage(tr("Wait for the ECU map write to finish before closing the Console."));
+    if (property("mapWriteBusy").toBool()||property("ecuToolBusy").toBool()) {
+        statusBar()->showMessage(tr("Finish or stop the active ECU tool/write before closing the Console."));
         event->ignore();return;
     }
     QMainWindow::closeEvent(event);
