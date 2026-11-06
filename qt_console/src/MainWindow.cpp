@@ -96,6 +96,7 @@
 #include "ecu/MapWriteTransaction.h"
 #include "protocol/MapPageCodec.h"
 #include "calibration/SensorCalibrationWidget.h"
+#include "display/TuneDisplayWidget.h"
 #include <QDateTime>
 #include <QUuid>
 #include <QCloseEvent>
@@ -413,6 +414,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     };
     // Graph windows are independent from their map tables and can be closed
     // and reopened from the navigation tree without discarding ECU data.
+    auto tuneWindow=QSharedPointer<QPointer<QMdiSubWindow>>::create();
+    const auto openTuneDisplay=[=]{
+        if(!*tuneWindow)return;auto *window=tuneWindow->data();
+        if(window->isMinimized())window->showNormal();else window->show();
+        window->widget()->show();workspace->setActiveSubWindow(window);window->raise();
+    };
     auto fuelGraphWindow = QSharedPointer<QPointer<QMdiSubWindow>>::create();
     auto ignitionGraphWindow = QSharedPointer<QPointer<QMdiSubWindow>>::create();
     auto mapWindows = QSharedPointer<QVector<QPointer<QMdiSubWindow>>>::create(3);
@@ -475,12 +482,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("DSG Gearbox"), {{tr("Gearbox settings"),-1}});
     addCategory(tr("CAN, Serial"), {{tr("Communication settings"),6}});
     addCategory(tr("Log"), {{tr("Graph Log"),4}});
-    addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
+    addCategory(tr("Gauges"), {{tr("Tune Display"),10},{tr("Runtime gauges"),-1}});
     addCategory(tr("Calibration & Setup"), {{tr("Sensor and engine calibration"),6}});
     auto engineStatusDockRef = QSharedPointer<QPointer<QDockWidget>>::create();
-    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, openSettingsPage, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows](QTreeWidgetItem *item, int) {
+    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, openSettingsPage, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows, openTuneDisplay](QTreeWidgetItem *item, int) {
         const int index = item->data(0, Qt::UserRole).toInt();
-        if (item->parent() && index == 9) {
+        if(item->parent()&&index==10){openTuneDisplay();}
+        else if (item->parent() && index == 9) {
             if (*engineStatusDockRef) { (*engineStatusDockRef)->show(); (*engineStatusDockRef)->raise(); }
         } else if (item->parent() && (index == 7 || index == 8)) {
             auto window = (index == 7) ? *fuelGraphWindow : *ignitionGraphWindow;
@@ -1580,6 +1588,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
     auto *graphLog = new tunuino::GraphLogWidget(tabs);
     tabs->addTab(graphLog, tr("Graph Log"));
+    auto *tuneDisplay=new tunuino::TuneDisplayWidget;
+    auto *tuneSubWindow=workspace->addSubWindow(tuneDisplay);
+    tuneSubWindow->setWindowTitle(tr("Tune Display"));
+    tuneSubWindow->setWindowFlags(Qt::SubWindow|Qt::WindowTitleHint|Qt::WindowSystemMenuHint|Qt::WindowMinMaxButtonsHint|Qt::WindowCloseButtonHint);
+    tuneSubWindow->setAttribute(Qt::WA_DeleteOnClose,false);tuneSubWindow->resize(780,560);
+    *tuneWindow=tuneSubWindow;boundsGuard->watch(tuneSubWindow);tuneSubWindow->hide();
 
     auto *firmwarePage = new QWidget(tabs);
     auto *firmwareLayout = new QVBoxLayout(firmwarePage);
@@ -2678,6 +2692,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if (!online) {
             for(auto *panel:*sensorPanels)panel->setAvailable(false);
             graphLog->setConnected(false);
+            tuneDisplay->setConnected(false);
             for (auto *value : *liveReadings) value->setText(tr("Unavailable"));
             maps->clearOperatingPoint();
             ignitionMap->clearOperatingPoint();
@@ -2785,6 +2800,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     viewMenu->addAction(inspectorDock->toggleViewAction());
     viewMenu->addAction(dock->toggleViewAction());
     auto *toolsMenu = menuBar()->addMenu(tr("Tools"));
+    auto *tuneDisplayAction=toolsMenu->addAction(tr("Tune Display"),this,openTuneDisplay);
+    tuneDisplayAction->setShortcut(QKeySequence(QStringLiteral("F7")));
     auto *graphLogAction = toolsMenu->addAction(tr("Graph Log"));
     graphLogAction->setShortcut(QKeySequence(QStringLiteral("F6")));
     connect(graphLogAction, &QAction::triggered, this, [openSettingsPage]() { openSettingsPage(4); });
@@ -3309,6 +3326,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if (mask & 8) logValues[4] = qint32(u32(1 + 52)) / 1000.0;
             graphLog->setConnected(true);
             graphLog->appendRuntime(logValues);
+            tuneDisplay->setConnected(true);
+            const double tuneTarget=sameSensorBase?tunuino::ecuTargetLambda(sensorBase->aux,data):std::numeric_limits<double>::quiet_NaN();
+            tuneDisplay->setReadings(logValues,tuneTarget);
             for(auto *panel:*sensorPanels)panel->updateRaw(data);
             if (*ecuClean && previousGeneration && (previousGeneration!=*ecuGeneration || !previouslyClean || *autoSync) && !transfer->page && !*writePending) {
                 (*mapBases)[0]={}; (*mapBases)[1]={}; *sensorBase={}; *autoSync=true;
