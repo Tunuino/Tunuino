@@ -33,10 +33,14 @@ SensorCalibrationWidget::SensorCalibrationWidget(SensorKind kind,QWidget *parent
         });
         auto *note=new QLabel(tr("Check the exact controller and configured analog output. Selecting a profile does not select an ECU input or save it."),this);note->setWordWrap(true);layout->addWidget(note);
     }
-    const int points=kind_==SensorKind::Clt?3:2;
+    if(kind_==SensorKind::Battery){
+        auto *note=new QLabel(tr("Use an AV input with an external divider suitable for battery voltage. Enter the conditioned voltage at the connector and the battery voltage measured with a multimeter. Never apply battery voltage directly to an AV input. Saving this calibration does not enable voltage compensation or protection."),this);
+        note->setWordWrap(true);layout->addWidget(note);
+    }
+    const int points=SensorCalibrationCodec::points(kind_);
     auto *table=new QTableWidget(points,kind_==SensorKind::Tps?2:3,this);table->setObjectName("sensorPoints");
     table->setHorizontalHeaderLabels(kind_==SensorKind::Tps?QStringList{tr("Voltage at connector"),tr("Measure")}:
-        QStringList{tr("Voltage at connector"),kind_==SensorKind::Map?tr("MAP kPa"):kind_==SensorKind::Clt?tr("Temperature °C"):tr("Lambda"),tr("Measure")});
+        QStringList{tr("Voltage at connector"),kind_==SensorKind::Map?tr("MAP kPa"):SensorCalibrationCodec::temperature(kind_)?tr("Temperature °C"):kind_==SensorKind::Battery?tr("Measured battery voltage V"):tr("Lambda"),tr("Measure")});
     QStringList rows;
     for(int i=0;i<points;++i){
         rows<< (kind_==SensorKind::Tps?(i?tr("Throttle open"):tr("Throttle closed")):tr("Point %1").arg(i+1));
@@ -44,7 +48,7 @@ SensorCalibrationWidget::SensorCalibrationWidget(SensorKind kind,QWidget *parent
         table->setCellWidget(i,0,volts_[i]);connect(volts_[i],QOverload<double>::of(&QDoubleSpinBox::valueChanged),this,[this]{edit();});
         if(kind_!=SensorKind::Tps){
             values_[i]=new QDoubleSpinBox(table);values_[i]->setObjectName(QStringLiteral("sensorValue%1").arg(i));
-            values_[i]->setRange(kind_==SensorKind::Clt?-40:0,kind_==SensorKind::Map?500:kind_==SensorKind::Clt?150:5);
+            values_[i]->setRange(SensorCalibrationCodec::temperature(kind_)?-40:0,kind_==SensorKind::Map?500:SensorCalibrationCodec::temperature(kind_)?150:kind_==SensorKind::Battery?24:5);
             values_[i]->setDecimals(kind_==SensorKind::Lambda?3:2);table->setCellWidget(i,1,values_[i]);
             connect(values_[i],QOverload<double>::of(&QDoubleSpinBox::valueChanged),this,[this]{edit();});
         }
@@ -52,7 +56,7 @@ SensorCalibrationWidget::SensorCalibrationWidget(SensorKind kind,QWidget *parent
         connect(capture_[i],&QPushButton::clicked,this,[this,i]{
             const int ch=input_->currentData().toInt();
             if(!hasSample())return;
-            const int index=kind_==SensorKind::Clt?11+ch:ch-1;
+            const int index=SensorCalibrationCodec::temperature(kind_)?11+ch:ch-1;
             const int raw=SensorCalibrationCodec::u16(runtime_,61+2*index);
             volts_[i]->setValue(SensorCalibrationCodec::voltage(raw,header_));
         });
@@ -70,7 +74,7 @@ QString SensorCalibrationWidget::inputName(int channel)const{
     // Proteus v0.7 PCB 383558bf: J103, TE 1-776231-2, natural housing.
     // AV sequence maps to raw[0..10]; AT1..4 maps to raw[12..15].
     static const int av[]={13,24,14,25,15,26,16,27,17,28,18},at[]={19,30,20,31};
-    const bool temperature=kind_==SensorKind::Clt;
+    const bool temperature=SensorCalibrationCodec::temperature(kind_);
     return tr("%1 — Natural/white J103, pin %2 (%3%4)").arg(SensorCalibrationCodec::name(kind_)).arg(temperature?at[channel-1]:av[channel-1]).arg(temperature?"AT":"AV").arg(channel);
 }
 void SensorCalibrationWidget::setInput(int channel){
@@ -78,7 +82,7 @@ void SensorCalibrationWidget::setInput(int channel){
     if(channel>0){input_->addItem(inputName(channel),channel);input_->setCurrentIndex(1);}
 }
 void SensorCalibrationWidget::chooseInput(){
-    QStringList choices;choices<<tr("Disabled");const int count=kind_==SensorKind::Clt?4:11;
+    QStringList choices;choices<<tr("Disabled");const int count=SensorCalibrationCodec::temperature(kind_)?4:11;
     for(int i=1;i<=count;++i)choices<<inputName(i);
     bool ok=false;const QString chosen=QInputDialog::getItem(this,tr("Customise sensor input"),tr("Proteus v0.7 connector contact"),choices,input_->currentData().toInt(),false,&ok);
     if(ok){setInput(choices.indexOf(chosen));edit();}
@@ -90,9 +94,9 @@ void SensorCalibrationWidget::load(const QByteArray &header,const QByteArray &au
     header_=header;aux_=aux;identity_=identity;generation_=generation;
     if(!keep){
         loading_=true;const auto c=SensorCalibrationCodec::decode(kind_,header,aux);
-        if(c.channel<0||c.channel>(kind_==SensorKind::Clt?4:11)){loading_=false;available_=false;refresh();return;}
+        if(c.channel<0||c.channel>(SensorCalibrationCodec::temperature(kind_)?4:11)){loading_=false;available_=false;refresh();return;}
         setInput(c.channel);if(preset_){QSignalBlocker blocker(preset_);preset_->setCurrentIndex(0);}
-        for(int i=0;i<(kind_==SensorKind::Clt?3:2);++i){volts_[i]->setValue(SensorCalibrationCodec::voltage(c.raw[i],header));if(values_[i])values_[i]->setValue(c.values[i]);}
+        for(int i=0;i<(SensorCalibrationCodec::points(kind_));++i){volts_[i]->setValue(SensorCalibrationCodec::voltage(c.raw[i],header));if(values_[i])values_[i]->setValue(c.values[i]);}
         edited_=false;loading_=false;
     }
     refresh();
@@ -104,20 +108,20 @@ void SensorCalibrationWidget::updateRaw(const QByteArray &runtime){
 }
 SensorCalibration SensorCalibrationWidget::configuration()const{
     SensorCalibration c;c.channel=input_->currentData().toInt();
-    for(int i=0;i<(kind_==SensorKind::Clt?3:2);++i){c.raw[i]=SensorCalibrationCodec::raw(volts_[i]->value(),header_);if(values_[i])c.values[i]=values_[i]->value();}return c;
+    for(int i=0;i<(SensorCalibrationCodec::points(kind_));++i){c.raw[i]=SensorCalibrationCodec::raw(volts_[i]->value(),header_);if(values_[i])c.values[i]=values_[i]->value();}return c;
 }
 void SensorCalibrationWidget::edit(){if(loading_)return;edited_=true;refresh();}
 void SensorCalibrationWidget::refresh(){
     const bool loaded=header_.size()==256&&aux_.size()==256&&!identity_.isEmpty()&&generation_;
     QString error;QByteArray desired;
     if(loaded){desired=SensorCalibrationCodec::apply(kind_,configuration(),header_,aux_,error);
-        if(!desired.isEmpty()&&!SensorCalibrationCodec::permitted(kind_,kind_==SensorKind::Tps?aux_:header_,desired,header_,aux_,error))desired.clear();}
+        if(!desired.isEmpty()&&!SensorCalibrationCodec::permitted(kind_,SensorCalibrationCodec::auxiliary(kind_)?aux_:header_,desired,header_,aux_,error))desired.clear();}
     save_->setEnabled(available_&&loaded&&!desired.isEmpty());
-    status_->setText(!loaded?tr("Connect the ECU to read its calibration."):!error.isEmpty()?error:edited_?tr("Unsaved calibration edits. Other ECU settings will be preserved."):tr("Calibration read from ECU."));
+    status_->setText(!loaded?tr("Connect the ECU to read its calibration."):!error.isEmpty()?error:edited_?tr("Unsaved calibration edits. Other ECU settings will be preserved."):((kind_==SensorKind::Iat||kind_==SensorKind::Battery)&&aux_[68]!=1)?tr("No calibration stored. Select an input and enter measured points."):tr("Calibration read from ECU."));
     const int channel=input_->currentData().toInt();
     const bool fresh=hasSample();
     for(auto *capture:capture_)if(capture)capture->setEnabled(fresh);
-    if(fresh){const int index=kind_==SensorKind::Clt?11+channel:channel-1;const int raw=SensorCalibrationCodec::u16(runtime_,61+2*index);
+    if(fresh){const int index=SensorCalibrationCodec::temperature(kind_)?11+channel:channel-1;const int raw=SensorCalibrationCodec::u16(runtime_,61+2*index);
         live_->setText(tr("Live selected input: %1 V").arg(SensorCalibrationCodec::voltage(raw,header_),0,'f',4));}
     else live_->setText(tr("No fresh ADC sample for the selected input"));
 }
@@ -125,14 +129,14 @@ bool SensorCalibrationWidget::hasSample()const{
     if(!available_||!input_->currentData().toInt()||header_.size()!=256||runtime_.size()!=101||!sampleAge_.isValid()
         ||sampleAge_.elapsed()>2000||!(quint8(runtime_[40])&1)||runtime_.mid(1,31)!=identity_.mid(1,31))return false;
     const quint32 generation=(quint32(SensorCalibrationCodec::u16(runtime_,57))<<16)|quint32(SensorCalibrationCodec::u16(runtime_,59));
-    const int channel=input_->currentData().toInt(),index=kind_==SensorKind::Clt?11+channel:channel-1;
+    const int channel=input_->currentData().toInt(),index=SensorCalibrationCodec::temperature(kind_)?11+channel:channel-1;
     const int reference=SensorCalibrationCodec::u16(header_,100);
     return generation==generation_&&reference>=2800&&reference<=3600&&SensorCalibrationCodec::u16(runtime_,61+2*index)<=4095;
 }
 void SensorCalibrationWidget::save(){
     if(!available_||!writeRequested)return;QString error;
     const auto desired=SensorCalibrationCodec::apply(kind_,configuration(),header_,aux_,error);
-    if(desired.isEmpty()||!SensorCalibrationCodec::permitted(kind_,kind_==SensorKind::Tps?aux_:header_,desired,header_,aux_,error)){
+    if(desired.isEmpty()||!SensorCalibrationCodec::permitted(kind_,SensorCalibrationCodec::auxiliary(kind_)?aux_:header_,desired,header_,aux_,error)){
         QMessageBox::warning(this,tr("Sensor calibration"),error);return;}
     writeRequested(kind_,desired);
 }

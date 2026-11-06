@@ -32,7 +32,7 @@ bool MapWriteTransaction::start(int page,const QByteArray &desired,const QByteAr
 }
 bool MapWriteTransaction::startSensor(SensorKind kind,const QByteArray &desired,const QByteArray &base,
     const QByteArray &identity,quint32 generation) {
-    if(busy() || int(kind)<0 || int(kind)>3 || desired.size()!=256 || base.size()!=256)return false;
+    if(busy() || !SensorCalibrationCodec::validKind(kind) || desired.size()!=256 || base.size()!=256)return false;
     sensor_=int(kind);return begin(SensorCalibrationCodec::page(kind),desired,base,identity,generation);
 }
 bool MapWriteTransaction::begin(int page,const QByteArray &desired,const QByteArray &baseMap,

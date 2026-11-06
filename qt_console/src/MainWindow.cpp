@@ -2146,7 +2146,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     leftLayout->addWidget(navigation, 1);
     struct Category { const char *title; const char *items[8]; };
     const Category categories[] = {
-        {"Sensor Calibration", {"TPS", "MAP", "CLT", "IAT", "Lambda", "Analog Inputs", nullptr}},
+        {"Sensor Calibration", {"TPS", "MAP", "CLT", "IAT", "Lambda", "Battery", "Analog Inputs", nullptr}},
         {"Fuel System", {"Injector Dead Time", "Fuel Pressure", "Injectors", nullptr}},
         {"Ignition System", {"Coils", "Dwell", "Trigger", nullptr}},
         {"Engine Control", {"Idle Control", "Boost Control", "Launch Control", "ETB / Drive by Wire", nullptr}},
@@ -2168,14 +2168,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             info->setWordWrap(true);
             form->addRow(info);
             const QString sensorName=QString::fromLatin1(name);
-            if(sensorName==QStringLiteral("TPS")||sensorName==QStringLiteral("MAP")||sensorName==QStringLiteral("CLT")||sensorName==QStringLiteral("Lambda")){
+            if(sensorName==QStringLiteral("TPS")||sensorName==QStringLiteral("MAP")||sensorName==QStringLiteral("CLT")||sensorName==QStringLiteral("Lambda")||sensorName==QStringLiteral("IAT")||sensorName==QStringLiteral("Battery")){
                 const auto kind=sensorName==QStringLiteral("TPS")?tunuino::SensorKind::Tps:sensorName==QStringLiteral("MAP")?tunuino::SensorKind::Map:
-                    sensorName==QStringLiteral("CLT")?tunuino::SensorKind::Clt:tunuino::SensorKind::Lambda;
+                    sensorName==QStringLiteral("CLT")?tunuino::SensorKind::Clt:sensorName==QStringLiteral("IAT")?tunuino::SensorKind::Iat:
+                    sensorName==QStringLiteral("Battery")?tunuino::SensorKind::Battery:tunuino::SensorKind::Lambda;
                 info->hide();auto *sensor=new tunuino::SensorCalibrationWidget(kind,page);sensorPanels->append(sensor);form->addRow(sensor);
                 pages->addWidget(page);item->setData(0,Qt::UserRole,pages->count()-1);continue;
-            }
-            if(sensorName==QStringLiteral("IAT")){
-                info->setText(tr("IAT calibration is not connected to this interface yet."));
             }
             if (QString::fromLatin1(name) == QStringLiteral("Idle Control") ||
                 QString::fromLatin1(name) == QStringLiteral("Boost Control") ||
@@ -2916,7 +2914,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(QMessageBox::question(this,tr("Write sensor to ECU"),tr("Save %1 calibration to the ECU? Engine must be stopped and outputs disarmed. Other calibrations and maps will be preserved.").arg(name),QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel)!=QMessageBox::Yes)return;
         if(!*ecuOnline||!*identityVerified||!session->isOpen()||transfer->page||*ecuIdentity!=base.identity||*ecuGeneration!=base.generation)return;
         pendingWrite->sensor=int(kind);*activeSensorWrite=int(kind);pendingWrite->page=tunuino::SensorCalibrationCodec::page(kind);
-        pendingWrite->desired=desired;pendingWrite->base=kind==tunuino::SensorKind::Tps?base.aux:base.header;
+        pendingWrite->desired=desired;pendingWrite->base=tunuino::SensorCalibrationCodec::auxiliary(kind)?base.aux:base.header;
         pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
         *writePending=true;setProperty("mapWriteBusy",true);writeWait->start();liveTimer->stop();validationAction->setEnabled(false);
         fuelRead->setEnabled(false);ignitionRead->setEnabled(false);if(tpsReadButton)tpsReadButton->setEnabled(false);
@@ -3288,18 +3286,24 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             setReading(2, mask & 2, QString::number(u32(1 + 44) / 1000.0, 'f', 1) + QStringLiteral(" kPa"));
             setReading(3, mask & 4, QString::number(u32(1 + 48) / 1000000.0, 'f', 3));
             setReading(4, mask & 8, QString::number(qint32(u32(1 + 52)) / 1000.0, 'f', 1) + QStringLiteral(" C"));
-            // TPS uses the stored calibration and the real selected ADC input. IAT and battery remain unavailable.
+            // Auxiliary readings use stored calibrations and the actual selected ADC inputs.
             // Never manufacture these readings from unrelated raw ADC channels.
             double calibratedTps=0;
             const bool tpsValid=sensorBase->generation==*ecuGeneration&&sensorBase->identity==*ecuIdentity
                 &&tunuino::SensorCalibrationCodec::tpsPercent(sensorBase->aux,data,calibratedTps);
             setReading(1,tpsValid,QString::number(calibratedTps,'f',2)+QStringLiteral(" %"));
-            setReading(5, false, QString());
-            setReading(6, false, QString());
+            double calibratedIat=0,calibratedBattery=0;
+            const bool sameSensorBase=sensorBase->generation==*ecuGeneration&&sensorBase->identity==*ecuIdentity;
+            const bool iatValid=sameSensorBase&&tunuino::SensorCalibrationCodec::auxiliaryReading(tunuino::SensorKind::Iat,sensorBase->aux,data,calibratedIat);
+            const bool batteryValid=sameSensorBase&&tunuino::SensorCalibrationCodec::auxiliaryReading(tunuino::SensorKind::Battery,sensorBase->aux,data,calibratedBattery);
+            setReading(5,iatValid,QString::number(calibratedIat,'f',2)+QStringLiteral(" C"));
+            setReading(6,batteryValid,QString::number(calibratedBattery,'f',2)+QStringLiteral(" V"));
             std::array<double, tunuino::LogChannelCount> logValues;
             logValues.fill(std::numeric_limits<double>::quiet_NaN());
             if ((mask & 1) || stoppedEngine) logValues[0] = rpmMilli / 1000.0;
             if(tpsValid)logValues[1]=calibratedTps;
+            if(iatValid)logValues[5]=calibratedIat;
+            if(batteryValid)logValues[6]=calibratedBattery;
             if (mask & 2) logValues[2] = u32(1 + 44) / 1000.0;
             if (mask & 4) logValues[3] = u32(1 + 48) / 1000000.0;
             if (mask & 8) logValues[4] = qint32(u32(1 + 52)) / 1000.0;

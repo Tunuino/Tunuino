@@ -16,18 +16,21 @@ static quint32 u32(const QByteArray &b,int at){return (quint32(Codec::u16(b,at))
 static void put32(QByteArray &b,int at,quint32 v){Codec::put(b,at,int(v>>16));Codec::put(b,at+2,int(v));}
 static QByteArray read(int page,int at,int count){QByteArray q(7,0);q[0]='r';Codec::put(q,1,page);Codec::put(q,3,at);Codec::put(q,5,count);return q;}
 static tunuino::SensorCalibration calibration(Kind kind){
-    tunuino::SensorCalibration c;c.channel=kind==Kind::Lambda?2:kind==Kind::Tps?3:1;
+    tunuino::SensorCalibration c;c.channel=kind==Kind::Lambda||kind==Kind::Iat?2:kind==Kind::Tps?3:kind==Kind::Battery?4:1;
     c.raw={0,2000,3977};c.values={120,50,-20};
     if(kind==Kind::Map){c.raw={0,3977,0};c.values={0,400,0};}
     if(kind==Kind::Lambda){c.raw={0,3977,0};c.values={.68,1.36,0};}
+    if(kind==Kind::Battery){c.raw={300,3500,0};c.values={5,20,0};}
     if(kind==Kind::Tps)c.raw={300,3500,0};return c;
 }
-static void nativeFirmware(){
+static void nativeFirmware(bool batteryFirst){
     const QString executable=qEnvironmentVariable("TUNUINO_FIRMWARE_HARNESS");if(executable.isEmpty())return;
     QProcess process;process.start(executable,QStringList{});CHECK(process.waitForStarted(3000));
     const auto exchange=[&](const QByteArray &q){const auto line=q.toHex()+"\n";CHECK(process.write(line)==line.size());CHECK(process.waitForBytesWritten(3000));while(!process.canReadLine())CHECK(process.waitForReadyRead(3000));return QByteArray::fromHex(process.readLine().trimmed());};
     const auto identity=exchange("TUNUINO?");quint32 generation=u32(exchange("TUNUINO:V"),8);int totalBurns=0;
-    for(const Kind kind:{Kind::Map,Kind::Clt,Kind::Lambda,Kind::Tps}){
+    const std::array<Kind,6> order=batteryFirst?std::array<Kind,6>{Kind::Battery,Kind::Iat,Kind::Map,Kind::Clt,Kind::Lambda,Kind::Tps}:
+        std::array<Kind,6>{Kind::Iat,Kind::Battery,Kind::Map,Kind::Clt,Kind::Lambda,Kind::Tps};
+    for(const Kind kind:order){
         Writer::Pages base;
         for(int p=1;p<=4;++p)for(int at=0;at<(p==1||p==4?256:576);at+=64)base[size_t(p-1)]+=exchange(read(p,at,64)).mid(1);
         QString error;const auto desired=Codec::apply(kind,calibration(kind),base[0],base[3],error);CHECK(!desired.isEmpty());
@@ -41,19 +44,19 @@ static void nativeFirmware(){
         CHECK(success&&copies==1&&burns==1&&writer.generation()==generation+1);generation=writer.generation();totalBurns+=burns;
         for(int p=1;p<=4;++p){QByteArray actual;for(int at=0;at<(p==1||p==4?256:576);at+=64)actual+=exchange(read(p,at,64)).mid(1);CHECK(actual==(p==page?desired:base[size_t(p-1)]));}
     }
-    CHECK(totalBurns==4);process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
-    std::cout<<"MAP, CLT, Lambda and TPS writes against real firmware, all pages preserved: passed (host simulation)\n";
+    CHECK(totalBurns==6);process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
+    std::cout<<"Six sensor writes against real firmware, all pages preserved: passed (host simulation)\n";
 }
 int main(int argc,char **argv){
     QApplication app(argc,argv);QByteArray header(256,char(0x55)),aux(256,0);Codec::put(header,0,2);Codec::put(header,100,3300);header[6]=1;header[7]=2;header[8]=1;
     QString error;
-    for(const Kind kind:{Kind::Map,Kind::Clt,Kind::Lambda,Kind::Tps}){
+    for(const Kind kind:{Kind::Map,Kind::Clt,Kind::Lambda,Kind::Tps,Kind::Iat,Kind::Battery}){
         const auto c=calibration(kind);auto desired=Codec::apply(kind,c,header,aux,error);CHECK(!desired.isEmpty());
-        CHECK(Codec::permitted(kind,kind==Kind::Tps?aux:header,desired,header,aux,error));
-        const auto roundTrip=Codec::decode(kind,kind==Kind::Tps?header:desired,kind==Kind::Tps?desired:aux);
+        CHECK(Codec::permitted(kind,Codec::auxiliary(kind)?aux:header,desired,header,aux,error));
+        const auto roundTrip=Codec::decode(kind,Codec::auxiliary(kind)?header:desired,Codec::auxiliary(kind)?desired:aux);
         CHECK(roundTrip.channel==c.channel&&roundTrip.raw==c.raw);
-        if(kind!=Kind::Tps)for(int i=0;i<(kind==Kind::Clt?3:2);++i)CHECK(roundTrip.values[i]==c.values[i]);
-        desired[200]=char(quint8(desired[200])^1);CHECK(!Codec::permitted(kind,kind==Kind::Tps?aux:header,desired,header,aux,error));
+        if(kind!=Kind::Tps)for(int i=0;i<(Codec::points(kind));++i)CHECK(roundTrip.values[i]==c.values[i]);
+        desired[200]=char(quint8(desired[200])^1);CHECK(!Codec::permitted(kind,Codec::auxiliary(kind)?aux:header,desired,header,aux,error));
     }
     auto conflict=calibration(Kind::Lambda);conflict.channel=1;auto desired=Codec::apply(Kind::Lambda,conflict,header,aux,error);CHECK(!Codec::permitted(Kind::Lambda,header,desired,header,aux,error));
     auto temps=calibration(Kind::Clt);auto iat=aux;iat[68]=1;Codec::put(iat,70,1);iat[72]=1;
@@ -77,5 +80,42 @@ int main(int argc,char **argv){
     QTest::qWait(2101);const double old=volts->value();capture->click();CHECK(volts->value()==old);
     auto other=identity;other[20]=43;widget.load(header,aux,other,43);CHECK(!capture->isEnabled());
     widget.setAvailable(false);CHECK(!widget.findChild<QPushButton*>("sensorSave")->isEnabled());
-    nativeFirmware();std::cout<<"Sensor encoding, input conflicts, reserved settings, reverse TPS, real ADC capture and stale samples: passed\n";
+    // A stored channel is reserved even when its compensation is disabled.
+    auto features=Codec::initialAux(Kind::Iat,aux);
+    auto iatCalibration=calibration(Kind::Iat),batteryCalibration=calibration(Kind::Battery);
+    features=Codec::apply(Kind::Iat,iatCalibration,header,features,error);
+    features=Codec::apply(Kind::Battery,batteryCalibration,header,features,error);
+    CHECK(Codec::u16(features,70)==0&&features[72]==2&&features[73]==4);
+    auto occupied=calibration(Kind::Map);occupied.channel=4;
+    auto changed=Codec::apply(Kind::Map,occupied,header,features,error);
+    CHECK(!Codec::permitted(Kind::Map,header,changed,header,features,error));
+    auto active=features;Codec::put(active,70,1|2|512);
+    for(auto kind:{Kind::Iat,Kind::Battery}){
+        auto disabled=Codec::decode(kind,header,active);disabled.channel=0;
+        changed=Codec::apply(kind,disabled,header,active,error);
+        CHECK(!Codec::permitted(kind,active,changed,header,active,error));
+        auto edited=Codec::decode(kind,header,active);edited.values[0]+=.01;
+        changed=Codec::apply(kind,edited,header,active,error);
+        CHECK(Codec::permitted(kind,active,changed,header,active,error));
+        CHECK(Codec::u16(changed,70)==(1|2|512));
+        changed[70]=char(quint8(changed[70])^1);CHECK(!Codec::permitted(kind,active,changed,header,active,error));
+    }
+    live=QByteArray(101,0);live[40]=1;Codec::put(live,87,2000);Codec::put(live,67,1900);
+    double measured=0;
+    CHECK(Codec::auxiliaryReading(Kind::Iat,features,live,measured)&&measured==50);
+    CHECK(Codec::auxiliaryReading(Kind::Battery,features,live,measured)&&measured==12.5);
+    Codec::put(live,67,3501);CHECK(!Codec::auxiliaryReading(Kind::Battery,features,live,measured));
+    live[40]=0;CHECK(!Codec::auxiliaryReading(Kind::Iat,features,live,measured));
+    // Each auxiliary panel captures its own selected ADC channel, not another sensor.
+    for(auto kind:{Kind::Iat,Kind::Battery}){
+        tunuino::SensorCalibrationWidget panel(kind);panel.load(header,features,identity,42);panel.setAvailable(true);
+        live=QByteArray(101,0);live.replace(1,31,identity.mid(1));live[40]=1;put32(live,57,42);
+        const int offset=kind==Kind::Iat?87:67;Codec::put(live,offset,1500);panel.updateRaw(live);
+        auto *button=panel.findChild<QPushButton*>("sensorCapture0");CHECK(button&&button->isEnabled());button->click();
+        auto *field=panel.findChild<QDoubleSpinBox*>("sensorVoltage0");CHECK(Codec::raw(field->value(),header)==1500);
+        int writes=0;panel.writeRequested=[&](Kind actual,const QByteArray &page){CHECK(actual==kind&&Codec::u16(page,kind==Kind::Iat?76:88)==1500);++writes;};
+        panel.save();CHECK(writes==1);
+        if(qEnvironmentVariableIsSet("TUNUINO_SENSOR_TEST_SCREENSHOT")){panel.resize(900,420);panel.show();app.processEvents();panel.grab().save(qEnvironmentVariable("TUNUINO_SENSOR_TEST_SCREENSHOT")+Codec::name(kind)+".png");}
+    }
+    nativeFirmware(false);nativeFirmware(true);std::cout<<"Sensor encoding, input conflicts, reserved settings, reverse TPS, real ADC capture and stale samples: passed\n";
 }
