@@ -16,6 +16,8 @@
 #include <QAction>
 #include <QFileDialog>
 #include <QTimer>
+#include <QTest>
+#include "ui/CalibrationAppearance.h"
 #include <iostream>
 #include <cstdlib>
 #define CHECK(x) do{if(!(x)){std::cerr<<"Failed "<<#x<<" line "<<__LINE__<<": "<<error.toStdString()<<std::endl;std::exit(1);}}while(false)
@@ -30,6 +32,9 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     auto bad=data;auto sensors=bad["sensors"].toObject(),tps=sensors["TPS"].toObject();tps["input"]=99;sensors["TPS"]=tps;bad["sensors"]=sensors;const auto corrupt=temp.path()+"/invalid.tnproj";QFile invalid(corrupt);CHECK(invalid.open(QIODevice::WriteOnly));invalid.write(tunuino::MapProject::encode(bad,error));invalid.close();CHECK(!project->open(corrupt,error));CHECK(project->capture(error)==data);
     auto *save=window.findChild<QAction*>("fileSaveMap");CHECK(save);CHECK(save->text()=="Save Project as...");CHECK(window.findChild<QAction*>("fileOpenMap")->text()=="Open Project...");CHECK(save->shortcut()==QKeySequence::Save);bool dialogChecked=false;
     QTimer::singleShot(100,[&]{for(auto *widget:QApplication::topLevelWidgets())if(auto *dialog=qobject_cast<QFileDialog*>(widget)){CHECK(dialog->nameFilters()==QStringList{"Tunuino project (*.tnproj)"});CHECK(dialog->defaultSuffix()=="tnproj");CHECK(dialog->selectedFiles().value(0).endsWith(".tnproj"));CHECK(!dialog->selectedFiles().value(0).contains("fuel.json"));dialogChecked=true;dialog->reject();}});save->trigger();CHECK(dialogChecked);
-    std::cout<<"Real File/Save Project as from Firing order: full 6-cylinder map round-trip, all three tables, parameters, comment, atomic rejection and complete-map dialog passed offline\n"<<std::flush;
+    auto *mdi=window.findChild<QMdiArea*>();QMdiSubWindow *sub=nullptr;for(auto *candidate:mdi->subWindowList())if(candidate->widget()==firing)sub=candidate;CHECK(sub);sub->showNormal();mdi->setActiveSubWindow(sub);app.processEvents();
+    const auto captionClick=[&](QStyle::SubControl control){mdi->setActiveSubWindow(sub);sub->raise();QTest::qWait(40);sub->repaint();QStyleOptionTitleBar option;option.initFrom(sub);const int height=sub->style()->pixelMetric(QStyle::PM_TitleBarHeight,&option,sub);option.rect=QRect(4,4,sub->width()-8,height);option.titleBarFlags=sub->windowFlags();option.titleBarState=sub->windowState();option.subControls=QStyle::SC_All;const auto rect=sub->style()->subControlRect(QStyle::CC_TitleBar,&option,control,sub);CHECK(!rect.isEmpty());mdi->setActiveSubWindow(sub);QTest::mouseMove(sub,QPoint(40,height+40));app.processEvents();QTest::mouseMove(sub,rect.center()+QPoint(-1,0));app.processEvents();QTest::mouseMove(sub,rect.center());app.processEvents();QTest::mouseClick(sub,Qt::LeftButton,Qt::NoModifier,rect.center());QTest::qWait(40);app.processEvents();};
+    captionClick(QStyle::SC_TitleBarMaxButton);CHECK(sub->isMaximized());sub->showNormal();app.processEvents();captionClick(QStyle::SC_TitleBarMinButton);CHECK(sub->isMinimized());sub->showNormal();app.processEvents();captionClick(QStyle::SC_TitleBarCloseButton);CHECK(!sub->isVisible());sub->showNormal();CHECK(firing->findChild<QDoubleSpinBox*>("cylinders")->value()==6);
+    std::cout<<"Real File/Save Project as from Firing order: full 6-cylinder map round-trip, all three tables, parameters, comment, atomic rejection and complete-project dialog and caption maximize/minimize/close/reopen passed offline\n"<<std::flush;
     std::_Exit(0);
 }

@@ -5,7 +5,7 @@
 #include <optional>
 #include <QWidget>
 #include <functional>
-class QTableWidget;class QLabel;class QPushButton;class QComboBox;class QDoubleSpinBox;class QGroupBox;
+class QAction;class QTableWidget;class QLabel;class QPushButton;class QComboBox;class QDoubleSpinBox;class QGroupBox;
 namespace tunuino {
 class ParameterWidget final:public QWidget {
 public:
@@ -23,6 +23,8 @@ public:
 private:
     bool projectEdits_=false;
     void refresh();
+    void status(const QString &text,bool important=true);
+    QAction *writeContext_=nullptr;
     double value(int row)const;
     void setValue(int row,double value);
     void file(bool writing);

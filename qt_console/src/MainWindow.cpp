@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "ui/CalibrationAppearance.h"
 #include "project/MapProject.h"
 #include "NativeDfuFlash.h"
 #include "logging/GraphLogWidget.h"
@@ -215,7 +216,7 @@ protected:
     }
 private:
     void clamp(QMdiSubWindow *w) {
-        if (!w || !w->isVisible() || w->isMaximized() || adjusting_) return;
+        if (!w || !w->isVisible() || w->isMaximized() || w->isMinimized() || adjusting_) return;
         const QRect bounds = area_->viewport()->rect();
         if (bounds.isEmpty()) return;
         adjusting_ = true;
@@ -380,7 +381,7 @@ private:
 };
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-    setWindowTitle("Tunuino Console — Qt 6");
+    setWindowTitle("Tunuino Console");
     resize(1400, 850);
     // First MDI migration stage: retain the existing tab controller and ECU
     // connections, but host it in a movable, resizable, closable workspace window.
@@ -408,7 +409,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             tabs->removeTab(index);
             page->setParent(nullptr);
             tabs->insertTab(index, new QWidget(tabs), title);
-            auto *window = workspace->addSubWindow(page);
+            auto *window = workspace->addSubWindow(page);tunuino::CalibrationAppearance::frame(window);
             window->setWindowTitle(title);
             window->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
                                    Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint |
@@ -448,7 +449,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     navigationSearch->setClearButtonEnabled(true);
     navigationLayout->addWidget(navigationSearch);
     auto *navigationTree = new QTreeWidget(navigationPanel);
-    navigationTree->setObjectName("MainNavigation");navigationTree->setStyleSheet("QTreeWidget::item:selected{background:#168bd2;color:white;}");
+    navigationTree->setObjectName("MainNavigation");navigationTree->setStyleSheet("QTreeWidget{font-family:'Segoe UI';font-size:10pt;}QTreeWidget::item{padding:1px 0;min-height:21px;}QTreeWidget::item:selected{background:#168bd2;color:white;}");navigationTree->setIconSize(QSize(18,18));
     navigationTree->setHeaderHidden(true);
     navigationTree->setIndentation(16);
     navigationTree->setMinimumWidth(200);
@@ -477,7 +478,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         return category;
     };
     auto *sensorsCategory=addCategory(tr("Sensors and inputs"),{});
-    const auto parameterItem=[=](QTreeWidgetItem *parent,const QString &name,const QString &key){auto *item=new QTreeWidgetItem(parent,{name});item->setIcon(0,style()->standardIcon(QStyle::SP_FileDialogDetailedView));item->setData(0,Qt::UserRole,100);item->setData(0,Qt::UserRole+1,key);return item;};
+    const auto parameterItem=[=](QTreeWidgetItem *parent,const QString &name,const QString &key){auto *item=new QTreeWidgetItem(parent,{name});item->setIcon(0,tunuino::CalibrationAppearance::icon(key.endsWith("wizard")?tunuino::CalibrationAppearance::Wizard:tunuino::CalibrationAppearance::Parameters));item->setData(0,Qt::UserRole,100);item->setData(0,Qt::UserRole+1,key);return item;};
     for(const QString &sensor:{QString("TPS"),QString("MAP"),QString("CLT"),QString("IAT"),QString("Lambda"),QString("Battery")})parameterItem(sensorsCategory,sensor,"sensor:"+sensor);
     addCategory(tr("Engine start"), {{tr("Cranking"),-1},{tr("Afterstart"),-1}});
     auto *fuelingCategory=addCategory(tr("Fueling"),{{tr("Autotune"),12}});
@@ -497,10 +498,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *ignitionCategory=addCategory(tr("Ignition"),{});
     parameterItem(ignitionCategory,tr("Trigger wizard"),"ignition.wizard");
     parameterItem(ignitionCategory,tr("Firing order"),"ignition.firing");
-    auto *coils=new QTreeWidgetItem(ignitionCategory,{tr("Coils")});parameterItem(coils,tr("Ignition outputs"),"coils.outputs");parameterItem(coils,tr("Dwell"),"coils.dwell");parameterItem(coils,tr("Voltage compensation"),"voltage.compensation");
+    auto *coils=new QTreeWidgetItem(ignitionCategory,{tr("Coils")});parameterItem(coils,tr("Ignition outputs"),"coils.outputs");parameterItem(coils,tr("Coil dwell time"),"coils.dwell");parameterItem(coils,tr("Voltage compensation"),"voltage.compensation");
     auto *sparkCorrections=new QTreeWidgetItem(ignitionCategory,{tr("Corrections")});parameterItem(sparkCorrections,tr("IAT"),"ignition.iat");parameterItem(sparkCorrections,tr("Cylinders trim"),"ignition.trim");
     auto *ignTables=new QTreeWidgetItem(ignitionCategory,{tr("Ign. tables")});auto *ignTable=new QTreeWidgetItem(ignTables,{tr("Ignition Table")});ignTable->setData(0,Qt::UserRole,1);auto *ignGraphItem=new QTreeWidgetItem(ignTables,{tr("Ignition 3D Graph")});ignGraphItem->setData(0,Qt::UserRole,8);
     parameterItem(ignitionCategory,tr("Rev limiters"),"ignition.limit");auto *triggers=new QTreeWidgetItem(ignitionCategory,{tr("Triggers")});parameterItem(triggers,tr("Primary trigger"),"ignition.primary");parameterItem(triggers,tr("Phase"),"ignition.phase");
+    for(auto *group:{coils,sparkCorrections,ignTables,triggers,injectors,fuelCorrections,fuelTables})group->setIcon(0,tunuino::CalibrationAppearance::icon(tunuino::CalibrationAppearance::Group));
     addCategory(tr("Overrun"), {{tr("Fuel cut"),-1}});
     addCategory(tr("Knock sensors"), {{tr("Knock settings"),-1}});
     addCategory(tr("Idle"), {{tr("Idle control"),-1}});
@@ -1146,7 +1148,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelWorkspace->addWidget(fuelGridPanel, 1);
     auto *fuelSurface = new MapSurfacePreview(maps, fuelPage);
     // The 3D graph has its own MDI window; the table remains independently visible.
-    auto *fuelGraphSubWindow = workspace->addSubWindow(fuelSurface);
+    auto *fuelGraphSubWindow = workspace->addSubWindow(fuelSurface);tunuino::CalibrationAppearance::frame(fuelGraphSubWindow);
     fuelGraphSubWindow->setWindowTitle(tr("Fuel | 3D Graph"));
     fuelGraphSubWindow->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
                                       Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint |
@@ -1273,7 +1275,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionWorkspace->addWidget(ignitionGridPanel, 1);
     auto *ignitionSurface = new MapSurfacePreview(ignitionMap, ignitionPage);
     // The 3D graph has its own MDI window; the table remains independently visible.
-    auto *ignitionGraphSubWindow = workspace->addSubWindow(ignitionSurface);
+    auto *ignitionGraphSubWindow = workspace->addSubWindow(ignitionSurface);tunuino::CalibrationAppearance::frame(ignitionGraphSubWindow);
     ignitionGraphSubWindow->setWindowTitle(tr("Ignition | 3D Graph"));
     ignitionGraphSubWindow->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
                                       Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint |
@@ -1374,7 +1376,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrRpmLabel->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     afrGridLayout->addWidget(afrRpmLabel);
     auto *afrSurface = new MapSurfacePreview(afrMap, afrPage);
-    auto *afrGraphWindow = workspace->addSubWindow(afrSurface);
+    auto *afrGraphWindow = workspace->addSubWindow(afrSurface);tunuino::CalibrationAppearance::frame(afrGraphWindow);
     afrGraphWindow->setWindowTitle(tr("AFR Target | 3D Graph"));
     afrGraphWindow->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
         Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
@@ -1404,7 +1406,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         auto *openMap = new QPushButton(tr("Show %1").arg(mapTitles.at(index)), placeholder);
         placeholderLayout->addWidget(openMap, 0, Qt::AlignCenter);
         tabs->insertTab(index, placeholder, mapTitles.at(index));
-        auto *window = workspace->addSubWindow(page);
+        auto *window = workspace->addSubWindow(page);tunuino::CalibrationAppearance::frame(window);
         window->setWindowTitle(mapTitles.at(index));
         window->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
                                Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint |
@@ -1621,7 +1623,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *triggerWizard=new tunuino::TriggerWizard;
     auto *outputTestTool=new tunuino::OutputTestWidget;
     auto *autotuneTool=new tunuino::AutotuneWidget;
-    const auto toolWindow=[=](QWidget *widget,const QString &title){auto *window=workspace->addSubWindow(widget);window->setWindowTitle(title);window->setAttribute(Qt::WA_DeleteOnClose,false);window->resize(900,640);boundsGuard->watch(window);window->hide();return window;};
+    const auto toolWindow=[=](QWidget *widget,const QString &title){auto *window=workspace->addSubWindow(widget);tunuino::CalibrationAppearance::frame(window);window->setWindowTitle(title);window->setAttribute(Qt::WA_DeleteOnClose,false);window->resize(900,640);boundsGuard->watch(window);window->hide();return window;};
     auto *serviceWindow=toolWindow(serviceTool,tr("ECU information and Logbook"));
     auto *scopeWindow=toolWindow(scopeTool,tr("Scope"));auto *outputTestWindow=toolWindow(outputTestTool,tr("Test outputs"));auto *autotuneWindow=toolWindow(autotuneTool,tr("Autotune"));
     const auto showTool=[=](QMdiSubWindow *window){window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
@@ -1629,7 +1631,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     tools->openServiceData=[=](int page){showTool(serviceWindow);serviceTool->showPage(page);};
     tools->openScope=[=]{showTool(scopeWindow);};tools->openOutputTest=[=]{showTool(outputTestWindow);};tools->openAutotune=[=]{showTool(autotuneWindow);};
     auto *tuneDisplay=new tunuino::TuneDisplayWidget;
-    auto *tuneSubWindow=workspace->addSubWindow(tuneDisplay);
+    auto *tuneSubWindow=workspace->addSubWindow(tuneDisplay);tunuino::CalibrationAppearance::frame(tuneSubWindow);
     tuneSubWindow->setWindowTitle(tr("Tune Display"));
     tuneSubWindow->setWindowFlags(Qt::SubWindow|Qt::WindowTitleHint|Qt::WindowSystemMenuHint|Qt::WindowMinMaxButtonsHint|Qt::WindowCloseButtonHint);
     tuneSubWindow->setAttribute(Qt::WA_DeleteOnClose,false);tuneSubWindow->resize(780,560);
