@@ -571,6 +571,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     inspectorLayout->addStretch(1);
     inspectorDock->setWidget(inspectorBody);
     addDockWidget(Qt::RightDockWidgetArea, inspectorDock);
+    inspectorDock->hide();
     resizeDocks({navigationDock, inspectorDock}, {235, 260}, Qt::Horizontal);
     const QStringList inspectorNotes = {
         tr("Fuel / VE table. ECU values must be read and verified before use."),
@@ -1421,18 +1422,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             window->show();
             workspace->setActiveSubWindow(window);
         });
-        if (index == 0) {
-            page->show();
-            window->show();
-        } else {
-            window->hide();
-        }
+        window->hide();
     }
-    // Startup: show Fuel Table only. All other maps and graphs remain available
-    // through navigation, without creating the old configuration window.
+    // Start with an empty workspace. Open maps and graphs only on user request.
     if (*fuelGraphWindow) (*fuelGraphWindow)->hide();
     if (*ignitionGraphWindow) (*ignitionGraphWindow)->hide();
-    workspace->setActiveSubWindow((*mapWindows)[0]);
+    workspace->setActiveSubWindow(nullptr);
     // User-selected external tune preview. No network access or ECU write path.
     auto *importPage = new QWidget(tabs);
     auto *importLayout = new QVBoxLayout(importPage);
@@ -2254,6 +2249,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     dock->setMinimumWidth(245);
     dock->setMaximumWidth(400);
     addDockWidget(Qt::RightDockWidgetArea, dock);
+    dock->hide();
     *engineStatusDockRef = dock;
     auto *session = new tunuino::SerialSession(this);
     auto identityVerified = QSharedPointer<bool>::create(false);
