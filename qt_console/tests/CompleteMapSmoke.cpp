@@ -6,6 +6,9 @@
 #include "parameters/TriggerPresetDialog.h"
 #include <QCheckBox>
 #include <QComboBox>
+#include <QListView>
+#include <QScrollBar>
+#include <QImage>
 #include <QPushButton>
 #include <QApplication>
 #include <QStyleFactory>
@@ -43,6 +46,15 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     QTreeWidgetItemIterator presetItem(tree);while(*presetItem){if((*presetItem)->data(0,Qt::UserRole+1).toString()=="ignition.wizard"){tree->itemClicked(*presetItem,0);break;}++presetItem;}
     app.processEvents();CHECK(presets->isVisible()&&presets->isModal());
     auto *engines=presets->findChild<QComboBox*>("predefinedTriggers");auto *ok=presets->findChild<QPushButton*>("triggerPresetOk");CHECK(engines&&ok&&engines->count()==tunuino::TriggerPresets::catalog().size());
+    // Exercise the actual popup: populated model data alone did not catch
+    // the pale-on-pale menu delegate that hid every engine name.
+    engines->showPopup();app.processEvents();auto *list=engines->view();CHECK(list->isVisible());
+    for(int row=0;row<engines->count();++row)CHECK(list->model()->index(row,0).data().toString()==tunuino::TriggerPresets::catalog()[row].name);
+    const auto second=list->model()->index(1,0);const auto rowRect=list->visualRect(second).adjusted(8,2,-8,-2);CHECK(!rowRect.isEmpty());
+    const auto popupImage=list->viewport()->grab().toImage().scaled(list->viewport()->size());int darkText=0;const auto pixels=rowRect.intersected(popupImage.rect());
+    for(int y=pixels.top();y<=pixels.bottom();++y)for(int x=pixels.left();x<=pixels.right();++x){const auto color=popupImage.pixelColor(x,y);if(color.red()<100&&color.green()<100&&color.blue()<100)++darkText;}
+    CHECK(darkText>40);CHECK(list->verticalScrollBar()->maximum()>0);QTest::mouseClick(list->viewport(),Qt::LeftButton,Qt::NoModifier,list->visualRect(second).center());app.processEvents();CHECK(engines->currentIndex()==1&&!list->isVisible());
+    engines->showPopup();app.processEvents();const auto lastEngine=list->model()->index(engines->count()-1,0);list->scrollTo(lastEngine,QAbstractItemView::PositionAtBottom);app.processEvents();CHECK(list->viewport()->rect().contains(list->visualRect(lastEngine).center()));QTest::mouseClick(list->viewport(),Qt::LeftButton,Qt::NoModifier,list->visualRect(lastEngine).center());app.processEvents();CHECK(engines->currentIndex()==engines->count()-1&&!list->isVisible());
     const auto beforePreset=project->capture(error);engines->setCurrentIndex(5);CHECK(!ok->isEnabled());CHECK(project->capture(error)==beforePreset);
     presets->findChild<QPushButton*>("triggerPresetCancel")->click();CHECK(!presets->isVisible()&&project->capture(error)==beforePreset);
     presets->open();engines->setCurrentIndex(1);presets->findChild<QCheckBox*>("triggerApply3")->setChecked(false);
