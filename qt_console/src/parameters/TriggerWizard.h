@@ -1,4 +1,5 @@
 #pragma once
+#include <QJsonObject>
 #include "TriggerSetupPlan.h"
 #include "../tools/ToolsData.h"
 #include <QWizard>
@@ -7,9 +8,13 @@ class QTableWidget;class QSpinBox;class QDoubleSpinBox;class QComboBox;class QCh
 namespace tunuino {
 class TriggerWizard final:public QWizard {
 public:
+    QJsonObject editorState()const;
+    bool restoreEditor(const QJsonObject &,bool apply,QString &error);
+    void keepProjectEdits(bool on){projectEdits_=on;}
     explicit TriggerWizard(QWidget *parent=nullptr);
     void load(const QByteArray &header,const QByteArray &aux,const QByteArray &identity,quint32 generation);
     void setAvailable(bool available);
+    void loadOffline(const QByteArray &header,const QByteArray &aux);
     void save();
     void writeFinished(bool success,const QString &message);
     bool observeScope(const ToolSnapshot &source,const QByteArray &header,const QByteArray &samples);
@@ -24,6 +29,7 @@ protected:
     bool validateCurrentPage()override;
     void closeEvent(QCloseEvent *event)override;
 private:
+    bool projectEdits_=false;
     TriggerSetup settings()const;
     void edited();
     void refresh();

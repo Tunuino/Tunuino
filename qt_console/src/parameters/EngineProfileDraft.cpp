@@ -88,12 +88,12 @@ QJsonObject EngineProfileDraft::json()const{
     QJsonArray rows,events;for(const auto &c:cylinders)rows.append(QJsonObject{{"injector",c.injector},{"coil",c.coil},{"tdc",int(c.tdc)}});for(int c:order)events.append(c);
     return {{"operation",operation},{"inverted",inverted},{"requiredFuel",requiredFuel},{"dwell",dwell},{"deadTime",deadTime},{"maximumInjection",maximumInjection},{"toothZero",int(toothZero)},{"camFirst",camFirst},{"camLast",camLast},{"cylinders",rows},{"order",events}};
 }
-bool EngineProfileDraft::import(const QJsonObject &o,QString &error){
+bool EngineProfileDraft::import(const QJsonObject &o,QString &error,bool editorDraft){
     auto copy=*this;const auto integer=[&](const QJsonObject &object,const char *key,int low,int high,int &out){const auto v=object[key];const double n=v.toDouble(-1e20);if(!v.isDouble()||n<low||n>high||n!=std::floor(n))return false;out=int(n);return true;};
     int angle=0;if(!integer(o,"operation",0,4,copy.operation)||!o["inverted"].isBool()||!integer(o,"requiredFuel",100,30000,copy.requiredFuel)||!integer(o,"dwell",100,5000,copy.dwell)||!integer(o,"deadTime",0,5000,copy.deadTime)||!integer(o,"maximumInjection",100,20000,copy.maximumInjection)||!integer(o,"toothZero",0,71999,angle)||!integer(o,"camFirst",0,119,copy.camFirst)||!integer(o,"camLast",0,119,copy.camLast)){error="Invalid engine-profile parameters.";return false;}
     copy.inverted=o["inverted"].toBool();copy.toothZero=quint32(angle);const auto rows=o["cylinders"].toArray(),events=o["order"].toArray();if(rows.size()<1||rows.size()>12||events.size()!=rows.size()){error="Invalid cylinder count or order.";return false;}
     copy.cylinders.clear();copy.order.clear();for(const auto &value:rows){const auto row=value.toObject();Cylinder c;int tdc=0;if(!integer(row,"injector",-1,15,c.injector)||!integer(row,"coil",-1,11,c.coil)||!integer(row,"tdc",0,71999,tdc)){error="Invalid cylinder assignment.";return false;}c.tdc=quint32(tdc);copy.cylinders<<c;}
-    for(const auto &value:events){const double n=value.toDouble(-1e20);if(!value.isDouble()||n<0||n>=rows.size()||n!=std::floor(n)){error="Invalid firing order.";return false;}copy.order<<int(n);}
-    if(!copy.permutation()){error="Each cylinder must occur once.";return false;}for(int i=1;i<copy.order.size();++i)if(copy.cylinders[copy.order[i-1]].tdc>=copy.cylinders[copy.order[i]].tdc){error="Firing order and TDC angles disagree.";return false;}copy.retained_=copy.cylinders;*this=copy;return true;
+    for(const auto &value:events){const double n=value.toDouble(-1e20);if(!value.isDouble()||n<(editorDraft?-1:0)||n>=rows.size()||n!=std::floor(n)){error="Invalid firing order.";return false;}copy.order<<int(n);}
+    if(!editorDraft&&!copy.permutation()){error="Each cylinder must occur once.";return false;}for(int i=1;!editorDraft&&i<copy.order.size();++i)if(copy.cylinders[copy.order[i-1]].tdc>=copy.cylinders[copy.order[i]].tdc){error="Firing order and TDC angles disagree.";return false;}copy.retained_=copy.cylinders;*this=copy;return true;
 }
 }

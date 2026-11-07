@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "project/MapProject.h"
 #include "NativeDfuFlash.h"
 #include "logging/GraphLogWidget.h"
 #include <QPainter>
@@ -881,8 +882,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto installMapFileActions = [this](QTableWidget *table, const QString &mapId,
                                         const QStringList &rpmAxis, const QStringList &mapAxis,
                                         double maximum) {
-        auto *openAction = new QAction(tr("Open map"), this);
-        auto *saveAction = new QAction(tr("Save map"), this);
+        auto *openAction = new QAction(tr("Import table"), this);
+        auto *saveAction = new QAction(tr("Export table"), this);
         connect(saveAction, &QAction::triggered, this, [this, table, mapId, rpmAxis, mapAxis, maximum]() {
             QJsonArray rows;
             for (int row = 0; row < 16; ++row) {
@@ -908,14 +909,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             doc.insert(QStringLiteral("rpm"), rpms);
             doc.insert(QStringLiteral("mapKpa"), loads);
             doc.insert(QStringLiteral("values"), rows);
-            const QString filename = QFileDialog::getSaveFileName(this, tr("Save map"), mapId + QStringLiteral(".json"), tr("Tunuino maps (*.json)"));
+            const QString filename = QFileDialog::getSaveFileName(this, tr("Export table"), mapId + QStringLiteral(".json"), tr("Tunuino table (*.json)"));
             if (filename.isEmpty()) return;
             QSaveFile file(filename);
             if (!file.open(QIODevice::WriteOnly) || file.write(QJsonDocument(doc).toJson(QJsonDocument::Indented)) < 0 || !file.commit())
                 QMessageBox::warning(this, tr("Save failed"), tr("Could not save map."));
         });
         connect(openAction, &QAction::triggered, this, [this, table, mapId, rpmAxis, mapAxis, maximum]() {
-            const QString filename = QFileDialog::getOpenFileName(this, tr("Open map"), QString(), tr("Tunuino maps (*.json)"));
+            const QString filename = QFileDialog::getOpenFileName(this, tr("Import table"), QString(), tr("Tunuino table (*.json)"));
             if (filename.isEmpty()) return;
             QFile file(filename);
             if (!file.open(QIODevice::ReadOnly)) {
@@ -2267,6 +2268,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto mapBases = QSharedPointer<std::array<MapBase,2>>::create();
     struct SensorBase { QByteArray header,aux,identity;quint32 generation=0; };
     auto sensorBase=QSharedPointer<SensorBase>::create();
+    auto *mapProject=new tunuino::MapProject(this);
+    auto projectLoaded=QSharedPointer<bool>::create(false);
+    auto projectPages=QSharedPointer<QJsonObject>::create();
     auto activeSensorWrite=QSharedPointer<int>::create(-1);
     auto activeParameterFinished=QSharedPointer<std::function<void(bool,const QString&)>>::create();
     auto writeActionRef = QSharedPointer<QPointer<QAction>>::create();
@@ -2382,16 +2386,45 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     openProject->setShortcut(QKeySequence::Open);
     auto *saveProject = fileMenu->addAction(tr("Save Map..."));
     saveProject->setShortcut(QKeySequence::Save);
-    // File actions operate on the active map, never on the example preview.
-    const auto activeMapActions = [workspace, tabs, mapWindows, fuelPage, ignitionPage, afrPage, fuelFileActions, ignitionFileActions, afrFileActions]() {
-        const auto *active = workspace->activeSubWindow();
-        const QWidget *page = active ? active->widget() : tabs->currentWidget();
-        if (page == ignitionPage) return ignitionFileActions;
-        if (page == afrPage) return afrFileActions;
-        return fuelFileActions;
+    openProject->setObjectName("fileOpenMap");saveProject->setObjectName("fileSaveMap");
+    mapProject->canUse=[=]{return !writer->busy()&&!*writePending&&!*readBusy&&!*validationPending&&!*toolBusy;};
+    mapProject->capture=[=](QString &error){
+        auto pages=*projectPages;if(pages.isEmpty())pages=tunuino::MapProject::defaultPages();
+        const auto live=tools->snapshot?tools->snapshot():tunuino::ToolSnapshot{};
+        if(!*projectLoaded&&live.valid()){const QStringList names{"header","fuel","ignition","aux"};for(int i=0;i<4;++i)pages[names[i]]=QString::fromLatin1(live.pages[i].toHex());}
+        QJsonObject tables,parameters,sensors;
+        const QList<QTableWidget*> grids{maps,ignitionMap,afrMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues};const QStringList names{"fuel","ignition","afr"};
+        for(int i=0;i<3;++i){const auto state=tunuino::MapProject::tableState(grids[i],rpms[i]);if(!tunuino::MapProject::tableState(grids[i],rpms[i],state,i==1?-90:0,i==0?300:i==1?90:25,false,error))return QJsonObject{};tables[names[i]]=state;}
+        for(auto *panel:*parameterPanels)parameters[panel->block().key]=panel->editorState();
+        for(auto *panel:*sensorPanels)sensors[tunuino::SensorCalibrationCodec::name(panel->kind())]=panel->editorState();
+        return QJsonObject{{"target",QJsonObject{{"family",1},{"mcu",1},{"hardwareRevision",7},{"schema",2}}},{"pages",pages},{"tables",tables},{"parameters",parameters},{"sensors",sensors},{"trigger",triggerWizard->editorState()},{"service",QJsonObject{{"comment",serviceTool->projectComment()}}}};
     };
-    connect(openProject, &QAction::triggered, this, [activeMapActions]() { activeMapActions().first->trigger(); });
-    connect(saveProject, &QAction::triggered, this, [activeMapActions]() { activeMapActions().second->trigger(); });
+    mapProject->apply=[=](const QJsonObject &document,QString &error){
+        const auto tables=document["tables"].toObject(),parameters=document["parameters"].toObject(),sensors=document["sensors"].toObject();
+        if(parameters.size()!=parameterPanels->size()||sensors.size()!=sensorPanels->size()){error=tr("This map does not contain all supported parameters and sensors.");return false;}
+        const QList<QTableWidget*> grids{maps,ignitionMap,afrMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues};const QStringList names{"fuel","ignition","afr"};
+        for(int i=0;i<3;++i)if(!tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,false,error))return false;
+        for(auto *panel:*parameterPanels)if(!panel->restoreEditor(parameters[panel->block().key].toObject(),false,error))return false;
+        for(auto *panel:*sensorPanels)if(!panel->restoreEditor(sensors[tunuino::SensorCalibrationCodec::name(panel->kind())].toObject(),false,error))return false;
+        if(!triggerWizard->restoreEditor(document["trigger"].toObject(),false,error))return false;
+        const QJsonValue comment=document["service"].toObject()["comment"];if(!comment.isString()||comment.toString().size()>128){error=tr("Invalid project comment.");return false;}
+        // All content is validated before changing any editor. File data never
+        // replaces the trusted live ECU snapshot used by the write transaction.
+        *projectPages=document["pages"].toObject();*projectLoaded=true;
+        const auto live=tools->snapshot?tools->snapshot():tunuino::ToolSnapshot{};
+        const auto header=live.valid()?live.pages[0]:QByteArray::fromHex((*projectPages)["header"].toString().toLatin1());
+        const auto aux=live.valid()?live.pages[3]:QByteArray::fromHex((*projectPages)["aux"].toString().toLatin1());
+        QByteArray identity=live.valid()?live.identity:QByteArray(32,0);if(!live.valid())identity[19]=char(255);const quint32 generation=live.valid()?live.generation:1;
+        for(auto *panel:*parameterPanels){panel->keepProjectEdits(false);panel->load(header,aux,identity,generation);panel->restoreEditor(parameters[panel->block().key].toObject(),true,error);panel->keepProjectEdits(true);if(!live.valid())panel->setAvailable(false);}
+        for(auto *panel:*sensorPanels){panel->keepProjectEdits(false);panel->load(header,aux,identity,generation);panel->restoreEditor(sensors[tunuino::SensorCalibrationCodec::name(panel->kind())].toObject(),true,error);panel->keepProjectEdits(true);if(!live.valid())panel->setAvailable(false);}
+        triggerWizard->keepProjectEdits(false);if(live.valid())triggerWizard->load(header,aux,identity,generation);else triggerWizard->loadOffline(header,aux);triggerWizard->restoreEditor(document["trigger"].toObject(),true,error);triggerWizard->keepProjectEdits(true);if(!live.valid())triggerWizard->setAvailable(false);
+        for(int i=0;i<3;++i)tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,true,error);
+        serviceTool->setProjectComment(comment.toString());fuelSurface->update();ignitionSurface->update();afrSurface->update();
+        statusBar()->showMessage(tr("Complete map opened locally. No ECU write was performed."),10000);return true;
+    };
+    serviceTool->saveMap=[mapProject]{mapProject->saveAs();};
+    connect(openProject,&QAction::triggered,mapProject,&tunuino::MapProject::openDialog);
+    connect(saveProject,&QAction::triggered,mapProject,&tunuino::MapProject::saveAs);
     fileMenu->addSeparator();
     auto *fullScreen = fileMenu->addAction(tr("Full screen"));
     fullScreen->setShortcut(QKeySequence(QStringLiteral("Ctrl+F")));
@@ -2850,6 +2883,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             }
             if(transfer->page==4){
                 sensorBase->aux=transfer->bytes;sensorBase->identity=*ecuIdentity;sensorBase->generation=*ecuGeneration;
+                if(!*projectLoaded&&sensorBase->header.size()==256){*projectPages=QJsonObject{{"header",QString::fromLatin1(sensorBase->header.toHex())},{"fuel",QString::fromLatin1((*mapBases)[0].bytes.toHex())},{"ignition",QString::fromLatin1((*mapBases)[1].bytes.toHex())},{"aux",QString::fromLatin1(sensorBase->aux.toHex())}};}
                 if(sensorBase->header.size()==256){for(auto *panel:*sensorPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*parameterPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);triggerWizard->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);}
                 abortTransfer(tr("ECU synchronized: Fuel, Ignition and sensor calibrations."));return;
             }
@@ -2879,6 +2913,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             // Rows are MAP load (kPa); columns are engine speed (RPM).
             // Firmware storage is load-major: cells[load][rpm].
             auto *rpmValues = (table == maps) ? fuelRpmValues : ignitionRpmValues;
+            if(!*projectLoaded){
             for (int i = 0; i < 16; ++i)
                 rpmValues->item(0, i)->setText(rpmLabels.at(i));
             std::reverse(loadLabels.begin(), loadLabels.end());
@@ -2886,6 +2921,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             for (int row = 0; row < 16; ++row)
                 for (int col = 0; col < 16; ++col)
                     table->item(15 - row, col)->setText(QString::number(qint16(u16(64 + 2 * (row * 16 + col))) / 100.0, 'f', 2));
+            }
             // Force the independent 3D view to repaint after the complete ECU map arrives.
             (page == 2 ? fuelSurface : ignitionSurface)->update();
             if (*autoSync && (page == 2 || page == 3)) {

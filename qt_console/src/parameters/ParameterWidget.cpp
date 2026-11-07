@@ -53,13 +53,14 @@ double ParameterWidget::value(int row)const{auto *w=table_->cellWidget(row,1);if
 void ParameterWidget::setValue(int row,double v){if(auto *check=qobject_cast<QCheckBox*>(table_->cellWidget(row,1))){check->setChecked(v!=0);return;}if(auto *c=qobject_cast<QComboBox*>(table_->cellWidget(row,1))){const auto &f=block_.fields[row];if(block_.key.endsWith(".outputs")||f.key=="input"){QSignalBlocker blocker(c);c->clear();c->addItem(f.choices.value(int(v)),int(v));c->addItem(tr("Customise..."),-1);c->setCurrentIndex(0);}else c->setCurrentIndex(int(v));}else qobject_cast<QDoubleSpinBox*>(table_->cellWidget(row,1))->setValue(v);}
 void ParameterWidget::load(const QByteArray &h,const QByteArray &a,const QByteArray &identity,quint32 generation){
     if(h.size()!=256||a.size()!=256||identity.size()!=32||!generation)return;
+    const auto project=projectEdits_&&identity_!=identity?editorState():QJsonObject{};
     const bool keep=edited_&&identity_==identity;
     if(profile_){
         if(keep&&(!profileHeader_.isEmpty())&&profileHeader_.mid(128)!=h.mid(128))profileConflict_=true;
         profileHeader_=h;profileAux_=a;
         if(!keep){profile_->load(h,a);profileConflict_=false;edited_=false;}
         else if(!profileConflict_)profile_->rebase(h,a);
-        base_=h;identity_=identity;generation_=generation;syncProfile();refresh();return;
+        base_=h;identity_=identity;generation_=generation;syncProfile();if(!project.isEmpty()){QString ignored;restoreEditor(project,true,ignored);}refresh();return;
     }
     if(block_.key=="ignition.primary"){
         if(!keep)profileConflict_=false;
@@ -70,7 +71,7 @@ void ParameterWidget::load(const QByteArray &h,const QByteArray &a,const QByteAr
     if(block_.key.endsWith(".outputs")){
         const int count=quint8(h[129]);for(int i=0;i<table_->rowCount();++i){table_->setRowHidden(i,i>=count);table_->item(i,0)->setText(tr("Cylinder %1").arg(i+1));}
         if(block_.key=="coils.outputs"&&h[128]==3){QSet<int> seen;for(int i=0;i<count;++i){const int coil=quint8(h[161+8*i]);if(seen.contains(coil)){table_->setRowHidden(i,true);continue;}seen.insert(coil);for(int j=i+1;j<count;++j)if(h[161+8*j]==h[161+8*i])table_->item(i,0)->setText(tr("Cylinders %1 / %2").arg(i+1).arg(j+1));}}
-    }refresh();
+    }if(!project.isEmpty()){QString ignored;restoreEditor(project,true,ignored);}refresh();
 }
 void ParameterWidget::setAvailable(bool available){if(available_==available)return;available_=available;refresh();}
 void ParameterWidget::refresh(){
@@ -106,6 +107,13 @@ void ParameterWidget::save(){if(block_.key=="fuel.guard"&&(identity_.size()!=32|
     if(block_.page==1&&block_.key!="ignition.primary"&&quint8(base_[128])==0){status_->setText(tr("A configured engine profile is required. This window does not invent injector/coil assignments."));return;}
     if(block_.page==1&&quint8(desired[128])>=1&&quint8(desired[128])<=3){EngineProfileDraft checked;checked.load(desired,profileAux_);QString error;if(checked.build(error).isEmpty()){status_->setText(error);return;}}
     writeRequested(block_.page,desired,mask);
+}
+QJsonObject ParameterWidget::editorState()const{QJsonObject values;for(int i=0;i<block_.fields.size();++i)values[block_.fields[i].key]=value(i);QJsonObject state{{"values",values}};if(profile_){state["engineProfile"]=profile_->json();values["cylinders"]=profile_->count();values["invert"]=profile_->inverted?1:0;for(int i=0;i<12;++i)values[QString("order%1").arg(i)]=i<profile_->count()?profile_->order.value(i,-1)+1:0;state["values"]=values;}return state;}
+bool ParameterWidget::restoreEditor(const QJsonObject &state,bool apply,QString &error){
+    const auto values=state["values"].toObject();if(values.size()!=block_.fields.size()){error="Missing parameter values: "+block_.key;return false;}QByteArray test(256,0);
+    for(const auto &f:block_.fields)if(!values[f.key].isDouble()||!ParameterCatalog::put(test,f,values[f.key].toDouble())||(!f.choices.isEmpty()&&(values[f.key].toDouble()!=std::floor(values[f.key].toDouble())||values[f.key].toDouble()>=f.choices.size()))){error="Invalid parameter: "+block_.key+" / "+f.key;return false;}
+    auto draft=profile_;if(draft&&(!state["engineProfile"].isObject()||!draft->import(state["engineProfile"].toObject(),error,true)))return false;
+    if(!apply)return true;loading_=true;if(draft){profile_=draft;syncProfile();}else for(int i=0;i<block_.fields.size();++i)setValue(i,values[block_.fields[i].key].toDouble());loading_=false;edited_=true;profileConflict_=false;refresh();return true;
 }
 void ParameterWidget::defaults(){
     if(QMessageBox::question(this,tr("Restore block defaults"),tr("Replace this window's values with reference defaults? Nothing is sent to the ECU until Write to ECU."))!=QMessageBox::Yes)return;

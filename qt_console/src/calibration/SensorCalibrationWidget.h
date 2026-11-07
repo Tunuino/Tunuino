@@ -1,4 +1,5 @@
 #pragma once
+#include <QJsonObject>
 #include "../protocol/SensorCalibrationCodec.h"
 #include <QWidget>
 #include <QElapsedTimer>
@@ -10,6 +11,9 @@ class QPushButton;
 namespace tunuino {
 class SensorCalibrationWidget final : public QWidget {
 public:
+    QJsonObject editorState()const;
+    bool restoreEditor(const QJsonObject &,bool apply,QString &error);
+    void keepProjectEdits(bool on){projectEdits_=on;}
     explicit SensorCalibrationWidget(SensorKind kind,QWidget *parent=nullptr);
     SensorKind kind() const {return kind_;}
     void load(const QByteArray &header,const QByteArray &aux,const QByteArray &identity,quint32 generation);
@@ -19,6 +23,7 @@ public:
     void save();
     std::function<void(SensorKind,const QByteArray&)> writeRequested;
 private:
+    bool projectEdits_=false;
     bool hasSample() const;
     void chooseInput();
     void refresh();

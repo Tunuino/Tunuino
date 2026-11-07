@@ -1,4 +1,5 @@
 #pragma once
+#include <QJsonObject>
 #include "ParameterCatalog.h"
 #include "EngineProfileDraft.h"
 #include <optional>
@@ -8,6 +9,9 @@ class QTableWidget;class QLabel;class QPushButton;class QComboBox;class QDoubleS
 namespace tunuino {
 class ParameterWidget final:public QWidget {
 public:
+    QJsonObject editorState()const;
+    bool restoreEditor(const QJsonObject &,bool apply,QString &error);
+    void keepProjectEdits(bool on){projectEdits_=on;}
     explicit ParameterWidget(ParameterBlock block,QWidget *parent=nullptr);
     QSize sizeHint()const override;
     const ParameterBlock &block()const{return block_;}
@@ -17,6 +21,7 @@ public:
     void save();
     std::function<void(int,const QByteArray&,const QByteArray&)> writeRequested;
 private:
+    bool projectEdits_=false;
     void refresh();
     double value(int row)const;
     void setValue(int row,double value);

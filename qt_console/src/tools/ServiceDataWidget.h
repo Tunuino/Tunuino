@@ -11,7 +11,10 @@ public:
     std::function<ToolSnapshot()> snapshot;
     std::function<bool()> canStart;
     std::function<void(bool)> busyChanged;
+    std::function<void()> saveMap;
     void showPage(int index);
+    QString projectComment()const;
+    void setProjectComment(const QString &text);
     bool busy()const{return phase_!=0;}
 protected:void closeEvent(QCloseEvent *event)override;
 private:

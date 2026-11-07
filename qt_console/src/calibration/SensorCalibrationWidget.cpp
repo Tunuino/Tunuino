@@ -12,6 +12,8 @@
 #include <QTimer>
 #include <QTableWidget>
 #include <QHeaderView>
+#include <QJsonArray>
+#include <cmath>
 namespace tunuino {
 SensorCalibrationWidget::SensorCalibrationWidget(SensorKind kind,QWidget *parent):QWidget(parent),kind_(kind){
     setObjectName(QStringLiteral("sensor%1").arg(SensorCalibrationCodec::name(kind)));
@@ -69,6 +71,12 @@ SensorCalibrationWidget::SensorCalibrationWidget(SensorKind kind,QWidget *parent
     connect(save_,&QPushButton::clicked,this,[this]{save();});
     auto *timer=new QTimer(this);timer->setInterval(500);connect(timer,&QTimer::timeout,this,[this]{refresh();});timer->start();refresh();
 }
+QJsonObject SensorCalibrationWidget::editorState()const{QJsonArray volts,values;for(int i=0;i<SensorCalibrationCodec::points(kind_);++i){volts.append(volts_[i]->value());values.append(values_[i]?values_[i]->value():0);}return {{"input",input_->currentData().toInt()},{"volts",volts},{"values",values}};}
+bool SensorCalibrationWidget::restoreEditor(const QJsonObject &o,bool apply,QString &error){
+    const auto volts=o["volts"].toArray(),values=o["values"].toArray();const auto input=o["input"].toDouble(-1);bool valid=o["input"].isDouble()&&input==std::floor(input)&&input>=0&&input<=(SensorCalibrationCodec::temperature(kind_)?4:11)&&volts.size()==SensorCalibrationCodec::points(kind_)&&values.size()==volts.size();
+    for(int i=0;valid&&i<volts.size();++i){valid=volts[i].isDouble()&&std::isfinite(volts[i].toDouble())&&volts[i].toDouble()>=volts_[i]->minimum()&&volts[i].toDouble()<=volts_[i]->maximum()&&values[i].isDouble()&&std::isfinite(values[i].toDouble());if(values_[i])valid=valid&&values[i].toDouble()>=values_[i]->minimum()&&values[i].toDouble()<=values_[i]->maximum();}
+    if(!valid){error="Invalid sensor editor: "+SensorCalibrationCodec::name(kind_);return false;}if(!apply)return true;loading_=true;setInput(int(input));if(preset_)preset_->setCurrentIndex(0);for(int i=0;i<volts.size();++i){volts_[i]->setValue(volts[i].toDouble());if(values_[i])values_[i]->setValue(values[i].toDouble());}loading_=false;edited_=true;runtime_.clear();sampleAge_.invalidate();refresh();return true;
+}
 QString SensorCalibrationWidget::inputName(int channel)const{
     if(!channel)return tr("Disabled");
     // Proteus v0.7 PCB 383558bf: J103, TE 1-776231-2, natural housing.
@@ -89,6 +97,7 @@ void SensorCalibrationWidget::chooseInput(){
 }
 void SensorCalibrationWidget::load(const QByteArray &header,const QByteArray &aux,const QByteArray &identity,quint32 generation){
     if(header.size()!=256||aux.size()!=256||identity.size()!=32||!generation)return;
+    const auto project=projectEdits_&&identity_!=identity?editorState():QJsonObject{};
     const bool keep=edited_&&identity_==identity;
     if(identity_!=identity){runtime_.clear();sampleAge_.invalidate();}
     header_=header;aux_=aux;identity_=identity;generation_=generation;
@@ -99,6 +108,7 @@ void SensorCalibrationWidget::load(const QByteArray &header,const QByteArray &au
         for(int i=0;i<(SensorCalibrationCodec::points(kind_));++i){volts_[i]->setValue(SensorCalibrationCodec::voltage(c.raw[i],header));if(values_[i])values_[i]->setValue(c.values[i]);}
         edited_=false;loading_=false;
     }
+    if(!project.isEmpty()){QString ignored;restoreEditor(project,true,ignored);}
     refresh();
 }
 void SensorCalibrationWidget::setAvailable(bool available){available_=available;refresh();}

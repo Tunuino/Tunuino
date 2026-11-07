@@ -15,6 +15,7 @@
 #include <QAction>
 #include <QCloseEvent>
 #include <QMdiSubWindow>
+#include <cmath>
 namespace tunuino {
 namespace {
 quint32 u32(const QByteArray &b,int at){return (quint32(SensorCalibrationCodec::u16(b,at))<<16)|quint32(SensorCalibrationCodec::u16(b,at+2));}
@@ -40,16 +41,24 @@ TriggerWizard::TriggerWizard(QWidget *parent):QWizard(parent){
     setContextMenuPolicy(Qt::ActionsContextMenu);auto *discard=new QAction(tr("Discard edits / use ECU values"),this);discard->setObjectName("triggerDiscard");addAction(discard);connect(discard,&QAction::triggered,this,[this]{this->discard();});
     loading_=true;teeth_->setValue(36);missing_->setValue(1);rpm_->setValue(12000);loading_=false;restart();refresh();
 }
+QJsonObject TriggerWizard::editorState()const{return {{"teeth",teeth_->value()},{"missing",missing_->value()},{"rpm",rpm_->value()},{"capture",capture_->isChecked()},{"angle",angle_->value()},{"first",first_->value()},{"last",last_->value()},{"invert",invert_->isChecked()}};}
+bool TriggerWizard::restoreEditor(const QJsonObject &o,bool apply,QString &error){
+    const auto number=[&](const char *key,double low,double high,double scale){const auto v=o[key];double n=v.toDouble();return v.isDouble()&&std::isfinite(n)&&n>=low&&n<=high&&std::abs(n*scale-std::round(n*scale))<1e-6;};
+    if(!number("teeth",4,120,1)||!number("missing",1,59,1)||!number("rpm",1000,20000,1)||!number("angle",0,719.99,100)||!number("first",0,119,1)||!number("last",0,119,1)||!o["capture"].isBool()||!o["invert"].isBool()){error="Invalid trigger wizard editor.";return false;}if(!apply)return true;loading_=true;pattern_->setCurrentIndex(0);teeth_->setValue(o["teeth"].toInt());missing_->setValue(o["missing"].toInt());rpm_->setValue(o["rpm"].toInt());angle_->setValue(o["angle"].toDouble());first_->setValue(o["first"].toInt());last_->setValue(o["last"].toInt());capture_->setChecked(o["capture"].toBool());invert_->setChecked(o["invert"].toBool());loading_=false;dirty_=true;conflict_=false;scopeEvidence_.clear();restart();refresh();return true;
+}
 TriggerSetup TriggerWizard::settings()const{TriggerSetup s;s.capture=capture_->isChecked();s.teeth=teeth_->value();s.missing=missing_->value();s.maximumRpm=rpm_->value();s.camFirst=first_->value();s.camLast=last_->value();s.toothZero=angle_->value();s.inverted=invert_->isChecked();return s;}
 void TriggerWizard::edited(){if(loading_)return;dirty_=true;refresh();}
 void TriggerWizard::load(const QByteArray &h,const QByteArray &a,const QByteArray &identity,quint32 generation){
     if(h.size()!=256||a.size()!=256||!EcuPowerState::supportedIdentity(identity)||!generation){setAvailable(false);return;}
+    const auto project=projectEdits_&&identity_!=identity?editorState():QJsonObject{};
     const bool keep=dirty_&&identity_==identity;const bool same=identity_==identity&&generation_==generation;
     if(keep&&header_!=h){const auto owned=TriggerSetupPlan::mask(TriggerSetupPlan::hasProfile(header_));for(int i=0;i<256;++i)if((quint8(header_[i])^quint8(h[i]))&quint8(owned[i]))conflict_=true;if(header_.mid(128)!=h.mid(128))conflict_=true;}
     header_=h;aux_=a;identity_=identity;generation_=generation;if(!same)scopeEvidence_.clear();
     if(!keep){const auto s=TriggerSetupPlan::read(h);loading_=true;pattern_->setCurrentIndex(0);teeth_->setValue(s.teeth);missing_->setValue(s.missing);rpm_->setValue(s.maximumRpm);capture_->setChecked(s.capture);angle_->setValue(s.toothZero);first_->setValue(s.camFirst);last_->setValue(s.camLast);invert_->setChecked(s.inverted);loading_=false;dirty_=conflict_=false;if(!same)restart();}
+    if(!project.isEmpty()){QString ignored;restoreEditor(project,true,ignored);}
     refresh();
 }
+void TriggerWizard::loadOffline(const QByteArray &h,const QByteArray &a){if(h.size()!=256||a.size()!=256)return;header_=h;aux_=a;identity_.clear();generation_=0;available_=false;scopeEvidence_.clear();refresh();}
 void TriggerWizard::setAvailable(bool on){if(available_==on)return;available_=on;refresh();}
 void TriggerWizard::discard(){if(pending_||header_.size()!=256)return;dirty_=false;conflict_=false;load(header_,aux_,identity_,generation_);refresh();}
 void TriggerWizard::refresh(){

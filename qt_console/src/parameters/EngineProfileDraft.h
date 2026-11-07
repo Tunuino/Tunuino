@@ -16,7 +16,7 @@ public:
     bool assign(int cylinder,bool ignition,int channel,QString &error);
     QByteArray build(QString &error)const;
     QJsonObject json()const;
-    bool import(const QJsonObject &object,QString &error);
+    bool import(const QJsonObject &object,QString &error,bool editorDraft=false);
     int count()const{return cylinders.size();}
     QVector<Cylinder> cylinders;
     QVector<int> order;

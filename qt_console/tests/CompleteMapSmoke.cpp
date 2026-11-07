@@ -1,0 +1,35 @@
+// Integration check using the real Console and its File menu.
+// Offline only; settings/files are isolated in a temporary directory.
+#include "MainWindow.h"
+#include "project/MapProject.h"
+#include "parameters/ParameterWidget.h"
+#include <QApplication>
+#include <QStyleFactory>
+#include <QTemporaryDir>
+#include <QSettings>
+#include <QDoubleSpinBox>
+#include <QTreeWidget>
+#include <QMdiArea>
+#include <QMdiSubWindow>
+#include <QJsonArray>
+#include <QFile>
+#include <QAction>
+#include <QFileDialog>
+#include <QTimer>
+#include <iostream>
+#include <cstdlib>
+#define CHECK(x) do{if(!(x)){std::cerr<<"Failed "<<#x<<" line "<<__LINE__<<": "<<error.toStdString()<<std::endl;std::exit(1);}}while(false)
+int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFactory::create("Fusion"));QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);QTemporaryDir temp;app.setOrganizationName("TunuinoTest");app.setApplicationName("CompleteMap");QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,temp.path());QString error;
+    MainWindow window;window.show();app.processEvents();auto *project=dynamic_cast<tunuino::MapProject*>(window.findChild<QObject*>("mapProject"));CHECK(project);
+    auto *firing=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QWidget*>("ignition.firing"));CHECK(firing);firing->findChild<QDoubleSpinBox*>("cylinders")->setValue(6);
+    auto *tree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(tree);QTreeWidgetItemIterator it(tree);while(*it){if((*it)->data(0,Qt::UserRole+1).toString()=="ignition.firing"){tree->itemClicked(*it,0);break;}++it;}app.processEvents();CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle()=="Ignition - Firing order");
+    auto data=project->capture(error);CHECK(!data.isEmpty());auto tables=data["tables"].toObject();for(const auto &name:{"fuel","ignition","afr"}){auto t=tables[name].toObject();auto rows=t["cells"].toArray(),row=rows[0].toArray();row[0]=QString(name)=="fuel"?123.45:QString(name)=="ignition"?-12.34:12.8;rows[0]=row;t["cells"]=rows;tables[name]=t;}data["tables"]=tables;
+    auto parameters=data["parameters"].toObject();auto general=parameters["fuel.general"].toObject(),values=general["values"].toObject();values["requiredFuel"]=6.75;general["values"]=values;parameters["fuel.general"]=general;data["parameters"]=parameters;data["service"]=QJsonObject{{"comment","Full six-cylinder map"}};
+    CHECK(project->apply(data,error));CHECK(project->capture(error)==data);const auto path=temp.path()+"/whole.tnproj";CHECK(project->save(path,error));QFile file(path);CHECK(file.open(QIODevice::ReadOnly));const auto saved=file.readAll();file.close();
+    firing->findChild<QDoubleSpinBox*>("cylinders")->setValue(2);CHECK(project->capture(error)!=data);CHECK(project->open(path,error));CHECK(firing->findChild<QDoubleSpinBox*>("cylinders")->value()==6);CHECK(project->capture(error)==data);
+    auto bad=data;auto sensors=bad["sensors"].toObject(),tps=sensors["TPS"].toObject();tps["input"]=99;sensors["TPS"]=tps;bad["sensors"]=sensors;const auto corrupt=temp.path()+"/invalid.tnproj";QFile invalid(corrupt);CHECK(invalid.open(QIODevice::WriteOnly));invalid.write(tunuino::MapProject::encode(bad,error));invalid.close();CHECK(!project->open(corrupt,error));CHECK(project->capture(error)==data);
+    auto *save=window.findChild<QAction*>("fileSaveMap");CHECK(save);CHECK(save->shortcut()==QKeySequence::Save);bool dialogChecked=false;
+    QTimer::singleShot(100,[&]{for(auto *widget:QApplication::topLevelWidgets())if(auto *dialog=qobject_cast<QFileDialog*>(widget)){CHECK(dialog->nameFilters()==QStringList{"Tunuino map (*.tnproj)"});CHECK(dialog->defaultSuffix()=="tnproj");CHECK(dialog->selectedFiles().value(0).endsWith(".tnproj"));CHECK(!dialog->selectedFiles().value(0).contains("fuel.json"));dialogChecked=true;dialog->reject();}});save->trigger();CHECK(dialogChecked);
+    std::cout<<"Real File/Save Map from Firing order: full 6-cylinder map round-trip, all three tables, parameters, comment, atomic rejection and complete-map dialog passed offline\n"<<std::flush;
+    std::_Exit(0);
+}
