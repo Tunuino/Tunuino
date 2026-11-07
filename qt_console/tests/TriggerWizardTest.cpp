@@ -1,4 +1,7 @@
 #include "parameters/TriggerWizard.h"
+#include "parameters/TriggerPresets.h"
+#include <QSet>
+#include <cmath>
 #include "parameters/EngineProfileDraft.h"
 #include "ecu/MapWriteTransaction.h"
 #include "tools/ScopeWidget.h"
@@ -36,8 +39,40 @@ static void native(bool profile){
         for(int p=1;p<=4;++p){QByteArray actual;for(int at=0;at<(p==1||p==4?256:576);at+=64)actual+=exchange(read(p,at,64)).mid(1);CHECK(actual==(p==1?desired:base[p-1]));}return true;};
     wizard.save();CHECK(!invoked);wizard.next();CHECK(wizard.currentId()==1);wizard.next();CHECK(wizard.currentId()==2);wizard.save();CHECK(invoked);wizard.writeFinished(true,"Verified");process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
 }
+static void presets(const QByteArray &header,const QByteArray &aux){
+    EngineProfileDraft engine;engine.load(header,aux);engine.setTdc(1,17000);
+    QJsonObject firing{{"values",QJsonObject{{"cylinders",4},{"invert",0}}},{"engineProfile",engine.json()}};
+    QJsonObject primary{{"values",QJsonObject{{"teeth",36},{"missing",1},{"limit",12000},{"capture",0},{"angleLock",0},{"lockedAngle",9.5}}}};
+    QJsonObject trigger{{"teeth",36},{"missing",1},{"rpm",12000},{"capture",false},{"angle",21.5},{"first",1},{"last",3},{"invert",true}};
+    const QJsonObject current{{"parameters",QJsonObject{{"ignition.firing",firing},{"ignition.primary",primary},{"fuel.general",QJsonObject{{"keep",123}}},{"coils.dwell",QJsonObject{{"keep",2.75}}}}},{"trigger",trigger},{"pages",QJsonObject{{"header",QString::fromLatin1(header.toHex())},{"aux",QString::fromLatin1(aux.toHex())},{"fuel","unchanged-fuel-page"}}},{"service",QJsonObject{{"comment","keep this comment"}}}};
+    QSet<QString> names;QString error;int primaryCount=0,firingCount=0;
+    for(int index=0;index<TriggerPresets::catalog().size();++index){
+        const auto &preset=TriggerPresets::catalog()[index];CHECK(TriggerPresets::valid(preset));CHECK(!names.contains(preset.name));names.insert(preset.name);
+        const int groups=TriggerPresets::supported(index);QJsonObject result{{"unchanged",true}};const auto untouched=result;
+        CHECK(!TriggerPresets::apply(current,index,TriggerPresets::Secondary,result,error));CHECK(result==untouched);
+        if(!groups){CHECK(!TriggerPresets::apply(current,index,TriggerPresets::Primary,result,error));CHECK(result==untouched);continue;}
+        CHECK(TriggerPresets::apply(current,index,groups,result,error));CHECK(result["pages"]==current["pages"]&&result["service"]==current["service"]);
+        const auto parameters=result["parameters"].toObject();CHECK(parameters["fuel.general"]==current["parameters"].toObject()["fuel.general"]);CHECK(parameters["coils.dwell"]==current["parameters"].toObject()["coils.dwell"]);
+        if(groups&TriggerPresets::Primary){
+            ++primaryCount;CHECK(TriggerPresets::apply(current,index,TriggerPresets::Primary,result,error));CHECK(result["parameters"].toObject()["ignition.firing"]==firing);
+            auto expected=primary;auto values=primary["values"].toObject();values["teeth"]=preset.teeth;values["missing"]=preset.missing;expected["values"]=values;CHECK(result["parameters"].toObject()["ignition.primary"]==expected);
+            auto expectedTrigger=trigger;expectedTrigger["teeth"]=preset.teeth;expectedTrigger["missing"]=preset.missing;CHECK(result["trigger"]==expectedTrigger);
+        }else {CHECK(!TriggerPresets::apply(current,index,TriggerPresets::Primary,result,error));}
+        if(groups&TriggerPresets::Firing){
+            ++firingCount;CHECK(TriggerPresets::apply(current,index,TriggerPresets::Firing,result,error));CHECK(result["parameters"].toObject()["ignition.primary"]==primary&&result["trigger"]==trigger);
+            const auto profile=result["parameters"].toObject()["ignition.firing"].toObject()["engineProfile"].toObject();const auto rows=profile["cylinders"].toArray(),order=profile["order"].toArray();CHECK(rows.size()==preset.order.size());
+            for(int i=0;i<rows.size();++i){CHECK(order[i].toInt()==preset.order[i]-1);const auto row=rows[i].toObject();if(i<engine.count()){CHECK(row["injector"].toInt()==engine.cylinders[i].injector&&row["coil"].toInt()==engine.cylinders[i].coil);}else CHECK(row["injector"].toInt()==-1&&row["coil"].toInt()==-1);}
+            CHECK(profile["operation"]==engine.json()["operation"]&&profile["dwell"]==engine.json()["dwell"]&&profile["toothZero"]==engine.json()["toothZero"]);
+            if(rows.size()==4){QSet<int> angles;for(const auto &row:rows)angles.insert(row.toObject()["tdc"].toInt());CHECK(angles==QSet<int>({0,17000,36000,54000}));}
+            else for(int event=0;event<order.size();++event)CHECK(rows[order[event].toInt()].toObject()["tdc"].toInt()==int(std::lround(72000.0*event/rows.size())));
+        }
+    }
+    auto bad=TriggerPresets::catalog()[0];bad.order={1,1};CHECK(!TriggerPresets::valid(bad));bad=TriggerPresets::catalog()[0];bad.teeth=3;CHECK(!TriggerPresets::valid(bad));bad=TriggerPresets::catalog()[0];bad.sources.clear();CHECK(!TriggerPresets::valid(bad));
+    std::cout<<"Preset catalog: "<<primaryCount<<" primary geometries, "<<firingCount<<" firing orders; selective edits, existing wiring, new unassigned cylinders, non-uniform events and base pages preserved offline\n";
+}
 int main(int argc,char **argv){QApplication app(argc,argv);const auto cssPath=qEnvironmentVariable("TUNUINO_PARAMETER_STYLE");if(!cssPath.isEmpty()){QFile css(cssPath);CHECK(css.open(QIODevice::ReadOnly));app.setStyleSheet(QString::fromUtf8(css.readAll()));}
     QByteArray header(256,0),aux(256,0);Codec::put(header,0,2);header[3]=36;header[4]=1;Codec::put(header,96,12000);EngineProfileDraft engine;engine.load(header,aux);QString error;for(int i=0;i<4;++i){CHECK(engine.assign(i,false,i,error));CHECK(engine.assign(i,true,i,error));}header=engine.build(error);CHECK(header.size()==256);
+    presets(header,aux);
     auto s=TriggerSetupPlan::read(header);s.teeth=60;s.missing=2;s.maximumRpm=11000;s.capture=true;s.camFirst=10;s.camLast=12;s.toothZero=123.45;s.inverted=true;const auto desired=TriggerSetupPlan::apply(header,aux,s,error);CHECK(desired.size()==256&&desired[2]==1&&desired[3]==60&&desired[4]==2&&desired[153]==10&&desired[154]==12&&desired[155]==1&&u32(desired,146)==12345);
     auto bad=s;bad.missing=30;CHECK(TriggerSetupPlan::apply(header,aux,bad,error).isEmpty());bad=s;bad.camFirst=13;CHECK(TriggerSetupPlan::apply(header,aux,bad,error).isEmpty());bad=s;bad.toothZero=720;CHECK(TriggerSetupPlan::apply(header,aux,bad,error).isEmpty());bad=s;bad.toothZero=1.001;CHECK(TriggerSetupPlan::apply(header,aux,bad,error).isEmpty());
     auto limited=Codec::featureDefaults(Codec::tpsDefaults());Codec::put(limited,70,64);bad=s;bad.maximumRpm=6000;CHECK(TriggerSetupPlan::apply(header,limited,bad,error).isEmpty());

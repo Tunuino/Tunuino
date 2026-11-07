@@ -42,8 +42,8 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     auto *presets=dynamic_cast<tunuino::TriggerPresetDialog*>(window.findChild<QDialog*>("triggerPresetDialog"));CHECK(presets);
     QTreeWidgetItemIterator presetItem(tree);while(*presetItem){if((*presetItem)->data(0,Qt::UserRole+1).toString()=="ignition.wizard"){tree->itemClicked(*presetItem,0);break;}++presetItem;}
     app.processEvents();CHECK(presets->isVisible()&&presets->isModal());
-    auto *engines=presets->findChild<QComboBox*>("predefinedTriggers");auto *ok=presets->findChild<QPushButton*>("triggerPresetOk");CHECK(engines&&ok&&engines->count()==11);
-    const auto beforePreset=project->capture(error);engines->setCurrentIndex(2);CHECK(!ok->isEnabled());CHECK(project->capture(error)==beforePreset);
+    auto *engines=presets->findChild<QComboBox*>("predefinedTriggers");auto *ok=presets->findChild<QPushButton*>("triggerPresetOk");CHECK(engines&&ok&&engines->count()==tunuino::TriggerPresets::catalog().size());
+    const auto beforePreset=project->capture(error);engines->setCurrentIndex(5);CHECK(!ok->isEnabled());CHECK(project->capture(error)==beforePreset);
     presets->findChild<QPushButton*>("triggerPresetCancel")->click();CHECK(!presets->isVisible()&&project->capture(error)==beforePreset);
     presets->open();engines->setCurrentIndex(1);presets->findChild<QCheckBox*>("triggerApply3")->setChecked(false);
     QJsonObject expected;CHECK(tunuino::TriggerPresets::apply(beforePreset,1,tunuino::TriggerPresets::Primary,expected,error));ok->click();CHECK(!presets->isVisible());CHECK(project->capture(error)==expected);
