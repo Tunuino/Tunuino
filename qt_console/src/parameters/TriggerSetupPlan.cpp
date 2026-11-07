@@ -11,6 +11,7 @@ QByteArray TriggerSetupPlan::mask(bool profile){QByteArray m(256,0);m[2]=1;m[3]=
 QByteArray TriggerSetupPlan::apply(const QByteArray &h,const QByteArray &a,const TriggerSetup &s,QString &error){
     error.clear();if(h.size()!=256||a.size()!=256||SensorCalibrationCodec::u16(h,0)!=2){error="Read a supported, complete ECU configuration first.";return {};}
     if(!primaryValid(s,error))return {};
+    if(h[28]!=0&&!s.capture){error="Disable ignition angle lock in Primary trigger before disabling trigger capture.";return {};}
     if(a[68]==1&&(SensorCalibrationCodec::u16(a,70)&64)&&SensorCalibrationCodec::u16(a,158)>=s.maximumRpm){error="Hard RPM limit must exceed the configured soft fuel-cut limiter.";return {};}
     auto desired=h;desired[2]=s.capture?1:0;desired[3]=char(s.teeth);desired[4]=char(s.missing);SensorCalibrationCodec::put(desired,96,s.maximumRpm);
     if(hasProfile(h)){

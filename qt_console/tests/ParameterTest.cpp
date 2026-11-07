@@ -5,6 +5,8 @@
 #include <QQueue>
 #include <QSet>
 #include <QComboBox>
+#include <QCheckBox>
+#include <QAction>
 #include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QTableWidget>
@@ -34,6 +36,11 @@ int main(int argc,char **argv){QApplication app(argc,argv);
     CHECK(!guardWidget.findChild<QPushButton*>("parameterSave")->isEnabled());guardWidget.save();CHECK(!guardCalled);
     guardIdentity[19]=79;guardWidget.load(guardHeader,guardAux,guardIdentity,1);CHECK(guardWidget.findChild<QPushButton*>("parameterSave")->isEnabled());guardWidget.save();CHECK(guardCalled);
     if(!qEnvironmentVariable("TUNUINO_GUARD_PREVIEW").isEmpty()){guardWidget.resize(guardWidget.sizeHint());guardWidget.show();app.processEvents();CHECK(guardWidget.grab().save(qEnvironmentVariable("TUNUINO_GUARD_PREVIEW")));guardWidget.hide();}
+    const auto primary=*std::find_if(blocks.begin(),blocks.end(),[](const auto &b){return b.key=="ignition.primary";});
+    ParameterWidget oldPrimary(primary);oldPrimary.load(guardHeader,guardAux,guardIdentity,1);oldPrimary.setAvailable(true);CHECK(!oldPrimary.findChild<QCheckBox*>("angleLock")->isEnabled());bool oldWrite=false;
+    oldPrimary.writeRequested=[&](int page,const QByteArray &desired,const QByteArray &){oldWrite=true;CHECK(page==1&&desired.mid(27,5)==guardHeader.mid(27,5));};oldPrimary.save();CHECK(oldWrite);oldWrite=false;oldPrimary.findChild<QDoubleSpinBox*>("lockedAngle")->setValue(10);oldPrimary.save();CHECK(!oldWrite);
+    auto lockId=guardIdentity;lockId[19]=char(207);ParameterWidget conflictPrimary(primary);auto lockHeader=guardHeader;lockHeader[3]=36;lockHeader[4]=1;Codec::put(lockHeader,96,12000);conflictPrimary.load(lockHeader,guardAux,lockId,1);conflictPrimary.setAvailable(true);conflictPrimary.findChild<QDoubleSpinBox*>("teeth")->setValue(60);
+    auto changedLock=lockHeader;changedLock[27]=1;Codec::put(changedLock,30,1000);conflictPrimary.load(changedLock,guardAux,lockId,2);CHECK(!conflictPrimary.findChild<QPushButton*>("parameterSave")->isEnabled());bool conflictWrite=false;conflictPrimary.writeRequested=[&](int,const QByteArray&,const QByteArray&){conflictWrite=true;};conflictPrimary.save();CHECK(!conflictWrite);conflictPrimary.findChild<QAction*>("primaryDiscard")->trigger();CHECK(conflictPrimary.findChild<QPushButton*>("parameterSave")->isEnabled());CHECK(conflictPrimary.findChild<QDoubleSpinBox*>("lockedAngle")->value()==10);
     const auto executable=qEnvironmentVariable("TUNUINO_FIRMWARE_HARNESS");if(executable.isEmpty()){std::cout<<"Parameter catalog/UI bounds passed; native firmware harness not supplied\n";return 0;}
     QProcess process;process.start(executable,{"--engine-profile"});CHECK(process.waitForStarted(3000));
     const auto exchange=[&](const QByteArray &q){const auto line=q.toHex()+"\n";CHECK(process.write(line)==line.size());CHECK(process.waitForBytesWritten(3000));while(!process.canReadLine())CHECK(process.waitForReadyRead(3000));return QByteArray::fromHex(process.readLine().trimmed());};
@@ -44,6 +51,7 @@ int main(int argc,char **argv){QApplication app(argc,argv);
         else {bool changed=false;for(const auto &f:b.fields){if(f.bit||!f.choices.isEmpty())continue;auto *spin=widget.findChild<QDoubleSpinBox*>(f.key);if(spin&&spin->value()+1/f.scale<=f.maximum){spin->setValue(spin->value()+1/f.scale);changed=true;break;}}
             if(!changed){auto *combo=widget.findChild<QComboBox*>("cylinder0");CHECK(combo);combo->addItem("Chosen spare output",4);combo->setCurrentIndex(2);}}
         if(b.key=="ignition.firing"&&!qEnvironmentVariable("TUNUINO_PARAMETER_PREVIEW").isEmpty()){widget.resize(widget.sizeHint());widget.show();app.processEvents();CHECK(widget.grab().save(qEnvironmentVariable("TUNUINO_PARAMETER_PREVIEW")));widget.findChild<QToolButton*>("engineProfileToggle")->setChecked(true);widget.resize(720,680);app.processEvents();CHECK(widget.grab().save(qEnvironmentVariable("TUNUINO_PARAMETER_PREVIEW")+"-advanced.png"));widget.hide();}
+        if(b.key=="ignition.primary"){widget.findChild<QCheckBox*>("capture")->setChecked(true);widget.findChild<QCheckBox*>("angleLock")->setChecked(true);widget.findChild<QDoubleSpinBox*>("lockedAngle")->setValue(10);}
         bool invoked=false;widget.writeRequested=[&](int page,const QByteArray &desired,const QByteArray &mask){invoked=true;CHECK(page==b.page&&desired!=base[page-1]);
             for(int i=0;i<256;++i)CHECK(!((quint8(desired[i])^quint8(base[page-1][i]))&~quint8(mask[i])));
             Writer writer;QQueue<QByteArray> pending;bool success=false;int copies=0,burns=0;
@@ -56,7 +64,13 @@ int main(int argc,char **argv){QApplication app(argc,argv);
             auto illegal=base[0];illegal[102]=1;CHECK(!writer.startParameters(1,illegal,base[0],identity,generation,QByteArray(256,char(255))));illegal=desired;int unowned=0;while(unowned<256&&mask[unowned]!=0)++unowned;CHECK(unowned<256);illegal[unowned]^=1;CHECK(!writer.startParameters(page,illegal,base[page-1],identity,generation,mask));
         };
         widget.save();CHECK(invoked);
+        if(b.key=="ignition.primary"){
+            for(int p=1;p<=4;++p){base[p-1].clear();for(int at=0;at<(p==1||p==4?256:576);at+=64)base[p-1]+=exchange(read(p,at,64)).mid(1);}
+            CHECK(base[0][27]==1&&base[0][28]==1&&Codec::u16(base[0],30)==1000);widget.saved();widget.load(base[0],base[3],identity,generation);invoked=false;
+            if(!qEnvironmentVariable("TUNUINO_LOCK_PREVIEW").isEmpty()){widget.resize(widget.sizeHint());widget.show();app.processEvents();CHECK(widget.grab().save(qEnvironmentVariable("TUNUINO_LOCK_PREVIEW")));widget.hide();}
+            widget.findChild<QCheckBox*>("angleLock")->setChecked(false);widget.save();CHECK(invoked);
+        }
     }
-    CHECK(operations==blocks.size());process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
+    CHECK(operations==blocks.size()+1);process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
     std::cout<<operations<<" parameter block writes against actual C dispatcher: one Burn each, full-page preservation and firing order independent of output wiring passed (host simulation)\n";
 }
