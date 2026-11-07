@@ -2189,8 +2189,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         auto *panel=new tunuino::SensorCalibrationWidget(kind);sensorPanels->append(panel);const auto name=tunuino::SensorCalibrationCodec::name(kind);
         (*parameterWindows)["sensor:"+name]=toolWindow(panel,tr("Sensors and inputs - %1").arg(name));
     }
-    for(const auto &block:tunuino::ParameterCatalog::blocks()){auto *panel=new tunuino::ParameterWidget(block);parameterPanels->append(panel);auto *window=toolWindow(panel,block.title);window->resize(720,block.key=="ignition.firing"?520:560);(*parameterWindows)[block.key]=window;}
-    *parameterNavigation=[=](const QString &key){auto *window=(*parameterWindows).value(key).data();if(!window)return;window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
+    for(const auto &block:tunuino::ParameterCatalog::blocks()){auto *panel=new tunuino::ParameterWidget(block);parameterPanels->append(panel);auto *window=toolWindow(panel,block.title);window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)[block.key]=window;}
+    *parameterNavigation=[=](const QString &key){auto *window=(*parameterWindows).value(key).data();if(!window)return;if(!window->property("parameterOpened").toBool()){if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))window->resize(parameters->sizeHint()+QSize(12,30));window->setProperty("parameterOpened",true);}window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
     auto *dock = new QDockWidget(tr("Engine Status"), this);
     dock->setObjectName("EngineStatusDock");
     auto *statusPanel = new QWidget(dock);

@@ -1,12 +1,15 @@
 #pragma once
 #include "ParameterCatalog.h"
+#include "EngineProfileDraft.h"
+#include <optional>
 #include <QWidget>
 #include <functional>
-class QTableWidget;class QLabel;class QPushButton;
+class QTableWidget;class QLabel;class QPushButton;class QComboBox;class QDoubleSpinBox;class QGroupBox;
 namespace tunuino {
 class ParameterWidget final:public QWidget {
 public:
     explicit ParameterWidget(ParameterBlock block,QWidget *parent=nullptr);
+    QSize sizeHint()const override;
     const ParameterBlock &block()const{return block_;}
     void load(const QByteArray &header,const QByteArray &aux,const QByteArray &identity,quint32 generation);
     void setAvailable(bool available);
@@ -19,8 +22,19 @@ private:
     void setValue(int row,double value);
     void file(bool writing);
     void defaults();
+    void setupProfile();
+    void syncProfile();
+    void discardProfileEdits();
+    bool eventFilter(QObject *watched,QEvent *event)override;
+    std::optional<EngineProfileDraft> profile_;
+    QByteArray profileHeader_,profileAux_;
+    bool profileConflict_=false;
+    QTableWidget *assignments_=nullptr;
+    QGroupBox *advanced_=nullptr;
+    QComboBox *operation_=nullptr;
+    QVector<QDoubleSpinBox*> profileValues_;
     ParameterBlock block_;QByteArray base_,identity_;quint32 generation_=0;
-    QTableWidget *table_;QLabel *status_;QPushButton *save_;
+    QTableWidget *table_=nullptr;QLabel *status_=nullptr;QPushButton *save_=nullptr;
     bool available_=false,edited_=false,loading_=false;
 };
 }
