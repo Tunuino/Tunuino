@@ -97,6 +97,7 @@
 #include "protocol/MapPageCodec.h"
 #include "calibration/SensorCalibrationWidget.h"
 #include "parameters/ParameterWidget.h"
+#include "parameters/TriggerWizard.h"
 #include "display/TuneDisplayWidget.h"
 #include "tools/ToolsSuite.h"
 #include "tools/ScopeWidget.h"
@@ -493,7 +494,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *injectors=new QTreeWidgetItem(fuelingCategory,{tr("Injectors")});parameterItem(injectors,tr("Injector outputs"),"injectors.outputs");parameterItem(injectors,tr("Injector dead time"),"injectors.deadtime");parameterItem(injectors,tr("Voltage compensation"),"voltage.compensation");
     unavailable(fuelingCategory,tr("Secondary injectors"),tr("Not implemented: staged secondary injection."));
     auto *ignitionCategory=addCategory(tr("Ignition"),{});
-    unavailable(ignitionCategory,tr("Trigger wizard"),tr("Not implemented: trigger configuration assistant. Use Triggers and Scope."));
+    parameterItem(ignitionCategory,tr("Trigger wizard"),"ignition.wizard");
     parameterItem(ignitionCategory,tr("Firing order"),"ignition.firing");
     auto *coils=new QTreeWidgetItem(ignitionCategory,{tr("Coils")});parameterItem(coils,tr("Ignition outputs"),"coils.outputs");parameterItem(coils,tr("Dwell"),"coils.dwell");parameterItem(coils,tr("Voltage compensation"),"voltage.compensation");
     auto *sparkCorrections=new QTreeWidgetItem(ignitionCategory,{tr("Corrections")});parameterItem(sparkCorrections,tr("IAT"),"ignition.iat");parameterItem(sparkCorrections,tr("Cylinders trim"),"ignition.trim");
@@ -1616,6 +1617,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *tools=new tunuino::ToolsSuite(this,navigationTree);
     auto *serviceTool=new tunuino::ServiceDataWidget;
     auto *scopeTool=new tunuino::ScopeWidget;
+    auto *triggerWizard=new tunuino::TriggerWizard;
     auto *outputTestTool=new tunuino::OutputTestWidget;
     auto *autotuneTool=new tunuino::AutotuneWidget;
     const auto toolWindow=[=](QWidget *widget,const QString &title){auto *window=workspace->addSubWindow(widget);window->setWindowTitle(title);window->setAttribute(Qt::WA_DeleteOnClose,false);window->resize(900,640);boundsGuard->watch(window);window->hide();return window;};
@@ -2190,6 +2192,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         (*parameterWindows)["sensor:"+name]=toolWindow(panel,tr("Sensors and inputs - %1").arg(name));
     }
     for(const auto &block:tunuino::ParameterCatalog::blocks()){auto *panel=new tunuino::ParameterWidget(block);parameterPanels->append(panel);auto *window=toolWindow(panel,block.title);window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)[block.key]=window;}
+    (*parameterWindows)["ignition.wizard"]=toolWindow(triggerWizard,tr("Ignition - Trigger wizard"));
+    (*parameterWindows)["ignition.wizard"]->resize(triggerWizard->sizeHint()+QSize(12,30));
+    triggerWizard->openScope=[=]{showTool(scopeWindow);};triggerWizard->openFiringOrder=[=]{if(*parameterNavigation)(*parameterNavigation)("ignition.firing");};
+    scopeTool->captured=[=](const tunuino::ToolSnapshot &source,const QByteArray &header,const QByteArray &samples){triggerWizard->observeScope(source,header,samples);};
     *parameterNavigation=[=](const QString &key){auto *window=(*parameterWindows).value(key).data();if(!window)return;if(!window->property("parameterOpened").toBool()){if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))window->resize(parameters->sizeHint()+QSize(12,30));window->setProperty("parameterOpened",true);}window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
     auto *dock = new QDockWidget(tr("Engine Status"), this);
     dock->setObjectName("EngineStatusDock");
@@ -2262,7 +2268,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     struct SensorBase { QByteArray header,aux,identity;quint32 generation=0; };
     auto sensorBase=QSharedPointer<SensorBase>::create();
     auto activeSensorWrite=QSharedPointer<int>::create(-1);
-    auto activeParameterWrite=QSharedPointer<QPointer<tunuino::ParameterWidget>>::create();
+    auto activeParameterFinished=QSharedPointer<std::function<void(bool,const QString&)>>::create();
     auto writeActionRef = QSharedPointer<QPointer<QAction>>::create();
     const auto updateWriteAvailability = [=]() {
         const bool ready = *ecuOnline && *ecuClean && *identityVerified && session->isOpen() && !writer->busy() && !*writePending && !*readBusy && !*validationPending && !*toolBusy && !*toolReply;
@@ -2272,12 +2278,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const bool sensorReady=ready&&sensorBase->header.size()==256&&sensorBase->aux.size()==256
             &&sensorBase->identity==*ecuIdentity&&sensorBase->generation==*ecuGeneration;
         for(auto *panel:*sensorPanels)panel->setAvailable(sensorReady);
-        for(auto *panel:*parameterPanels)panel->setAvailable(sensorReady);
+        for(auto *panel:*parameterPanels)panel->setAvailable(sensorReady);triggerWizard->setAvailable(sensorReady);
         if (*writeActionRef) {
             const auto *window=workspace->activeSubWindow(); auto *page=window?window->widget():nullptr;
             (*writeActionRef)->setEnabled(((page==fuelPage || page==fuelSurface) && fuelSave->isEnabled())
                 || ((page==ignitionPage || page==ignitionSurface) && ignitionSave->isEnabled())
-                || (sensorReady&&(dynamic_cast<const tunuino::SensorCalibrationWidget*>(page)||dynamic_cast<const tunuino::ParameterWidget*>(page))));
+                || (sensorReady&&(dynamic_cast<const tunuino::SensorCalibrationWidget*>(page)||dynamic_cast<const tunuino::ParameterWidget*>(page)||(page==triggerWizard&&triggerWizard->reviewReady()))));
         }
     };
     auto connectionClock = QSharedPointer<QElapsedTimer>::create();
@@ -2293,7 +2299,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             : QStringLiteral("color: #aaaaaa; font-weight: bold; padding: 4px 12px;"));
         if (!online) {
             for(auto *panel:*sensorPanels)panel->setAvailable(false);
-            for(auto *panel:*parameterPanels)panel->setAvailable(false);
+            for(auto *panel:*parameterPanels)panel->setAvailable(false);triggerWizard->setAvailable(false);
             graphLog->setConnected(false);
             tuneDisplay->setConnected(false);
             autotuneTool->disconnected();
@@ -2474,14 +2480,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     const auto freezeMapEditing = [=](bool frozen) {
         openProject->setEnabled(!frozen);saveProject->setEnabled(!frozen);
         fuelPage->setEnabled(!frozen); ignitionPage->setEnabled(!frozen);
-        for(auto *panel:*sensorPanels)panel->setEnabled(!frozen);for(auto *panel:*parameterPanels)panel->setEnabled(!frozen);
+        for(auto *panel:*sensorPanels)panel->setEnabled(!frozen);for(auto *panel:*parameterPanels)panel->setEnabled(!frozen);triggerWizard->setEnabled(!frozen);
         for (auto *action : {fuelFileActions.first,fuelFileActions.second,ignitionFileActions.first,ignitionFileActions.second})
             action->setEnabled(!frozen);
     };
     writer->completed = [=](bool success,bool uncertain,const QString &message) {
         *writePending=false; setProperty("mapWriteBusy",false); freezeMapEditing(false);
         (*mapBases)[0]={}; (*mapBases)[1]={}; *sensorBase={};
-        if(success&&*activeParameterWrite)(*activeParameterWrite)->saved();*activeParameterWrite=nullptr;
+        if(*activeParameterFinished){auto done=std::move(*activeParameterFinished);*activeParameterFinished={};done(success,message);}
         if(success&&*activeSensorWrite>=0)for(auto *panel:*sensorPanels)if(int(panel->kind())==*activeSensorWrite)panel->saved();
         statusBar()->showMessage(message,30000);
         if (success) {
@@ -2509,13 +2515,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *writeLaunch = new QTimer(this); writeLaunch->setInterval(25);
     auto writeWait = QSharedPointer<QElapsedTimer>::create();
     connect(writeLaunch,&QTimer::timeout,this,[=] {
-        if (!*writePending) { writeLaunch->stop(); return; }
+        if (!*writePending) { writeLaunch->stop();if(!writer->busy()&&*activeParameterFinished){auto done=std::move(*activeParameterFinished);*activeParameterFinished={};done(false,tr("Write request cancelled before starting."));}return; }
         if (!*ecuOnline || !*identityVerified || !session->isOpen() || writeWait->elapsed()>3000) {
             writeLaunch->stop(); *writePending=false; setProperty("mapWriteBusy",false); freezeMapEditing(false);
             if (*identityVerified && session->isOpen())liveTimer->start();
             validationAction->setEnabled(*ecuOnline);
             fuelRead->setEnabled(*ecuOnline);ignitionRead->setEnabled(*ecuOnline);if(tpsReadButton)tpsReadButton->setEnabled(*ecuOnline);
             updateWriteAvailability();
+            if(*activeParameterFinished){auto done=std::move(*activeParameterFinished);*activeParameterFinished={};done(false,tr("ECU unavailable or communication busy. No write started."));}
             statusBar()->showMessage(tr("Map write cancelled: ECU unavailable or communication busy."),10000);return;
         }
         if (session->isBusy()) return;
@@ -2527,6 +2534,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             validationAction->setEnabled(*ecuOnline);
             fuelRead->setEnabled(*ecuOnline);ignitionRead->setEnabled(*ecuOnline);if(tpsReadButton)tpsReadButton->setEnabled(*ecuOnline);
             updateWriteAvailability();
+            if(*activeParameterFinished){auto done=std::move(*activeParameterFinished);*activeParameterFinished={};done(false,tr("Write could not start. Re-read the ECU configuration."));}
             QMessageBox::warning(this,tr("ECU map write"),tr("Map write could not start. Re-read the ECU and check map values."));
         }
     });
@@ -2554,7 +2562,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             || *ecuIdentity!=base.identity || *ecuGeneration!=base.generation) {
             statusBar()->showMessage(tr("ECU changed while confirming. Wait for a fresh read before writing."),15000);return;
         }
-        pendingWrite->sensor=-1;*activeSensorWrite=-1;*activeParameterWrite=nullptr;
+        pendingWrite->sensor=-1;*activeSensorWrite=-1;*activeParameterFinished={};
         pendingWrite->page=page;pendingWrite->desired=desired;pendingWrite->base=base.bytes;
         pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
         *writePending=true;setProperty("mapWriteBusy",true);writeWait->start();liveTimer->stop();validationAction->setEnabled(false);
@@ -2569,7 +2577,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const QString name=tunuino::SensorCalibrationCodec::name(kind);
         if(QMessageBox::question(this,tr("Write sensor to ECU"),tr("Save %1 calibration to the ECU? Engine must be stopped and outputs disarmed. Other calibrations and maps will be preserved.").arg(name),QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel)!=QMessageBox::Yes)return;
         if(!*ecuOnline||!*identityVerified||!session->isOpen()||transfer->page||*ecuIdentity!=base.identity||*ecuGeneration!=base.generation)return;
-        pendingWrite->sensor=int(kind);*activeSensorWrite=int(kind);*activeParameterWrite=nullptr;pendingWrite->page=tunuino::SensorCalibrationCodec::page(kind);
+        pendingWrite->sensor=int(kind);*activeSensorWrite=int(kind);*activeParameterFinished={};pendingWrite->page=tunuino::SensorCalibrationCodec::page(kind);
         pendingWrite->desired=desired;pendingWrite->base=tunuino::SensorCalibrationCodec::auxiliary(kind)?base.aux:base.header;
         pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
         *writePending=true;setProperty("mapWriteBusy",true);writeWait->start();liveTimer->stop();validationAction->setEnabled(false);
@@ -2577,14 +2585,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         freezeMapEditing(true);updateWriteAvailability();writeLaunch->start();
         statusBar()->showMessage(tr("Checking ECU and preparing %1 calibration...").arg(name));
     };
-    for(auto *panel:*parameterPanels)panel->writeRequested=[=](int page,const QByteArray &desired,const QByteArray &mask){
-        if(!*ecuOnline||!*ecuClean||!*identityVerified||!session->isOpen()||transfer->page||*validationPending||writer->busy()||*writePending||*toolBusy||*toolReply)return;
-        const auto base=*sensorBase;if(base.identity!=*ecuIdentity||base.generation!=*ecuGeneration)return;
-        if(QMessageBox::question(this,tr("Write parameters to ECU"),tr("Save %1? Engine must be stopped and outputs disarmed. Only this block is written; other window edits are separate.").arg(panel->block().title),QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel)!=QMessageBox::Yes)return;
-        if(!*ecuOnline||!*identityVerified||!session->isOpen()||transfer->page||*ecuIdentity!=base.identity||*ecuGeneration!=base.generation)return;
-        pendingWrite->sensor=-2;*activeSensorWrite=-1;*activeParameterWrite=panel;pendingWrite->page=page;pendingWrite->desired=desired;pendingWrite->mask=mask;pendingWrite->base=page==1?base.header:base.aux;pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
-        *writePending=true;setProperty("mapWriteBusy",true);writeWait->start();liveTimer->stop();validationAction->setEnabled(false);freezeMapEditing(true);updateWriteAvailability();writeLaunch->start();
+    const auto queueParameters=[=](const QString &title,int page,const QByteArray &desired,const QByteArray &mask,std::function<void(bool,const QString&)> done)->bool{
+        if(!*ecuOnline||!*ecuClean||!*identityVerified||!session->isOpen()||transfer->page||*validationPending||writer->busy()||*writePending||*toolBusy||*toolReply)return false;
+        const auto base=*sensorBase;if(base.identity!=*ecuIdentity||base.generation!=*ecuGeneration)return false;
+        if(QMessageBox::question(this,tr("Write parameters to ECU"),tr("Save %1? Engine must be stopped and outputs disarmed. Only this block is written; other window edits are separate.").arg(title),QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel)!=QMessageBox::Yes)return false;
+        if(!*ecuOnline||!*identityVerified||!session->isOpen()||transfer->page||*ecuIdentity!=base.identity||*ecuGeneration!=base.generation)return false;
+        pendingWrite->sensor=-2;*activeSensorWrite=-1;*activeParameterFinished=std::move(done);pendingWrite->page=page;pendingWrite->desired=desired;pendingWrite->mask=mask;pendingWrite->base=page==1?base.header:base.aux;pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
+        *writePending=true;setProperty("mapWriteBusy",true);writeWait->start();liveTimer->stop();validationAction->setEnabled(false);freezeMapEditing(true);updateWriteAvailability();writeLaunch->start();return true;
     };
+    for(auto *panel:*parameterPanels)panel->writeRequested=[=](int page,const QByteArray &desired,const QByteArray &mask){queueParameters(panel->block().title,page,desired,mask,[panel](bool success,const QString&){if(success)panel->saved();});};
+    triggerWizard->writeRequested=[=](int page,const QByteArray &desired,const QByteArray &mask){return queueParameters(tr("Ignition - Trigger wizard"),page,desired,mask,[triggerWizard](bool success,const QString &message){triggerWizard->writeFinished(success,message);});};
     connect(fuelSave,&QPushButton::clicked,this,[=] { queueMapWrite(2); });
     connect(ignitionSave,&QPushButton::clicked,this,[=] { queueMapWrite(3); });
     connect(workspace,&QMdiArea::subWindowActivated,this,[=](QMdiSubWindow*) { updateWriteAvailability(); });
@@ -2694,6 +2704,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         else if(page==ignitionPage || page==ignitionSurface)ignitionSave->click();
         else if(auto *sensor=dynamic_cast<tunuino::SensorCalibrationWidget*>(page))sensor->save();
         else if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(page))parameters->save();
+        else if(page==triggerWizard)triggerWizard->save();
     });
 
     auto *settingsMenu = menuBar()->addMenu(tr("Settings"));
@@ -2839,7 +2850,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             }
             if(transfer->page==4){
                 sensorBase->aux=transfer->bytes;sensorBase->identity=*ecuIdentity;sensorBase->generation=*ecuGeneration;
-                if(sensorBase->header.size()==256){for(auto *panel:*sensorPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*parameterPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);}
+                if(sensorBase->header.size()==256){for(auto *panel:*sensorPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*parameterPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);triggerWizard->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);}
                 abortTransfer(tr("ECU synchronized: Fuel, Ignition and sensor calibrations."));return;
             }
             bool valid = true;

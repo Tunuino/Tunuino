@@ -13,6 +13,7 @@ public:
     std::function<ToolSnapshot()> snapshot;
     std::function<bool()> ready;
     std::function<void(bool)> busyChanged;
+    std::function<void(const ToolSnapshot&,const QByteArray&,const QByteArray&)> captured;
     bool busy()const{return phase_!=0;}
 private:
     void start();void pump();void receive(const QByteArray&);void finish(const QString &);
