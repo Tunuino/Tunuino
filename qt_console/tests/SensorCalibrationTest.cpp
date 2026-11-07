@@ -1,4 +1,6 @@
 #include "calibration/SensorCalibrationWidget.h"
+#include "calibration/SensorInputsWidget.h"
+#include "calibration/SensorCurveWizard.h"
 #include "ecu/MapWriteTransaction.h"
 #include <QApplication>
 #include <QDoubleSpinBox>
@@ -77,7 +79,9 @@ int main(int argc,char **argv){
     widget.load(header,aux,identity,43);CHECK(!capture->isEnabled());CHECK(std::abs(volts->value()-Codec::voltage(1500,header))<.0001); // Unsaved edit preserved, old generation rejected.
     put32(live,57,43);widget.updateRaw(live);CHECK(capture->isEnabled());
     live[40]=0;widget.updateRaw(live);CHECK(!capture->isEnabled());live[40]=1;widget.updateRaw(live);
-    QTest::qWait(2101);const double old=volts->value();capture->click();CHECK(volts->value()==old);
+    tunuino::SensorInputsWidget inputs(tunuino::SensorInputsWidget::Analog);inputs.load(header,aux,identity,43);inputs.setAvailable(true);inputs.updateRaw(live);auto *inputGrid=inputs.findChild<QTableWidget*>("sensorInputReadings");CHECK(inputGrid&&inputGrid->rowCount()==15);CHECK(inputGrid->item(0,1)->text().contains("13")&&inputGrid->item(0,2)->text()=="MAP");CHECK(inputGrid->item(0,3)->text()==QString::number(Codec::voltage(1500,header),'f',4)+" V");
+    auto wrongSample=live;wrongSample[21]=char(quint8(wrongSample[21])+1);inputs.updateRaw(wrongSample);CHECK(inputGrid->item(0,3)->text()=="---");inputs.updateRaw(live);wrongSample=live;put32(wrongSample,57,44);inputs.updateRaw(wrongSample);CHECK(inputGrid->item(0,3)->text()=="---");inputs.updateRaw(live);
+    QTest::qWait(2101);inputs.setAvailable(true);CHECK(inputGrid->item(0,3)->text()=="---");const double old=volts->value();capture->click();CHECK(volts->value()==old);
     auto other=identity;other[20]=43;widget.load(header,aux,other,43);CHECK(!capture->isEnabled());
     widget.setAvailable(false);CHECK(!widget.findChild<QPushButton*>("sensorSave")->isEnabled());
     // A stored channel is reserved even when its compensation is disabled.
@@ -117,5 +121,11 @@ int main(int argc,char **argv){
         panel.save();CHECK(writes==1);
         if(qEnvironmentVariableIsSet("TUNUINO_SENSOR_TEST_SCREENSHOT")){panel.resize(900,420);panel.show();app.processEvents();panel.grab().save(qEnvironmentVariable("TUNUINO_SENSOR_TEST_SCREENSHOT")+Codec::name(kind)+".png");}
     }
+    QJsonObject curve{{"untouched",true}};const auto originalCurve=curve;
+    CHECK(!tunuino::SensorCurveWizard::ntc(0,3950,2500,5,{0,25,100},curve,error));CHECK(curve==originalCurve);
+    CHECK(tunuino::SensorCurveWizard::ntc(2500,3950,2500,5,{0,25,100},curve,error));CHECK(curve["volts"].toArray()[1].toDouble()==2.5);CHECK(curve["values"].toArray()==QJsonArray({100,25,0}));CHECK(curve["volts"].toArray()[0].toDouble()<2.5&&curve["volts"].toArray()[2].toDouble()>2.5);
+    CHECK(!tunuino::SensorCurveWizard::ntc(2500,3950,2500,5,{25,25,100},curve,error));CHECK(!tunuino::SensorCurveWizard::linear(4.5,0,.5,300,curve,error));CHECK(tunuino::SensorCurveWizard::linear(.5,0,4.5,300,curve,error));CHECK(curve["volts"].toArray()==QJsonArray({.5,4.5}));
+    tunuino::SensorInputsWidget digital(tunuino::SensorInputsWidget::Cam1);digital.load(header,aux,identity,43);digital.setAvailable(true);put32(live,57,43);live[40]=9;digital.updateRaw(live);auto *digitalGrid=digital.findChild<QTableWidget*>("sensorInputReadings");CHECK(digitalGrid->item(0,1)->text().contains("4 (+), 12 (-)"));CHECK(digitalGrid->item(3,1)->text()=="Synchronized");digital.setAvailable(false);CHECK(digitalGrid->item(3,1)->text()=="---");
+    tunuino::SensorInputsWidget temperatures(tunuino::SensorInputsWidget::Temperature);temperatures.load(header,features,identity,43);temperatures.setAvailable(true);Codec::put(live,87,1500);temperatures.updateRaw(live);auto *thermalGrid=temperatures.findChild<QTableWidget*>("sensorInputReadings");CHECK(thermalGrid->item(0,1)->text().contains("30 (AT2)"));CHECK(thermalGrid->item(0,3)->text()==QString::number(Codec::voltage(1500,header),'f',4)+" V");
     nativeFirmware(false);nativeFirmware(true);std::cout<<"Sensor encoding, input conflicts, reserved settings, reverse TPS, real ADC capture and stale samples: passed\n";
 }

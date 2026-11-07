@@ -1,4 +1,10 @@
 #include "SensorCalibrationWidget.h"
+#include "SensorUi.h"
+#include <QFileDialog>
+#include <QSaveFile>
+#include <QFile>
+#include <QJsonDocument>
+#include <QAction>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -17,59 +23,37 @@
 namespace tunuino {
 SensorCalibrationWidget::SensorCalibrationWidget(SensorKind kind,QWidget *parent):QWidget(parent),kind_(kind){
     setObjectName(QStringLiteral("sensor%1").arg(SensorCalibrationCodec::name(kind)));
-    auto *layout=new QVBoxLayout(this);layout->setContentsMargins(0,0,0,0);
-    auto *row=new QHBoxLayout;input_=new QComboBox(this);input_->setObjectName("sensorInput");input_->addItem(tr("Disabled"),0);
-    auto *custom=new QPushButton(tr("Customise input..."),this);custom->setObjectName("sensorCustomise");row->addWidget(input_,1);row->addWidget(custom);layout->addLayout(row);
-    connect(custom,&QPushButton::clicked,this,[this]{chooseInput();});
-    connect(input_,&QComboBox::currentIndexChanged,this,[this]{edit();});
+    auto *layout=new QVBoxLayout(this);layout->setContentsMargins(4,4,4,4);layout->setSpacing(3);
+    auto *bar=SensorUi::toolbar(this);bar->setObjectName("sensorToolbar");
+    auto *open=bar->addAction(CalibrationAppearance::icon(CalibrationAppearance::Open),tr("Open calibration"));auto *store=bar->addAction(CalibrationAppearance::icon(CalibrationAppearance::Save),tr("Save calibration"));restore_=bar->addAction(CalibrationAppearance::icon(CalibrationAppearance::Defaults),tr("Restore last loaded calibration"));bar->addSeparator();auto *help=bar->addAction(CalibrationAppearance::icon(CalibrationAppearance::Help),tr("Help"));
+    connect(open,&QAction::triggered,this,[this]{file(false);});connect(store,&QAction::triggered,this,[this]{file(true);});connect(restore_,&QAction::triggered,this,[this]{if(header_.size()!=256||aux_.size()!=256)return;edited_=false;projectEdits_=false;load(header_,aux_,identity_,generation_);});connect(help,&QAction::triggered,this,[this]{QMessageBox::information(this,SensorCalibrationCodec::name(kind_),tr("Choose the installed input through Customise. Enter measured voltage/calibration points or capture a fresh sample from the selected input. Toolbar files contain this sensor only; File / Save Project as stores the whole project. Write to ECU is available through ECU / F2 or the table context menu. Opening files, restoring values or editing never arms outputs."));});
+    layout->addWidget(bar);layout->addWidget(SensorUi::section(this,SensorCalibrationCodec::name(kind_)));
+    const int points=SensorCalibrationCodec::points(kind_);table_=new QTableWidget(1+(kind_==SensorKind::Lambda?1:0)+points*(kind_==SensorKind::Tps?1:2),2,this);table_->setObjectName("sensorPoints");SensorUi::grid(table_);int row=0;
+    table_->setItem(row,0,new QTableWidgetItem(tr("Input")));auto *inputRow=new QWidget(table_);auto *inputLayout=new QHBoxLayout(inputRow);inputLayout->setContentsMargins(0,0,0,0);inputLayout->setSpacing(2);input_=new QComboBox(inputRow);input_->setObjectName("sensorInput");input_->addItem(tr("Disabled"),0);SensorUi::choices(input_);auto *custom=new QPushButton(tr("Customise..."),inputRow);custom->setObjectName("sensorCustomise");inputLayout->addWidget(input_,1);inputLayout->addWidget(custom);table_->setCellWidget(row++,1,inputRow);connect(custom,&QPushButton::clicked,this,[this]{chooseInput();});connect(input_,&QComboBox::currentIndexChanged,this,[this]{edit();});
     if(kind_==SensorKind::Lambda){
-        preset_=new QComboBox(this);preset_->setObjectName("sensorPreset");
-        preset_->addItems({tr("Current / custom curve"),"AEM X-Series 30-0300","14point7 Spartan 3 v2 (green output)","Innovate LC-2 (factory output 1)","PLX SM-AFR Gen2"});
-        layout->addWidget(preset_);
-        connect(preset_,&QComboBox::currentIndexChanged,this,[this](int index){
-            if(!index)return;loading_=true;
-            const double low[]={0,.5,0,0,0},high[]={0,4.5,5,5,5};
-            const double first[]={0,.4990+.1621*.5,.68,.5,10/14.7},second[]={0,.4990+.1621*4.5,1.36,22.39/14.7,20/14.7};
-            volts_[0]->setValue(low[index]);volts_[1]->setValue(high[index]);
-            values_[0]->setValue(first[index]);values_[1]->setValue(second[index]);loading_=false;edit();
-        });
-        auto *note=new QLabel(tr("Check the exact controller and configured analog output. Selecting a profile does not select an ECU input or save it."),this);note->setWordWrap(true);layout->addWidget(note);
+        table_->setItem(row,0,new QTableWidgetItem(tr("Controller")));preset_=new QComboBox(table_);preset_->setObjectName("sensorPreset");preset_->addItems({tr("Current / custom curve"),"AEM X-Series 30-0300","14point7 Spartan 3 v2 (green output)","Innovate LC-2 (factory output 1)","PLX SM-AFR Gen2"});SensorUi::choices(preset_);table_->setCellWidget(row++,1,preset_);
+        preset_->setToolTip(tr("Check the exact controller and configured analog output. A profile changes the curve only; it does not choose an input or write the ECU."));connect(preset_,&QComboBox::currentIndexChanged,this,[this](int index){if(!index)return;loading_=true;const double low[]={0,.5,0,0,0},high[]={0,4.5,5,5,5};const double first[]={0,.4990+.1621*.5,.68,.5,10/14.7},second[]={0,.4990+.1621*4.5,1.36,22.39/14.7,20/14.7};volts_[0]->setValue(low[index]);volts_[1]->setValue(high[index]);values_[0]->setValue(first[index]);values_[1]->setValue(second[index]);loading_=false;edit();});
     }
-    if(kind_==SensorKind::Battery){
-        auto *note=new QLabel(tr("Use an AV input with an external divider suitable for battery voltage. Enter the conditioned voltage at the connector and the battery voltage measured with a multimeter. Never apply battery voltage directly to an AV input. Saving this calibration does not enable voltage compensation or protection."),this);
-        note->setWordWrap(true);layout->addWidget(note);
-    }
-    const int points=SensorCalibrationCodec::points(kind_);
-    auto *table=new QTableWidget(points,kind_==SensorKind::Tps?2:3,this);table->setObjectName("sensorPoints");
-    table->setHorizontalHeaderLabels(kind_==SensorKind::Tps?QStringList{tr("Voltage at connector"),tr("Measure")}:
-        QStringList{tr("Voltage at connector"),kind_==SensorKind::Map?tr("MAP kPa"):SensorCalibrationCodec::temperature(kind_)?tr("Temperature °C"):kind_==SensorKind::Battery?tr("Measured battery voltage V"):tr("Lambda"),tr("Measure")});
-    QStringList rows;
     for(int i=0;i<points;++i){
-        rows<< (kind_==SensorKind::Tps?(i?tr("Throttle open"):tr("Throttle closed")):tr("Point %1").arg(i+1));
-        volts_[i]=new QDoubleSpinBox(table);volts_[i]->setObjectName(QStringLiteral("sensorVoltage%1").arg(i));volts_[i]->setRange(0,6);volts_[i]->setDecimals(4);volts_[i]->setSuffix(" V");
-        table->setCellWidget(i,0,volts_[i]);connect(volts_[i],QOverload<double>::of(&QDoubleSpinBox::valueChanged),this,[this]{edit();});
-        if(kind_!=SensorKind::Tps){
-            values_[i]=new QDoubleSpinBox(table);values_[i]->setObjectName(QStringLiteral("sensorValue%1").arg(i));
-            values_[i]->setRange(SensorCalibrationCodec::temperature(kind_)?-40:0,kind_==SensorKind::Map?500:SensorCalibrationCodec::temperature(kind_)?150:kind_==SensorKind::Battery?24:5);
-            values_[i]->setDecimals(kind_==SensorKind::Lambda?3:2);table->setCellWidget(i,1,values_[i]);
-            connect(values_[i],QOverload<double>::of(&QDoubleSpinBox::valueChanged),this,[this]{edit();});
-        }
-        capture_[i]=new QPushButton(tr("Capture"),table);capture_[i]->setObjectName(QStringLiteral("sensorCapture%1").arg(i));table->setCellWidget(i,kind_==SensorKind::Tps?1:2,capture_[i]);
-        connect(capture_[i],&QPushButton::clicked,this,[this,i]{
-            const int ch=input_->currentData().toInt();
-            if(!hasSample())return;
-            const int index=SensorCalibrationCodec::temperature(kind_)?11+ch:ch-1;
-            const int raw=SensorCalibrationCodec::u16(runtime_,61+2*index);
-            volts_[i]->setValue(SensorCalibrationCodec::voltage(raw,header_));
-        });
+        table_->setItem(row,0,new QTableWidgetItem(kind_==SensorKind::Tps?(i?tr("Throttle open"):tr("Throttle closed")):tr("Point %1 voltage").arg(i+1)));
+        auto *voltageRow=new QWidget(table_);auto *line=new QHBoxLayout(voltageRow);line->setContentsMargins(0,0,0,0);line->setSpacing(2);volts_[i]=new QDoubleSpinBox(voltageRow);volts_[i]->setObjectName(QStringLiteral("sensorVoltage%1").arg(i));volts_[i]->setRange(0,6);volts_[i]->setDecimals(4);volts_[i]->setSuffix(" V");volts_[i]->setKeyboardTracking(false);volts_[i]->setButtonSymbols(QAbstractSpinBox::NoButtons);line->addWidget(volts_[i],1);capture_[i]=new QPushButton(tr("Capture"),voltageRow);capture_[i]->setObjectName(QStringLiteral("sensorCapture%1").arg(i));line->addWidget(capture_[i]);table_->setCellWidget(row++,1,voltageRow);connect(volts_[i],&QDoubleSpinBox::valueChanged,this,[this]{edit();});
+        connect(capture_[i],&QPushButton::clicked,this,[this,i]{if(!hasSample())return;const int ch=input_->currentData().toInt(),index=SensorCalibrationCodec::temperature(kind_)?11+ch:ch-1;const int raw=SensorCalibrationCodec::u16(runtime_,61+2*index);volts_[i]->setValue(SensorCalibrationCodec::voltage(raw,header_));});
+        if(kind_!=SensorKind::Tps){table_->setItem(row,0,new QTableWidgetItem(tr("Point %1 %2").arg(i+1).arg(kind_==SensorKind::Map?tr("pressure"):SensorCalibrationCodec::temperature(kind_)?tr("temperature"):kind_==SensorKind::Battery?tr("battery voltage"):tr("lambda"))));values_[i]=new QDoubleSpinBox(table_);values_[i]->setObjectName(QStringLiteral("sensorValue%1").arg(i));values_[i]->setRange(SensorCalibrationCodec::temperature(kind_)?-40:0,kind_==SensorKind::Map?500:SensorCalibrationCodec::temperature(kind_)?150:kind_==SensorKind::Battery?24:5);values_[i]->setDecimals(kind_==SensorKind::Lambda?3:2);values_[i]->setSuffix(kind_==SensorKind::Map?" kPa":SensorCalibrationCodec::temperature(kind_)?" °C":kind_==SensorKind::Battery?" V":"");values_[i]->setKeyboardTracking(false);values_[i]->setButtonSymbols(QAbstractSpinBox::NoButtons);table_->setCellWidget(row++,1,values_[i]);connect(values_[i],&QDoubleSpinBox::valueChanged,this,[this]{edit();});}
     }
-    table->setVerticalHeaderLabels(rows);table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    table->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);table->setMaximumHeight(points==3?185:145);layout->addWidget(table);
-    live_=new QLabel(tr("No live sample"),this);live_->setObjectName("sensorLive");layout->addWidget(live_);
-    status_=new QLabel(tr("Connect the ECU to read its calibration."),this);status_->setObjectName("sensorStatus");status_->setWordWrap(true);layout->addWidget(status_);
-    save_=new QPushButton(tr("Write to ECU"),this);save_->setObjectName("sensorSave");layout->addWidget(save_,0,Qt::AlignLeft);
-    connect(save_,&QPushButton::clicked,this,[this]{save();});
+    layout->addWidget(table_,1);
+    if(kind_==SensorKind::Battery){auto *notice=new QLabel(tr("Use a suitable external divider. Never apply battery voltage directly to an AV input. Calibration does not enable voltage compensation or protection."),this);notice->setWordWrap(true);layout->addWidget(notice);}
+    live_=new QLabel(tr("No live sample"),this);live_->setObjectName("sensorLive");layout->addWidget(live_);status_=new QLabel(this);status_->setObjectName("sensorStatus");status_->setWordWrap(true);layout->addWidget(status_);
+    save_=new QPushButton(tr("Write to ECU"),this);save_->setObjectName("sensorSave");layout->addWidget(save_,0,Qt::AlignLeft);connect(save_,&QPushButton::clicked,this,[this]{save();});save_->hide();
+    table_->setContextMenuPolicy(Qt::ActionsContextMenu);writeContext_=new QAction(tr("Write to ECU (F2)"),table_);writeContext_->setObjectName("sensorWriteContext");table_->addAction(writeContext_);connect(writeContext_,&QAction::triggered,this,[this]{save();});
     auto *timer=new QTimer(this);timer->setInterval(500);connect(timer,&QTimer::timeout,this,[this]{refresh();});timer->start();refresh();
+}
+QSize SensorCalibrationWidget::sizeHint()const{return QSize(780,table_->rowCount()*30+(kind_==SensorKind::Battery?180:140));}
+void SensorCalibrationWidget::file(bool writing){
+    const auto path=writing?QFileDialog::getSaveFileName(this,tr("Save sensor calibration"),{},tr("Tunuino sensor calibration (*.tnsensor)")):QFileDialog::getOpenFileName(this,tr("Open sensor calibration"),{},tr("Tunuino sensor calibration (*.tnsensor)"));if(path.isEmpty())return;
+    if(writing){QSaveFile file(path);const auto bytes=QJsonDocument(QJsonObject{{"format","tunuino-sensor-v1"},{"sensor",SensorCalibrationCodec::name(kind_)},{"editor",editorState()}}).toJson();if(!file.open(QIODevice::WriteOnly)||file.write(bytes)!=bytes.size()||!file.commit())QMessageBox::warning(this,tr("Sensor calibration"),tr("Could not save the calibration."));return;}
+    QFile file(path);if(!file.open(QIODevice::ReadOnly)||file.size()>65536)return;QJsonParseError parse;const auto doc=QJsonDocument::fromJson(file.readAll(),&parse).object();QString error;
+    if(parse.error!=QJsonParseError::NoError||doc["format"]!="tunuino-sensor-v1"||doc["sensor"]!=SensorCalibrationCodec::name(kind_)||!restoreEditor(doc["editor"].toObject(),false,error)){QMessageBox::warning(this,tr("Sensor calibration"),error.isEmpty()?tr("The file does not match this sensor."):error);return;}
+    restoreEditor(doc["editor"].toObject(),true,error);projectEdits_=true;
 }
 QJsonObject SensorCalibrationWidget::editorState()const{QJsonArray volts,values;for(int i=0;i<SensorCalibrationCodec::points(kind_);++i){volts.append(volts_[i]->value());values.append(values_[i]?values_[i]->value():0);}return {{"input",input_->currentData().toInt()},{"volts",volts},{"values",values}};}
 bool SensorCalibrationWidget::restoreEditor(const QJsonObject &o,bool apply,QString &error){
@@ -126,7 +110,7 @@ void SensorCalibrationWidget::refresh(){
     QString error;QByteArray desired;
     if(loaded){desired=SensorCalibrationCodec::apply(kind_,configuration(),header_,aux_,error);
         if(!desired.isEmpty()&&!SensorCalibrationCodec::permitted(kind_,SensorCalibrationCodec::auxiliary(kind_)?aux_:header_,desired,header_,aux_,error))desired.clear();}
-    save_->setEnabled(available_&&loaded&&!desired.isEmpty());
+    save_->setEnabled(available_&&loaded&&!desired.isEmpty());writeContext_->setEnabled(save_->isEnabled());restore_->setEnabled(loaded);
     status_->setText(!loaded?tr("Connect the ECU to read its calibration."):!error.isEmpty()?error:edited_?tr("Unsaved calibration edits. Other ECU settings will be preserved."):((kind_==SensorKind::Iat||kind_==SensorKind::Battery)&&aux_[68]!=1)?tr("No calibration stored. Select an input and enter measured points."):tr("Calibration read from ECU."));
     const int channel=input_->currentData().toInt();
     const bool fresh=hasSample();

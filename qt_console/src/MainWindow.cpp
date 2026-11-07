@@ -98,6 +98,9 @@
 #include "ecu/MapWriteTransaction.h"
 #include "protocol/MapPageCodec.h"
 #include "calibration/SensorCalibrationWidget.h"
+#include "calibration/SensorNavigation.h"
+#include "calibration/SensorInputsWidget.h"
+#include "calibration/SensorCurveWizard.h"
 #include "parameters/ParameterWidget.h"
 #include "parameters/TriggerWizard.h"
 #include "parameters/TriggerPresetDialog.h"
@@ -480,7 +483,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     };
     auto *sensorsCategory=addCategory(tr("Sensors and inputs"),{});
     const auto parameterItem=[=](QTreeWidgetItem *parent,const QString &name,const QString &key){auto *item=new QTreeWidgetItem(parent,{name});item->setIcon(0,tunuino::CalibrationAppearance::icon(key.endsWith("wizard")?tunuino::CalibrationAppearance::Wizard:tunuino::CalibrationAppearance::Parameters));item->setData(0,Qt::UserRole,100);item->setData(0,Qt::UserRole+1,key);return item;};
-    for(const QString &sensor:{QString("TPS"),QString("MAP"),QString("CLT"),QString("IAT"),QString("Lambda"),QString("Battery")})parameterItem(sensorsCategory,sensor,"sensor:"+sensor);
+    tunuino::populateSensorNavigation(sensorsCategory);
     addCategory(tr("Engine start"), {{tr("Cranking"),-1},{tr("Afterstart"),-1}});
     auto *fuelingCategory=addCategory(tr("Fueling"),{{tr("Autotune"),12}});
     parameterItem(fuelingCategory,tr("General"),"fuel.general");parameterItem(fuelingCategory,tr("Fuel cut"),"fuel.cut");
@@ -2188,8 +2191,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     QPushButton *tpsReadButton=nullptr;QLabel *tpsReadStatus=nullptr;
     for(auto kind:{tunuino::SensorKind::Tps,tunuino::SensorKind::Map,tunuino::SensorKind::Clt,tunuino::SensorKind::Iat,tunuino::SensorKind::Lambda,tunuino::SensorKind::Battery}){
         auto *panel=new tunuino::SensorCalibrationWidget(kind);sensorPanels->append(panel);const auto name=tunuino::SensorCalibrationCodec::name(kind);
-        (*parameterWindows)["sensor:"+name]=toolWindow(panel,tr("Sensors and inputs - %1").arg(name));
+        auto *window=toolWindow(panel,tr("Sensors and inputs - %1").arg(name));window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)["sensor:"+name]=window;
     }
+    auto inputPanels=QSharedPointer<QVector<tunuino::SensorInputsWidget*>>::create();
+    const QStringList inputKeys{"inputs.analog","inputs.crank","inputs.cam1","inputs.temperature"};
+    for(int mode=0;mode<4;++mode){auto *panel=new tunuino::SensorInputsWidget(tunuino::SensorInputsWidget::Mode(mode));inputPanels->append(panel);panel->openScope=[=]{showTool(scopeWindow);};auto *window=toolWindow(panel,panel->title());window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)[inputKeys[mode]]=window;}
+    auto sensorWizards=QSharedPointer<QMap<QString,QPointer<tunuino::SensorCurveWizard>>>::create();
+    (*sensorWizards)["sensorwizard:IAT"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Iat,false,this);
+    (*sensorWizards)["sensorwizard:CLT"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Clt,false,this);
+    (*sensorWizards)["sensorwizard:Temperature"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Iat,true,this);
+    (*sensorWizards)["sensorwizard:MAP"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Map,false,this);
     for(const auto &block:tunuino::ParameterCatalog::blocks()){auto *panel=new tunuino::ParameterWidget(block);parameterPanels->append(panel);auto *window=toolWindow(panel,block.title);window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)[block.key]=window;}
     auto *manualTriggerWindow=toolWindow(triggerWizard,tr("Triggers - Manual setup"));
     manualTriggerWindow->resize(triggerWizard->sizeHint()+QSize(12,30));
@@ -2197,7 +2208,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     triggerPresets->openManual=[=]{showTool(manualTriggerWindow);};
     triggerWizard->openScope=[=]{showTool(scopeWindow);};triggerWizard->openFiringOrder=[=]{if(*parameterNavigation)(*parameterNavigation)("ignition.firing");};
     scopeTool->captured=[=](const tunuino::ToolSnapshot &source,const QByteArray &header,const QByteArray &samples){triggerWizard->observeScope(source,header,samples);};
-    *parameterNavigation=[=](const QString &key){if(key=="ignition.wizard"){triggerPresets->open();return;}auto *window=(*parameterWindows).value(key).data();if(!window)return;if(!window->property("parameterOpened").toBool()){if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))window->resize(parameters->sizeHint()+QSize(12,30));window->setProperty("parameterOpened",true);}window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
+    *parameterNavigation=[=](const QString &key){if((*sensorWizards).contains(key)){(*sensorWizards)[key]->open();return;}if(key=="ignition.wizard"){triggerPresets->open();return;}auto *window=(*parameterWindows).value(key).data();if(!window)return;if(!window->property("parameterOpened").toBool()){if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))window->resize(parameters->sizeHint()+QSize(12,30));window->setProperty("parameterOpened",true);}window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
     auto *dock = new QDockWidget(tr("Engine Status"), this);
     dock->setObjectName("EngineStatusDock");
     auto *statusPanel = new QWidget(dock);
@@ -2282,7 +2293,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         ignitionSave->setEnabled(ready && !ignitionBase.bytes.isEmpty() && ignitionBase.identity==*ecuIdentity && ignitionBase.generation!=0 && ignitionBase.generation==*ecuGeneration);
         const bool sensorReady=ready&&sensorBase->header.size()==256&&sensorBase->aux.size()==256
             &&sensorBase->identity==*ecuIdentity&&sensorBase->generation==*ecuGeneration;
-        for(auto *panel:*sensorPanels)panel->setAvailable(sensorReady);
+        for(auto *panel:*sensorPanels)panel->setAvailable(sensorReady);for(auto *panel:*inputPanels)panel->setAvailable(sensorReady);
         for(auto *panel:*parameterPanels)panel->setAvailable(sensorReady);triggerWizard->setAvailable(sensorReady);
         if (*writeActionRef) {
             const auto *window=workspace->activeSubWindow(); auto *page=window?window->widget():nullptr;
@@ -2303,7 +2314,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             ? QStringLiteral("color: #76d58a; font-weight: bold; padding: 4px 12px;")
             : QStringLiteral("color: #aaaaaa; font-weight: bold; padding: 4px 12px;"));
         if (!online) {
-            for(auto *panel:*sensorPanels)panel->setAvailable(false);
+            for(auto *panel:*sensorPanels)panel->setAvailable(false);for(auto *panel:*inputPanels)panel->setAvailable(false);
             for(auto *panel:*parameterPanels)panel->setAvailable(false);triggerWizard->setAvailable(false);
             graphLog->setConnected(false);
             tuneDisplay->setConnected(false);
@@ -2422,6 +2433,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         for(int i=0;i<3;++i)tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,true,error);
         serviceTool->setProjectComment(comment.toString());fuelSurface->update();ignitionSurface->update();afrSurface->update();
         statusBar()->showMessage(tr("Project opened locally. No ECU write was performed."),10000);return true;
+    };
+    for(const auto &wizard:*sensorWizards)wizard->prepare=[=](tunuino::SensorKind kind,const QJsonObject &curve,QString &error){
+        if(!mapProject->canUse()){error=tr("Wait for the current ECU operation to finish.");return false;}
+        for(auto *panel:*sensorPanels)if(panel->kind()==kind){auto state=panel->editorState();state["volts"]=curve["volts"];state["values"]=curve["values"];if(!panel->restoreEditor(state,false,error))return false;panel->restoreEditor(state,true,error);panel->keepProjectEdits(true);statusBar()->showMessage(tr("Sensor curve prepared locally. Input preserved; no ECU write."),10000);return true;}
+        error=tr("This sensor has no native calibration editor.");return false;
     };
     triggerPresets->applyRequested=[=](int index,int groups,QString &error){
         if(!mapProject->canUse()){error=tr("Wait for the current ECU operation to finish.");return false;}
@@ -2899,7 +2915,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if(transfer->page==4){
                 sensorBase->aux=transfer->bytes;sensorBase->identity=*ecuIdentity;sensorBase->generation=*ecuGeneration;
                 if(!*projectLoaded&&sensorBase->header.size()==256){*projectPages=QJsonObject{{"header",QString::fromLatin1(sensorBase->header.toHex())},{"fuel",QString::fromLatin1((*mapBases)[0].bytes.toHex())},{"ignition",QString::fromLatin1((*mapBases)[1].bytes.toHex())},{"aux",QString::fromLatin1(sensorBase->aux.toHex())}};}
-                if(sensorBase->header.size()==256){for(auto *panel:*sensorPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*parameterPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);triggerWizard->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);}
+                if(sensorBase->header.size()==256){for(auto *panel:*inputPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*sensorPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*parameterPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);triggerWizard->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);}
                 abortTransfer(tr("ECU synchronized: Fuel, Ignition and sensor calibrations."));return;
             }
             bool valid = true;
@@ -3039,7 +3055,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             const double tuneTarget=sameSensorBase?tunuino::ecuTargetLambda(sensorBase->aux,data):std::numeric_limits<double>::quiet_NaN();
             tuneDisplay->setReadings(logValues,tuneTarget);
             autotuneTool->sample(logValues,tuneTarget);
-            for(auto *panel:*sensorPanels)panel->updateRaw(data);
+            for(auto *panel:*sensorPanels)panel->updateRaw(data);for(auto *panel:*inputPanels)panel->updateRaw(data);
             if (*ecuClean && previousGeneration && (previousGeneration!=*ecuGeneration || !previouslyClean || *autoSync) && !transfer->page && !*writePending) {
                 (*mapBases)[0]={}; (*mapBases)[1]={}; *sensorBase={}; *autoSync=true;
                 QTimer::singleShot(0,this,[=] { startTransfer(1); });

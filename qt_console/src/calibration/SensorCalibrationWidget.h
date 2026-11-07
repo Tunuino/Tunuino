@@ -5,6 +5,8 @@
 #include <QElapsedTimer>
 #include <functional>
 class QComboBox;
+class QAction;
+class QTableWidget;
 class QDoubleSpinBox;
 class QLabel;
 class QPushButton;
@@ -15,6 +17,7 @@ public:
     bool restoreEditor(const QJsonObject &,bool apply,QString &error);
     void keepProjectEdits(bool on){projectEdits_=on;}
     explicit SensorCalibrationWidget(SensorKind kind,QWidget *parent=nullptr);
+    QSize sizeHint()const override;
     SensorKind kind() const {return kind_;}
     void load(const QByteArray &header,const QByteArray &aux,const QByteArray &identity,quint32 generation);
     void setAvailable(bool available);
@@ -23,6 +26,9 @@ public:
     void save();
     std::function<void(SensorKind,const QByteArray&)> writeRequested;
 private:
+    void file(bool writing);
+    QAction *writeContext_=nullptr,*restore_=nullptr;
+    QTableWidget *table_=nullptr;
     bool projectEdits_=false;
     bool hasSample() const;
     void chooseInput();

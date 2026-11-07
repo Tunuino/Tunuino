@@ -4,6 +4,8 @@
 #include "project/MapProject.h"
 #include "parameters/ParameterWidget.h"
 #include "parameters/TriggerPresetDialog.h"
+#include "calibration/SensorCurveWizard.h"
+#include "calibration/SensorCalibrationWidget.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QListView>
@@ -30,6 +32,17 @@
 #define CHECK(x) do{if(!(x)){std::cerr<<"Failed "<<#x<<" line "<<__LINE__<<": "<<error.toStdString()<<std::endl;std::exit(1);}}while(false)
 int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFactory::create("Fusion"));QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);QTemporaryDir temp;app.setOrganizationName("TunuinoTest");app.setApplicationName("CompleteMap");QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,temp.path());QString error;
     MainWindow window;window.show();app.processEvents();auto *project=dynamic_cast<tunuino::MapProject*>(window.findChild<QObject*>("mapProject"));CHECK(project);
+    auto *sensorTree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(sensorTree);auto *sensorRoot=sensorTree->topLevelItem(0);CHECK(sensorRoot->text(0)=="Sensors and inputs");
+    const QStringList expectedSensorGroups{"Analog inputs","Digital inputs","Oxygen Sensor","TPS, PPS","Switches","IAT, CLT","MAP, BARO","Pressure","Temperature","Other sensors","VSS and Gearbox"};CHECK(sensorRoot->childCount()==expectedSensorGroups.size());for(int i=0;i<expectedSensorGroups.size();++i)CHECK(sensorRoot->child(i)->text(0)==expectedSensorGroups[i]);
+    CHECK(!(sensorRoot->child(1)->child(2)->flags()&Qt::ItemIsEnabled));CHECK(sensorRoot->child(7)->childCount()==12&&sensorRoot->child(8)->childCount()==11&&sensorRoot->child(10)->childCount()==9);
+    const auto openSensor=[&](const QString &key){QTreeWidgetItemIterator sensorItem(sensorTree);while(*sensorItem){if((*sensorItem)->data(0,Qt::UserRole+1).toString()==key){sensorTree->itemClicked(*sensorItem,0);app.processEvents();return;}++sensorItem;}CHECK(false);};
+    openSensor("inputs.analog");auto *inputWindow=window.findChild<QMdiArea*>()->activeSubWindow();CHECK(inputWindow&&inputWindow->windowTitle()=="Analog inputs");inputWindow->close();
+    auto *iat=dynamic_cast<tunuino::SensorCalibrationWidget*>(window.findChild<QWidget*>("sensorIAT"));CHECK(iat);const auto beforeWizard=project->capture(error);const QJsonValue oldInput=iat->editorState()["input"];
+    openSensor("sensorwizard:IAT");auto *sensorWizard=dynamic_cast<tunuino::SensorCurveWizard*>(window.findChild<QDialog*>("iatSensorWizard"));CHECK(sensorWizard&&sensorWizard->isVisible()&&sensorWizard->isModal());auto *sensorOk=sensorWizard->findChild<QPushButton*>("sensorWizardOk");CHECK(sensorOk&&!sensorOk->isEnabled());
+    for(int i=0;i<3;++i)sensorWizard->findChild<QDoubleSpinBox*>(QString("sensorWizardValue%1").arg(i))->setValue(i==1?3950:2500);CHECK(sensorOk->isEnabled());sensorOk->click();CHECK(!sensorWizard->isVisible());CHECK(iat->editorState()["input"]==oldInput);CHECK(project->capture(error)["parameters"]==beforeWizard["parameters"]&&project->capture(error)["pages"]==beforeWizard["pages"]);
+    const auto prepared=project->capture(error);openSensor("sensorwizard:IAT");sensorWizard->reject();CHECK(project->capture(error)==prepared);
+    openSensor("sensorwizard:MAP");auto *pressureWizard=dynamic_cast<tunuino::SensorCurveWizard*>(window.findChild<QDialog*>("mapSensorWizard"));CHECK(pressureWizard&&pressureWizard->isVisible());pressureWizard->findChild<QDoubleSpinBox*>("sensorWizardValue0")->setValue(.5);pressureWizard->findChild<QDoubleSpinBox*>("sensorWizardValue2")->setValue(4.5);pressureWizard->findChild<QDoubleSpinBox*>("sensorWizardValue3")->setValue(300);pressureWizard->findChild<QPushButton*>("sensorWizardOk")->click();CHECK(!pressureWizard->isVisible());
+    CHECK(project->capture(error)["sensors"].toObject()["MAP"].toObject()["volts"].toArray()==QJsonArray({.5,4.5}));
     auto *firing=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QWidget*>("ignition.firing"));CHECK(firing);firing->findChild<QDoubleSpinBox*>("cylinders")->setValue(6);
     auto *tree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(tree);QTreeWidgetItemIterator it(tree);while(*it){if((*it)->data(0,Qt::UserRole+1).toString()=="ignition.firing"){tree->itemClicked(*it,0);break;}++it;}app.processEvents();CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle()=="Ignition - Firing order");
     auto data=project->capture(error);CHECK(!data.isEmpty());auto tables=data["tables"].toObject();for(const auto &name:{"fuel","ignition","afr"}){auto t=tables[name].toObject();auto rows=t["cells"].toArray(),row=rows[0].toArray();row[0]=QString(name)=="fuel"?123.45:QString(name)=="ignition"?-12.34:12.8;rows[0]=row;t["cells"]=rows;tables[name]=t;}data["tables"]=tables;
