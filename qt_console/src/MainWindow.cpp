@@ -100,6 +100,7 @@
 #include "calibration/SensorCalibrationWidget.h"
 #include "parameters/ParameterWidget.h"
 #include "parameters/TriggerWizard.h"
+#include "parameters/TriggerPresetDialog.h"
 #include "display/TuneDisplayWidget.h"
 #include "tools/ToolsSuite.h"
 #include "tools/ScopeWidget.h"
@@ -2190,11 +2191,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         (*parameterWindows)["sensor:"+name]=toolWindow(panel,tr("Sensors and inputs - %1").arg(name));
     }
     for(const auto &block:tunuino::ParameterCatalog::blocks()){auto *panel=new tunuino::ParameterWidget(block);parameterPanels->append(panel);auto *window=toolWindow(panel,block.title);window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)[block.key]=window;}
-    (*parameterWindows)["ignition.wizard"]=toolWindow(triggerWizard,tr("Ignition - Trigger wizard"));
-    (*parameterWindows)["ignition.wizard"]->resize(triggerWizard->sizeHint()+QSize(12,30));
+    auto *manualTriggerWindow=toolWindow(triggerWizard,tr("Triggers - Manual setup"));
+    manualTriggerWindow->resize(triggerWizard->sizeHint()+QSize(12,30));
+    auto *triggerPresets=new tunuino::TriggerPresetDialog(this);
+    triggerPresets->openManual=[=]{showTool(manualTriggerWindow);};
     triggerWizard->openScope=[=]{showTool(scopeWindow);};triggerWizard->openFiringOrder=[=]{if(*parameterNavigation)(*parameterNavigation)("ignition.firing");};
     scopeTool->captured=[=](const tunuino::ToolSnapshot &source,const QByteArray &header,const QByteArray &samples){triggerWizard->observeScope(source,header,samples);};
-    *parameterNavigation=[=](const QString &key){auto *window=(*parameterWindows).value(key).data();if(!window)return;if(!window->property("parameterOpened").toBool()){if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))window->resize(parameters->sizeHint()+QSize(12,30));window->setProperty("parameterOpened",true);}window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
+    *parameterNavigation=[=](const QString &key){if(key=="ignition.wizard"){triggerPresets->open();return;}auto *window=(*parameterWindows).value(key).data();if(!window)return;if(!window->property("parameterOpened").toBool()){if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))window->resize(parameters->sizeHint()+QSize(12,30));window->setProperty("parameterOpened",true);}window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
     auto *dock = new QDockWidget(tr("Engine Status"), this);
     dock->setObjectName("EngineStatusDock");
     auto *statusPanel = new QWidget(dock);
@@ -2419,6 +2422,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         for(int i=0;i<3;++i)tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,true,error);
         serviceTool->setProjectComment(comment.toString());fuelSurface->update();ignitionSurface->update();afrSurface->update();
         statusBar()->showMessage(tr("Project opened locally. No ECU write was performed."),10000);return true;
+    };
+    triggerPresets->applyRequested=[=](int index,int groups,QString &error){
+        if(!mapProject->canUse()){error=tr("Wait for the current ECU operation to finish.");return false;}
+        const auto current=mapProject->capture(error);if(current.isEmpty())return false;
+        QJsonObject desired;if(!tunuino::TriggerPresets::apply(current,index,groups,desired,error))return false;
+        const auto parameters=desired["parameters"].toObject();
+        const auto selected=[=](const QString &key){return (key=="ignition.primary"&&(groups&tunuino::TriggerPresets::Primary))||(key=="ignition.firing"&&(groups&tunuino::TriggerPresets::Firing));};
+        // Validate every selected editor before mutating any. Other drafts and
+        // their live-base/conflict state are deliberately left untouched.
+        for(auto *panel:*parameterPanels)if(selected(panel->block().key)&&!panel->restoreEditor(parameters[panel->block().key].toObject(),false,error))return false;
+        if((groups&tunuino::TriggerPresets::Primary)&&!triggerWizard->restoreEditor(desired["trigger"].toObject(),false,error))return false;
+        for(auto *panel:*parameterPanels)if(selected(panel->block().key)){panel->restoreEditor(parameters[panel->block().key].toObject(),true,error);panel->keepProjectEdits(true);}
+        if(groups&tunuino::TriggerPresets::Primary){triggerWizard->restoreEditor(desired["trigger"].toObject(),true,error);triggerWizard->keepProjectEdits(true);}
+        statusBar()->showMessage(tr("Trigger preset applied to local editors. Review settings before Write to ECU."),10000);return true;
     };
     serviceTool->saveMap=[mapProject]{mapProject->saveAs();};
     connect(openProject,&QAction::triggered,mapProject,&tunuino::MapProject::openDialog);

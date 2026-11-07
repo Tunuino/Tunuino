@@ -3,6 +3,10 @@
 #include "MainWindow.h"
 #include "project/MapProject.h"
 #include "parameters/ParameterWidget.h"
+#include "parameters/TriggerPresetDialog.h"
+#include <QCheckBox>
+#include <QComboBox>
+#include <QPushButton>
 #include <QApplication>
 #include <QStyleFactory>
 #include <QTemporaryDir>
@@ -35,6 +39,18 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     auto *mdi=window.findChild<QMdiArea*>();QMdiSubWindow *sub=nullptr;for(auto *candidate:mdi->subWindowList())if(candidate->widget()==firing)sub=candidate;CHECK(sub);sub->showNormal();mdi->setActiveSubWindow(sub);app.processEvents();
     const auto captionClick=[&](QStyle::SubControl control){mdi->setActiveSubWindow(sub);sub->raise();QTest::qWait(40);sub->repaint();QStyleOptionTitleBar option;option.initFrom(sub);const int height=sub->style()->pixelMetric(QStyle::PM_TitleBarHeight,&option,sub);option.rect=QRect(4,4,sub->width()-8,height);option.titleBarFlags=sub->windowFlags();option.titleBarState=sub->windowState();option.subControls=QStyle::SC_All;const auto rect=sub->style()->subControlRect(QStyle::CC_TitleBar,&option,control,sub);CHECK(!rect.isEmpty());mdi->setActiveSubWindow(sub);QTest::mouseMove(sub,QPoint(40,height+40));app.processEvents();QTest::mouseMove(sub,rect.center()+QPoint(-1,0));app.processEvents();QTest::mouseMove(sub,rect.center());app.processEvents();QTest::mouseClick(sub,Qt::LeftButton,Qt::NoModifier,rect.center());QTest::qWait(40);app.processEvents();};
     captionClick(QStyle::SC_TitleBarMaxButton);CHECK(sub->isMaximized());sub->showNormal();app.processEvents();captionClick(QStyle::SC_TitleBarMinButton);CHECK(sub->isMinimized());sub->showNormal();app.processEvents();captionClick(QStyle::SC_TitleBarCloseButton);CHECK(!sub->isVisible());sub->showNormal();CHECK(firing->findChild<QDoubleSpinBox*>("cylinders")->value()==6);
+    auto *presets=dynamic_cast<tunuino::TriggerPresetDialog*>(window.findChild<QDialog*>("triggerPresetDialog"));CHECK(presets);
+    QTreeWidgetItemIterator presetItem(tree);while(*presetItem){if((*presetItem)->data(0,Qt::UserRole+1).toString()=="ignition.wizard"){tree->itemClicked(*presetItem,0);break;}++presetItem;}
+    app.processEvents();CHECK(presets->isVisible()&&presets->isModal());
+    auto *engines=presets->findChild<QComboBox*>("predefinedTriggers");auto *ok=presets->findChild<QPushButton*>("triggerPresetOk");CHECK(engines&&ok&&engines->count()==11);
+    const auto beforePreset=project->capture(error);engines->setCurrentIndex(2);CHECK(!ok->isEnabled());CHECK(project->capture(error)==beforePreset);
+    presets->findChild<QPushButton*>("triggerPresetCancel")->click();CHECK(!presets->isVisible()&&project->capture(error)==beforePreset);
+    presets->open();engines->setCurrentIndex(1);presets->findChild<QCheckBox*>("triggerApply3")->setChecked(false);
+    QJsonObject expected;CHECK(tunuino::TriggerPresets::apply(beforePreset,1,tunuino::TriggerPresets::Primary,expected,error));ok->click();CHECK(!presets->isVisible());CHECK(project->capture(error)==expected);
+    presets->open();engines->setCurrentIndex(0);presets->findChild<QCheckBox*>("triggerApply0")->setChecked(false);
+    const auto beforeOrder=project->capture(error);CHECK(tunuino::TriggerPresets::apply(beforeOrder,0,tunuino::TriggerPresets::Firing,expected,error));ok->click();CHECK(project->capture(error)==expected);
+    const auto engine=expected["parameters"].toObject()["ignition.firing"].toObject()["engineProfile"].toObject();CHECK(engine["order"].toArray()==QJsonArray({0,4,2,5,1,3}));CHECK(expected["pages"]==beforePreset["pages"]);
+    const auto afterPreset=project->capture(error);CHECK(!tunuino::TriggerPresets::apply(afterPreset,0,tunuino::TriggerPresets::Secondary,expected,error));CHECK(project->capture(error)==afterPreset);
     std::cout<<"Real File/Save Project as from Firing order: full 6-cylinder map round-trip, all three tables, parameters, comment, atomic rejection and complete-project dialog and caption maximize/minimize/close/reopen passed offline\n"<<std::flush;
     std::_Exit(0);
 }
