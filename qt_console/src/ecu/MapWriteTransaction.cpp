@@ -41,6 +41,7 @@ bool MapWriteTransaction::startParameters(int page,const QByteArray &desired,con
     for(int i=0;i<256;++i)if((quint8(desired[i])^quint8(base[i]))&~quint8(mask[i]))return false;
     // Autonomous operation is never changed by a parameter-window write.
     if(page==1&&desired[102]!=base[102])return false;
+    if(page==4&&((desired[240]!=base[240])||desired.mid(242)!=base.mid(242)||((quint8(desired[70])^quint8(base[70]))&8))&&(identity.size()!=32||!(quint8(identity[19])&64)))return false;
     sensor_=-2;return begin(page,desired,base,identity,generation);
 }
 bool MapWriteTransaction::begin(int page,const QByteArray &desired,const QByteArray &baseMap,

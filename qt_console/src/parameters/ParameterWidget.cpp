@@ -62,20 +62,21 @@ void ParameterWidget::load(const QByteArray &h,const QByteArray &a,const QByteAr
         base_=h;identity_=identity;generation_=generation;syncProfile();refresh();return;
     }
     base_=block_.page==1?h:a;profileHeader_=h;profileAux_=a;identity_=identity;generation_=generation;
-    if(!keep){loading_=true;const bool extension=(block_.page==4&&base_[68]==0)||(block_.key=="fuel.corrections"&&base_.mid(103,25)==QByteArray(25,0));for(int i=0;i<block_.fields.size();++i)setValue(i,extension?block_.fields[i].initial:ParameterCatalog::value(base_,block_.fields[i]));loading_=false;edited_=false;}
+    if(!keep){loading_=true;const bool extension=(block_.key=="fuel.guard"&&base_[240]==0)||(block_.page==4&&base_[68]==0)||(block_.key=="fuel.corrections"&&base_.mid(103,25)==QByteArray(25,0));for(int i=0;i<block_.fields.size();++i)setValue(i,extension?block_.fields[i].initial:ParameterCatalog::value(base_,block_.fields[i]));loading_=false;edited_=false;}
     if(block_.key.endsWith(".outputs")){
         const int count=quint8(h[129]);for(int i=0;i<table_->rowCount();++i){table_->setRowHidden(i,i>=count);table_->item(i,0)->setText(tr("Cylinder %1").arg(i+1));}
         if(block_.key=="coils.outputs"&&h[128]==3){QSet<int> seen;for(int i=0;i<count;++i){const int coil=quint8(h[161+8*i]);if(seen.contains(coil)){table_->setRowHidden(i,true);continue;}seen.insert(coil);for(int j=i+1;j<count;++j)if(h[161+8*j]==h[161+8*i])table_->item(i,0)->setText(tr("Cylinders %1 / %2").arg(i+1).arg(j+1));}}
     }refresh();
 }
 void ParameterWidget::setAvailable(bool available){if(available_==available)return;available_=available;refresh();}
-void ParameterWidget::refresh(){const bool profile=profile_.has_value()||block_.page!=1||block_.key=="ignition.primary"||(base_.size()==256&&quint8(base_[128])>=1&&quint8(base_[128])<=3);save_->setEnabled(available_&&base_.size()==256&&profile&&!profileConflict_);if(!available_)status_->setText(tr("Offline or ECU operation in progress. Edits are retained."));else if(profileConflict_)status_->setText(tr("ECU profile or assignments changed while editing. Right-click the table and discard local edits before writing."));else if(!profile)status_->setText(tr("A configured engine profile is required; injector/coil assignments are not generated automatically."));else status_->setText(tr("Synchronized ECU data. Writing affects only this parameter block; other window edits are separate."));}
-void ParameterWidget::save(){if(!available_||base_.size()!=256||!writeRequested)return;auto desired=base_;
+void ParameterWidget::refresh(){const bool profile=profile_.has_value()||block_.page!=1||block_.key=="ignition.primary"||(base_.size()==256&&quint8(base_[128])>=1&&quint8(base_[128])<=3);const bool supported=block_.key!="fuel.guard"||(identity_.size()==32&&(quint8(identity_[19])&64));save_->setEnabled(available_&&base_.size()==256&&profile&&!profileConflict_&&supported);if(!available_)status_->setText(tr("Offline or ECU operation in progress. Edits are retained."));else if(!supported)status_->setText(tr("This ECU firmware does not support Lambda guard. Update firmware before writing this block."));else if(profileConflict_)status_->setText(tr("ECU profile or assignments changed while editing. Right-click the table and discard local edits before writing."));else if(!profile)status_->setText(tr("A configured engine profile is required; injector/coil assignments are not generated automatically."));else status_->setText(tr("Synchronized ECU data. Writing affects only this parameter block; other window edits are separate."));}
+void ParameterWidget::save(){if(block_.key=="fuel.guard"&&(identity_.size()!=32||!(quint8(identity_[19])&64))){refresh();return;}if(!available_||base_.size()!=256||!writeRequested)return;auto desired=base_;
     if(block_.page==4&&desired[68]==0)desired=SensorCalibrationCodec::featureDefaults(SensorCalibrationCodec::initialAux(SensorKind::Iat,desired));
     auto mask=ParameterCatalog::ownedMask(block_);
     // Initializing an absent extension is explicit only on Write; existing blocks
     // are always preserved bit-for-bit outside this block's fields.
     if(block_.page==4&&base_[68]==0)for(int i=0;i<256;++i)mask[i]=char(quint8(mask[i])|(quint8(desired[i])^quint8(base_[i])));
+    if(block_.key=="fuel.guard"){desired[240]=1;mask[240]=char(255);}
     if(block_.key=="fuel.corrections"&&base_.mid(103,25)==QByteArray(25,0)){
         SensorCalibrationCodec::put(desired,104,400);SensorCalibrationCodec::put(desired,106,10000);SensorCalibrationCodec::put(desired,108,10000);
         for(int i=104;i<112;++i)mask[i]=char(quint8(mask[i])|(quint8(desired[i])^quint8(base_[i])));

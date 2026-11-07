@@ -13,6 +13,7 @@
 #include <QToolButton>
 #include <iostream>
 #include <cstdlib>
+#include <algorithm>
 #define CHECK(x) do{if(!(x)){std::cerr<<"Failed: "<<#x<<" line "<<__LINE__<<std::endl;std::exit(1);}}while(false)
 using namespace tunuino;
 using Codec=SensorCalibrationCodec;using Writer=MapWriteTransaction;
@@ -24,6 +25,15 @@ int main(int argc,char **argv){QApplication app(argc,argv);
     for(const auto &b:blocks){CHECK(!keys.contains(b.key));keys.insert(b.key);ParameterWidget widget(b);CHECK(widget.findChild<QTableWidget*>("parameters")->columnCount()==2);CHECK(!widget.findChild<QPushButton*>("parameterSave")->isEnabled());const auto mask=ParameterCatalog::ownedMask(b);CHECK(mask.size()==256);if(b.page==1)CHECK(mask[102]==0);
         for(const auto &f:b.fields){CHECK(f.offset>=0&&f.offset+f.width<=256);QByteArray data(256,0);CHECK(ParameterCatalog::put(data,f,f.initial));if(b.key!="ignition.firing")CHECK(ParameterCatalog::value(data,f)==f.initial);CHECK(!ParameterCatalog::put(data,f,f.maximum+1));}
     }
+    // The guard is editable offline, but older firmware must never receive its extension.
+    const auto guard=*std::find_if(blocks.begin(),blocks.end(),[](const auto &b){return b.key=="fuel.guard";});
+    ParameterWidget guardWidget(guard);QByteArray guardHeader(256,0),guardIdentity(32,0);guardIdentity[19]=15;
+    auto guardAux=Codec::featureDefaults(Codec::tpsDefaults());Codec::put(guardAux,70,1024);
+    guardWidget.load(guardHeader,guardAux,guardIdentity,1);guardWidget.setAvailable(true);bool guardCalled=false;
+    guardWidget.writeRequested=[&](int page,const QByteArray &desired,const QByteArray &mask){guardCalled=true;CHECK(page==4&&desired[240]==1&&Codec::u16(desired,70)==1024);for(int j=0;j<256;++j)CHECK(!((quint8(desired[j])^quint8(guardAux[j]))&~quint8(mask[j])));};
+    CHECK(!guardWidget.findChild<QPushButton*>("parameterSave")->isEnabled());guardWidget.save();CHECK(!guardCalled);
+    guardIdentity[19]=79;guardWidget.load(guardHeader,guardAux,guardIdentity,1);CHECK(guardWidget.findChild<QPushButton*>("parameterSave")->isEnabled());guardWidget.save();CHECK(guardCalled);
+    if(!qEnvironmentVariable("TUNUINO_GUARD_PREVIEW").isEmpty()){guardWidget.resize(guardWidget.sizeHint());guardWidget.show();app.processEvents();CHECK(guardWidget.grab().save(qEnvironmentVariable("TUNUINO_GUARD_PREVIEW")));guardWidget.hide();}
     const auto executable=qEnvironmentVariable("TUNUINO_FIRMWARE_HARNESS");if(executable.isEmpty()){std::cout<<"Parameter catalog/UI bounds passed; native firmware harness not supplied\n";return 0;}
     QProcess process;process.start(executable,{"--engine-profile"});CHECK(process.waitForStarted(3000));
     const auto exchange=[&](const QByteArray &q){const auto line=q.toHex()+"\n";CHECK(process.write(line)==line.size());CHECK(process.waitForBytesWritten(3000));while(!process.canReadLine())CHECK(process.waitForReadyRead(3000));return QByteArray::fromHex(process.readLine().trimmed());};

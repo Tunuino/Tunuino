@@ -102,6 +102,7 @@ public:
             if(!allowed && desired[i]!=allowedBase[i]){error="A sensor edit attempted to change unrelated ECU settings.";return false;}
         }
         if(!c.channel){
+            if(a[68]==1&&(u16(a,70)&2048)&&(kind==SensorKind::Lambda||kind==SensorKind::Map||kind==SensorKind::Clt||kind==SensorKind::Tps)){error="Lambda guard still requires this sensor. Disable the guard before removing its input.";return false;}
             if(a[68]==1&&((kind==SensorKind::Iat&&(u16(a,70)&1))||(kind==SensorKind::Battery&&(u16(a,70)&(2|512))))){error="An enabled compensation or protection still requires this input.";return false;}
             return true;
         }

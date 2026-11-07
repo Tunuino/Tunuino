@@ -482,7 +482,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *fuelingCategory=addCategory(tr("Fueling"),{{tr("Autotune"),12}});
     parameterItem(fuelingCategory,tr("General"),"fuel.general");parameterItem(fuelingCategory,tr("Fuel cut"),"fuel.cut");
     const auto unavailable=[=](QTreeWidgetItem *parent,const QString &title,const QString &reason){auto *item=new QTreeWidgetItem(parent,{title});item->setFlags(item->flags()&~Qt::ItemIsEnabled);item->setToolTip(0,reason);return item;};
-    unavailable(fuelingCategory,tr("Lambda guard"),tr("Not implemented: independent lambda-deviation guard strategy."));
+    parameterItem(fuelingCategory,tr("Lambda guard"),"fuel.guard");
     parameterItem(fuelingCategory,tr("Acceleration"),"fuel.acceleration");
     auto *fuelCorrections=new QTreeWidgetItem(fuelingCategory,{tr("Corrections")});parameterItem(fuelCorrections,tr("Warmup"),"fuel.corrections");
     parameterItem(fuelingCategory,tr("Cylinders trim"),"fuel.trim");parameterItem(fuelingCategory,tr("Short term trim"),"fuel.shortterm");
