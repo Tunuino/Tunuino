@@ -2382,9 +2382,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(fuelRead, &QPushButton::clicked, this, [=]() { startTransfer(2); });
     connect(ignitionRead, &QPushButton::clicked, this, [=]() { startTransfer(3); });
     auto *fileMenu = menuBar()->addMenu(tr("File"));
-    auto *openProject = fileMenu->addAction(tr("Open Map..."));
+    auto *openProject = fileMenu->addAction(tr("Open Project..."));
     openProject->setShortcut(QKeySequence::Open);
-    auto *saveProject = fileMenu->addAction(tr("Save Map..."));
+    auto *saveProject = fileMenu->addAction(tr("Save Project as..."));
     saveProject->setShortcut(QKeySequence::Save);
     openProject->setObjectName("fileOpenMap");saveProject->setObjectName("fileSaveMap");
     mapProject->canUse=[=]{return !writer->busy()&&!*writePending&&!*readBusy&&!*validationPending&&!*toolBusy;};
@@ -2420,7 +2420,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         triggerWizard->keepProjectEdits(false);if(live.valid())triggerWizard->load(header,aux,identity,generation);else triggerWizard->loadOffline(header,aux);triggerWizard->restoreEditor(document["trigger"].toObject(),true,error);triggerWizard->keepProjectEdits(true);if(!live.valid())triggerWizard->setAvailable(false);
         for(int i=0;i<3;++i)tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,true,error);
         serviceTool->setProjectComment(comment.toString());fuelSurface->update();ignitionSurface->update();afrSurface->update();
-        statusBar()->showMessage(tr("Complete map opened locally. No ECU write was performed."),10000);return true;
+        statusBar()->showMessage(tr("Project opened locally. No ECU write was performed."),10000);return true;
     };
     serviceTool->saveMap=[mapProject]{mapProject->saveAs();};
     connect(openProject,&QAction::triggered,mapProject,&tunuino::MapProject::openDialog);

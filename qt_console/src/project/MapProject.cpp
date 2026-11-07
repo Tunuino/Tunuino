@@ -28,29 +28,29 @@ QByteArray MapProject::encode(const QJsonObject &payload,QString &error){
     const auto encoded=QJsonDocument(envelope).toJson(QJsonDocument::Indented);QJsonObject checked;if(!decode(encoded,checked,error))return {};return encoded;
 }
 bool MapProject::decode(const QByteArray &bytes,QJsonObject &payload,QString &error){
-    error.clear();const auto fail=[&](const char *message){error=message;return false;};if(bytes.size()>2*1024*1024)return fail("Map file is too large.");
-    QJsonParseError parse;const auto doc=QJsonDocument::fromJson(bytes,&parse);if(parse.error!=QJsonParseError::NoError||!doc.isObject())return fail("Invalid map file.");const auto o=doc.object();
-    if(o["format"]!="tunuino-project-v2"||!o["payload"].isObject())return fail("This is not a complete Tunuino map. Use the table toolbar to import individual tables.");
+    error.clear();const auto fail=[&](const char *message){error=message;return false;};if(bytes.size()>2*1024*1024)return fail("Project file is too large.");
+    QJsonParseError parse;const auto doc=QJsonDocument::fromJson(bytes,&parse);if(parse.error!=QJsonParseError::NoError||!doc.isObject())return fail("Invalid project file.");const auto o=doc.object();
+    if(o["format"]!="tunuino-project-v2"||!o["payload"].isObject())return fail("This is not a complete Tunuino project. Use the table toolbar to import individual tables.");
     const auto p=o["payload"].toObject();const auto raw=content(p);
-    if(o["crc32"]!=crc(raw)||o["sha256"]!=QString::fromLatin1(QCryptographicHash::hash(raw,QCryptographicHash::Sha256).toHex()))return fail("Map checksum does not match; nothing was loaded.");
+    if(o["crc32"]!=crc(raw)||o["sha256"]!=QString::fromLatin1(QCryptographicHash::hash(raw,QCryptographicHash::Sha256).toHex()))return fail("Project checksum does not match; nothing was loaded.");
     if(p["target"].toObject()!=QJsonObject{{"family",1},{"mcu",1},{"hardwareRevision",7},{"schema",2}})return fail("Unsupported ECU target or configuration format.");
-    const auto pages=p["pages"].toObject();const QStringList names{"header","fuel","ignition","aux"};if(pages.size()!=4)return fail("Map must contain all four configuration pages.");
-    for(int i=0;i<4;++i){const auto text=pages[names[i]].toString();const auto b=QByteArray::fromHex(text.toLatin1());if(text!=QString::fromLatin1(b.toHex())||b.size()!=(i==0||i==3?256:576)||(i==0&&SensorCalibrationCodec::u16(b,0)!=2)||(i==1&&!MapPageCodec::valid(2,b))||(i==2&&!MapPageCodec::valid(3,b)))return fail("Invalid map configuration page.");}
-    for(const auto &key:{"tables","parameters","sensors","trigger","service"})if(!p[key].isObject())return fail("Incomplete map editor data.");
+    const auto pages=p["pages"].toObject();const QStringList names{"header","fuel","ignition","aux"};if(pages.size()!=4)return fail("Project must contain all four configuration pages.");
+    for(int i=0;i<4;++i){const auto text=pages[names[i]].toString();const auto b=QByteArray::fromHex(text.toLatin1());if(text!=QString::fromLatin1(b.toHex())||b.size()!=(i==0||i==3?256:576)||(i==0&&SensorCalibrationCodec::u16(b,0)!=2)||(i==1&&!MapPageCodec::valid(2,b))||(i==2&&!MapPageCodec::valid(3,b)))return fail("Invalid project configuration page.");}
+    for(const auto &key:{"tables","parameters","sensors","trigger","service"})if(!p[key].isObject())return fail("Incomplete project editor data.");
     if(p["tables"].toObject().size()!=3)return fail("Fuel, Ignition and AFR Target tables are required.");payload=p;return true;
 }
 bool MapProject::save(const QString &path,QString &error){
-    if(canUse&&!canUse()){error="Wait for the active ECU operation to finish.";return false;}if(!capture){error="Map capture is unavailable.";return false;}
+    if(canUse&&!canUse()){error="Wait for the active ECU operation to finish.";return false;}if(!capture){error="Project capture is unavailable.";return false;}
     if(auto *focus=QApplication::focusWidget())focus->clearFocus();
     const auto p=capture(error);if(p.isEmpty())return false;const auto bytes=encode(p,error);if(bytes.isEmpty())return false;
-    QSaveFile file(path);if(!file.open(QIODevice::WriteOnly)||file.write(bytes)!=bytes.size()||!file.commit()){error="Could not save the complete map.";return false;}path_=path;QSettings().setValue("maps/directory",QFileInfo(path).absolutePath());return true;
+    QSaveFile file(path);if(!file.open(QIODevice::WriteOnly)||file.write(bytes)!=bytes.size()||!file.commit()){error="Could not save the complete project.";return false;}path_=path;QSettings().setValue("maps/directory",QFileInfo(path).absolutePath());return true;
 }
 bool MapProject::open(const QString &path,QString &error){
-    if(canUse&&!canUse()){error="Wait for the active ECU operation to finish.";return false;}QFile file(path);if(!file.open(QIODevice::ReadOnly)||file.size()>2*1024*1024){error="Could not read the map file.";return false;}QJsonObject p;if(!decode(file.readAll(),p,error)||!apply||!apply(p,error))return false;path_=path;QSettings().setValue("maps/directory",QFileInfo(path).absolutePath());return true;
+    if(canUse&&!canUse()){error="Wait for the active ECU operation to finish.";return false;}QFile file(path);if(!file.open(QIODevice::ReadOnly)||file.size()>2*1024*1024){error="Could not read the project file.";return false;}QJsonObject p;if(!decode(file.readAll(),p,error)||!apply||!apply(p,error))return false;path_=path;QSettings().setValue("maps/directory",QFileInfo(path).absolutePath());return true;
 }
 QString MapProject::defaultDirectory(){const auto saved=QSettings().value("maps/directory").toString();if(!saved.isEmpty()&&QDir(saved).exists())return saved;const auto dir=QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/Tunuino/Maps";QDir().mkpath(dir);return dir;}
-void MapProject::saveAs(){QFileDialog dialog(window_,tr("Save Map"),path_.isEmpty()?defaultDirectory()+"/Untitled.tnproj":path_,tr("Tunuino map (*.tnproj)"));dialog.setAcceptMode(QFileDialog::AcceptSave);dialog.setDefaultSuffix("tnproj");if(dialog.exec()!=QDialog::Accepted)return;QString error;if(!save(dialog.selectedFiles().value(0),error))QMessageBox::warning(window_,tr("Save Map"),error);}
-void MapProject::openDialog(){const auto path=QFileDialog::getOpenFileName(window_,tr("Open Map"),defaultDirectory(),tr("Tunuino map (*.tnproj)"));if(path.isEmpty())return;QString error;if(!open(path,error))QMessageBox::warning(window_,tr("Open Map"),error);}
+void MapProject::saveAs(){QFileDialog dialog(window_,tr("Save Project"),path_.isEmpty()?defaultDirectory()+"/Untitled.tnproj":path_,tr("Tunuino project (*.tnproj)"));dialog.setAcceptMode(QFileDialog::AcceptSave);dialog.setDefaultSuffix("tnproj");if(dialog.exec()!=QDialog::Accepted)return;QString error;if(!save(dialog.selectedFiles().value(0),error))QMessageBox::warning(window_,tr("Save Project"),error);}
+void MapProject::openDialog(){const auto path=QFileDialog::getOpenFileName(window_,tr("Open Project"),defaultDirectory(),tr("Tunuino project (*.tnproj)"));if(path.isEmpty())return;QString error;if(!open(path,error))QMessageBox::warning(window_,tr("Open Project"),error);}
 QJsonObject MapProject::tableState(QTableWidget *t,QTableWidget *rpm){QJsonArray x,y,rows;for(int i=0;i<16;++i){bool ok;double n=rpm->item(0,i)->text().toDouble(&ok);x.append(ok?QJsonValue(n):QJsonValue());n=t->verticalHeaderItem(i)->text().toDouble(&ok);y.append(ok?QJsonValue(n):QJsonValue());QJsonArray row;for(int j=0;j<16;++j){n=t->item(i,j)->text().toDouble(&ok);row.append(ok?QJsonValue(n):QJsonValue());}rows.append(row);}return {{"rpm",x},{"load",y},{"cells",rows}};}
 bool MapProject::tableState(QTableWidget *t,QTableWidget *rpm,const QJsonObject &o,double low,double high,bool apply,QString &error){
     const auto x=o["rpm"].toArray(),y=o["load"].toArray(),rows=o["cells"].toArray();const auto number=[](const QJsonValue &v,double a,double b){return v.isDouble()&&std::isfinite(v.toDouble())&&v.toDouble()>=a&&v.toDouble()<=b;};
