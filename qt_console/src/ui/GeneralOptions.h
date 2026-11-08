@@ -13,7 +13,7 @@ inline int option(const char *key,int fallback){return QSettings().value(QString
 inline bool enabledOption(const char *key,bool fallback){return QSettings().value(QString("general/")+key,fallback).toBool();}
 inline double displayValue(int channel,double value){if(option("units",0)==0)return value;if(channel==2)return value*.1450377377;if(channel==4||channel==5)return value*1.8+32;return value;}
 inline QString displayUnit(int channel,const QString &metric){if(option("units",0)==0)return metric;return channel==2?"psi":channel==4||channel==5?"°F":metric;}
-inline QColor tablePalette(double level){if(option("scheme",0)==1)return QColor::fromHsvF(.78-.18*level,.72,.86);if(option("scheme",0)==2)return level<.5?QColor(0,int(level*510),int(255-level*510)):QColor(int((level-.5)*510),int(255-(level-.5)*510),0);return QColor::fromHsvF(.66*(1-level),.72,.86);}
+inline QColor tablePalette(double level,int scheme){if(scheme==1)return QColor::fromHsvF(.78-.18*level,.72,.86);if(scheme==2)return level<.5?QColor(0,int(level*510),int(255-level*510)):QColor(int((level-.5)*510),int(255-(level-.5)*510),0);return QColor::fromHsvF(.66*(1-level),.72,.86);}
 class OptionCheck final:public QCheckBox {
 public:using QCheckBox::QCheckBox;
 protected:void paintEvent(QPaintEvent*)override{QPainter p(this);const QRect r(4,(height()-16)/2,16,16);p.setPen(isEnabled()?QColor("#8bff00"):QColor("#8b8f89"));p.setBrush(isChecked()?QColor("#eeeeeb"):QColor("#242628"));p.drawRect(r);if(isChecked()){p.setRenderHint(QPainter::Antialiasing);p.setPen(QPen(isEnabled()?QColor("#555854"):QColor("#999c96"),2));p.drawLine(r.topLeft()+QPoint(3,8),r.topLeft()+QPoint(7,12));p.drawLine(r.topLeft()+QPoint(7,12),r.topLeft()+QPoint(13,3));}}

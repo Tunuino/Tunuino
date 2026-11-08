@@ -353,7 +353,9 @@ protected:
         const double scale = fit * 0.82 * zoom_;
         const QPointF center = view.center();
         const QPointF boundsCenter((left+right)*0.5, (top+bottom)*0.5);
-        auto screen = [&](const Vertex &v) { if(tunuino::enabledOption("cubic",false))return center+(v.p-boundsCenter)*scale;return center+QPointF((v.p.x()-boundsCenter.x())*view.width()/(right-left)*.82*zoom_,(v.p.y()-boundsCenter.y())*view.height()/(bottom-top)*.82*zoom_); };
+        const bool cubic=tunuino::enabledOption("cubic",false);
+        const int scheme=tunuino::option("scheme",0);
+        auto screen = [&](const Vertex &v) { if(cubic)return center+(v.p-boundsCenter)*scale;return center+QPointF((v.p.x()-boundsCenter.x())*view.width()/(right-left)*.82*zoom_,(v.p.y()-boundsCenter.y())*view.height()/(bottom-top)*.82*zoom_); };
         struct Face { int row; int col; double depth; };
         QVector<Face> faces;
         faces.reserve(225);
@@ -371,7 +373,7 @@ protected:
             const double avg = (z[row][col] + z[row+1][col] +
                                 z[row][col+1] + z[row+1][col+1]) / 4.0;
             const double level = (avg - minValue) / span;
-            const QColor color=tunuino::option("scheme",0)==0?QColor::fromHsvF(.33-level*.32,.76,.86):tunuino::tablePalette(level);
+            const QColor color=scheme==0?QColor::fromHsvF(.33-level*.32,.76,.86):tunuino::tablePalette(level,scheme);
             painter.setBrush(color);
             painter.setPen(QPen(color.darker(155), 0.6));
             painter.drawPolygon(QPolygonF{screen(verts[row][col]), screen(verts[row][col+1]),
@@ -661,6 +663,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         valueFont.setWeight(QFont::Bold);
         table->setFont(valueFont);
         const auto recolor = [table]() {
+            // Read preferences once per grid, not once for every cell.
+            const int scheme=tunuino::option("scheme",0);
             double minimum = 1e100, maximum = -1e100;
             for (int row = 0; row < table->rowCount(); ++row)
                 for (int col = 0; col < table->columnCount(); ++col) {
@@ -686,7 +690,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     }
                     const double level = qBound(0.0, (value - minimum) / range, 1.0);
                     // Blue/green for lower values, yellow/orange/red for higher.
-                    const QColor color=tunuino::tablePalette(level);
+                    const QColor color=tunuino::tablePalette(level,scheme);
                     item->setBackground(color);
                     item->setForeground(color.lightnessF() < 0.48 ? QColor(255, 255, 255)
                                                                       : QColor(20, 24, 28));
