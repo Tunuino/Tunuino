@@ -10,7 +10,7 @@ inline void populateSensorNavigation(QTreeWidgetItem *root){
     const QString unsupported="Not implemented in the native ECU configuration/runtime protocol. No operational control is available.";
     page(root,"Analog inputs","inputs.analog");
     auto *digital=group(root,"Digital inputs");page(digital,"Primary trigger","inputs.primary");page(digital,"CAM 1","inputs.cam1");
-    missing(digital,"CAM 2",unsupported);missing(digital,"VSS",unsupported);
+    missing(digital,"CAM 2",unsupported);page(digital,"VSS","inputs.vss");
     missing(digital,"CAM 1 sensitivity","The conditioned capture input has no software sensitivity curve.",Curve);missing(digital,"CAM 2 sensitivity",unsupported,Curve);
     auto *oxygen=group(root,"Oxygen Sensor");page(oxygen,"Parameters","sensor:Lambda");
     auto *throttle=group(root,"TPS, PPS");page(throttle,"TPS","sensor:TPS");missing(throttle,"PPS",unsupported);
@@ -25,7 +25,7 @@ inline void populateSensorNavigation(QTreeWidgetItem *root){
     auto *temperature=group(root,"Temperature");page(temperature,"Sensor wizard","sensorwizard:Temperature",Wizard);page(temperature,"Standard sensors","inputs.temperature");missing(temperature,"Custom sensors",unsupported);
     for(const auto &name:{"AC evap temp cal.","Cylinder head temp. cal.","Engine oil temp. cal.","Fuel temp cal.","Custom temp. cal 1","Custom temp. cal 2","Custom temp. cal 3","Custom temp. cal 4"})missing(temperature,name,unsupported,Curve);
     auto *other=group(root,"Other sensors");for(const auto &name:{"Parameters","EWG position sensor","Turboshaft speed"})missing(other,name,unsupported);missing(other,"Fuel level cal.",unsupported,Curve);page(other,"Battery","sensor:Battery");
-    auto *vss=group(root,"VSS and Gearbox");for(const auto &name:{"Gearbox","Vehicle speed","Wheels setup","Driven axle","Non-driven axle","Paddle shifters"})missing(vss,name,unsupported);
+    auto *vss=group(root,"VSS and Gearbox");for(const auto &name:{"Gearbox","Vehicle speed","Wheels setup","Driven axle","Non-driven axle","Paddle shifters"}){if(QString(name)=="Vehicle speed")page(vss,name,"speed.vehicle");else missing(vss,name,unsupported);}
     missing(vss,"Gear position sensor",unsupported,Group);missing(vss,"Gear lever",unsupported,Group);missing(vss,"Vss and gears",unsupported);
 }
 }

@@ -18,7 +18,7 @@ public:
     static bool primaryInputSupported(const QByteArray &identity){return identity.size()==32&&(quint8(identity[18])&4);}
     static bool primaryInputFormat(const QByteArray &h){return h.size()==256&&((h[5]==0&&h[9]==0)||(h[5]==1&&quint8(h[9])<=3));}
     static bool inputFilterSupported(const QByteArray &identity){return identity.size()==32&&(quint8(identity[18])&2);}
-    static bool inputFilterFormat(const QByteArray &h){if(h.size()!=256)return false;if(h.mid(70,26)==QByteArray(26,0))return true;if(h[70]!=1||h.mid(82,14)!=QByteArray(14,0))return false;for(int i=71;i<82;++i)if(quint8(h[i])>6)return false;return true;}
+    static bool inputFilterFormat(const QByteArray &h){if(h.size()!=256)return false;if(h.mid(70,12)==QByteArray(12,0))return true;if(h[70]!=1)return false;for(int i=71;i<82;++i)if(quint8(h[i])>6)return false;return true;}
     static bool pressureSupported(const QByteArray &identity){return identity.size()==32&&(quint8(identity[18])&1);}
     static double maximum(SensorKind kind){return pressure(kind)?2000:kind==SensorKind::Map?500:temperature(kind)?150:kind==SensorKind::Battery?24:5;}
     static bool auxiliary(SensorKind kind){return kind==SensorKind::Tps||kind==SensorKind::Iat||kind==SensorKind::Battery;}
