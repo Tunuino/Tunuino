@@ -49,3 +49,11 @@
 - Perfil formato 3, modos 3/4: semi-sequencial/batch com bobina partilhada por exatamente dois cilindros a 360°. Só esses perfis permitem repetir uma IGN. Não repetir injetores; não permitir três cilindros numa bobina nem ajustes de avanço diferentes num par.
 - Mostrar uma função e um teste de ignição por bobina partilhada, identificada pelo par. Mover essa função deve atualizar os dois descritores. Propostas de ligação do par não substituem a cablagem lida.
 - O projeto .tnproj inclui as quatro páginas e mapas completos, valida alvo/formato/CRC e não arma saídas ao abrir ou restaurar. Restaurar exige snapshot limpo e atual da mesma ECU, cópia anterior criada primeiro, páginas preparadas e relidas, uma única gravação e releitura completa. Após pedido de Burn incerto, orientar para releitura sem repetição automática.
+
+## Documentos de referência e comparação
+
+- Antes de implementar ou corrigir um bloco, consultar as secções relevantes dos PDFs fornecidos e registar na publicação técnica as páginas usadas e as lacunas reais da documentação.
+- Comparar organização, campos, listas, cores e toolbar com a referência antes de considerar a janela concluída. Compilar e passar testes não prova correspondência visual ou funcional.
+- Não substituir uma janela de configuração por um monitor. Manter monitores separados e identificados.
+- Não exigir ao utilizador fotografias de cada opção como fluxo normal. Procurar primeiro nos documentos e nas fontes técnicas disponíveis. Não inventar opções ou alegar que um PDF contém detalhes que não descreve.
+- Identificar as limitações físicas e de protocolo da placa, preservando as funções implementadas e distinguindo opções indisponíveis de comandos funcionais.

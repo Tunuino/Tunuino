@@ -13,6 +13,8 @@ struct SensorCalibration {
 class SensorCalibrationCodec {
 public:
     static bool pressure(SensorKind kind){return kind==SensorKind::FuelPressure||kind==SensorKind::OilPressure;}
+    static bool camInputSupported(const QByteArray &identity){return identity.size()==32&&(quint8(identity[18])&8);}
+    static bool camInputFormat(const QByteArray &h){return h.size()==256&&((h[98]==0&&h[99]==0)||(h[98]==1&&quint8(h[99])<=3));}
     static bool primaryInputSupported(const QByteArray &identity){return identity.size()==32&&(quint8(identity[18])&4);}
     static bool primaryInputFormat(const QByteArray &h){return h.size()==256&&((h[5]==0&&h[9]==0)||(h[5]==1&&quint8(h[9])<=3));}
     static bool inputFilterSupported(const QByteArray &identity){return identity.size()==32&&(quint8(identity[18])&2);}

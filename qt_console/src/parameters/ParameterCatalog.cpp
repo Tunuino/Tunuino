@@ -56,6 +56,9 @@ QVector<ParameterBlock> ParameterCatalog::blocks(){
     fixed=number("adaptiveThreshold","Adaptive threshold",0,1,0,0,0,{},false,0);fixed.choices={"Hardware controlled","Low (unavailable)","High (unavailable)"};b.fields<<fixed;
     fixed=number("pullupPulldown","Pullup/Pulldown",0,1,0,0,0,{},false,0);fixed.choices={"Hardware / external wiring","None (not software selectable)","Pullup 4K7 (unavailable)","Pullup 1K (unavailable)","Pullup 820 Ohm (unavailable)","Pulldown 4K7 (unavailable)","Pulldown 1K (unavailable)","Pulldown 820 Ohm (unavailable)"};b.fields<<fixed;
     auto edgeFilter=number("inputFilter","Input filter",9,1,0,3,0,{},false,1);edgeFilter.choices={"None","Low","Medium","High"};b.fields<<edgeFilter;all<<b;
+    b.key="inputs.cam1";b.title="Digital inputs - CAM 1";
+    b.help="Conditioned CAM 1 input J101 / 4 (+), 12 (-), MAX9924 U1204. Sensor selection, pull resistors and VR sensitivity are not software-controlled or readable on this board. Hardware alternatives are shown but disabled, including VR Sensor sensitivity table. The filter is independent native rising-edge blanking: None / Low 5 us / Medium 10 us / High 20 us minimum separation between accepted CAM edges. It does not alter crank filtering, phase window, wheel geometry, electrical thresholds or output state.";
+    b.fields.removeAt(1);b.fields[0].choices<<"VR Sensor sensitivity table (unavailable)";b.fields[2].offset=99;all<<b;
     return all;
 }
 double ParameterCatalog::value(const QByteArray &p,const ParameterField &f){if(f.width==0)return f.initial;if(p.size()!=256)return 0;quint32 n=0;for(int i=0;i<f.width;++i)n=(n<<8)|quint8(p[f.offset+i]);if(f.bit)return (n&f.bit)?1:0;if(f.signedValue&&f.width==2)return qint16(n)/f.scale;return n/f.scale;}

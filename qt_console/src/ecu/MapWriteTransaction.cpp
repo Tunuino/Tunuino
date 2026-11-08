@@ -47,6 +47,7 @@ bool MapWriteTransaction::startParameters(int page,const QByteArray &desired,con
     if(page==1&&desired.mid(38,26)!=base.mid(38,26)&&!SensorCalibrationCodec::pressureSupported(identity))return false;
     if(page==1&&desired.mid(70,26)!=base.mid(70,26)&&(identity.size()!=32||!(quint8(identity[18])&2)))return false;
     if(page==1&&(desired[5]!=base[5]||desired[9]!=base[9])&&!SensorCalibrationCodec::primaryInputSupported(identity))return false;
+    if(page==1&&desired.mid(98,2)!=base.mid(98,2)&&!SensorCalibrationCodec::camInputSupported(identity))return false;
     sensor_=-2;return begin(page,desired,base,identity,generation);
 }
 bool MapWriteTransaction::begin(int page,const QByteArray &desired,const QByteArray &baseMap,
