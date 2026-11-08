@@ -10,6 +10,7 @@
 #include "calibration/SensorCalibrationWidget.h"
 #include <QCheckBox>
 #include <QToolBar>
+#include <QToolButton>
 #include <QComboBox>
 #include <QListView>
 #include <QScrollBar>
@@ -115,6 +116,19 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     checkpoint("CAM sensitivity and monitors");
     auto *sensitivity=dynamic_cast<tunuino::SensitivityCurve*>(window.findChild<QWidget*>("cam1Sensitivity"));CHECK(sensitivity);openSensor("inputs.cam1.sensitivity");CHECK(mdi->activeSubWindow()->windowTitle()=="Digital inputs - CAM 1 sensitivity [V]");auto curveProject=project->capture(error);const auto oldPages=curveProject["pages"];auto curve=sensitivity->state();auto volts=curve["volts"].toArray();volts[1]=.60;curve["volts"]=volts;CHECK(sensitivity->restore(curve,true,error));auto changedCurve=project->capture(error);CHECK(changedCurve["pages"]==oldPages&&changedCurve["curves"]!=curveProject["curves"]);CHECK(project->apply(curveProject,error));CHECK(sensitivity->state()["volts"].toArray()[1].toDouble()==.53);auto invalidCurve=curve;auto invalidRpm=curve["rpm"].toArray();invalidRpm[1]=750;invalidCurve["rpm"]=invalidRpm;CHECK(!sensitivity->restore(invalidCurve,true,error));
     openSensor("inputs.cam1.monitor");CHECK(mdi->activeSubWindow()->windowTitle()=="CAM 1 monitor");openSensor("inputs.pressure.monitor");CHECK(mdi->activeSubWindow()->windowTitle()=="Pressure sensors");
+    auto *toolbar=window.findChild<QToolBar*>("MainToolbar");CHECK(toolbar&&toolbar->toolButtonStyle()==Qt::ToolButtonIconOnly&&toolbar->iconSize()==QSize(24,24));
+    QStringList shortcuts;for(auto *action:toolbar->actions())if(!action->isSeparator()){
+        shortcuts<<action->text();CHECK(!action->icon().isNull());
+        auto *button=qobject_cast<QToolButton*>(toolbar->widgetForAction(action));
+        CHECK(button&&button->defaultAction()==action&&button->toolButtonStyle()==Qt::ToolButtonIconOnly&&!button->toolTip().isEmpty());
+        CHECK(button->sizeHint().width()<40);
+        bool shared=false;for(auto *menuAction:window.menuBar()->actions())if(menuAction->menu()&&menuAction->menu()->actions().contains(action))shared=true;CHECK(shared);
+    }
+    CHECK(shortcuts==QStringList({"Write to ECU","Open Project...","Save Project as...","Restore desktops","Store desktops","Test outputs","Show assigned outputs","Show assigned inputs","Customize keys","Available strategies","Logbook","Autotune","General options","Scope","Graph Log","Tune Display"}));
+    CHECK(!toolbar->actions().first()->isEnabled());
+    if(!qEnvironmentVariable("TUNUINO_TOOLBAR_PREVIEW").isEmpty()){
+        QToolBar preview;preview.setToolButtonStyle(toolbar->toolButtonStyle());preview.setIconSize(toolbar->iconSize());preview.setMovable(false);preview.setStyleSheet(toolbar->styleSheet());for(auto *action:toolbar->actions())preview.addAction(action);preview.resize(720,36);preview.show();app.processEvents();CHECK(preview.grab().save(qEnvironmentVariable("TUNUINO_TOOLBAR_PREVIEW")));
+    }
     checkpoint("general options persistence");
     tunuino::GeneralOptionsDialog optionsDialog(&window);CHECK(!optionsDialog.findChild<QPushButton*>("Monitors and panels..."));CHECK(optionsDialog.findChild<QComboBox*>("appearance")&&optionsDialog.findChild<QComboBox*>("gaugeType"));CHECK(!optionsDialog.findChild<QComboBox*>("rtaAlgorithm")->isEnabled()&&!optionsDialog.findChild<QCheckBox*>("loadY")->isEnabled());optionsDialog.findChild<QCheckBox*>("toolbar")->setChecked(false);optionsDialog.findChild<QComboBox*>("gaugeType")->setCurrentIndex(2);optionsDialog.findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();CHECK(!tunuino::enabledOption("toolbar",true)&&tunuino::option("gaugeType",1)==2);QSettings().setValue("general/toolbar",true);QSettings().setValue("general/gaugeType",0);
     if(!qEnvironmentVariable("TUNUINO_OPTIONS_PREVIEW").isEmpty()){tunuino::GeneralOptionsDialog optionsPreview;optionsPreview.resize(590,1040);optionsPreview.show();app.processEvents();CHECK(optionsPreview.grab().save(qEnvironmentVariable("TUNUINO_OPTIONS_PREVIEW")+"-options.png"));optionsPreview.hide();tunuino::SensitivityCurve curvePreview;CHECK(curvePreview.restore(sensitivity->state(),true,error));curvePreview.resize(800,410);curvePreview.show();app.processEvents();CHECK(curvePreview.grab().save(qEnvironmentVariable("TUNUINO_OPTIONS_PREVIEW")+"-sensitivity.png"));}

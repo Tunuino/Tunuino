@@ -3,6 +3,7 @@
 #include "ui/GeneralOptions.h"
 #include "calibration/SensitivityCurve.h"
 #include <QToolBar>
+#include "ui/ShortcutIcons.h"
 #include "ui/CalibrationAppearance.h"
 #include "project/MapProject.h"
 #include "NativeDfuFlash.h"
@@ -2832,7 +2833,42 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         QMessageBox::information(this, tr("Firmware / DFU"),
             tr("Enter USB DFU bootloader mode, select a verified firmware image and detect the device. Flash and verify programs the selected image and verifies it by reading it back."));
     });
-    auto *mainToolbar=addToolBar(tr("Main toolbar"));mainToolbar->setObjectName("MainToolbar");mainToolbar->addAction(openProject);mainToolbar->addAction(saveProject);mainToolbar->addAction(writeActiveMap);mainToolbar->addSeparator();mainToolbar->addAction(findChild<QAction*>("desktopRestore"));mainToolbar->addAction(findChild<QAction*>("desktopStore"));mainToolbar->addSeparator();for(auto *action:toolsMenu->actions())if(QStringList({"Scope","Graph Log","Tune Display","General options"}).contains(action->text()))mainToolbar->addAction(action);
+    auto *mainToolbar=addToolBar(tr("Main toolbar"));
+    mainToolbar->setObjectName("MainToolbar");
+    mainToolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    mainToolbar->setIconSize(QSize(24,24));
+    mainToolbar->setMovable(false);
+    mainToolbar->setStyleSheet("QToolBar{background:#666764;border:0;spacing:2px;padding:2px;}QToolButton{background:transparent;border:1px solid transparent;padding:2px;}QToolButton:hover{background:#0078d7;border-color:#91c7e8;}QToolButton:pressed{background:#005a9e;}QToolBar::separator{background:#b0b3a8;width:1px;margin:2px 4px;}");
+    const auto shortcut=[=](QAction *action,tunuino::ShortcutGlyph glyph){
+        if(!action)return;
+        action->setIcon(tunuino::shortcutIcon(glyph));
+        mainToolbar->addAction(action);
+        if(auto *button=mainToolbar->widgetForAction(action))button->setAccessibleName(action->text());
+    };
+    const auto toolShortcut=[=](const QString &name,tunuino::ShortcutGlyph glyph){
+        for(auto *action:toolsMenu->actions())if(action->text()==name){shortcut(action,glyph);return;}
+    };
+    using Glyph=tunuino::ShortcutGlyph;
+    shortcut(writeActiveMap,Glyph::Write);
+    shortcut(openProject,Glyph::Open);
+    shortcut(saveProject,Glyph::Save);
+    mainToolbar->addSeparator();
+    shortcut(findChild<QAction*>("desktopRestore"),Glyph::RestoreDesktop);
+    shortcut(findChild<QAction*>("desktopStore"),Glyph::StoreDesktop);
+    mainToolbar->addSeparator();
+    toolShortcut(tr("Test outputs"),Glyph::Test);
+    toolShortcut(tr("Show assigned outputs"),Glyph::Outputs);
+    toolShortcut(tr("Show assigned inputs"),Glyph::Inputs);
+    toolShortcut(tr("Customize keys"),Glyph::Keyboard);
+    toolShortcut(tr("Available strategies"),Glyph::Strategies);
+    toolShortcut(tr("Logbook"),Glyph::Logbook);
+    toolShortcut(tr("Autotune"),Glyph::Autotune);
+    mainToolbar->addSeparator();
+    toolShortcut(tr("General options"),Glyph::Options);
+    mainToolbar->addSeparator();
+    toolShortcut(tr("Scope"),Glyph::Scope);
+    toolShortcut(tr("Graph Log"),Glyph::Graph);
+    toolShortcut(tr("Tune Display"),Glyph::Tune);
     const auto applyOptions=[=]{mainToolbar->setVisible(tunuino::enabledOption("toolbar",true));resizeDocks({navigationDock},{tunuino::option("panelSize",297)},Qt::Horizontal);for(auto *grid:{maps,ignitionMap,afrMap}){grid->itemChanged(grid->item(0,0));QResizeEvent resize(grid->size(),grid->size());QApplication::sendEvent(grid,&resize);grid->viewport()->update();}fuelSurface->update();ignitionSurface->update();afrSurface->update();tuneDisplay->update();for(auto *widget:findChildren<QWidget*>())widget->update();};
     tools->optionsChanged=applyOptions;applyOptions();desktopController->identitySupplier=[=]{auto state=tools->snapshot?tools->snapshot():tunuino::ToolSnapshot{};return state.valid()?state.identity.mid(20,12):QByteArray{};};
     tunuino::AutoConnection::Hooks autoConnectionHooks;
