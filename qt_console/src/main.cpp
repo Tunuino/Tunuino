@@ -12,9 +12,12 @@ int main(int argc, char *argv[]) {
     app.setStyleSheet(R"QSS(
         /* Graphite motorsport workspace: neutral panels and blue selection. */
         QMainWindow, QWidget { background: #242629; color: #e1e1e1; font-family: "Segoe UI"; font-size: 9pt; }
-        QMenuBar { background: #191b1d; color: #e4e4e4; padding: 3px; border-bottom: 1px solid #424448; }
+        QMenuBar { background: #666764; color: #efefea; font-size: 10pt; padding: 1px; border-bottom: 1px solid #a0a19a; }
+        QMenuBar::item { padding: 4px 12px; }
         QMenuBar::item:selected, QMenu::item:selected { background: #0078d7; color: #ffffff; }
-        QMenu { background: #292b2e; border: 1px solid #515358; padding: 4px; }
+        QMenu { background: #414343; color: #efefea; font-size: 10pt; border: 1px solid #b1b5ad; padding: 3px; }
+        QMenu::item { padding: 5px 24px 5px 32px; }
+        QMenu::separator { height: 1px; background: #92968f; margin: 4px 5px 4px 31px; }
         QTabWidget::pane { border: 1px solid #45474a; background: #292b2e; }
         QTabBar::tab { background: #34363a; border: 1px solid #4a4c50; border-bottom: 0; padding: 8px 15px; margin-right: 1px; color: #d2d2d2; }
         QTabBar::tab:selected { background: #4a4c50; color: #ffffff; border-top: 2px solid #168bd2; }

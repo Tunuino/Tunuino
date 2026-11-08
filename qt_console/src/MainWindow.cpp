@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "workspace/DesktopController.h"
 #include "ui/CalibrationAppearance.h"
 #include "project/MapProject.h"
 #include "NativeDfuFlash.h"
@@ -415,7 +416,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             page->setParent(nullptr);
             tabs->insertTab(index, new QWidget(tabs), title);
             auto *window = workspace->addSubWindow(page);tunuino::CalibrationAppearance::frame(window);
-            window->setWindowTitle(title);
+            window->setWindowTitle(title);window->setProperty("desktopWindowId",QString("settings:%1").arg(index));
             window->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
                                    Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint |
                                    Qt::WindowCloseButtonHint);
@@ -780,14 +781,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                         cell->setText(values.at(row * 16 + col));
             history->restoring = false;
         };
-        const auto flush = [history, snapshot]() {
+        const auto flush = [history, snapshot, table]() {
             history->pending = false;
             const QStringList next = snapshot();
             if (next == history->current) return;
             history->undo.append(history->current);
             if (history->undo.size() > 50) history->undo.removeFirst();
             history->redo.clear();
-            history->current = next;
+            history->current = next;table->setProperty("undoCount",history->undo.size());table->setProperty("redoCount",history->redo.size());
         };
         connect(table, &QTableWidget::itemChanged, this, [this, history, flush](QTableWidgetItem *) {
             if (history->restoring || history->pending) return;
@@ -798,8 +799,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         });
         auto *interpolate = new QAction(tr("Interpolate"), table);
         auto *smooth = new QAction(tr("Smooth"), table);
-        auto *undo = new QAction(tr("Undo"), table);
-        auto *redo = new QAction(tr("Redo"), table);
+        auto *undo = new QAction(tr("Undo"), table);undo->setObjectName("tableUndo");
+        auto *redo = new QAction(tr("Redo"), table);redo->setObjectName("tableRedo");
         // QAction objects have no visual widget: editing is available only through the context menu.
         Q_UNUSED(bar);
         connect(interpolate, &QAction::triggered, this, [table, afr, editMapRegion, flush]() {
@@ -812,22 +813,24 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             editMapRegion(table, 4, afr);
             flush();
         });
-        connect(undo, &QAction::triggered, this, [history, flush, snapshot, restore]() {
+        connect(undo, &QAction::triggered, this, [history, flush, snapshot, restore, table]() {
             flush();
             if (history->undo.isEmpty()) return;
             history->redo.append(history->current);
             const QStringList previous = history->undo.takeLast();
             restore(previous);
-            history->current = snapshot();
+            history->current = snapshot();table->setProperty("undoCount",history->undo.size());table->setProperty("redoCount",history->redo.size());
         });
-        connect(redo, &QAction::triggered, this, [history, flush, snapshot, restore]() {
+        connect(redo, &QAction::triggered, this, [history, flush, snapshot, restore, table]() {
             flush();
             if (history->redo.isEmpty()) return;
             history->undo.append(history->current);
             const QStringList next = history->redo.takeLast();
             restore(next);
-            history->current = snapshot();
+            history->current = snapshot();table->setProperty("undoCount",history->undo.size());table->setProperty("redoCount",history->redo.size());
         });
+        auto *historyAction=new QAction(tr("Show undo list.."),table);historyAction->setObjectName("tableHistory");
+        connect(historyAction,&QAction::triggered,this,[this,history,flush]{flush();auto *dialog=new QDialog(this);dialog->setAttribute(Qt::WA_DeleteOnClose);dialog->setObjectName("undoHistoryDialog");dialog->setWindowTitle(tr("Undo list"));auto *layout=new QVBoxLayout(dialog);auto *list=new QListWidget(dialog);list->addItem(tr("Current state"));for(int i=history->undo.size()-1;i>=0;--i){const auto &newer=i+1<history->undo.size()?history->undo[i+1]:history->current;int changed=0;for(int cell=0;cell<newer.size();++cell)if(newer[cell]!=history->undo[i][cell])++changed;list->addItem(tr("Undo %1 — %2 changed cells").arg(history->undo.size()-i).arg(changed));}if(!history->redo.isEmpty())list->addItem(tr("%1 redo operations available").arg(history->redo.size()));layout->addWidget(list);dialog->resize(460,320);dialog->show();});
         // Context commands documented in EMU Black V3 Software Guide.
         // The existing interpolation and smoothing handlers retain their undo history.
         table->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -2487,10 +2490,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fileMenu->addSeparator();
     auto *exitAction = fileMenu->addAction(tr("Exit"), this, &QWidget::close);
     exitAction->setShortcut(QKeySequence(QStringLiteral("Alt+X")));
-    auto *baseMapsMenu = menuBar()->addMenu(tr("Base Maps"));
-    auto *openBaseMaps = baseMapsMenu->addAction(tr("Open Base Maps"));
-    connect(openBaseMaps, &QAction::triggered, this, [openSettingsPage]() { openSettingsPage(3); });
-    auto *viewMenu = menuBar()->addMenu(tr("View"));
+    auto *editMenu=menuBar()->addMenu(tr("Edit"));editMenu->setObjectName("EditMenu");
+    auto *editUndo=editMenu->addAction(tr("Undo"));editUndo->setObjectName("editUndo");editUndo->setIcon(QIcon::fromTheme("edit-undo",style()->standardIcon(QStyle::SP_ArrowBack)));editUndo->setShortcut(QKeySequence("Ctrl+Z"));
+    auto *editRedo=editMenu->addAction(tr("Redo"));editRedo->setObjectName("editRedo");editRedo->setIcon(QIcon::fromTheme("edit-redo",style()->standardIcon(QStyle::SP_ArrowForward)));editRedo->setShortcut(QKeySequence("Ctrl+Y"));
+    auto *editHistory=editMenu->addAction(tr("Show undo list.."));editHistory->setObjectName("editHistory");editMenu->addSeparator();
+    const auto tableCommand=[=](const QString &name){auto *window=workspace->activeSubWindow();return window?window->widget()->findChild<QAction*>(name):nullptr;};
+    connect(editUndo,&QAction::triggered,this,[=]{if(auto *action=tableCommand("tableUndo"))action->trigger();});
+    connect(editRedo,&QAction::triggered,this,[=]{if(auto *action=tableCommand("tableRedo"))action->trigger();});
+    connect(editHistory,&QAction::triggered,this,[=]{if(auto *action=tableCommand("tableHistory"))action->trigger();});
+    const auto updateEditMenu=[=]{auto *undo=tableCommand("tableUndo");auto *redo=tableCommand("tableRedo");auto *history=tableCommand("tableHistory");editUndo->setEnabled(undo&&undo->parent()->property("undoCount").toInt()>0);editRedo->setEnabled(redo&&redo->parent()->property("redoCount").toInt()>0);editHistory->setEnabled(history);};
+    connect(editMenu,&QMenu::aboutToShow,this,updateEditMenu);connect(workspace,&QMdiArea::subWindowActivated,this,[=](QMdiSubWindow*){updateEditMenu();});
+    auto *editTimer=new QTimer(this);editTimer->setInterval(150);connect(editTimer,&QTimer::timeout,this,updateEditMenu);editTimer->start();
+    auto *desktopsMenu=menuBar()->addMenu(tr("Desktops"));desktopsMenu->setObjectName("DesktopsMenu");
+    auto *windowMenu=new QMenu(tr("Window"),this);windowMenu->setObjectName("WindowMenu");
+    auto *viewMenu = new QMenu(tr("Monitors and panels"),this);
     auto *inputMonitorAction=viewMenu->addAction(tr("Analog input monitor"));connect(inputMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.monitor");});
     auto *primaryMonitorAction=viewMenu->addAction(tr("Primary trigger monitor"));connect(primaryMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.crank");});
     auto *camMonitorAction=viewMenu->addAction(tr("CAM 1 monitor"));connect(camMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.cam1.monitor");});
@@ -2507,6 +2520,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     graphLogAction->setShortcut(QKeySequence(QStringLiteral("F6")));
     connect(graphLogAction, &QAction::triggered, this, [openSettingsPage]() { openSettingsPage(4); });
     tools->populate(toolsMenu,graphLogAction,tuneDisplayAction);
+    tools->monitorMenu=viewMenu;menuBar()->addMenu(windowMenu);
     tools->snapshot=[=]{
         tunuino::ToolSnapshot result;
         if(!*ecuOnline||!*ecuClean||!*identityVerified||!session->isOpen()||*readBusy||*validationPending||writer->busy()||*writePending)return result;
@@ -2692,7 +2706,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(ignitionSave,&QPushButton::clicked,this,[=] { queueMapWrite(3); });
     connect(workspace,&QMdiArea::subWindowActivated,this,[=](QMdiSubWindow*) { updateWriteAvailability(); });
     auto *helpMenu = menuBar()->addMenu(tr("Help"));
-    auto *checkUpdates = helpMenu->addAction(tr("Check for updates..."));
+    auto *checkUpdates = new QAction(tr("Check for updates..."),this);tools->checkForUpdates=[checkUpdates]{checkUpdates->trigger();};
     connect(checkUpdates, &QAction::triggered, this, [this, checkUpdates]() {
         const QString channel = QSettings(QStringLiteral("Tunuino"), QStringLiteral("TunuinoConsole"))
             .value(QStringLiteral("updates/channel"), QStringLiteral("beta")).toString() == QLatin1String("stable")
@@ -2781,7 +2795,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             });
         });
     });
-    auto *aboutAction = helpMenu->addAction(tr("About Tunuino Console"));
+    auto *desktopController=new tunuino::DesktopController(this,workspace,navigationDock,navigationTree,editMenu,desktopsMenu,windowMenu,helpMenu);
+    desktopController->ensureWindow=[=](const QString &id)->QMdiSubWindow*{if(!id.startsWith("settings:"))return nullptr;bool ok=false;const int index=id.mid(9).toInt(&ok);if(!ok||(index!=4&&index!=5))return nullptr;openSettingsPage(index);return (*settingsWindows)[index];};
+    desktopController->contextHelp=[=]{if(auto *window=workspace->activeSubWindow()){if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))return parameters->block().help;const auto text=window->widget()->toolTip();if(!text.isEmpty())return text;}if(auto *item=navigationTree->currentItem())if(!item->toolTip(0).isEmpty())return item->toolTip(0);return tr("Select a parameter window. F1 opens general help and the supported signal pinout.");};
+    QTimer::singleShot(0,desktopController,[desktopController]{desktopController->initialize();});
+    auto *aboutAction = helpMenu->addAction(tr("About"));
     connect(aboutAction, &QAction::triggered, this, [this]() {
         QMessageBox::about(this, tr("About Tunuino Console"),
             tr("Tunuino Console — Qt 6\\nMap editing, ECU monitoring and verified map/sensor calibration writes."));
@@ -2800,28 +2818,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         else if(page==triggerWizard)triggerWizard->save();
     });
 
-    auto *settingsMenu = menuBar()->addMenu(tr("Settings"));
-    auto *updatesMenu = settingsMenu->addMenu(tr("Update channel"));
-    auto *channelActions = new QActionGroup(this);
-    channelActions->setExclusive(true);
-    auto *betaChannel = updatesMenu->addAction(tr("Beta — test builds"));
-    auto *stableChannel = updatesMenu->addAction(tr("Stable — validated releases"));
-    for (auto *action : {betaChannel, stableChannel}) {
-        action->setCheckable(true);
-        channelActions->addAction(action);
-    }
-    QSettings updateSettings(QStringLiteral("Tunuino"), QStringLiteral("TunuinoConsole"));
-    const QString initialChannel = updateSettings.value(QStringLiteral("updates/channel"),
-        QStringLiteral("beta")).toString();
-    (initialChannel == QLatin1String("stable") ? stableChannel : betaChannel)->setChecked(true);
-    connect(betaChannel, &QAction::triggered, this, []() {
-        QSettings(QStringLiteral("Tunuino"), QStringLiteral("TunuinoConsole"))
-            .setValue(QStringLiteral("updates/channel"), QStringLiteral("beta"));
-    });
-    connect(stableChannel, &QAction::triggered, this, []() {
-        QSettings(QStringLiteral("Tunuino"), QStringLiteral("TunuinoConsole"))
-            .setValue(QStringLiteral("updates/channel"), QStringLiteral("stable"));
-    });
     auto *openFirmware = ecuMenu->addAction(tr("Firmware / USB DFU"));
     connect(openFirmware, &QAction::triggered, this, [=]() {
         if (writer->busy() || *writePending) return;
@@ -3121,5 +3117,6 @@ void MainWindow::closeEvent(QCloseEvent *event) {
         statusBar()->showMessage(tr("Finish or stop the active ECU tool/write before closing the Console."));
         event->ignore();return;
     }
+    if(auto *controller=dynamic_cast<tunuino::DesktopController*>(findChild<QObject*>("desktopController")))controller->store();
     QMainWindow::closeEvent(event);
 }

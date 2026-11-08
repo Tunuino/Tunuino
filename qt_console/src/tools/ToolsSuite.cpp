@@ -15,6 +15,7 @@
 #include <QKeySequenceEdit>
 #include <QSpinBox>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QTreeWidget>
 #include <QSettings>
 #include <QMessageBox>
@@ -111,7 +112,10 @@ void ToolsSuite::strategies(){
 }
 void ToolsSuite::generalOptions(){
     QDialog dialog(window_);dialog.setWindowTitle(tr("General options"));auto *layout=new QFormLayout(&dialog);auto *dark=new QCheckBox(tr("Dark mode"),&dialog);dark->setChecked(QSettings().value("tools/darkMode",true).toBool());layout->addRow(dark);auto *size=new QSpinBox(&dialog);size->setRange(8,18);size->setValue(QApplication::font().pointSize());layout->addRow(tr("Interface font size"),size);
+    auto *channel=new QComboBox(&dialog);channel->addItems({tr("Beta — test builds"),tr("Stable — validated releases")});channel->setCurrentIndex(QSettings("Tunuino","TunuinoConsole").value("updates/channel","beta").toString()=="stable"?1:0);layout->addRow(tr("Update channel"),channel);
+    auto *check=new QPushButton(tr("Check for updates..."),&dialog);layout->addRow(check);connect(check,&QPushButton::clicked,&dialog,[this,&dialog]{dialog.accept();if(checkForUpdates)QTimer::singleShot(0,this,[this]{checkForUpdates();});});
+    if(monitorMenu){auto *panels=new QPushButton(tr("Monitors and panels..."),&dialog);layout->addRow(panels);connect(panels,&QPushButton::clicked,&dialog,[this,panels,&dialog]{if(monitorMenu->exec(panels->mapToGlobal(QPoint(0,panels->height()))))dialog.accept();});}
     auto *buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,&dialog);layout->addRow(buttons);connect(buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
-    if(dialog.exec()==QDialog::Accepted){auto font=QApplication::font();font.setPointSize(size->value());QApplication::setFont(font);QSettings().setValue("tools/fontSize",size->value());QSettings().setValue("tools/darkMode",dark->isChecked());qApp->setStyleSheet(dark->isChecked()?darkStyle_:lightStyle());}
+    if(dialog.exec()==QDialog::Accepted){QSettings("Tunuino","TunuinoConsole").setValue("updates/channel",channel->currentIndex()?"stable":"beta");auto font=QApplication::font();font.setPointSize(size->value());QApplication::setFont(font);QSettings().setValue("tools/fontSize",size->value());QSettings().setValue("tools/darkMode",dark->isChecked());qApp->setStyleSheet(dark->isChecked()?darkStyle_:lightStyle());}
 }
 }

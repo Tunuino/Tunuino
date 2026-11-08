@@ -13,6 +13,8 @@ public:
     std::function<void()> openAutotune,openScope,openOutputTest;
     std::function<void(int)> openServiceData;
     void refreshAssignments();
+    std::function<void()> checkForUpdates;
+    QMenu *monitorMenu=nullptr;
 private:
     void assignments(bool outputs);
     void userNames(bool outputs);
