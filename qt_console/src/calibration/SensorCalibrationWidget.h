@@ -24,6 +24,7 @@ public:
     void updateRaw(const QByteArray &runtime);
     void saved(){edited_=false;}
     void save();
+    bool writeEnabled()const;
     std::function<void(SensorKind,const QByteArray&)> writeRequested;
 private:
     void file(bool writing);

@@ -33,6 +33,7 @@ bool MapWriteTransaction::start(int page,const QByteArray &desired,const QByteAr
 bool MapWriteTransaction::startSensor(SensorKind kind,const QByteArray &desired,const QByteArray &base,
     const QByteArray &identity,quint32 generation) {
     if(busy() || !SensorCalibrationCodec::validKind(kind) || desired.size()!=256 || base.size()!=256)return false;
+    if(SensorCalibrationCodec::pressure(kind)&&!SensorCalibrationCodec::pressureSupported(identity))return false;
     sensor_=int(kind);return begin(SensorCalibrationCodec::page(kind),desired,base,identity,generation);
 }
 bool MapWriteTransaction::startParameters(int page,const QByteArray &desired,const QByteArray &base,
@@ -43,6 +44,7 @@ bool MapWriteTransaction::startParameters(int page,const QByteArray &desired,con
     if(page==1&&desired[102]!=base[102])return false;
     if(page==4&&((desired[240]!=base[240])||desired.mid(242)!=base.mid(242)||((quint8(desired[70])^quint8(base[70]))&8))&&(identity.size()!=32||!(quint8(identity[19])&64)))return false;
     if(page==1&&desired.mid(27,5)!=base.mid(27,5)&&(identity.size()!=32||!(quint8(identity[19])&128)))return false;
+    if(page==1&&desired.mid(38,26)!=base.mid(38,26)&&!SensorCalibrationCodec::pressureSupported(identity))return false;
     sensor_=-2;return begin(page,desired,base,identity,generation);
 }
 bool MapWriteTransaction::begin(int page,const QByteArray &desired,const QByteArray &baseMap,

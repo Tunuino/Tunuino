@@ -16,7 +16,7 @@ static bool output(void *user,const uint8_t *q,size_t n,uint8_t *out,size_t cap,
 }
 int main(int argc,char **argv){
     (void)argv;
-    tunuino_identity id={TUNUINO_PROTEUS,TUNUINO_STM32_F4,7,0,2,0,207,{42}};
+    tunuino_identity id={TUNUINO_PROTEUS,TUNUINO_STM32_F4,7,0,2,0,463,{42}};
     tunuino_device_init(&device,save,clock_ms,NULL);device.output_command=output;
     if(argc>1){uint8_t config[TUNUINO_IO_SETTINGS_SIZE];memcpy(config,device.active,sizeof(config));uint8_t *p=config+128;
         p[0]=1;p[1]=4;const unsigned at[]={2,4,6,8,12,14};const unsigned v[]={5000,2000,1000,15000,9000,8500};

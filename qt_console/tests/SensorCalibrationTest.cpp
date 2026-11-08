@@ -20,6 +20,7 @@ static QByteArray read(int page,int at,int count){QByteArray q(7,0);q[0]='r';Cod
 static tunuino::SensorCalibration calibration(Kind kind){
     tunuino::SensorCalibration c;c.channel=kind==Kind::Lambda||kind==Kind::Iat?2:kind==Kind::Tps?3:kind==Kind::Battery?4:1;
     c.raw={0,2000,3977};c.values={120,50,-20};
+    if(Codec::pressure(kind)){c.channel=kind==Kind::FuelPressure?7:8;c.raw={300,3500,0};c.values={0,1000,0};return c;}
     if(kind==Kind::Map){c.raw={0,3977,0};c.values={0,400,0};}
     if(kind==Kind::Lambda){c.raw={0,3977,0};c.values={.68,1.36,0};}
     if(kind==Kind::Battery){c.raw={300,3500,0};c.values={5,20,0};}
@@ -30,8 +31,8 @@ static void nativeFirmware(bool batteryFirst){
     QProcess process;process.start(executable,QStringList{});CHECK(process.waitForStarted(3000));
     const auto exchange=[&](const QByteArray &q){const auto line=q.toHex()+"\n";CHECK(process.write(line)==line.size());CHECK(process.waitForBytesWritten(3000));while(!process.canReadLine())CHECK(process.waitForReadyRead(3000));return QByteArray::fromHex(process.readLine().trimmed());};
     const auto identity=exchange("TUNUINO?");quint32 generation=u32(exchange("TUNUINO:V"),8);int totalBurns=0;
-    const std::array<Kind,6> order=batteryFirst?std::array<Kind,6>{Kind::Battery,Kind::Iat,Kind::Map,Kind::Clt,Kind::Lambda,Kind::Tps}:
-        std::array<Kind,6>{Kind::Iat,Kind::Battery,Kind::Map,Kind::Clt,Kind::Lambda,Kind::Tps};
+    const std::array<Kind,8> order=batteryFirst?std::array<Kind,8>{Kind::Battery,Kind::Iat,Kind::Map,Kind::Clt,Kind::Lambda,Kind::Tps,Kind::FuelPressure,Kind::OilPressure}:
+        std::array<Kind,8>{Kind::Iat,Kind::Battery,Kind::Map,Kind::Clt,Kind::Lambda,Kind::Tps,Kind::FuelPressure,Kind::OilPressure};
     for(const Kind kind:order){
         Writer::Pages base;
         for(int p=1;p<=4;++p)for(int at=0;at<(p==1||p==4?256:576);at+=64)base[size_t(p-1)]+=exchange(read(p,at,64)).mid(1);
@@ -46,13 +47,13 @@ static void nativeFirmware(bool batteryFirst){
         CHECK(success&&copies==1&&burns==1&&writer.generation()==generation+1);generation=writer.generation();totalBurns+=burns;
         for(int p=1;p<=4;++p){QByteArray actual;for(int at=0;at<(p==1||p==4?256:576);at+=64)actual+=exchange(read(p,at,64)).mid(1);CHECK(actual==(p==page?desired:base[size_t(p-1)]));}
     }
-    CHECK(totalBurns==6);process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
-    std::cout<<"Six sensor writes against real firmware, all pages preserved: passed (host simulation)\n";
+    CHECK(totalBurns==8);process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
+    std::cout<<"Eight sensor writes against real firmware, all pages preserved: passed (host simulation)\n";
 }
 int main(int argc,char **argv){
-    QApplication app(argc,argv);QByteArray header(256,char(0x55)),aux(256,0);Codec::put(header,0,2);Codec::put(header,100,3300);header[6]=1;header[7]=2;header[8]=1;
+    QApplication app(argc,argv);QByteArray header(256,char(0x55)),aux(256,0);Codec::put(header,0,2);Codec::put(header,100,3300);header.replace(38,26,QByteArray(26,0));header[6]=1;header[7]=2;header[8]=1;
     QString error;
-    for(const Kind kind:{Kind::Map,Kind::Clt,Kind::Lambda,Kind::Tps,Kind::Iat,Kind::Battery}){
+    for(const Kind kind:{Kind::Map,Kind::Clt,Kind::Lambda,Kind::Tps,Kind::Iat,Kind::Battery,Kind::FuelPressure,Kind::OilPressure}){
         const auto c=calibration(kind);auto desired=Codec::apply(kind,c,header,aux,error);CHECK(!desired.isEmpty());
         CHECK(Codec::permitted(kind,Codec::auxiliary(kind)?aux:header,desired,header,aux,error));
         const auto roundTrip=Codec::decode(kind,Codec::auxiliary(kind)?header:desired,Codec::auxiliary(kind)?desired:aux);
@@ -127,5 +128,13 @@ int main(int argc,char **argv){
     CHECK(!tunuino::SensorCurveWizard::ntc(2500,3950,2500,5,{25,25,100},curve,error));CHECK(!tunuino::SensorCurveWizard::linear(4.5,0,.5,300,curve,error));CHECK(tunuino::SensorCurveWizard::linear(.5,0,4.5,300,curve,error));CHECK(curve["volts"].toArray()==QJsonArray({.5,4.5}));
     tunuino::SensorInputsWidget digital(tunuino::SensorInputsWidget::Cam1);digital.load(header,aux,identity,43);digital.setAvailable(true);put32(live,57,43);live[40]=9;digital.updateRaw(live);auto *digitalGrid=digital.findChild<QTableWidget*>("sensorInputReadings");CHECK(digitalGrid->item(0,1)->text().contains("4 (+), 12 (-)"));CHECK(digitalGrid->item(3,1)->text()=="Synchronized");digital.setAvailable(false);CHECK(digitalGrid->item(3,1)->text()=="---");
     tunuino::SensorInputsWidget temperatures(tunuino::SensorInputsWidget::Temperature);temperatures.load(header,features,identity,43);temperatures.setAvailable(true);Codec::put(live,87,1500);temperatures.updateRaw(live);auto *thermalGrid=temperatures.findChild<QTableWidget*>("sensorInputReadings");CHECK(thermalGrid->item(0,1)->text().contains("30 (AT2)"));CHECK(thermalGrid->item(0,3)->text()==QString::number(Codec::voltage(1500,header),'f',4)+" V");
+    const auto fuel=calibration(Kind::FuelPressure),oil=calibration(Kind::OilPressure);const auto pressureHeader=Codec::apply(Kind::FuelPressure,fuel,header,features,error);CHECK(Codec::pressureFormat(pressureHeader)&&Codec::permitted(Kind::FuelPressure,header,pressureHeader,header,features,error));CHECK(pressureHeader[38]==1&&pressureHeader[39]==7&&pressureHeader[48]==0);CHECK(pressureHeader.mid(64)==header.mid(64)&&pressureHeader.left(38)==header.left(38));
+    const auto both=Codec::apply(Kind::OilPressure,oil,pressureHeader,features,error);CHECK(Codec::permitted(Kind::OilPressure,pressureHeader,both,pressureHeader,features,error));CHECK(both.mid(39,9)==pressureHeader.mid(39,9));
+    auto conflicting=fuel;conflicting.channel=1;auto conflictPage=Codec::apply(Kind::FuelPressure,conflicting,both,features,error);CHECK(!Codec::permitted(Kind::FuelPressure,both,conflictPage,both,features,error));conflicting=oil;conflicting.channel=7;conflictPage=Codec::apply(Kind::OilPressure,conflicting,both,features,error);CHECK(!Codec::permitted(Kind::OilPressure,both,conflictPage,both,features,error));
+    auto mapConflict=calibration(Kind::Map);mapConflict.channel=7;conflictPage=Codec::apply(Kind::Map,mapConflict,both,features,error);CHECK(!Codec::permitted(Kind::Map,both,conflictPage,both,features,error));
+    live=QByteArray(101,0);live.replace(1,31,identity.mid(1));live[40]=1;put32(live,57,42);Codec::put(live,73,1900);double pressure=0;CHECK(Codec::pressureReading(Kind::FuelPressure,both,live,pressure)&&pressure==500);Codec::put(live,73,299);CHECK(!Codec::pressureReading(Kind::FuelPressure,both,live,pressure));
+    tunuino::SensorCalibrationWidget pressurePanel(Kind::FuelPressure);pressurePanel.load(header,features,identity,42);pressurePanel.setAvailable(true);CHECK(!pressurePanel.findChild<QPushButton*>("sensorSave")->isEnabled());auto pressureId=identity;pressureId[18]=1;pressurePanel.load(header,features,pressureId,42);pressurePanel.setAvailable(true);CHECK(pressurePanel.findChild<QPushButton*>("sensorSave")->isEnabled());
+    tunuino::SensorInputsWidget pressureMonitor(tunuino::SensorInputsWidget::Pressure);pressureMonitor.load(both,features,pressureId,42);pressureMonitor.setAvailable(true);live.replace(1,31,pressureId.mid(1));Codec::put(live,73,1900);pressureMonitor.updateRaw(live);auto *pressures=pressureMonitor.findChild<QTableWidget*>("sensorInputReadings");CHECK(pressures->item(0,3)->text()=="500.000 kPa");
+    Writer guarded;int sent=0;guarded.send=[&](const QByteArray&,int){++sent;return true;};guarded.savePrevious=[](const QByteArray&,quint32,const Writer::Pages&){return true;};guarded.completed=[](bool,bool,const QString&){};CHECK(!guarded.startSensor(Kind::FuelPressure,pressureHeader,header,identity,42)&&sent==0);
     nativeFirmware(false);nativeFirmware(true);std::cout<<"Sensor encoding, input conflicts, reserved settings, reverse TPS, real ADC capture and stale samples: passed\n";
 }

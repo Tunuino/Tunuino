@@ -4,7 +4,7 @@
 #include <array>
 #include <cmath>
 namespace tunuino {
-enum class SensorKind { Map,Clt,Lambda,Tps,Iat,Battery };
+enum class SensorKind { Map,Clt,Lambda,Tps,Iat,Battery,FuelPressure,OilPressure };
 struct SensorCalibration {
     int channel=0;
     std::array<int,3> raw{};
@@ -12,16 +12,26 @@ struct SensorCalibration {
 };
 class SensorCalibrationCodec {
 public:
+    static bool pressure(SensorKind kind){return kind==SensorKind::FuelPressure||kind==SensorKind::OilPressure;}
+    static bool pressureSupported(const QByteArray &identity){return identity.size()==32&&(quint8(identity[18])&1);}
+    static double maximum(SensorKind kind){return pressure(kind)?2000:kind==SensorKind::Map?500:temperature(kind)?150:kind==SensorKind::Battery?24:5;}
     static bool auxiliary(SensorKind kind){return kind==SensorKind::Tps||kind==SensorKind::Iat||kind==SensorKind::Battery;}
     static bool temperature(SensorKind kind){return kind==SensorKind::Clt||kind==SensorKind::Iat;}
     static int points(SensorKind kind){return temperature(kind)?3:2;}
-    static bool validKind(SensorKind kind){return int(kind)>=0&&int(kind)<=int(SensorKind::Battery);}
+    static bool validKind(SensorKind kind){return int(kind)>=0&&int(kind)<=int(SensorKind::OilPressure);}
     static int page(SensorKind kind){return auxiliary(kind)?4:1;}
-    static QString name(SensorKind kind){switch(kind){case SensorKind::Map:return "MAP";case SensorKind::Clt:return "CLT";case SensorKind::Lambda:return "Lambda";case SensorKind::Tps:return "TPS";case SensorKind::Iat:return "IAT";case SensorKind::Battery:return "Battery";}return {};}
+    static QString name(SensorKind kind){switch(kind){case SensorKind::Map:return "MAP";case SensorKind::Clt:return "CLT";case SensorKind::Lambda:return "Lambda";case SensorKind::Tps:return "TPS";case SensorKind::Iat:return "IAT";case SensorKind::Battery:return "Battery";case SensorKind::FuelPressure:return "Fuel pressure";case SensorKind::OilPressure:return "Oil pressure";}return {};}
     static int u16(const QByteArray &p,int at){return (int(quint8(p[at]))<<8)|quint8(p[at+1]);}
     static void put(QByteArray &p,int at,int v){p[at]=char(unsigned(v)>>8);p[at+1]=char(v);}
+    static int pressureAt(SensorKind kind){return kind==SensorKind::FuelPressure?39:48;}
+    static QByteArray pressureDefaults(QByteArray h){if(h.size()==256&&h.mid(38,26)==QByteArray(26,0)){h[38]=1;for(int at:{39,48}){put(h,at+3,4095);put(h,at+7,10000);}}return h;}
+    static bool pressureFormat(const QByteArray &h){
+        if(h.size()!=256)return false;if(h.mid(38,26)==QByteArray(26,0))return true;if(h[38]!=1||h.mid(57,7)!=QByteArray(7,0))return false;
+        for(int at:{39,48})if(quint8(h[at])>11||u16(h,at+1)>=u16(h,at+3)||u16(h,at+3)>4095||u16(h,at+5)>=u16(h,at+7)||u16(h,at+7)>20000)return false;return true;
+    }
     static SensorCalibration decode(SensorKind kind,const QByteArray &header,const QByteArray &aux) {
         SensorCalibration c;if(header.size()!=256 || aux.size()!=256)return c;
+        if(pressure(kind)){if(header[38]==0){c.raw={0,4095,0};c.values={0,1000,0};return c;}const int at=pressureAt(kind);c.channel=quint8(header[at]);c.raw={u16(header,at+1),u16(header,at+3),0};c.values={u16(header,at+5)/10.0,u16(header,at+7)/10.0,0};return c;}
         if(kind==SensorKind::Tps){if(aux[0]==0)return c;c.channel=quint8(aux[5]);c.raw[0]=u16(aux,6);c.raw[1]=u16(aux,8);return c;}
         if(kind==SensorKind::Iat||kind==SensorKind::Battery){
             if(aux[68]!=1)return c;
@@ -41,8 +51,8 @@ public:
         for(int i=0;i<count;++i)if(c.raw[i]<0 || c.raw[i]>4095){error="Calibration voltage exceeds ADC range.";return false;}
         if(kind==SensorKind::Tps){if(c.channel && std::abs(c.raw[1]-c.raw[0])<100){error="TPS closed/open points must differ by at least 100 ADC counts.";return false;}return true;}
         for(int i=1;i<count;++i)if(c.raw[i]<=c.raw[i-1]){error="Calibration voltage points must increase strictly.";return false;}
-        for(int i=0;i<count;++i){const double v=c.values[i];const double scale=kind==SensorKind::Lambda?1000:100;
-            const double low=temperature(kind)?-40:0,high=kind==SensorKind::Map?500:temperature(kind)?150:kind==SensorKind::Battery?24:5;
+        for(int i=0;i<count;++i){const double v=c.values[i];const double scale=pressure(kind)?10:kind==SensorKind::Lambda?1000:100;
+            const double low=temperature(kind)?-40:0,high=maximum(kind);
             if(!std::isfinite(v)||v<low||v>high||std::abs(v*scale-std::round(v*scale))>1e-6){error="Invalid calibration value or precision.";return false;}}
         if(c.channel && temperature(kind) && c.values[0]==c.values[1] && c.values[1]==c.values[2]){error="Temperature calibration must not be flat.";return false;}
         if(c.channel && !temperature(kind) && (c.values[0]>=c.values[1] || (kind==SensorKind::Lambda && c.values[0]<=0))){error="The second calibration value must exceed the first.";return false;}
@@ -74,7 +84,8 @@ public:
     static QByteArray apply(SensorKind kind,const SensorCalibration &c,const QByteArray &header,const QByteArray &aux,QString &error){
         if(header.size()!=256||aux.size()!=256||!validate(kind,c,error))return {};
         QByteArray p=auxiliary(kind)?aux:header;
-        if(kind==SensorKind::Tps){if(p==QByteArray(256,0)){if(!c.channel)return p;p=tpsDefaults();}p[5]=char(c.channel);put(p,6,c.raw[0]);put(p,8,c.raw[1]);}
+        if(pressure(kind)){if(!pressureFormat(header)){error="Unsupported pressure extension format.";return {};}const auto original=decode(kind,header,aux);if(header[38]==0&&!c.channel&&c.raw==original.raw&&c.values==original.values)return header;p=pressureDefaults(header);const int at=pressureAt(kind);p[at]=char(c.channel);put(p,at+1,c.raw[0]);put(p,at+3,c.raw[1]);put(p,at+5,int(std::round(c.values[0]*10)));put(p,at+7,int(std::round(c.values[1]*10)));}
+        else if(kind==SensorKind::Tps){if(p==QByteArray(256,0)){if(!c.channel)return p;p=tpsDefaults();}p[5]=char(c.channel);put(p,6,c.raw[0]);put(p,8,c.raw[1]);}
         else if(kind==SensorKind::Iat||kind==SensorKind::Battery){
             if(p.mid(68)==QByteArray(188,0)){if(!c.channel)return p;p=initialAux(kind,p);}
             p[kind==SensorKind::Iat?72:73]=char(c.channel);
@@ -94,13 +105,16 @@ public:
         QByteArray allowedBase=base;
         if(auxiliary(kind) && a!=QByteArray(256,0) && a[0]!=1){error="Unsupported auxiliary format.";return false;}
         if(auxiliary(kind) && desired!=base)allowedBase=initialAux(kind,base);
+        if(pressure(kind)){if(!pressureFormat(h)){error="Invalid pressure extension.";return false;}if(base.mid(38,26)==QByteArray(26,0)&&desired[38]==1)allowedBase=pressureDefaults(base);}
         for(int i=0;i<256;++i){
-            const bool allowed=kind==SensorKind::Map?(i==6||(i>=10&&i<18)):
+            const int pressureOffset=pressureAt(kind);
+            const bool allowed=pressure(kind)?(i==38||(i>=pressureOffset&&i<pressureOffset+9)):kind==SensorKind::Map?(i==6||(i>=10&&i<18)):
                 kind==SensorKind::Lambda?(i==7||(i>=18&&i<26)):
                 kind==SensorKind::Clt?(i==8||(i>=32&&i<38)||(i>=64&&i<70)):kind==SensorKind::Tps?(i>=5&&i<10):
                 kind==SensorKind::Iat?(i==72||(i>=76&&i<88)):(i==73||(i>=88&&i<96));
             if(!allowed && desired[i]!=allowedBase[i]){error="A sensor edit attempted to change unrelated ECU settings.";return false;}
         }
+        if(!temperature(kind)&&c.channel&&h[38]==1){for(auto other:{SensorKind::FuelPressure,SensorKind::OilPressure})if(kind!=other&&quint8(h[pressureAt(other)])==c.channel){error="Input is reserved by a pressure sensor.";return false;}}
         if(!c.channel){
             if(a[68]==1&&(u16(a,70)&2048)&&(kind==SensorKind::Lambda||kind==SensorKind::Map||kind==SensorKind::Clt||kind==SensorKind::Tps)){error="Lambda guard still requires this sensor. Disable the guard before removing its input.";return false;}
             if(a[68]==1&&((kind==SensorKind::Iat&&(u16(a,70)&1))||(kind==SensorKind::Battery&&(u16(a,70)&(2|512))))){error="An enabled compensation or protection still requires this input.";return false;}
@@ -135,6 +149,11 @@ public:
         const int i=last==2&&sample>=c.raw[1]?1:0;
         const int first=int(std::round(c.values[i]*100)),second=int(std::round(c.values[i+1]*100));
         value=(first+qint64(second-first)*(sample-c.raw[i])/(c.raw[i+1]-c.raw[i]))/100.0;return true;
+    }
+    static bool pressureReading(SensorKind kind,const QByteArray &header,const QByteArray &runtime,double &value){
+        if(!pressure(kind)||!pressureFormat(header)||header[38]!=1||runtime.size()!=101||runtime[0]!=0||!(quint8(runtime[40])&1))return false;
+        const auto c=decode(kind,header,QByteArray(256,0));QString error;if(!c.channel||!validate(kind,c,error))return false;const int raw=u16(runtime,61+2*(c.channel-1));if(raw<c.raw[0]||raw>c.raw[1]||raw>4095)return false;
+        const qint64 low=qRound64(c.values[0]*1000),high=qRound64(c.values[1]*1000);value=(low+(high-low)*(raw-c.raw[0])/(c.raw[1]-c.raw[0]))/1000.0;return true;
     }
     // Proteus v0.7 AV/AT input stages: 5.6k series + 10k to ground;
     // external connector voltage = ADC voltage * 1.56. Reference from page 1.
