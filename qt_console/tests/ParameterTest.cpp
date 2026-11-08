@@ -10,6 +10,8 @@
 #include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QTableWidget>
+#include <QHeaderView>
+#include <QAbstractItemView>
 #include <QTest>
 #include <QFile>
 #include <QToolButton>
@@ -27,6 +29,12 @@ int main(int argc,char **argv){QApplication app(argc,argv);
     for(const auto &b:blocks){CHECK(!keys.contains(b.key));keys.insert(b.key);ParameterWidget widget(b);CHECK(widget.findChild<QTableWidget*>("parameters")->columnCount()==2);CHECK(!widget.findChild<QPushButton*>("parameterSave")->isEnabled());const auto mask=ParameterCatalog::ownedMask(b);CHECK(mask.size()==256);if(b.page==1)CHECK(mask[102]==0);
         for(const auto &f:b.fields){CHECK(f.offset>=0&&f.offset+f.width<=256);QByteArray data(256,0);CHECK(ParameterCatalog::put(data,f,f.initial));if(b.key!="ignition.firing")CHECK(ParameterCatalog::value(data,f)==f.initial);CHECK(!ParameterCatalog::put(data,f,f.maximum+1));}
     }
+    const auto analog=*std::find_if(blocks.begin(),blocks.end(),[](const auto &b){return b.key=="inputs.analog";});ParameterWidget inputs(analog);CHECK(analog.fields.size()==24);auto *grid=inputs.findChild<QTableWidget*>("parameters");CHECK(grid->rowCount()==24&&!grid->horizontalHeader()->isVisible());
+    const QStringList filters{"500Hz (no filter)","50Hz","25Hz","10Hz","5Hz","2Hz","1Hz"};for(int i=0;i<11;++i){auto *filter=inputs.findChild<QComboBox*>(QString("filter%1").arg(i));CHECK(filter&&filter->count()==7);for(int j=0;j<7;++j)CHECK(filter->itemText(j)==filters[j]);CHECK(!inputs.findChild<QComboBox*>(QString("pull%1").arg(i))->isEnabled());}CHECK(inputs.findChild<QCheckBox*>("CLTPullup")->isChecked()&&!inputs.findChild<QCheckBox*>("CLTPullup")->isEnabled());
+    QByteArray inputHeader(256,0),inputAux(256,0),inputId(32,0);inputId[19]=15;inputs.load(inputHeader,inputAux,inputId,1);inputs.setAvailable(true);bool inputWrite=false;inputs.writeRequested=[&](int page,const QByteArray &desired,const QByteArray &mask){inputWrite=true;CHECK(page==1&&desired[70]==1&&desired[71]==6);for(int i=0;i<256;++i)CHECK(i>=70&&i<=81?mask[i]==char(255):mask[i]==0);};inputs.findChild<QComboBox*>("filter0")->setCurrentIndex(6);inputs.save();CHECK(!inputWrite);inputId[18]=2;inputs.load(inputHeader,inputAux,inputId,1);inputs.findChild<QComboBox*>("filter0")->setCurrentIndex(6);inputs.save();CHECK(inputWrite);
+    auto inputState=inputs.editorState();auto inputValues=inputState["values"].toObject();inputValues["CLTPullup"]=0;inputState["values"]=inputValues;QString inputError;CHECK(!inputs.restoreEditor(inputState,true,inputError));auto desiredInput=inputHeader;desiredInput[70]=1;desiredInput[71]=6;QByteArray inputMask(256,0);for(int i=70;i<=81;++i)inputMask[i]=char(255);Writer oldInputWriter;bool sentInput=false;oldInputWriter.send=[&](const QByteArray &,int){sentInput=true;return true;};auto oldInputId=inputId;oldInputId[18]=0;CHECK(!oldInputWriter.startParameters(1,desiredInput,inputHeader,oldInputId,1,inputMask)&&!sentInput);
+    auto externalInput=inputHeader;externalInput[70]=1;externalInput[71]=1;inputs.load(externalInput,inputAux,inputId,2);CHECK(!inputs.findChild<QPushButton*>("parameterSave")->isEnabled());inputWrite=false;inputs.save();CHECK(!inputWrite);inputs.findChild<QAction*>("primaryDiscard")->trigger();CHECK(inputs.findChild<QComboBox*>("filter0")->currentIndex()==1);
+    if(!qEnvironmentVariable("TUNUINO_ANALOG_PREVIEW").isEmpty()){inputs.resize(inputs.sizeHint());inputs.show();app.processEvents();CHECK(inputs.grab().save(qEnvironmentVariable("TUNUINO_ANALOG_PREVIEW")));auto *popup=inputs.findChild<QComboBox*>("filter0");popup->showPopup();app.processEvents();CHECK(popup->view()->grab().save(qEnvironmentVariable("TUNUINO_ANALOG_PREVIEW")+"-popup.png"));popup->hidePopup();inputs.hide();}
     // The guard is editable offline, but older firmware must never receive its extension.
     const auto guard=*std::find_if(blocks.begin(),blocks.end(),[](const auto &b){return b.key=="fuel.guard";});
     ParameterWidget guardWidget(guard);QByteArray guardHeader(256,0),guardIdentity(32,0);guardIdentity[19]=15;
@@ -48,6 +56,7 @@ int main(int argc,char **argv){QApplication app(argc,argv);
     for(const auto &b:blocks){Writer::Pages base;for(int p=1;p<=4;++p)for(int at=0;at<(p==1||p==4?256:576);at+=64)base[p-1]+=exchange(read(p,at,64)).mid(1);
         ParameterWidget widget(b);widget.load(base[0],base[3],identity,generation);widget.setAvailable(true);
         if(b.key=="ignition.firing"){auto *first=widget.findChild<QComboBox*>("order0"),*last=widget.findChild<QComboBox*>("order3");CHECK(first&&last);const auto selected=first->currentIndex();first->setCurrentIndex(last->currentIndex());last->setCurrentIndex(selected);CHECK(widget.findChild<QDoubleSpinBox*>("cylinders")->isEnabled());}
+        else if(b.key=="inputs.analog")widget.findChild<QComboBox*>("filter0")->setCurrentIndex(6);
         else {bool changed=false;for(const auto &f:b.fields){if(f.bit||!f.choices.isEmpty())continue;auto *spin=widget.findChild<QDoubleSpinBox*>(f.key);if(spin&&spin->value()+1/f.scale<=f.maximum){spin->setValue(spin->value()+1/f.scale);changed=true;break;}}
             if(!changed){auto *combo=widget.findChild<QComboBox*>("cylinder0");CHECK(combo);combo->addItem("Chosen spare output",4);combo->setCurrentIndex(2);}}
         if(b.key=="ignition.firing"&&!qEnvironmentVariable("TUNUINO_PARAMETER_PREVIEW").isEmpty()){widget.resize(widget.sizeHint());widget.show();app.processEvents();CHECK(widget.grab().save(qEnvironmentVariable("TUNUINO_PARAMETER_PREVIEW")));widget.findChild<QToolButton*>("engineProfileToggle")->setChecked(true);widget.resize(720,680);app.processEvents();CHECK(widget.grab().save(qEnvironmentVariable("TUNUINO_PARAMETER_PREVIEW")+"-advanced.png"));widget.hide();}
