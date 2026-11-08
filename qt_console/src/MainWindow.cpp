@@ -2196,14 +2196,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     }
     auto inputPanels=QSharedPointer<QVector<tunuino::SensorInputsWidget*>>::create();
     const QStringList inputKeys{"inputs.analog","inputs.crank","inputs.cam1","inputs.temperature","inputs.pressure"};
-    for(int mode=0;mode<5;++mode){auto *panel=new tunuino::SensorInputsWidget(tunuino::SensorInputsWidget::Mode(mode));inputPanels->append(panel);panel->openScope=[=]{showTool(scopeWindow);};auto *window=toolWindow(panel,panel->title());window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)[mode==0?"inputs.monitor":mode==2?"inputs.cam1.monitor":inputKeys[mode]]=window;}
+    for(int mode=0;mode<5;++mode){auto *panel=new tunuino::SensorInputsWidget(tunuino::SensorInputsWidget::Mode(mode));inputPanels->append(panel);panel->openScope=[=]{showTool(scopeWindow);};auto *window=toolWindow(panel,panel->title());window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)[mode==0?"inputs.monitor":mode==2?"inputs.cam1.monitor":mode==4?"inputs.pressure.monitor":inputKeys[mode]]=window;}
     auto *cam2Monitor=new tunuino::VssMonitor(nullptr,tunuino::VssMonitor::Source::Cam2);auto *cam2Window=toolWindow(cam2Monitor,tr("CAM 2 - Live pulses"));(*parameterWindows)["inputs.cam2.monitor"]=cam2Window;cam2Window->resize(cam2Monitor->sizeHint()+QSize(12,30));
     auto *vssMonitor=new tunuino::VssMonitor;auto *vssWindow=toolWindow(vssMonitor,tr("Vehicle speed - Live readings"));(*parameterWindows)["speed.monitor"]=vssWindow;vssWindow->resize(vssMonitor->sizeHint()+QSize(12,30));
     auto sensorWizards=QSharedPointer<QMap<QString,QPointer<tunuino::SensorCurveWizard>>>::create();
     (*sensorWizards)["sensorwizard:IAT"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Iat,false,this);
     (*sensorWizards)["sensorwizard:CLT"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Clt,false,this);
     (*sensorWizards)["sensorwizard:Temperature"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Iat,true,this);
-    (*sensorWizards)["sensorwizard:MAP"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Map,false,this,true);
+    (*sensorWizards)["sensorwizard:MAP"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Map,false,this);
+    (*sensorWizards)["sensorwizard:Pressure"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Map,false,this,true);
     for(const auto &block:tunuino::ParameterCatalog::blocks()){auto *panel=new tunuino::ParameterWidget(block);parameterPanels->append(panel);auto *window=toolWindow(panel,block.title);window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)[block.key]=window;}
     auto *manualTriggerWindow=toolWindow(triggerWizard,tr("Triggers - Manual setup"));
     manualTriggerWindow->resize(triggerWizard->sizeHint()+QSize(12,30));
@@ -2427,6 +2428,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(!tunuino::SensorCalibrationCodec::inputFilterFormat(storedHeader)){error=tr("Invalid analog input filter extension.");return false;}
         if(!tunuino::SensorCalibrationCodec::pressureFormat(storedHeader)){error=tr("Invalid project pressure extension.");return false;}
         for(auto kind:{tunuino::SensorKind::FuelPressure,tunuino::SensorKind::OilPressure}){const auto name=tunuino::SensorCalibrationCodec::name(kind);if(!sensors.contains(name)){const auto c=tunuino::SensorCalibrationCodec::decode(kind,storedHeader,QByteArray(256,0));sensors[name]=QJsonObject{{"input",c.channel},{"volts",QJsonArray{tunuino::SensorCalibrationCodec::voltage(c.raw[0],storedHeader),tunuino::SensorCalibrationCodec::voltage(c.raw[1],storedHeader)}},{"values",QJsonArray{c.values[0],c.values[1]}}};}}
+        if(!parameters.contains("inputs.pressure")){QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="inputs.pressure")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(storedHeader,field);parameters["inputs.pressure"]=QJsonObject{{"values",values}};}
         if(!parameters.contains("inputs.analog")){QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="inputs.analog")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(storedHeader,field);parameters["inputs.analog"]=QJsonObject{{"values",values}};}
         if(!parameters.contains("inputs.primary")){QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="inputs.primary")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(storedHeader,field);parameters["inputs.primary"]=QJsonObject{{"values",values}};}
         if(!parameters.contains("inputs.cam1")){QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="inputs.cam1")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(storedHeader,field);parameters["inputs.cam1"]=QJsonObject{{"values",values}};}
@@ -2492,6 +2494,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *inputMonitorAction=viewMenu->addAction(tr("Analog input monitor"));connect(inputMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.monitor");});
     auto *primaryMonitorAction=viewMenu->addAction(tr("Primary trigger monitor"));connect(primaryMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.crank");});
     auto *camMonitorAction=viewMenu->addAction(tr("CAM 1 monitor"));connect(camMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.cam1.monitor");});
+    auto *pressureMonitorAction=viewMenu->addAction(tr("Pressure monitor"));connect(pressureMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.pressure.monitor");});
     auto *cam2MonitorAction=viewMenu->addAction(tr("CAM 2 monitor"));connect(cam2MonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.cam2.monitor");});
     auto *vssMonitorAction=viewMenu->addAction(tr("Vehicle speed monitor"));connect(vssMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("speed.monitor");});
     viewMenu->addAction(navigationDock->toggleViewAction());
