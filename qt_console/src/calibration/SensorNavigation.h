@@ -10,8 +10,8 @@ inline void populateSensorNavigation(QTreeWidgetItem *root){
     const QString unsupported="Not implemented in the native ECU configuration/runtime protocol. No operational control is available.";
     page(root,"Analog inputs","inputs.analog");
     auto *digital=group(root,"Digital inputs");page(digital,"Primary trigger","inputs.primary");page(digital,"CAM 1","inputs.cam1");
-    missing(digital,"CAM 2",unsupported);page(digital,"VSS","inputs.vss");
-    missing(digital,"CAM 1 sensitivity","The conditioned capture input has no software sensitivity curve.",Curve);missing(digital,"CAM 2 sensitivity",unsupported,Curve);
+    page(digital,"CAM 2","inputs.cam2");page(digital,"VSS","inputs.vss");
+    missing(digital,"CAM 1 sensitivity","The conditioned capture input has no software sensitivity curve.",Curve);missing(digital,"CAM 2 sensitivity","The Hall/optical Schmitt input has no programmable VR sensitivity curve.",Curve);
     auto *oxygen=group(root,"Oxygen Sensor");page(oxygen,"Parameters","sensor:Lambda");
     auto *throttle=group(root,"TPS, PPS");page(throttle,"TPS","sensor:TPS");missing(throttle,"PPS",unsupported);
     missing(throttle,"PPS check voltage vs pedal pos.",unsupported,Curve);missing(throttle,"TPS check voltage vs throttle pos.","Independent throttle plausibility curves are not implemented; TPS calibration remains available.",Curve);

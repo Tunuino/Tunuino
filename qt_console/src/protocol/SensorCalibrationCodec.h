@@ -30,9 +30,9 @@ public:
     static int u16(const QByteArray &p,int at){return (int(quint8(p[at]))<<8)|quint8(p[at+1]);}
     static void put(QByteArray &p,int at,int v){p[at]=char(unsigned(v)>>8);p[at+1]=char(v);}
     static int pressureAt(SensorKind kind){return kind==SensorKind::FuelPressure?39:48;}
-    static QByteArray pressureDefaults(QByteArray h){if(h.size()==256&&h.mid(38,26)==QByteArray(26,0)){h[38]=1;for(int at:{39,48}){put(h,at+3,4095);put(h,at+7,10000);}}return h;}
+    static QByteArray pressureDefaults(QByteArray h){if(h.size()==256&&h.mid(38,19)==QByteArray(19,0)){h[38]=1;for(int at:{39,48}){put(h,at+3,4095);put(h,at+7,10000);}}return h;}
     static bool pressureFormat(const QByteArray &h){
-        if(h.size()!=256)return false;if(h.mid(38,26)==QByteArray(26,0))return true;if(h[38]!=1||h.mid(57,7)!=QByteArray(7,0))return false;
+        if(h.size()!=256)return false;if(h.mid(38,19)==QByteArray(19,0))return true;if(h[38]!=1)return false;
         for(int at:{39,48})if(quint8(h[at])>11||u16(h,at+1)>=u16(h,at+3)||u16(h,at+3)>4095||u16(h,at+5)>=u16(h,at+7)||u16(h,at+7)>20000)return false;return true;
     }
     static SensorCalibration decode(SensorKind kind,const QByteArray &header,const QByteArray &aux) {
@@ -111,7 +111,7 @@ public:
         QByteArray allowedBase=base;
         if(auxiliary(kind) && a!=QByteArray(256,0) && a[0]!=1){error="Unsupported auxiliary format.";return false;}
         if(auxiliary(kind) && desired!=base)allowedBase=initialAux(kind,base);
-        if(pressure(kind)){if(!pressureFormat(h)){error="Invalid pressure extension.";return false;}if(base.mid(38,26)==QByteArray(26,0)&&desired[38]==1)allowedBase=pressureDefaults(base);}
+        if(pressure(kind)){if(!pressureFormat(h)){error="Invalid pressure extension.";return false;}if(base.mid(38,19)==QByteArray(19,0)&&desired[38]==1)allowedBase=pressureDefaults(base);}
         for(int i=0;i<256;++i){
             const int pressureOffset=pressureAt(kind);
             const bool allowed=pressure(kind)?(i==38||(i>=pressureOffset&&i<pressureOffset+9)):kind==SensorKind::Map?(i==6||(i>=10&&i<18)):

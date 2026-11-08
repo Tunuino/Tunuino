@@ -1,6 +1,7 @@
 #include "MapWriteTransaction.h"
 #include "EcuPowerState.h"
 #include "../protocol/VssCodec.h"
+#include "../protocol/Cam2Codec.h"
 #include "../protocol/MapPageCodec.h"
 #include <utility>
 
@@ -45,11 +46,12 @@ bool MapWriteTransaction::startParameters(int page,const QByteArray &desired,con
     if(page==1&&desired[102]!=base[102])return false;
     if(page==4&&((desired[240]!=base[240])||desired.mid(242)!=base.mid(242)||((quint8(desired[70])^quint8(base[70]))&8))&&(identity.size()!=32||!(quint8(identity[19])&64)))return false;
     if(page==1&&desired.mid(27,5)!=base.mid(27,5)&&(identity.size()!=32||!(quint8(identity[19])&128)))return false;
-    if(page==1&&desired.mid(38,26)!=base.mid(38,26)&&!SensorCalibrationCodec::pressureSupported(identity))return false;
+    if(page==1&&desired.mid(38,19)!=base.mid(38,19)&&!SensorCalibrationCodec::pressureSupported(identity))return false;
     if(page==1&&desired.mid(70,12)!=base.mid(70,12)&&(identity.size()!=32||!(quint8(identity[18])&2)))return false;
     if(page==1&&(desired[5]!=base[5]||desired[9]!=base[9])&&!SensorCalibrationCodec::primaryInputSupported(identity))return false;
     if(page==1&&desired.mid(98,2)!=base.mid(98,2)&&!SensorCalibrationCodec::camInputSupported(identity))return false;
     if(page==1&&desired.mid(82,14)!=base.mid(82,14)&&!VssCodec::supported(identity))return false;
+    if(page==1&&desired.mid(57,7)!=base.mid(57,7)&&!Cam2Codec::supported(identity))return false;
     sensor_=-2;return begin(page,desired,base,identity,generation);
 }
 bool MapWriteTransaction::begin(int page,const QByteArray &desired,const QByteArray &baseMap,

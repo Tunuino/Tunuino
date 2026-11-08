@@ -2197,6 +2197,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto inputPanels=QSharedPointer<QVector<tunuino::SensorInputsWidget*>>::create();
     const QStringList inputKeys{"inputs.analog","inputs.crank","inputs.cam1","inputs.temperature","inputs.pressure"};
     for(int mode=0;mode<5;++mode){auto *panel=new tunuino::SensorInputsWidget(tunuino::SensorInputsWidget::Mode(mode));inputPanels->append(panel);panel->openScope=[=]{showTool(scopeWindow);};auto *window=toolWindow(panel,panel->title());window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)[mode==0?"inputs.monitor":mode==2?"inputs.cam1.monitor":inputKeys[mode]]=window;}
+    auto *cam2Monitor=new tunuino::VssMonitor(nullptr,tunuino::VssMonitor::Source::Cam2);auto *cam2Window=toolWindow(cam2Monitor,tr("CAM 2 - Live pulses"));(*parameterWindows)["inputs.cam2.monitor"]=cam2Window;cam2Window->resize(cam2Monitor->sizeHint()+QSize(12,30));
     auto *vssMonitor=new tunuino::VssMonitor;auto *vssWindow=toolWindow(vssMonitor,tr("Vehicle speed - Live readings"));(*parameterWindows)["speed.monitor"]=vssWindow;vssWindow->resize(vssMonitor->sizeHint()+QSize(12,30));
     auto sensorWizards=QSharedPointer<QMap<QString,QPointer<tunuino::SensorCurveWizard>>>::create();
     (*sensorWizards)["sensorwizard:IAT"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Iat,false,this);
@@ -2419,6 +2420,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         // Older v2 projects have six sensor editors. Add only the two new
         // pressure editors from their stored base; never discard legacy fields.
         const auto storedHeader=QByteArray::fromHex(document["pages"].toObject()["header"].toString().toLatin1());
+        if(!tunuino::Cam2Codec::format(storedHeader)){error=tr("Invalid CAM 2 extension.");return false;}
         if(!tunuino::VssCodec::format(storedHeader)){error=tr("Invalid VSS extension.");return false;}
         if(!tunuino::SensorCalibrationCodec::camInputFormat(storedHeader)){error=tr("Invalid CAM input filter extension.");return false;}
         if(!tunuino::SensorCalibrationCodec::primaryInputFormat(storedHeader)){error=tr("Invalid primary input filter extension.");return false;}
@@ -2428,6 +2430,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(!parameters.contains("inputs.analog")){QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="inputs.analog")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(storedHeader,field);parameters["inputs.analog"]=QJsonObject{{"values",values}};}
         if(!parameters.contains("inputs.primary")){QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="inputs.primary")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(storedHeader,field);parameters["inputs.primary"]=QJsonObject{{"values",values}};}
         if(!parameters.contains("inputs.cam1")){QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="inputs.cam1")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(storedHeader,field);parameters["inputs.cam1"]=QJsonObject{{"values",values}};}
+        if(!parameters.contains("inputs.cam2")){const auto header=tunuino::Cam2Codec::defaults(storedHeader);QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="inputs.cam2")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(header,field);parameters["inputs.cam2"]=QJsonObject{{"values",values}};}
         for(const auto &key:{QString("inputs.vss"),QString("speed.vehicle")})if(!parameters.contains(key)){const auto header=tunuino::VssCodec::defaults(storedHeader);QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key==key)for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(header,field);parameters[key]=QJsonObject{{"values",values}};}
         if(parameters.size()!=parameterPanels->size()||sensors.size()!=sensorPanels->size()){error=tr("This map does not contain all supported parameters and sensors.");return false;}
         const QList<QTableWidget*> grids{maps,ignitionMap,afrMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues};const QStringList names{"fuel","ignition","afr"};
@@ -2489,6 +2492,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *inputMonitorAction=viewMenu->addAction(tr("Analog input monitor"));connect(inputMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.monitor");});
     auto *primaryMonitorAction=viewMenu->addAction(tr("Primary trigger monitor"));connect(primaryMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.crank");});
     auto *camMonitorAction=viewMenu->addAction(tr("CAM 1 monitor"));connect(camMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.cam1.monitor");});
+    auto *cam2MonitorAction=viewMenu->addAction(tr("CAM 2 monitor"));connect(cam2MonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.cam2.monitor");});
     auto *vssMonitorAction=viewMenu->addAction(tr("Vehicle speed monitor"));connect(vssMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("speed.monitor");});
     viewMenu->addAction(navigationDock->toggleViewAction());
     viewMenu->addAction(inspectorDock->toggleViewAction());
@@ -2522,6 +2526,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(!session->exchange(request,timeout)){*toolReply={};return false;}
         QTimer::singleShot(timeout+300,this,[=]{if(*toolReply&&*toolLease==lease){auto callback=std::move(*toolReply);*toolReply={};callback({});}});return true;
     };
+    cam2Monitor->exchange=toolExchange;cam2Monitor->snapshot=tools->snapshot;cam2Monitor->ready=[=]{return !*toolBusy&&!*toolReply;};
     vssMonitor->exchange=toolExchange;vssMonitor->snapshot=tools->snapshot;vssMonitor->ready=[=]{return !*toolBusy&&!*toolReply;};
     serviceTool->exchange=toolExchange;
     scopeTool->exchange=toolExchange;outputTestTool->exchange=toolExchange;
