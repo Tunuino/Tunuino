@@ -9,7 +9,7 @@ inline void populateSensorNavigation(QTreeWidgetItem *root){
     const auto missing=[](QTreeWidgetItem *parent,const QString &name,const QString &reason,Glyph glyph=Parameters){auto *item=new QTreeWidgetItem(parent,{name});item->setIcon(0,icon(glyph));item->setFlags(item->flags()&~Qt::ItemIsEnabled);item->setForeground(0,QColor("#858585"));item->setToolTip(0,reason);return item;};
     const QString unsupported="Not implemented in the native ECU configuration/runtime protocol. No operational control is available.";
     page(root,"Analog inputs","inputs.analog");
-    auto *digital=group(root,"Digital inputs");page(digital,"Primary trigger","inputs.crank");page(digital,"CAM 1","inputs.cam1");
+    auto *digital=group(root,"Digital inputs");page(digital,"Primary trigger","inputs.primary");page(digital,"CAM 1","inputs.cam1");
     missing(digital,"CAM 2",unsupported);missing(digital,"VSS",unsupported);
     missing(digital,"CAM 1 sensitivity","The conditioned capture input has no software sensitivity curve.",Curve);missing(digital,"CAM 2 sensitivity",unsupported,Curve);
     auto *oxygen=group(root,"Oxygen Sensor");page(oxygen,"Parameters","sensor:Lambda");

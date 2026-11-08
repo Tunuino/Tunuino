@@ -2417,10 +2417,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         // Older v2 projects have six sensor editors. Add only the two new
         // pressure editors from their stored base; never discard legacy fields.
         const auto storedHeader=QByteArray::fromHex(document["pages"].toObject()["header"].toString().toLatin1());
+        if(!tunuino::SensorCalibrationCodec::primaryInputFormat(storedHeader)){error=tr("Invalid primary input filter extension.");return false;}
         if(!tunuino::SensorCalibrationCodec::inputFilterFormat(storedHeader)){error=tr("Invalid analog input filter extension.");return false;}
         if(!tunuino::SensorCalibrationCodec::pressureFormat(storedHeader)){error=tr("Invalid project pressure extension.");return false;}
         for(auto kind:{tunuino::SensorKind::FuelPressure,tunuino::SensorKind::OilPressure}){const auto name=tunuino::SensorCalibrationCodec::name(kind);if(!sensors.contains(name)){const auto c=tunuino::SensorCalibrationCodec::decode(kind,storedHeader,QByteArray(256,0));sensors[name]=QJsonObject{{"input",c.channel},{"volts",QJsonArray{tunuino::SensorCalibrationCodec::voltage(c.raw[0],storedHeader),tunuino::SensorCalibrationCodec::voltage(c.raw[1],storedHeader)}},{"values",QJsonArray{c.values[0],c.values[1]}}};}}
         if(!parameters.contains("inputs.analog")){QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="inputs.analog")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(storedHeader,field);parameters["inputs.analog"]=QJsonObject{{"values",values}};}
+        if(!parameters.contains("inputs.primary")){QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="inputs.primary")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(storedHeader,field);parameters["inputs.primary"]=QJsonObject{{"values",values}};}
         if(parameters.size()!=parameterPanels->size()||sensors.size()!=sensorPanels->size()){error=tr("This map does not contain all supported parameters and sensors.");return false;}
         const QList<QTableWidget*> grids{maps,ignitionMap,afrMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues};const QStringList names{"fuel","ignition","afr"};
         for(int i=0;i<3;++i)if(!tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,false,error))return false;
@@ -2479,6 +2481,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(openBaseMaps, &QAction::triggered, this, [openSettingsPage]() { openSettingsPage(3); });
     auto *viewMenu = menuBar()->addMenu(tr("View"));
     auto *inputMonitorAction=viewMenu->addAction(tr("Analog input monitor"));connect(inputMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.monitor");});
+    auto *primaryMonitorAction=viewMenu->addAction(tr("Primary trigger monitor"));connect(primaryMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.crank");});
     viewMenu->addAction(navigationDock->toggleViewAction());
     viewMenu->addAction(inspectorDock->toggleViewAction());
     viewMenu->addAction(dock->toggleViewAction());

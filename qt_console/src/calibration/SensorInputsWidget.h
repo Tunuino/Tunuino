@@ -22,7 +22,7 @@ public:
         layout->addWidget(table_,1);state_=new QLabel(tr("Offline — no live readings"),this);state_->setWordWrap(true);layout->addWidget(state_);
         auto *timer=new QTimer(this);timer->setInterval(250);connect(timer,&QTimer::timeout,this,[this]{refresh();});timer->start();refresh();
     }
-    QString title()const{return mode_==Analog?tr("Analog inputs"):mode_==Pressure?tr("Pressure sensors"):mode_==Temperature?tr("Standard temperature sensors"):mode_==Crank?tr("Digital inputs - Primary trigger"):tr("Digital inputs - CAM 1");}
+    QString title()const{return mode_==Analog?tr("Analog inputs"):mode_==Pressure?tr("Pressure sensors"):mode_==Temperature?tr("Standard temperature sensors"):mode_==Crank?tr("Primary trigger monitor"):tr("Digital inputs - CAM 1");}
     QSize sizeHint()const override{return QSize(mode_==Analog?780:680,mode_==Analog?610:mode_==Temperature?240:300);}
     void load(const QByteArray &header,const QByteArray &aux,const QByteArray &identity,quint32 generation){
         if(header.size()!=256||aux.size()!=256||!generation||!EcuPowerState::supportedIdentity(identity)){setAvailable(false);return;}
