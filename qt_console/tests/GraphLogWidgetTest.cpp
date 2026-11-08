@@ -1,4 +1,7 @@
 #include "logging/GraphLogWidget.h"
+#include "ui/GeneralOptions.h"
+#include <QDir>
+#include <QFile>
 #include <QApplication>
 #include <QAction>
 #include <QPushButton>
@@ -119,5 +122,7 @@ int main(int argc,char **argv) {
     CHECK(saved[0].charts.size()==2 && table->item(0,1)->text()=="0");
     const QString screenshot=qEnvironmentVariable("TUNUINO_LOG_TEST_SCREENSHOT");
     if(!screenshot.isEmpty())CHECK(widget.grab().save(screenshot));
+    QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,temp.path());app.setOrganizationName("TunuinoOptionsTest");app.setApplicationName("Logging");QSettings().setValue("general/stopPaused",true);QSettings().setValue("general/autoSave",true);QSettings().setValue("general/logDirectory",temp.path()+"/automatic");QSettings().setValue("general/units",1);
+    tunuino::GraphLogWidget controlled;controlled.setConnected(true);auto *record=controlled.findChild<QAction*>("logRecord");record->trigger();std::array<double,tunuino::LogChannelCount> optionsValues{};optionsValues[0]=1500;optionsValues[2]=100;optionsValues[4]=100;controlled.appendRuntime(optionsValues);auto *readings=controlled.findChild<QTableWidget*>("logCursorValues");CHECK(readings->item(2,2)->text()=="psi"&&readings->item(4,1)->text()=="212");controlled.findChild<QAction*>("logPause")->trigger();QTest::qWait(2);optionsValues[0]=2500;controlled.appendRuntime(optionsValues);controlled.findChild<QAction*>("logPause")->trigger();CHECK(readings->item(0,1)->text()=="1500");QTest::qWait(2);controlled.appendRuntime(optionsValues);record->trigger();const auto files=QDir(temp.path()+"/automatic").entryList({"*.csv"},QDir::Files);CHECK(files.size()==1);QFile autoLog(temp.path()+"/automatic/"+files[0]);CHECK(autoLog.open(QIODevice::ReadOnly));std::vector<tunuino::LogSample> savedSamples;std::string csvError;CHECK(tunuino::decodeLogCsv(autoLog.readAll().toStdString(),savedSamples,csvError)&&savedSamples.size()==2&&savedSamples[1].values[2]==100);CHECK(std::abs(tunuino::displayValue(2,100)-14.50377377)<.00001);QSettings().clear();
     std::cout<<"Graph Log capture, pause, 12 tabs, shared cursor, dual axes, saved config, corrupt settings and rendering: passed\n";
 }

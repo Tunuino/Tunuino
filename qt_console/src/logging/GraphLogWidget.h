@@ -11,6 +11,7 @@ class QTabWidget;
 namespace tunuino {
 class LogPlot;
 struct LogViewState {
+    qint64 epochMs=0;
     bool paused=false;
     double span=30;
     double end=30;
@@ -22,6 +23,7 @@ public:
     void setConnected(bool connected);
     void appendRuntime(const std::array<double,LogChannelCount> &values);
 private:
+    void autoSave();
     void refresh();
     void clearLog();
     void follow();

@@ -1,4 +1,9 @@
 #include "GraphLogWidget.h"
+#include "../ui/GeneralOptions.h"
+#include <QDateTime>
+#include <QDir>
+#include <QStandardPaths>
+#include <QTimer>
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>
@@ -75,7 +80,7 @@ protected:
         for (int i=0;i<=4;++i) {
             const double x=area.left()+area.width()*i/4;
             p.drawText(QRectF(x-38,area.bottom()+5,76,20),Qt::AlignCenter,
-                QString::number(begin+view_.span*i/4,'f',2)+" s");
+                enabledOption("systemTime",false)&&view_.epochMs?QDateTime::fromMSecsSinceEpoch(view_.epochMs+qint64((begin+view_.span*i/4)*1000)).toString("HH:mm:ss"):QString::number(begin+view_.span*i/4,'f',2)+" s");
         }
         bool anyValid=false;
         const auto first=std::lower_bound(samples_.begin(),samples_.end(),begin-1e-9,
@@ -84,11 +89,11 @@ protected:
             const auto &axis=config_.axes[side];const int channel=axis.channel;
             if (channel<0) continue;
             const QColor color=channelColor(channel);p.setPen(color);
-            QString title=QString::fromLatin1(LogNames[channel])+" ["+LogUnits[channel]+"]";
+            QString title=QString::fromLatin1(LogNames[channel])+" ["+displayUnit(channel,LogUnits[channel])+"]";
             if (axis.autoscale) title+=QStringLiteral(" ▲▼");
             if (view_.cursor>=0 && view_.cursor<int(samples_.size())) {
                 const double value=samples_[size_t(view_.cursor)].values[channel];
-                title+="  "+(std::isfinite(value)?QString::number(value,'g',6):tr("Unavailable"));
+                title+="  "+(std::isfinite(value)?QString::number(displayValue(channel,value),'g',6):tr("Unavailable"));
             }
             p.drawText(QRectF(8+side*width()/2,5,width()/2-16,22),
                 side?Qt::AlignRight:Qt::AlignLeft,title);
@@ -106,7 +111,7 @@ protected:
             for(int i=0;i<=4;++i)
                 p.drawText(QRectF(side?area.right()+5:0,area.bottom()-area.height()*i/4-10,77,20),
                     (side?Qt::AlignLeft:Qt::AlignRight)|Qt::AlignVCenter,
-                    QString::number(low+(high-low)*i/4,'g',5));
+                    QString::number(displayValue(channel,low+(high-low)*i/4),'g',5));
             auto point=[&](const LogSample &s){return QPointF(area.left()+(s.seconds-begin)/view_.span*area.width(),
                 area.bottom()-(s.values[channel]-low)/(high-low)*area.height());};
             p.save();p.setClipRect(area);p.setRenderHint(QPainter::Antialiasing);
@@ -121,6 +126,7 @@ protected:
             }
             if(!dots_)p.drawPath(path);
             p.restore();
+            const LogSample *minimum=nullptr,*maximum=nullptr;for(auto it=first;it!=samples_.end()&&it->seconds<=view_.end;++it)if(std::isfinite(it->values[channel])){if(!minimum||it->values[channel]<minimum->values[channel])minimum=&*it;if(!maximum||it->values[channel]>maximum->values[channel])maximum=&*it;}for(int mark=0;mark<2;++mark){const auto *sample=mark?maximum:minimum;if(!sample||!enabledOption(mark?"maxMarks":"minMarks",true))continue;const QPointF pos=point(*sample);p.setPen(mark?QColor("#ffad29"):QColor("#6dff00"));p.drawEllipse(pos,4,4);p.drawText(pos+QPointF(5,mark?-5:15),QString::number(displayValue(channel,sample->values[channel]),'g',5));}
         }
         if(!anyValid) {p.setPen(QColor(180,180,185));p.drawText(area,Qt::AlignCenter,tr("No valid samples for selected channels"));}
         if(view_.cursor>=0 && view_.cursor<int(samples_.size())) {
@@ -156,9 +162,9 @@ GraphLogWidget::GraphLogWidget(QWidget *parent,QSettings *settings) : QWidget(pa
         connect(a,&QAction::triggered,this,callback);return a;
     };
     record_=action("logRecord",tr("Start logging"),QStyle::SP_MediaPlay,[this] {
-        if(recording_) {recording_=false;refresh();return;}
+        if(recording_) {recording_=false;autoSave();refresh();return;}
         if(!connected_ || !confirmDiscard())return;
-        clearLog();clock_.start();recording_=true;view_.paused=false;refresh();
+        clearLog();clock_.start();view_.epochMs=QDateTime::currentMSecsSinceEpoch();recording_=true;view_.paused=false;refresh();
     });
     record_->setEnabled(false);
     pause_=action("logPause",tr("Pause display"),QStyle::SP_MediaPause,[this] {
@@ -177,7 +183,7 @@ GraphLogWidget::GraphLogWidget(QWidget *parent,QSettings *settings) : QWidget(pa
             QMessageBox::warning(this,tr("Invalid log"),QString::fromStdString(error));return;
         }
         if(!confirmDiscard())return;
-        recording_=false;samples_=std::move(parsed);dirty_=false;
+        recording_=false;samples_=std::move(parsed);view_.epochMs=0;dirty_=false;
         view_.paused=true;view_.cursor=0;fit();refresh();
     });
     action("logSave",tr("Save CSV..."),QStyle::SP_DialogSaveButton,[this] {
@@ -243,6 +249,7 @@ GraphLogWidget::GraphLogWidget(QWidget *parent,QSettings *settings) : QWidget(pa
     };
     shortcut("Q",[this]{zoom(.5);});shortcut("A",[this]{zoom(2);});
     shortcut("Shift+S",[this]{style_->trigger();});
+    auto *automatic=new QTimer(this);automatic->setInterval(30000);connect(automatic,&QTimer::timeout,this,[this]{autoSave();});automatic->start();
     rebuildPlots();refresh();
 }
 
@@ -331,11 +338,12 @@ void GraphLogWidget::configureChart(int tab,int chartIndex) {
     });
     if(dialog.exec()==QDialog::Accepted) {saveLayout();rebuildPlots();refresh();}
 }
+void GraphLogWidget::autoSave(){if(!enabledOption("autoSave",false)||!dirty_||samples_.empty()||!view_.epochMs)return;const QString directory=QSettings().value("general/logDirectory",QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/Tunuino/logs").toString();if(!QDir().mkpath(directory))return;QSaveFile file(directory+"/"+QDateTime::fromMSecsSinceEpoch(view_.epochMs).toString("yyyyMMdd-HHmmss-zzz")+".csv");const auto bytes=encodeLogCsv(samples_);if(file.open(QIODevice::WriteOnly)&&file.write(bytes.data(),qint64(bytes.size()))==qint64(bytes.size())&&file.commit())dirty_=false;}
 void GraphLogWidget::setConnected(bool connected) {
-    connected_=connected;if(!connected){recording_=false;view_.paused=true;}refresh();
+    connected_=connected;if(!connected){autoSave();recording_=false;view_.paused=true;}refresh();
 }
 void GraphLogWidget::appendRuntime(const std::array<double,LogChannelCount> &values) {
-    if(!connected_ || !recording_)return;
+    if(!connected_ || !recording_||(view_.paused&&enabledOption("stopPaused",false)))return;
     if(samples_.size()>=MaxLogSamples) {recording_=false;view_.paused=true;refresh();return;}
     LogSample sample;sample.seconds=clock_.nsecsElapsed()/1e9;sample.values=values;
     if(!samples_.empty() && sample.seconds<=samples_.back().seconds)return;
@@ -360,12 +368,13 @@ void GraphLogWidget::refresh() {
     const int index=view_.cursor;
     for(int i=0;i<LogChannelCount;++i) {
         const double value=index>=0 && index<int(samples_.size())?samples_[size_t(index)].values[i]:std::numeric_limits<double>::quiet_NaN();
-        channels_->item(i,1)->setText(std::isfinite(value)?QString::number(value,'g',8):tr("Unavailable"));
+        channels_->item(i,2)->setText(displayUnit(i,LogUnits[i]));
+        channels_->item(i,1)->setText(std::isfinite(value)?QString::number(displayValue(i,value),'g',8):tr("Unavailable"));
     }
     const QString cursor=index>=0 && index<int(samples_.size())?QString::number(samples_[size_t(index)].seconds,'f',3):QStringLiteral("—");
     status_->setText(tr("%1 | %2 samples | C=%3 s | %4 | ECU polling: 500 ms nominal; actual receive timestamps. TPS, IAT and Battery use real ADC inputs and stored ECU calibrations.")
         .arg(recording_?tr("Recording"):tr("Stopped")).arg(qulonglong(samples_.size())).arg(cursor)
-        .arg(view_.paused?tr("Display paused — collection continues while recording"):tr("Live display")));
+        .arg(view_.paused?(enabledOption("stopPaused",false)?tr("Display and collection paused"):tr("Display paused — collection continues while recording")):tr("Live display")));
     if(samples_.size()>=MaxLogSamples)status_->setText(tr("Log full: recording stopped at 100000 samples. Save CSV before starting a new log."));
     for(auto *plot:plots_)if(plot->isVisible())plot->update();
 }

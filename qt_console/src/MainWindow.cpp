@@ -1,5 +1,8 @@
 #include "MainWindow.h"
 #include "workspace/DesktopController.h"
+#include "ui/GeneralOptions.h"
+#include "calibration/SensitivityCurve.h"
+#include <QToolBar>
 #include "ui/CalibrationAppearance.h"
 #include "project/MapProject.h"
 #include "NativeDfuFlash.h"
@@ -160,6 +163,7 @@ public:
 protected:
     void resizeEvent(QResizeEvent *event) override {
         QTableWidget::resizeEvent(event);
+        const bool square=tunuino::enabledOption("square",false);horizontalHeader()->setSectionResizeMode(square?QHeaderView::Fixed:QHeaderView::Stretch);verticalHeader()->setSectionResizeMode(square?QHeaderView::Fixed:QHeaderView::Stretch);if(square){int side=qMax(1,qMin(viewport()->width()/qMax(1,columnCount()),viewport()->height()/qMax(1,rowCount())));for(int i=0;i<columnCount();++i)setColumnWidth(i,side);for(int i=0;i<rowCount();++i)setRowHeight(i,side);}
         // Adapt typography to actual cell width, not the MDI window size.
         // A fixed 9pt bold font was eliding values as "..." in compact maps.
         const int cellWidth = (std::max)(1, viewport()->width() / (std::max)(1, columnCount()));
@@ -181,6 +185,7 @@ protected:
     }
     void paintEvent(QPaintEvent *event) override {
         QTableWidget::paintEvent(event);
+        if(tunuino::enabledOption("modified",true)){QPainter marks(viewport());marks.setPen(Qt::NoPen);marks.setBrush(QColor("#ffe32d"));for(int r=0;r<rowCount();++r)for(int c=0;c<columnCount();++c){auto *cell=item(r,c);if(cell&&cell->data(Qt::UserRole+77).isValid()&&cell->text()!=cell->data(Qt::UserRole+77).toString()){const auto rect=visualItemRect(cell);marks.drawPolygon(QPolygon{rect.topRight(),rect.topRight()+QPoint(-7,0),rect.topRight()+QPoint(0,7)});}}}
         if (row_ < 0 || column_ < 0) return;
         const QRect cell = visualRect(model()->index(row_, column_));
         if (cell.isEmpty()) return;
@@ -348,7 +353,7 @@ protected:
         const double scale = fit * 0.82 * zoom_;
         const QPointF center = view.center();
         const QPointF boundsCenter((left+right)*0.5, (top+bottom)*0.5);
-        auto screen = [&](const Vertex &v) { return center + (v.p - boundsCenter) * scale; };
+        auto screen = [&](const Vertex &v) { if(tunuino::enabledOption("cubic",false))return center+(v.p-boundsCenter)*scale;return center+QPointF((v.p.x()-boundsCenter.x())*view.width()/(right-left)*.82*zoom_,(v.p.y()-boundsCenter.y())*view.height()/(bottom-top)*.82*zoom_); };
         struct Face { int row; int col; double depth; };
         QVector<Face> faces;
         faces.reserve(225);
@@ -366,7 +371,7 @@ protected:
             const double avg = (z[row][col] + z[row+1][col] +
                                 z[row][col+1] + z[row+1][col+1]) / 4.0;
             const double level = (avg - minValue) / span;
-            const QColor color = QColor::fromHsvF(0.33 - level * 0.32, 0.76, 0.86);
+            const QColor color=tunuino::option("scheme",0)==0?QColor::fromHsvF(.33-level*.32,.76,.86):tunuino::tablePalette(level);
             painter.setBrush(color);
             painter.setPen(QPen(color.darker(155), 0.6));
             painter.drawPolygon(QPolygonF{screen(verts[row][col]), screen(verts[row][col+1]),
@@ -443,6 +448,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     };
     auto fuelGraphWindow = QSharedPointer<QPointer<QMdiSubWindow>>::create();
     auto ignitionGraphWindow = QSharedPointer<QPointer<QMdiSubWindow>>::create();
+    auto afrGraphWindowRef=QSharedPointer<QPointer<QMdiSubWindow>>::create();
     auto mapWindows = QSharedPointer<QVector<QPointer<QMdiSubWindow>>>::create(3);
     auto *navigationDock = new QDockWidget(tr("TUNUINO  |  Navigation"), this);
     navigationDock->setObjectName("NavigationDock");
@@ -526,13 +532,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("DSG Gearbox"), {{tr("Gearbox settings"),-1}});
     addCategory(tr("CAN, Serial"), {{tr("Communication settings"),-1}});
     addCategory(tr("Log"), {{tr("Scope"),11},{tr("Graph Log"),4},{tr("Tune Display"),10},{tr("Autotune"),12}});
-    addCategory(tr("Gauges"), {{tr("Runtime gauges"),-1}});
+    addCategory(tr("Gauges"), {{tr("Runtime gauges"),13},{tr("Engine Status"),9}});
     auto engineStatusDockRef = QSharedPointer<QPointer<QDockWidget>>::create();
-    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, openSettingsPage, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows, openTuneDisplay, toolNavigation, parameterNavigation](QTreeWidgetItem *item, int) {
+    connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, openSettingsPage, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows, afrGraphWindowRef, openTuneDisplay, toolNavigation, parameterNavigation](QTreeWidgetItem *item, int) {
         if(!item->data(0,Qt::UserRole).isValid()){item->setExpanded(!item->isExpanded());return;}
         const int index = item->data(0, Qt::UserRole).toInt();
         if(item->data(0,Qt::UserRole+1).isValid()){if(*parameterNavigation)(*parameterNavigation)(item->data(0,Qt::UserRole+1).toString());}
         else if(item->parent()&&(index==11||index==12)){if(*toolNavigation)(*toolNavigation)(index);}
+        else if(item->parent()&&index==13){if(*parameterNavigation)(*parameterNavigation)("runtime.gauges");}
         else if(item->parent()&&index==10){openTuneDisplay();}
         else if (item->parent() && index == 9) {
             if (*engineStatusDockRef) { (*engineStatusDockRef)->show(); (*engineStatusDockRef)->raise(); }
@@ -541,6 +548,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if (window) { window->showNormal(); if (window->widget()) window->widget()->show(); window->update(); workspace->setActiveSubWindow(window); }
         } else if (item->parent() && index >= 0 && index <= 2 && (*mapWindows)[index]) {
             auto window = (*mapWindows)[index];
+            if(!window->property("generalSizeApplied").toBool()){const int widths[]={560,780,1000};window->resize(widths[qBound(0,tunuino::option("table3Size",2),2)],650);window->setProperty("generalSizeApplied",true);if(tunuino::option("table3Appearance",1)==0){auto graph=index==0?*fuelGraphWindow:index==1?*ignitionGraphWindow:*afrGraphWindowRef;if(graph){graph->showNormal();graph->widget()->show();const int half=workspace->viewport()->width()/2;window->setGeometry(0,0,half,workspace->viewport()->height());graph->setGeometry(half,0,half,workspace->viewport()->height());}}}
             window->showNormal();
             if (window->widget()) window->widget()->show();
             window->show();
@@ -678,7 +686,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     }
                     const double level = qBound(0.0, (value - minimum) / range, 1.0);
                     // Blue/green for lower values, yellow/orange/red for higher.
-                    const QColor color = QColor::fromHsvF(0.66 * (1.0 - level), 0.72, 0.86);
+                    const QColor color=tunuino::tablePalette(level);
                     item->setBackground(color);
                     item->setForeground(color.lightnessF() < 0.48 ? QColor(255, 255, 255)
                                                                       : QColor(20, 24, 28));
@@ -771,7 +779,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     result.append(table->item(row, col) ? table->item(row, col)->text() : QString());
             return result;
         };
-        history->current = snapshot();
+        history->current = snapshot();for(int r=0;r<16;++r)for(int c=0;c<16;++c)table->item(r,c)->setData(Qt::UserRole+77,table->item(r,c)->text());
         const auto restore = [table, history](const QStringList &values) {
             if (values.size() != 256) return;
             history->restoring = true;
@@ -1385,7 +1393,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrRpmLabel->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
     afrGridLayout->addWidget(afrRpmLabel);
     auto *afrSurface = new MapSurfacePreview(afrMap, afrPage);
-    auto *afrGraphWindow = workspace->addSubWindow(afrSurface);tunuino::CalibrationAppearance::frame(afrGraphWindow);
+    auto *afrGraphWindow = workspace->addSubWindow(afrSurface);*afrGraphWindowRef=afrGraphWindow;tunuino::CalibrationAppearance::frame(afrGraphWindow);
     afrGraphWindow->setWindowTitle(tr("AFR Target | 3D Graph"));
     afrGraphWindow->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
         Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
@@ -1637,7 +1645,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *tuneSubWindow=workspace->addSubWindow(tuneDisplay);tunuino::CalibrationAppearance::frame(tuneSubWindow);
     tuneSubWindow->setWindowTitle(tr("Tune Display"));
     tuneSubWindow->setWindowFlags(Qt::SubWindow|Qt::WindowTitleHint|Qt::WindowSystemMenuHint|Qt::WindowMinMaxButtonsHint|Qt::WindowCloseButtonHint);
-    tuneSubWindow->setAttribute(Qt::WA_DeleteOnClose,false);tuneSubWindow->resize(780,560);
+    tuneSubWindow->setAttribute(Qt::WA_DeleteOnClose,false);const int gaugeWidths[]={600,780,1020};tuneSubWindow->resize(gaugeWidths[qBound(0,tunuino::option("gaugeSize",1),2)],560);
     *tuneWindow=tuneSubWindow;boundsGuard->watch(tuneSubWindow);tuneSubWindow->hide();
 
     auto *firmwarePage = new QWidget(tabs);
@@ -2192,6 +2200,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto sensorPanels=QSharedPointer<QVector<tunuino::SensorCalibrationWidget*>>::create();
     auto parameterPanels=QSharedPointer<QVector<tunuino::ParameterWidget*>>::create();
     auto parameterWindows=QSharedPointer<QMap<QString,QPointer<QMdiSubWindow>>>::create();
+    auto *gaugeDisplay=new tunuino::TuneDisplayWidget(nullptr,true);auto *gaugeWindow=toolWindow(gaugeDisplay,tr("Gauges"));(*parameterWindows)["runtime.gauges"]=gaugeWindow;const int gaugeSizes[]={600,780,1020};gaugeWindow->resize(gaugeSizes[qBound(0,tunuino::option("gaugeSize",1),2)],560);
     QPushButton *tpsReadButton=nullptr;QLabel *tpsReadStatus=nullptr;
     for(auto kind:{tunuino::SensorKind::Tps,tunuino::SensorKind::Map,tunuino::SensorKind::Clt,tunuino::SensorKind::Iat,tunuino::SensorKind::Lambda,tunuino::SensorKind::Battery,tunuino::SensorKind::FuelPressure,tunuino::SensorKind::OilPressure}){
         auto *panel=new tunuino::SensorCalibrationWidget(kind);sensorPanels->append(panel);const auto name=tunuino::SensorCalibrationCodec::name(kind);
@@ -2200,6 +2209,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto inputPanels=QSharedPointer<QVector<tunuino::SensorInputsWidget*>>::create();
     const QStringList inputKeys{"inputs.analog","inputs.crank","inputs.cam1","inputs.temperature","inputs.pressure"};
     for(int mode=0;mode<5;++mode){auto *panel=new tunuino::SensorInputsWidget(tunuino::SensorInputsWidget::Mode(mode));inputPanels->append(panel);panel->openScope=[=]{showTool(scopeWindow);};auto *window=toolWindow(panel,panel->title());window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)[mode==0?"inputs.monitor":mode==2?"inputs.cam1.monitor":mode==4?"inputs.pressure.monitor":inputKeys[mode]]=window;}
+    auto *camSensitivity=new tunuino::SensitivityCurve;auto *camSensitivityWindow=toolWindow(camSensitivity,tr("Digital inputs - CAM 1 sensitivity [V]"));(*parameterWindows)["inputs.cam1.sensitivity"]=camSensitivityWindow;camSensitivityWindow->resize(camSensitivity->sizeHint()+QSize(12,30));
     auto *cam2Monitor=new tunuino::VssMonitor(nullptr,tunuino::VssMonitor::Source::Cam2);auto *cam2Window=toolWindow(cam2Monitor,tr("CAM 2 - Live pulses"));(*parameterWindows)["inputs.cam2.monitor"]=cam2Window;cam2Window->resize(cam2Monitor->sizeHint()+QSize(12,30));
     auto *vssMonitor=new tunuino::VssMonitor;auto *vssWindow=toolWindow(vssMonitor,tr("Vehicle speed - Live readings"));(*parameterWindows)["speed.monitor"]=vssWindow;vssWindow->resize(vssMonitor->sizeHint()+QSize(12,30));
     auto sensorWizards=QSharedPointer<QMap<QString,QPointer<tunuino::SensorCurveWizard>>>::create();
@@ -2325,7 +2335,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             for(auto *panel:*sensorPanels)panel->setAvailable(false);for(auto *panel:*inputPanels)panel->setAvailable(false);
             for(auto *panel:*parameterPanels)panel->setAvailable(false);triggerWizard->setAvailable(false);
             graphLog->setConnected(false);
-            tuneDisplay->setConnected(false);
+            tuneDisplay->setConnected(false);gaugeDisplay->setConnected(false);
             autotuneTool->disconnected();
             for (auto *value : *liveReadings) value->setText(tr("Unavailable"));
             maps->clearOperatingPoint();
@@ -2417,9 +2427,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         for(int i=0;i<3;++i){const auto state=tunuino::MapProject::tableState(grids[i],rpms[i]);if(!tunuino::MapProject::tableState(grids[i],rpms[i],state,i==1?-90:0,i==0?300:i==1?90:25,false,error))return QJsonObject{};tables[names[i]]=state;}
         for(auto *panel:*parameterPanels)parameters[panel->block().key]=panel->editorState();
         for(auto *panel:*sensorPanels)sensors[tunuino::SensorCalibrationCodec::name(panel->kind())]=panel->editorState();
-        return QJsonObject{{"target",QJsonObject{{"family",1},{"mcu",1},{"hardwareRevision",7},{"schema",2}}},{"pages",pages},{"tables",tables},{"parameters",parameters},{"sensors",sensors},{"trigger",triggerWizard->editorState()},{"service",QJsonObject{{"comment",serviceTool->projectComment()}}}};
+        const auto curve=camSensitivity->state();if(!camSensitivity->restore(curve,false,error))return QJsonObject{};
+        return QJsonObject{{"curves",QJsonObject{{"cam1Sensitivity",curve}}},{"target",QJsonObject{{"family",1},{"mcu",1},{"hardwareRevision",7},{"schema",2}}},{"pages",pages},{"tables",tables},{"parameters",parameters},{"sensors",sensors},{"trigger",triggerWizard->editorState()},{"service",QJsonObject{{"comment",serviceTool->projectComment()}}}};
     };
     mapProject->apply=[=](const QJsonObject &document,QString &error){
+        const auto curve=document.contains("curves")?document["curves"].toObject()["cam1Sensitivity"].toObject():tunuino::SensitivityCurve::defaultState();if(!camSensitivity->restore(curve,false,error))return false;
         const auto tables=document["tables"].toObject();auto parameters=document["parameters"].toObject();auto sensors=document["sensors"].toObject();
         // Older v2 projects have six sensor editors. Add only the two new
         // pressure editors from their stored base; never discard legacy fields.
@@ -2455,7 +2467,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         for(auto *panel:*sensorPanels){panel->keepProjectEdits(false);panel->load(header,aux,identity,generation);panel->restoreEditor(sensors[tunuino::SensorCalibrationCodec::name(panel->kind())].toObject(),true,error);panel->keepProjectEdits(true);if(!live.valid())panel->setAvailable(false);}
         triggerWizard->keepProjectEdits(false);if(live.valid())triggerWizard->load(header,aux,identity,generation);else triggerWizard->loadOffline(header,aux);triggerWizard->restoreEditor(document["trigger"].toObject(),true,error);triggerWizard->keepProjectEdits(true);if(!live.valid())triggerWizard->setAvailable(false);
         for(int i=0;i<3;++i)tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,true,error);
-        serviceTool->setProjectComment(comment.toString());fuelSurface->update();ignitionSurface->update();afrSurface->update();
+        camSensitivity->restore(curve,true,error);serviceTool->setProjectComment(comment.toString());fuelSurface->update();ignitionSurface->update();afrSurface->update();
         statusBar()->showMessage(tr("Project opened locally. No ECU write was performed."),10000);return true;
     };
     for(const auto &wizard:*sensorWizards)wizard->prepare=[=](tunuino::SensorKind kind,const QJsonObject &curve,QString &error){
@@ -2503,16 +2515,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *editTimer=new QTimer(this);editTimer->setInterval(150);connect(editTimer,&QTimer::timeout,this,updateEditMenu);editTimer->start();
     auto *desktopsMenu=menuBar()->addMenu(tr("Desktops"));desktopsMenu->setObjectName("DesktopsMenu");
     auto *windowMenu=new QMenu(tr("Window"),this);windowMenu->setObjectName("WindowMenu");
-    auto *viewMenu = new QMenu(tr("Monitors and panels"),this);
-    auto *inputMonitorAction=viewMenu->addAction(tr("Analog input monitor"));connect(inputMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.monitor");});
-    auto *primaryMonitorAction=viewMenu->addAction(tr("Primary trigger monitor"));connect(primaryMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.crank");});
-    auto *camMonitorAction=viewMenu->addAction(tr("CAM 1 monitor"));connect(camMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.cam1.monitor");});
-    auto *pressureMonitorAction=viewMenu->addAction(tr("Pressure monitor"));connect(pressureMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.pressure.monitor");});
-    auto *cam2MonitorAction=viewMenu->addAction(tr("CAM 2 monitor"));connect(cam2MonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("inputs.cam2.monitor");});
-    auto *vssMonitorAction=viewMenu->addAction(tr("Vehicle speed monitor"));connect(vssMonitorAction,&QAction::triggered,this,[=]{(*parameterNavigation)("speed.monitor");});
-    viewMenu->addAction(navigationDock->toggleViewAction());
-    viewMenu->addAction(inspectorDock->toggleViewAction());
-    viewMenu->addAction(dock->toggleViewAction());
     auto *toolsMenu = menuBar()->addMenu(tr("Tools"));
     auto *tuneDisplayAction=toolsMenu->addAction(tr("Tune Display"),this,openTuneDisplay);
     tuneDisplayAction->setShortcut(QKeySequence(QStringLiteral("F7")));
@@ -2520,7 +2522,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     graphLogAction->setShortcut(QKeySequence(QStringLiteral("F6")));
     connect(graphLogAction, &QAction::triggered, this, [openSettingsPage]() { openSettingsPage(4); });
     tools->populate(toolsMenu,graphLogAction,tuneDisplayAction);
-    tools->monitorMenu=viewMenu;menuBar()->addMenu(windowMenu);
+    menuBar()->addMenu(windowMenu);
     tools->snapshot=[=]{
         tunuino::ToolSnapshot result;
         if(!*ecuOnline||!*ecuClean||!*identityVerified||!session->isOpen()||*readBusy||*validationPending||writer->busy()||*writePending)return result;
@@ -2800,10 +2802,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     desktopController->contextHelp=[=]{if(auto *window=workspace->activeSubWindow()){if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))return parameters->block().help;const auto text=window->widget()->toolTip();if(!text.isEmpty())return text;}if(auto *item=navigationTree->currentItem())if(!item->toolTip(0).isEmpty())return item->toolTip(0);return tr("Select a parameter window. F1 opens general help and the supported signal pinout.");};
     QTimer::singleShot(0,desktopController,[desktopController]{desktopController->initialize();});
     auto *aboutAction = helpMenu->addAction(tr("About"));
-    connect(aboutAction, &QAction::triggered, this, [this]() {
-        QMessageBox::about(this, tr("About Tunuino Console"),
-            tr("Tunuino Console — Qt 6\\nMap editing, ECU monitoring and verified map/sensor calibration writes."));
-    });
+    connect(aboutAction,&QAction::triggered,this,[this,checkUpdates]{QDialog dialog(this);dialog.setWindowTitle(tr("About Tunuino Console"));auto *layout=new QVBoxLayout(&dialog);layout->addWidget(new QLabel(tr("Tunuino Console — Qt 6\nProject editing, ECU monitoring and verified calibration writes."),&dialog));auto *channel=new QComboBox(&dialog);channel->addItems({tr("Beta — test builds"),tr("Stable — validated releases")});channel->setCurrentIndex(QSettings("Tunuino","TunuinoConsole").value("updates/channel","beta").toString()=="stable"?1:0);layout->addWidget(channel);connect(channel,&QComboBox::currentIndexChanged,&dialog,[](int i){QSettings("Tunuino","TunuinoConsole").setValue("updates/channel",i?"stable":"beta");});auto *check=new QPushButton(tr("Check for updates..."),&dialog);layout->addWidget(check);connect(check,&QPushButton::clicked,&dialog,[&dialog,checkUpdates]{dialog.accept();QTimer::singleShot(0,checkUpdates,[checkUpdates]{checkUpdates->trigger();});});auto *buttons=new QDialogButtonBox(QDialogButtonBox::Close,&dialog);layout->addWidget(buttons);connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);dialog.exec();});
     auto *ecuMenu = menuBar()->addMenu(tr("ECU"));
     ecuMenu->addAction(validationAction);
     auto *writeActiveMap=ecuMenu->addAction(tr("Write to ECU"));
@@ -2829,6 +2828,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         QMessageBox::information(this, tr("Firmware / DFU"),
             tr("Enter USB DFU bootloader mode, select a verified firmware image and detect the device. Flash and verify programs the selected image and verifies it by reading it back."));
     });
+    auto *mainToolbar=addToolBar(tr("Main toolbar"));mainToolbar->setObjectName("MainToolbar");mainToolbar->addAction(openProject);mainToolbar->addAction(saveProject);mainToolbar->addAction(writeActiveMap);mainToolbar->addSeparator();mainToolbar->addAction(findChild<QAction*>("desktopRestore"));mainToolbar->addAction(findChild<QAction*>("desktopStore"));mainToolbar->addSeparator();for(auto *action:toolsMenu->actions())if(QStringList({"Scope","Graph Log","Tune Display","General options"}).contains(action->text()))mainToolbar->addAction(action);
+    const auto applyOptions=[=]{mainToolbar->setVisible(tunuino::enabledOption("toolbar",true));resizeDocks({navigationDock},{tunuino::option("panelSize",297)},Qt::Horizontal);for(auto *grid:{maps,ignitionMap,afrMap}){grid->itemChanged(grid->item(0,0));QResizeEvent resize(grid->size(),grid->size());QApplication::sendEvent(grid,&resize);grid->viewport()->update();}fuelSurface->update();ignitionSurface->update();afrSurface->update();tuneDisplay->update();for(auto *widget:findChildren<QWidget*>())widget->update();};
+    tools->optionsChanged=applyOptions;applyOptions();desktopController->identitySupplier=[=]{auto state=tools->snapshot?tools->snapshot():tunuino::ToolSnapshot{};return state.valid()?state.identity.mid(20,12):QByteArray{};};
     tunuino::AutoConnection::Hooks autoConnectionHooks;
     autoConnectionHooks.ports = [] {
         QVector<tunuino::AutoPort> result;
@@ -3076,9 +3078,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if (mask & 8) logValues[4] = qint32(u32(1 + 52)) / 1000.0;
             graphLog->setConnected(true);
             graphLog->appendRuntime(logValues);
-            tuneDisplay->setConnected(true);
+            tuneDisplay->setConnected(true);gaugeDisplay->setConnected(true);
             const double tuneTarget=sameSensorBase?tunuino::ecuTargetLambda(sensorBase->aux,data):std::numeric_limits<double>::quiet_NaN();
-            tuneDisplay->setReadings(logValues,tuneTarget);
+            tuneDisplay->setReadings(logValues,tuneTarget);gaugeDisplay->setReadings(logValues,tuneTarget);
             autotuneTool->sample(logValues,tuneTarget);
             for(auto *panel:*sensorPanels)panel->updateRaw(data);for(auto *panel:*inputPanels)panel->updateRaw(data);
             if (*ecuClean && previousGeneration && (previousGeneration!=*ecuGeneration || !previouslyClean || *autoSync) && !transfer->page && !*writePending) {
@@ -3117,6 +3119,7 @@ void MainWindow::closeEvent(QCloseEvent *event) {
         statusBar()->showMessage(tr("Finish or stop the active ECU tool/write before closing the Console."));
         event->ignore();return;
     }
+    if(!tunuino::enabledOption("noExitAsk",true)&&QMessageBox::question(this,tr("Exit"),tr("Are you sure you want to exit the application?"),QMessageBox::Yes|QMessageBox::No,QMessageBox::No)!=QMessageBox::Yes){event->ignore();return;}
     if(auto *controller=dynamic_cast<tunuino::DesktopController*>(findChild<QObject*>("desktopController")))controller->store();
     QMainWindow::closeEvent(event);
 }

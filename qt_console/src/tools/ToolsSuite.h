@@ -14,7 +14,7 @@ public:
     std::function<void(int)> openServiceData;
     void refreshAssignments();
     std::function<void()> checkForUpdates;
-    QMenu *monitorMenu=nullptr;
+    std::function<void()> optionsChanged;
 private:
     void assignments(bool outputs);
     void userNames(bool outputs);

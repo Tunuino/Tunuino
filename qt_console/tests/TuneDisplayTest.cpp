@@ -53,5 +53,6 @@ int main(int argc,char **argv){
     QMdiArea area;auto *mdiWidget=new tunuino::TuneDisplayWidget;auto *window=area.addSubWindow(mdiWidget);window->setAttribute(Qt::WA_DeleteOnClose,false);area.show();window->show();CHECK(mdiWidget->assignChannel(0,4));window->close();window->show();mdiWidget->show();CHECK(mdiWidget->channel(0)==4);
     QSettings settings;QStringList corrupt;for(int i=0;i<9;++i)corrupt<<"0";corrupt[8]="8";settings.setValue("tuneDisplay/channels",corrupt);
     {tunuino::TuneDisplayWidget recovered;for(int i=0;i<9;++i)CHECK(recovered.channel(i)==-1);}
+    tunuino::TuneDisplayWidget gauges(nullptr,true);CHECK(gauges.channel(0)==0&&gauges.channel(6)==6);gauges.setConnected(true);gauges.setReadings(values,.95);gauges.resize(900,620);gauges.show();for(int type=0;type<3;++type){QSettings().setValue("general/gaugeType",type);QSettings().setValue("general/gaugeStyle",type);app.processEvents();CHECK(!gauges.grab().isNull());}gauges.setConnected(false);CHECK(gauges.findChild<QWidget*>("tuneReadout0")->accessibleDescription()=="---");QSettings().remove("general/gaugeType");QSettings().remove("general/gaugeStyle");
     std::cout<<"Tune Display: target curve, validity, nine channels, persistence, selection, stale data, MDI reopening and rendering passed (synthetic data)\n";
 }

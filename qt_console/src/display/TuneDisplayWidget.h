@@ -10,7 +10,7 @@ namespace tunuino {
 double ecuTargetLambda(const QByteArray &aux,const QByteArray &runtime);
 class TuneDisplayWidget final : public QWidget {
 public:
-    explicit TuneDisplayWidget(QWidget *parent=nullptr);
+    explicit TuneDisplayWidget(QWidget *parent=nullptr,bool gauges=false);
     void setConnected(bool connected);
     void setReadings(const std::array<double,LogChannelCount> &readings,double target);
     bool assignChannel(int slot,int channel); // -1=None, 0..6=runtime, 7=target lambda.
@@ -26,6 +26,7 @@ private:
     std::array<double,8> readings_{};
     std::array<QWidget*,9> cells_{};
     QWidget *bars_;
+    bool gauges_=false;
     bool connected_=false;
     QElapsedTimer sampleAge_;
 };
