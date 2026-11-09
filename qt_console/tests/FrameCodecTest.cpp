@@ -15,7 +15,8 @@ private slots:
         QCOMPARE(request.toHex(), QByteArray("72000112340100"));
         QCOMPARE(tunuino::FrameCodec::decode(tunuino::FrameCodec::encode(request)).body, request);
         QVERIFY(tunuino::ConfigProtocol::readPage(0, 0, 1).isEmpty());
-        QVERIFY(tunuino::ConfigProtocol::readPage(5, 0, 1).isEmpty());
+        QVERIFY(!tunuino::ConfigProtocol::readPage(5, 0, 1).isEmpty());
+        QVERIFY(tunuino::ConfigProtocol::readPage(6, 0, 1).isEmpty());
         QVERIFY(tunuino::ConfigProtocol::readPage(1, 0, 0).isEmpty());
         QVERIFY(tunuino::ConfigProtocol::readPage(1, 0, 257).isEmpty());
     }

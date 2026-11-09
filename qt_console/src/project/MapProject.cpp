@@ -34,8 +34,8 @@ bool MapProject::decode(const QByteArray &bytes,QJsonObject &payload,QString &er
     const auto p=o["payload"].toObject();const auto raw=content(p);
     if(o["crc32"]!=crc(raw)||o["sha256"]!=QString::fromLatin1(QCryptographicHash::hash(raw,QCryptographicHash::Sha256).toHex()))return fail("Project checksum does not match; nothing was loaded.");
     if(p["target"].toObject()!=QJsonObject{{"family",1},{"mcu",1},{"hardwareRevision",7},{"schema",2}})return fail("Unsupported ECU target or configuration format.");
-    const auto pages=p["pages"].toObject();const QStringList names{"header","fuel","ignition","aux"};if(pages.size()!=4)return fail("Project must contain all four configuration pages.");
-    for(int i=0;i<4;++i){const auto text=pages[names[i]].toString();const auto b=QByteArray::fromHex(text.toLatin1());if(text!=QString::fromLatin1(b.toHex())||b.size()!=(i==0||i==3?256:576)||(i==0&&SensorCalibrationCodec::u16(b,0)!=2)||(i==1&&!MapPageCodec::valid(2,b))||(i==2&&!MapPageCodec::valid(3,b)))return fail("Invalid project configuration page.");}
+    const auto pages=p["pages"].toObject();QStringList names{"header","fuel","ignition","aux"};if(pages.contains("afr"))names<<"afr";if(pages.size()!=names.size())return fail("Project must contain all four configuration pages.");
+    for(int i=0;i<names.size();++i){const auto text=pages[names[i]].toString();const auto b=QByteArray::fromHex(text.toLatin1());if(text!=QString::fromLatin1(b.toHex())||b.size()!=(i==0||i==3?256:576)||(i==0&&SensorCalibrationCodec::u16(b,0)!=2)||(i==1&&!MapPageCodec::valid(2,b))||(i==2&&!MapPageCodec::valid(3,b))||(i==4&&!MapPageCodec::valid(5,b)))return fail("Invalid project configuration page.");}
     for(const auto &key:{"tables","parameters","sensors","trigger","service"})if(!p[key].isObject())return fail("Incomplete project editor data.");
     if(p["tables"].toObject().size()!=3)return fail("Fuel, Ignition and AFR Target tables are required.");payload=p;return true;
 }

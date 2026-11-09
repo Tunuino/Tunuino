@@ -108,7 +108,7 @@ void AutotuneWidget::configure(){
 void AutotuneWidget::review(){refresh();}
 QByteArray AutotuneWidget::displayPage()const{if(base_.valid()&&!invalidated_)return base_.pages[1];auto page=previewPage?previewPage():QByteArray{};if(MapPageCodec::valid(2,page))return page;MapPageValues m;for(int i=0;i<16;++i){m.rpm[i]=500+i*500;m.load[i]=20+i*20;}m.cells.fill(40);QString error;return MapPageCodec::encode(2,m,error);}
 void AutotuneWidget::start(){if(collecting_||!snapshot)return;if(canStart&&!canStart()){state_->setText(tr("Another ECU operation is in progress."));return;}const auto base=snapshot();if(!base.valid()){state_->setText(tr("Connect the ECU and wait for a complete configuration read."));return;}
- const int flags=SensorCalibrationCodec::u16(base.pages[3],70);if(base.pages[3][68]!=1||!(flags&4)||(flags&~7)||base.pages[0][103]!=0){state_->setText(tr("Requires an enabled ECU lambda target and no closed-loop/transient/trim/fuel corrections. Their effects are not silently treated as VE error."));return;}
+ const int flags=SensorCalibrationCodec::u16(base.pages[3],70);if(base.pages[3][68]!=1||!(flags&4)||(flags&~(7|4096))||base.pages[0][103]!=0){state_->setText(tr("Requires an enabled ECU lambda target and no closed-loop/transient/trim/fuel corrections. Their effects are not silently treated as VE error."));return;}
  base_=base;appliedPage_=base.pages[1];samples_.clear();counts_.fill(0);ratios_.fill(0);lambdas_.fill(0);targets_.fill(0);accepted_=rejected_=0;previousTime_=lastSample_=-1;invalidated_=false;collecting_=true;clock_.start();if(busyChanged)busyChanged(true);refresh();
 }
 void AutotuneWidget::stop(){if(!collecting_)return;collecting_=false;if(busyChanged)busyChanged(false);refresh();}

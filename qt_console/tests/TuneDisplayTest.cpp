@@ -26,6 +26,7 @@ int main(int argc,char **argv){
     put32(runtime,45,500000);CHECK(tunuino::ecuTargetLambda(aux,runtime)==1.1);
     put32(runtime,45,500001);CHECK(std::isnan(tunuino::ecuTargetLambda(aux,runtime)));
     put32(runtime,45,100000);CHECK(tunuino::ecuTargetLambda(aux,runtime)==1.0);
+    Codec::put(aux,70,4100);CHECK(std::isnan(tunuino::ecuTargetLambda(aux,runtime)));
     Codec::put(aux,70,0);CHECK(std::isnan(tunuino::ecuTargetLambda(aux,runtime)));
     Codec::put(aux,70,4);runtime[39]=0;CHECK(std::isnan(tunuino::ecuTargetLambda(aux,runtime)));
     runtime[39]=2;auto invalid=aux;Codec::put(invalid,116,2000);CHECK(std::isnan(tunuino::ecuTargetLambda(invalid,runtime)));

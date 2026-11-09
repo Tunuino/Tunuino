@@ -86,6 +86,7 @@ protected:
 }
 double ecuTargetLambda(const QByteArray &aux,const QByteArray &runtime){
     if(aux.size()!=256||aux[0]!=1||aux[68]!=1||!(SensorCalibrationCodec::u16(aux,70)&4)
+        ||(SensorCalibrationCodec::u16(aux,70)&4096)
         ||runtime.size()!=101||quint8(runtime[0])!=0||!(quint8(runtime[39])&2))return Missing;
     int x[3],y[3];for(int i=0;i<3;++i){x[i]=SensorCalibrationCodec::u16(aux,114+2*i);y[i]=SensorCalibrationCodec::u16(aux,120+2*i);
         if(x[i]<1000||x[i]>50000||y[i]<650||y[i]>1300||(i&&x[i]<=x[i-1]))return Missing;}

@@ -12,7 +12,7 @@ namespace tunuino {
 class MapWriteTransaction : public QObject {
 public:
     explicit MapWriteTransaction(QObject *parent=nullptr) : QObject(parent) {}
-    using Pages=std::array<QByteArray,4>;
+    using Pages=std::array<QByteArray,5>;
     std::function<bool(const QByteArray&,int)> send;
     std::function<bool(const QByteArray&,quint32,const Pages&)> savePrevious;
     std::function<void(bool,bool,const QString&)> completed; // success, uncertain permanent save, message.
@@ -49,6 +49,7 @@ private:
     static QByteArray pageCommand(char command,int page);
     static QByteArray readCommand(int page,int offset,int count);
     Phase phase_=Phase::Idle;
+    int pageCount_=4;
     int page_=0,offset_=0,readPage_=0,sensor_=-1;
     quint32 generation_=0,resultGeneration_=0;
     bool burnRequested_=false,writeRequested_=false,identityMatched_=false;

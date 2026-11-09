@@ -92,10 +92,10 @@ struct Run {
         if(success && !unchanged){CHECK(ecu.pages[size_t(page-1)]==desired);CHECK(ecu.pages[0]==copied[0] && ecu.pages[3]==copied[3]);CHECK(ecu.pages[size_t(page==2?2:1)]==copied[size_t(page==2?2:1)]);}
     }
 };
-static void nativeFirmware() {
+static void nativeFirmware(bool afr=false) {
     const QString executable=qEnvironmentVariable("TUNUINO_FIRMWARE_HARNESS");
     if(executable.isEmpty())return;
-    QProcess process;process.start(executable,QStringList{});CHECK(process.waitForStarted(3000));
+    QProcess process;process.start(executable,afr?QStringList{"--afr"}:QStringList{});CHECK(process.waitForStarted(3000));
     const auto exchange=[&](const QByteArray &q) {
         const auto line=q.toHex()+"\n";CHECK(process.write(line)==line.size());CHECK(process.waitForBytesWritten(3000));
         while(!process.canReadLine())CHECK(process.waitForReadyRead(3000));
@@ -104,10 +104,13 @@ static void nativeFirmware() {
     const auto id=exchange("TUNUINO?");const auto validation=exchange("TUNUINO:V");
     CHECK(id.size()==32 && validation.size()==16 && u32(validation,4)==0);
     Writer::Pages before;
-    for(int p=1;p<=4;++p)for(int at=0;at<(p==1 || p==4?256:576);at+=64)before[size_t(p-1)]+=exchange(read(p,at,64)).mid(1);
+    for(int p=1;p<=(afr?5:4);++p)for(int at=0;at<(p==1 || p==4?256:576);at+=64)before[size_t(p-1)]+=exchange(read(p,at,64)).mid(1);
     quint32 generation=u32(validation,8);int copies=0,totalBurns=0;
-    for(int page=2;page<=3;++page) {
-        auto desired=before[size_t(page-1)];desired[64]=page==2?char(0x13):char(0xfe);desired[65]=page==2?char(0x88):char(0x0c);
+    for(int index=0;index<(afr?3:2);++index) {
+        const int page=afr?(index==0?5:index+1):index+2;
+        auto desired=before[size_t(page-1)];
+        if(page==5){tunuino::MapPageValues v;for(int i=0;i<16;++i){v.rpm[i]=500+400*i;v.load[i]=20+10*i;}v.cells.fill(14.7);QString error;desired=tunuino::MapPageCodec::encode(5,v,error);CHECK(!desired.isEmpty());}
+        if(page!=5){desired[64]=page==2?char(0x13):char(0xfe);desired[65]=page==2?char(0x88):char(0x0c);}
         Writer writer;QQueue<QByteArray> pending;bool success=false;int burns=0;
         writer.send=[&](const QByteArray &q,int){pending.enqueue(q);return true;};
         writer.savePrevious=[&](const QByteArray &identity,quint32 gen,const Writer::Pages &pages){CHECK(identity==id && gen==generation && pages==before);++copies;return true;};
@@ -117,7 +120,7 @@ static void nativeFirmware() {
         CHECK(success && burns==1);CHECK(writer.generation()==generation+1);
         before[size_t(page-1)]=desired;generation=writer.generation();totalBurns+=burns;
     }
-    CHECK(copies==2 && totalBurns==2);
+    CHECK(copies==(afr?3:2) && totalBurns==(afr?3:2));
     process.closeWriteChannel();CHECK(process.waitForFinished(3000) && process.exitCode()==0);
     std::cout<<"Real firmware dispatcher, page validation, persistence callback and generation: passed (host simulation)\n";
 }
@@ -154,6 +157,11 @@ int main(int argc,char **argv) {
     CHECK(tunuino::MapPageCodec::encode(2,badMap,codecError).isEmpty());
     badMap.cells.fill(0);badMap.rpm[1]=badMap.rpm[0];CHECK(tunuino::MapPageCodec::encode(2,badMap,codecError).isEmpty());
     badMap.rpm[1]=900;badMap.cells[0]=1.001;CHECK(tunuino::MapPageCodec::encode(2,badMap,codecError).isEmpty());
-    nativeFirmware();
+    badMap.cells.fill(14.7);CHECK(!tunuino::MapPageCodec::encode(5,badMap,codecError).isEmpty());
+    const auto afrPage=tunuino::MapPageCodec::encode(5,badMap,codecError);CHECK(tunuino::MapPageCodec::valid(5,afrPage));
+    CHECK(!invalid.start(5,afrPage,QByteArray(576,0),ecu.identity,5));
+    badMap.cells[0]=9;CHECK(tunuino::MapPageCodec::encode(5,badMap,codecError).isEmpty());
+    badMap.cells[0]=20;CHECK(tunuino::MapPageCodec::encode(5,badMap,codecError).isEmpty());
+    nativeFirmware();nativeFirmware(true);
     std::cout<<"Fuel/Ignition write, clean base, unchanged pages, readback, save failure and no Burn retry: passed\n";
 }

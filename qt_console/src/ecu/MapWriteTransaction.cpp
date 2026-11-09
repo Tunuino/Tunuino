@@ -30,6 +30,7 @@ quint32 MapWriteTransaction::crc32(const QByteArray &bytes) {
 bool MapWriteTransaction::start(int page,const QByteArray &desired,const QByteArray &baseMap,
     const QByteArray &identity,quint32 generation) {
     if(busy() || !MapPageCodec::valid(page,desired) || !MapPageCodec::valid(page,baseMap))return false;
+    if(page==5&&(!MapPageCodec::afrSupported(identity)||desired==QByteArray(576,0)))return false;
     sensor_=-1;return begin(page,desired,baseMap,identity,generation);
 }
 bool MapWriteTransaction::startSensor(SensorKind kind,const QByteArray &desired,const QByteArray &base,
@@ -52,12 +53,14 @@ bool MapWriteTransaction::startParameters(int page,const QByteArray &desired,con
     if(page==1&&desired.mid(98,2)!=base.mid(98,2)&&!SensorCalibrationCodec::camInputSupported(identity))return false;
     if(page==1&&desired.mid(82,14)!=base.mid(82,14)&&!VssCodec::supported(identity))return false;
     if(page==1&&desired.mid(57,7)!=base.mid(57,7)&&!Cam2Codec::supported(identity))return false;
+    if(page==4&&((quint8(desired[70])^quint8(base[70]))&16)&&!MapPageCodec::afrSupported(identity))return false;
     sensor_=-2;return begin(page,desired,base,identity,generation);
 }
 bool MapWriteTransaction::begin(int page,const QByteArray &desired,const QByteArray &baseMap,
     const QByteArray &identity,quint32 generation) {
     if(busy() || !send || !savePrevious || !completed || generation==0
         || !EcuPowerState::supportedIdentity(identity) || !(quint8(identity[19])&8))return false;
+    pageCount_=MapPageCodec::afrSupported(identity)?5:4;
     page_=page;desired_=desired;baseMap_=baseMap;identity_=identity;generation_=resultGeneration_=generation;
     burnRequested_=writeRequested_=identityMatched_=false;base_={};expected_={};read_={};
     issue(Phase::Identity,QByteArray("TUNUINO?"));return true;
@@ -125,11 +128,11 @@ void MapWriteTransaction::receive(const QByteArray &b) {
         if(b.size()!=count+1){reject();return;}
         read_[size_t(readPage_-1)]+=b.mid(1);offset_+=count;
         if(offset_==pageSize(readPage_)){++readPage_;offset_=0;}
-        if(readPage_<=4){requestRead();return;}
+        if(readPage_<=pageCount_){requestRead();return;}
         if(reading==Phase::ReadBase) {
             base_=read_;
             if(base_[size_t(page_-1)]!=baseMap_ || quint8(base_[0][0])!=0 || quint8(base_[0][1])!=2
-                || !MapPageCodec::valid(2,base_[1]) || !MapPageCodec::valid(3,base_[2])){reject();return;}
+                || !MapPageCodec::valid(2,base_[1]) || !MapPageCodec::valid(3,base_[2]) || (pageCount_==5&&!MapPageCodec::valid(5,base_[4]))){reject();return;}
             if(sensor_>=0){QString error;
                 if(!SensorCalibrationCodec::permitted(SensorKind(sensor_),baseMap_,desired_,base_[0],base_[3],error)){fail(error);return;}}
             issue(Phase::ConfirmBase,QByteArray("TUNUINO:V"));

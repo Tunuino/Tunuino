@@ -27,7 +27,7 @@ public:
     static quint32 crc32(const QByteArray &bytes){quint32 crc=0xffffffffu;for(char byte:bytes){crc^=quint8(byte);for(int bit=0;bit<8;++bit)crc=(crc>>1)^((crc&1u)?0xedb88320u:0u);}return ~crc;}
     static QByteArray project(const ToolSnapshot &base,const QString &comment){
         if(!base.valid()||!EcuPowerState::supportedIdentity(base.identity)||SensorCalibrationCodec::u16(base.pages[0],0)!=2||!validComment(comment))return {};
-        QJsonArray pages;QByteArray content("Tunuino-project-v1");content+=base.identity.mid(20,12);QByteArray generation(4,0);put32(generation,0,base.generation);content+=generation;for(const auto &page:base.pages){pages.append(QString::fromLatin1(page.toHex()));content+=page;}content+=comment.toUtf8();
+        QJsonArray pages;QByteArray content("Tunuino-project-v1");content+=base.identity.mid(20,12);QByteArray generation(4,0);put32(generation,0,base.generation);content+=generation;for(const auto &page:base.pages){if(page.isEmpty())continue;pages.append(QString::fromLatin1(page.toHex()));content+=page;}content+=comment.toUtf8();
         const QJsonObject object{{"format","tunuino-project-v1"},{"target",QJsonObject{{"family",1},{"mcu",1},{"hardwareRevision",7},{"schema",2}}},{"sourceUid",QString::fromLatin1(base.identity.mid(20,12).toHex())},{"sourceGeneration",double(base.generation)},{"pages",pages},{"comment",comment},{"crc32",QStringLiteral("%1").arg(crc32(content),8,16,QLatin1Char('0'))},{"sha256",QString::fromLatin1(QCryptographicHash::hash(content,QCryptographicHash::Sha256).toHex())}};
         return QJsonDocument(object).toJson(QJsonDocument::Indented);
     }

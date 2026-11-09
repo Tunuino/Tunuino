@@ -8,9 +8,9 @@ namespace tunuino {
 struct ToolSnapshot {
     QByteArray identity;
     quint32 generation=0;
-    std::array<QByteArray,4> pages;
+    std::array<QByteArray,5> pages;
     bool valid() const {return identity.size()==32&&generation&&pages[0].size()==256&&pages[3].size()==256
-        &&MapPageCodec::valid(2,pages[1])&&MapPageCodec::valid(3,pages[2]);}
+        &&(pages[4].isEmpty()||MapPageCodec::valid(5,pages[4]))&&MapPageCodec::valid(2,pages[1])&&MapPageCodec::valid(3,pages[2]);}
 };
 struct Assignment {QString id,contact;QStringList functions;bool conflict=false;};
 inline QVector<Assignment> inputAssignments(const ToolSnapshot &s){
