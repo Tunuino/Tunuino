@@ -642,7 +642,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     const QStringList fuelMapBins = QStringLiteral("16,26,30,36,40,46,50,56,60,66,70,76,86,90,96,100").split(',');
     const QStringList ignitionRpmBins = QStringLiteral("500,1000,1500,2000,2500,3000,3500,4000,4500,5000,5500,6000,6300,6700,7000,7200").split(',');
     const QStringList ignitionMapBins = QStringLiteral("10,16,20,26,30,36,40,46,50,56,66,74,80,88,96,100").split(',');
-    const QStringList afrRpmBins = QStringLiteral("500,700,900,1500,2100,2900,3800,4700,5500,5700,5900,6100,6300,6500,6500,6500").split(',');
+    const QStringList afrRpmBins = QStringLiteral("500,700,900,1500,2100,2900,3800,4700,5500,5700,5900,6100,6300,6700,7000,7200").split(',');
     const QStringList afrMapBins = fuelMapBins;
     auto fillDefaultTable = [](QTableWidget *table, const QByteArray &packed, double divisor, const QStringList &mapAxis) {
         if (packed.size() != 256 || mapAxis.size() != 16) return;
@@ -1091,7 +1091,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     maps->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     fillDefaultTable(maps, fuelDefaults, 1.0, fuelMapBins);
     installMapHeatmap(maps);
-    fuelActionsLayout->insertStretch(2, 1);
     installTableEditControls(fuelActionsLayout, maps, false);
     const auto fuelFileActions = installMapFileActions(maps, QStringLiteral("fuel"), fuelRpmBins, fuelMapBins, 255.0);
     maps->setCornerButtonEnabled(false);
@@ -1216,7 +1215,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ignitionMap->setAlternatingRowColors(true);
     fillDefaultTable(ignitionMap, ignitionDefaults, 1.0, ignitionMapBins);
     installMapHeatmap(ignitionMap);
-    ignitionActionsLayout->insertStretch(2, 1);
     installTableEditControls(ignitionActionsLayout, ignitionMap, false);
     const auto ignitionFileActions = installMapFileActions(ignitionMap, QStringLiteral("ignition"), ignitionRpmBins, ignitionMapBins, 90.0);
     ignitionMap->setCornerButtonEnabled(false);
@@ -1357,10 +1355,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrAxisRow->addWidget(afrMapAxisLabel, 0, Qt::AlignVCenter);
     afrAxisRow->addWidget(afrMap, 1);
     afrGridLayout->addLayout(afrAxisRow, 1);
+    connect(afrMap->verticalHeader(), &QHeaderView::sectionDoubleClicked, afrPage, [afrMap](int row){
+        bool ok=false;const double value=QInputDialog::getDouble(afrMap,QObject::tr("MAP breakpoint"),QObject::tr("MAP (kPa)"),afrMap->verticalHeaderItem(row)->text().toDouble(),0,500,2,&ok);
+        if(ok)afrMap->verticalHeaderItem(row)->setText(QString::number(value,'f',2));
+    });
     auto *afrRpmValues = new QTableWidget(1, 16, afrGridPanel);
     afrRpmValues->horizontalHeader()->hide();
     afrRpmValues->verticalHeader()->hide();
-    afrRpmValues->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    afrRpmValues->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
     afrRpmValues->setFocusPolicy(Qt::NoFocus);
     afrRpmValues->setSelectionMode(QAbstractItemView::NoSelection);
     afrRpmValues->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);

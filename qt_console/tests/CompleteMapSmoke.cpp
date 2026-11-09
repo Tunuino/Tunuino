@@ -150,6 +150,19 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     auto axisSource=source;auto axisTables=axisSource["tables"].toObject(),axisFuel=axisTables["fuel"].toObject();auto axisRpm=axisFuel["rpm"].toArray();axisRpm[0]=axisRpm[0].toDouble()+1;axisFuel["rpm"]=axisRpm;auto axisRows=axisFuel["cells"].toArray(),axisRow=axisRows[0].toArray();axisRow[0]=142.25;axisRows[0]=axisRow;axisFuel["cells"]=axisRows;axisTables["fuel"]=axisFuel;axisSource["tables"]=axisTables;CHECK(compareFile.open(QIODevice::WriteOnly|QIODevice::Truncate));compareFile.write(tunuino::MapProject::encode(axisSource,error));compareFile.close();CHECK(comparator->load(compareFile.fileName(),error));CHECK(compTables->rowCount()==2);for(int r=0;r<compTables->rowCount();++r)if(compTables->item(r,0)->text().contains("Cell"))compTables->selectRow(r);const auto beforeAxis=project->capture(error);CHECK(!comparator->applySelected(error));CHECK(project->capture(error)==beforeAxis);compTables->selectAll();CHECK(comparator->applySelected(error));CHECK(project->capture(error)["tables"]==axisSource["tables"]&&project->capture(error)["pages"]==compareBase["pages"]);
     CHECK(project->apply(compareBase,error));
     if(!qEnvironmentVariable("TUNUINO_ANALYSIS_PREVIEW").isEmpty()){tunuino::ProjectComparator preview(project);CHECK(preview.load(compareFile.fileName(),error));preview.resize(1000,500);preview.show();app.processEvents();CHECK(preview.grab().save(qEnvironmentVariable("TUNUINO_ANALYSIS_PREVIEW")+"-compare.png"));}
+    checkpoint("render native map windows");
+    for(const auto &title:{QString("Fuel Table"),QString("AFR Target")}){
+        QTreeWidgetItemIterator entry(tree);bool opened=false;
+        while(*entry){if((*entry)->text(0)==title){tree->itemClicked(*entry,0);opened=true;break;}++entry;}
+        CHECK(opened);app.processEvents();auto *mapWindow=mdi->activeSubWindow();CHECK(mapWindow&&mapWindow->windowTitle()==title);
+        mapWindow->resize(900,620);mapWindow->move(0,0);app.processEvents();CHECK(!mapWindow->grab().isNull());
+        if(title=="AFR Target"){
+            const auto state=project->capture(error)["tables"].toObject()["afr"].toObject();const auto points=state["rpm"].toArray();for(int i=1;i<points.size();++i)CHECK(points[i].toDouble()>points[i-1].toDouble());
+            bool editableAxis=false;for(auto *grid:mapWindow->findChildren<QTableWidget*>())if(grid->rowCount()==1&&grid->columnCount()==16)editableAxis=grid->editTriggers().testFlag(QAbstractItemView::DoubleClicked);CHECK(editableAxis);
+            if(!qEnvironmentVariable("TUNUINO_AFR_PREVIEW").isEmpty())CHECK(mapWindow->grab().save(qEnvironmentVariable("TUNUINO_AFR_PREVIEW")));
+        }
+        mapWindow->close();mapWindow->showNormal();app.processEvents();CHECK(!mapWindow->grab().isNull());mapWindow->hide();
+    }
     checkpoint("all checks complete");
     std::cout<<"Real File/Save Project as from Firing order: full 6-cylinder map round-trip, all three tables, parameters, comment, atomic rejection and complete-project dialog and caption maximize/minimize/close/reopen passed offline\n"<<std::flush;
     std::_Exit(0);
