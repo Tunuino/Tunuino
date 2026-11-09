@@ -2,6 +2,7 @@
 #include "workspace/DesktopController.h"
 #include "ui/GeneralOptions.h"
 #include "calibration/SensitivityCurve.h"
+#include "dbw/DbwWidget.h"
 #include <QToolBar>
 #include "ui/ShortcutIcons.h"
 #include "ui/CalibrationAppearance.h"
@@ -527,9 +528,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("Functions"), {{tr("General functions"),-1}});
     addCategory(tr("Outputs"), {{tr("Output configuration"),-1}});
     addCategory(tr("Boost"), {{tr("Boost control"),-1}});
-    addCategory(tr("DBW"), {{tr("Electronic throttle"),-1}});
+    auto *dbwCategory=addCategory(tr("DBW"),{});
+    parameterItem(dbwCategory,tr("APS / TPS calibration"),"dbw.signals");
+    parameterItem(dbwCategory,tr("Signal diagnostics"),"dbw.monitor");
+    unavailable(dbwCategory,tr("Throttle motor control"),tr("Unavailable: native H-bridge driver and redundant DBW protection are not implemented."));
     addCategory(tr("Traction control"), {{tr("Traction settings"),-1}});
-    addCategory(tr("VVT"), {{tr("Cam timing"),-1}});
+    auto *vvtCategory=addCategory(tr("VVT"),{});
+    unavailable(vvtCategory,tr("Continuous cam timing"),tr("Unavailable: cam phase feedback and native VVT control are not implemented."));
+    unavailable(vvtCategory,tr("Switched cam profile - VTEC"),tr("Unavailable: native switched-profile control, hysteresis and pressure confirmation are not implemented."));
     addCategory(tr("Sport"), {{tr("Sport mode"),-1}});
     addCategory(tr("Nitrous"), {{tr("Nitrous control"),-1}});
     addCategory(tr("Tables switching"), {{tr("Table selection"),-1}});
@@ -2213,6 +2219,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto sensorPanels=QSharedPointer<QVector<tunuino::SensorCalibrationWidget*>>::create();
     auto parameterPanels=QSharedPointer<QVector<tunuino::ParameterWidget*>>::create();
     auto parameterWindows=QSharedPointer<QMap<QString,QPointer<QMdiSubWindow>>>::create();
+    auto dbwSignals=std::make_shared<tunuino::DbwSignals>();
+    auto *dbwSetup=new tunuino::DbwWidget(dbwSignals);auto *dbwSetupWindow=toolWindow(dbwSetup,tr("DBW - APS / TPS calibration"));(*parameterWindows)["dbw.signals"]=dbwSetupWindow;dbwSetupWindow->resize(dbwSetup->sizeHint()+QSize(12,30));
+    auto *dbwMonitor=new tunuino::DbwWidget(dbwSignals,true);auto *dbwMonitorWindow=toolWindow(dbwMonitor,tr("DBW - Signal diagnostics"));(*parameterWindows)["dbw.monitor"]=dbwMonitorWindow;dbwMonitorWindow->resize(dbwMonitor->sizeHint()+QSize(12,30));
     auto *textLog=new tunuino::TextLogWidget;auto *textWindow=toolWindow(textLog,tr("Text Log"));(*parameterWindows)["analysis.text"]=textWindow;
     auto *scatter=new tunuino::ScatterPlotWidget(graphLog);auto *scatterWindow=toolWindow(scatter,tr("Scatter Plot"));(*parameterWindows)["analysis.scatter"]=scatterWindow;
     graphLog->inspectionChanged=[=](const tunuino::LogSample *sample){textLog->inspect(sample);};
@@ -2328,6 +2337,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const auto &afrBase=(*mapBases)[2];afrSave->setEnabled(ready&&tunuino::MapPageCodec::afrSupported(*ecuIdentity)&&afrBase.bytes.size()==576&&afrBase.identity==*ecuIdentity&&afrBase.generation==*ecuGeneration);
         const bool sensorReady=ready&&sensorBase->header.size()==256&&sensorBase->aux.size()==256
             &&sensorBase->identity==*ecuIdentity&&sensorBase->generation==*ecuGeneration;
+        // Read-only target queries do not invalidate the ADC sample stream.
+        dbwSignals->available=*ecuOnline&&*ecuClean&&*identityVerified&&session->isOpen()&&!writer->busy()&&!*writePending&&!*readBusy&&!*validationPending&&!*toolBusy&&sensorBase->header.size()==256&&sensorBase->aux.size()==256&&sensorBase->identity==*ecuIdentity&&sensorBase->generation==*ecuGeneration;
+        if(!dbwSignals->available)dbwSignals->invalidate();
         for(auto *panel:*sensorPanels)panel->setAvailable(sensorReady);for(auto *panel:*inputPanels)panel->setAvailable(sensorReady);
         for(auto *panel:*parameterPanels)panel->setAvailable(sensorReady);triggerWizard->setAvailable(sensorReady);
         if (*writeActionRef) {
@@ -2351,6 +2363,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             ? QStringLiteral("color: #76d58a; font-weight: bold; padding: 4px 12px;")
             : QStringLiteral("color: #aaaaaa; font-weight: bold; padding: 4px 12px;"));
         if (!online) {
+            dbwSignals->available=false;dbwSignals->invalidate();
             for(auto *panel:*sensorPanels)panel->setAvailable(false);for(auto *panel:*inputPanels)panel->setAvailable(false);
             for(auto *panel:*parameterPanels)panel->setAvailable(false);triggerWizard->setAvailable(false);
             graphLog->setConnected(false);
@@ -2447,9 +2460,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         for(auto *panel:*parameterPanels)parameters[panel->block().key]=panel->editorState();
         for(auto *panel:*sensorPanels)sensors[tunuino::SensorCalibrationCodec::name(panel->kind())]=panel->editorState();
         const auto curve=camSensitivity->state();if(!camSensitivity->restore(curve,false,error))return QJsonObject{};
-        return QJsonObject{{"curves",QJsonObject{{"cam1Sensitivity",curve}}},{"target",QJsonObject{{"family",1},{"mcu",1},{"hardwareRevision",7},{"schema",2}}},{"pages",pages},{"tables",tables},{"parameters",parameters},{"sensors",sensors},{"trigger",triggerWizard->editorState()},{"service",QJsonObject{{"comment",serviceTool->projectComment()}}}};
+        return QJsonObject{{"dbw",dbwSignals->state()},{"curves",QJsonObject{{"cam1Sensitivity",curve}}},{"target",QJsonObject{{"family",1},{"mcu",1},{"hardwareRevision",7},{"schema",2}}},{"pages",pages},{"tables",tables},{"parameters",parameters},{"sensors",sensors},{"trigger",triggerWizard->editorState()},{"service",QJsonObject{{"comment",serviceTool->projectComment()}}}};
     };
     mapProject->apply=[=](const QJsonObject &document,QString &error){
+        const auto dbwState=document.contains("dbw")?document["dbw"].toObject():tunuino::DbwSignals::defaults();if(!dbwSignals->restore(dbwState,false,error))return false;
         const auto curve=document.contains("curves")?document["curves"].toObject()["cam1Sensitivity"].toObject():tunuino::SensitivityCurve::defaultState();if(!camSensitivity->restore(curve,false,error))return false;
         const auto tables=document["tables"].toObject();auto parameters=document["parameters"].toObject();auto sensors=document["sensors"].toObject();
         // Older v2 projects have six sensor editors. Add only the two new
@@ -2477,6 +2491,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const QJsonValue comment=document["service"].toObject()["comment"];if(!comment.isString()||comment.toString().size()>128){error=tr("Invalid project comment.");return false;}
         // All content is validated before changing any editor. File data never
         // replaces the trusted live ECU snapshot used by the write transaction.
+        dbwSignals->restore(dbwState,true,error);dbwSetup->sync();dbwMonitor->sync();
         *projectPages=document["pages"].toObject();*projectLoaded=true;
         const auto live=tools->snapshot?tools->snapshot():tunuino::ToolSnapshot{};
         const auto header=live.valid()?live.pages[0]:QByteArray::fromHex((*projectPages)["header"].toString().toLatin1());
@@ -2493,6 +2508,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(!mapProject->canUse()){error=tr("Wait for the current ECU operation to finish.");return false;}
         for(auto *panel:*sensorPanels)if(panel->kind()==kind){auto state=panel->editorState();state["volts"]=curve["volts"];state["values"]=curve["values"];if(!panel->restoreEditor(state,false,error))return false;panel->restoreEditor(state,true,error);panel->keepProjectEdits(true);statusBar()->showMessage(tr("Sensor curve prepared locally. Input preserved; no ECU write."),10000);return true;}
         error=tr("This sensor has no native calibration editor.");return false;
+    };
+    dbwSetup->preparePrimaryTps=[=]{
+        QString error;
+        if(!mapProject->canUse()||!dbwSignals->fresh()||!dbwSignals->assignmentError().isEmpty()||!dbwSignals->calibrated(2)||!dbwSignals->calibrated(3)){QMessageBox::warning(this,tr("Primary TPS"),tr("Connect and synchronize the ECU, assign independent inputs and calibrate both TPS signals first."));return;}
+        for(auto *panel:*sensorPanels)if(panel->kind()==tunuino::SensorKind::Tps){auto state=panel->editorState();const auto signal=dbwSignals->tracks[2];state["input"]=signal.channel;state["volts"]=QJsonArray{signal.rest,signal.full};
+            if(!panel->restoreEditor(state,false,error)){QMessageBox::warning(this,tr("Primary TPS"),error);return;}
+            panel->restoreEditor(state,true,error);panel->keepProjectEdits(true);if(*parameterNavigation)(*parameterNavigation)("sensor:TPS");statusBar()->showMessage(tr("Primary TPS prepared locally. Review and use Write to ECU. Redundant DBW control remains unavailable."),10000);return;}
     };
     triggerPresets->applyRequested=[=](int index,int groups,QString &error){
         if(!mapProject->canUse()){error=tr("Wait for the current ECU operation to finish.");return false;}
@@ -2512,6 +2534,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(!mapProject->canUse()){error=tr("Wait for the active ECU operation to finish.");return false;}
         const auto current=mapProject->capture(error);if(current.isEmpty())return false;
         if(desired.keys()!=current.keys()||desired["target"]!=current["target"]||desired["pages"]!=current["pages"]){error=tr("Comparator cannot replace the ECU target or stored base pages.");return false;}
+        if(!dbwSignals->restore(desired["dbw"].toObject(),false,error))return false;
         const auto params=desired["parameters"].toObject(),sensors=desired["sensors"].toObject(),tables=desired["tables"].toObject();
         if(params.keys()!=current["parameters"].toObject().keys()||sensors.keys()!=current["sensors"].toObject().keys()||tables.keys()!=current["tables"].toObject().keys()){error=tr("Comparison requires compatible editor blocks.");return false;}
         for(auto *panel:*parameterPanels)if(params[panel->block().key]!=current["parameters"].toObject()[panel->block().key]&&!panel->restoreEditor(params[panel->block().key].toObject(),false,error))return false;
@@ -2522,6 +2545,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const auto curve=desired["curves"].toObject()["cam1Sensitivity"].toObject();if(!camSensitivity->restore(curve,false,error))return false;
         if(!desired["service"].toObject()["comment"].isString()||desired["service"].toObject()["comment"].toString().size()>128){error=tr("Invalid project comment.");return false;}
         // Validate the complete selection first; mutate only the changed editors.
+        if(desired["dbw"]!=current["dbw"]){dbwSignals->restore(desired["dbw"].toObject(),true,error);dbwSetup->sync();dbwMonitor->sync();}
         for(auto *panel:*parameterPanels)if(params[panel->block().key]!=current["parameters"].toObject()[panel->block().key]){panel->restoreEditor(params[panel->block().key].toObject(),true,error);panel->keepProjectEdits(true);}
         for(auto *panel:*sensorPanels){auto key=tunuino::SensorCalibrationCodec::name(panel->kind());if(sensors[key]!=current["sensors"].toObject()[key]){panel->restoreEditor(sensors[key].toObject(),true,error);panel->keepProjectEdits(true);}}
         for(int i=0;i<3;++i)if(tables[names[i]]!=current["tables"].toObject()[names[i]])tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,true,error);
@@ -3188,6 +3212,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     autotuneTool->sample(logValues,target/1000.0);
                 });
             }
+            dbwSignals->observe(tools->snapshot?tools->snapshot():tunuino::ToolSnapshot{},data);
             for(auto *panel:*sensorPanels)panel->updateRaw(data);for(auto *panel:*inputPanels)panel->updateRaw(data);
             if (*ecuClean && previousGeneration && (previousGeneration!=*ecuGeneration || !previouslyClean || *autoSync) && !transfer->page && !*writePending) {
                 (*mapBases)[0]={}; (*mapBases)[1]={};(*mapBases)[2]={}; *sensorBase={}; *autoSync=true;

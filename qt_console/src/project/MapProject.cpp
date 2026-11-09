@@ -1,4 +1,5 @@
 #include "MapProject.h"
+#include "../dbw/DbwSignals.h"
 #include "../tools/ServiceDataCodec.h"
 #include <QJsonDocument>
 #include <QJsonArray>
@@ -37,6 +38,7 @@ bool MapProject::decode(const QByteArray &bytes,QJsonObject &payload,QString &er
     const auto pages=p["pages"].toObject();QStringList names{"header","fuel","ignition","aux"};if(pages.contains("afr"))names<<"afr";if(pages.size()!=names.size())return fail("Project must contain all four configuration pages.");
     for(int i=0;i<names.size();++i){const auto text=pages[names[i]].toString();const auto b=QByteArray::fromHex(text.toLatin1());if(text!=QString::fromLatin1(b.toHex())||b.size()!=(i==0||i==3?256:576)||(i==0&&SensorCalibrationCodec::u16(b,0)!=2)||(i==1&&!MapPageCodec::valid(2,b))||(i==2&&!MapPageCodec::valid(3,b))||(i==4&&!MapPageCodec::valid(5,b)))return fail("Invalid project configuration page.");}
     for(const auto &key:{"tables","parameters","sensors","trigger","service"})if(!p[key].isObject())return fail("Incomplete project editor data.");
+    if(p.contains("dbw")){DbwSignals dbw;if(!p["dbw"].isObject()||!dbw.restore(p["dbw"].toObject(),false,error))return false;}
     if(p["tables"].toObject().size()!=3)return fail("Fuel, Ignition and AFR Target tables are required.");payload=p;return true;
 }
 bool MapProject::save(const QString &path,QString &error){

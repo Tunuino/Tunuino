@@ -1,6 +1,7 @@
 // Integration check using the real Console and its File menu.
 // Offline only; settings/files are isolated in a temporary directory.
 #include "MainWindow.h"
+#include "dbw/DbwWidget.h"
 #include "workspace/DesktopController.h"
 #include "calibration/SensitivityCurve.h"
 #include "tools/AutotuneWidget.h"
@@ -102,6 +103,17 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     auto badCamProject=project->capture(error);auto camPages=badCamProject["pages"].toObject();auto camBytes=QByteArray::fromHex(camPages["header"].toString().toLatin1());camBytes[98]=2;camPages["header"]=QString::fromLatin1(camBytes.toHex());badCamProject["pages"]=camPages;CHECK(!project->apply(badCamProject,error));
     auto badVssProject=project->capture(error);auto vssPages=badVssProject["pages"].toObject();auto vssBytes=QByteArray::fromHex(vssPages["header"].toString().toLatin1());vssBytes[82]=2;vssPages["header"]=QString::fromLatin1(vssBytes.toHex());badVssProject["pages"]=vssPages;CHECK(!project->apply(badVssProject,error));
     auto badCam2Project=project->capture(error);const auto beforeBadCam2=badCam2Project;auto cam2Pages=badCam2Project["pages"].toObject();auto cam2Bytes=QByteArray::fromHex(cam2Pages["header"].toString().toLatin1());cam2Bytes[57]=2;cam2Pages["header"]=QString::fromLatin1(cam2Bytes.toHex());badCam2Project["pages"]=cam2Pages;CHECK(!project->apply(badCam2Project,error));CHECK(project->capture(error)==beforeBadCam2);
+    openSensor("dbw.signals");auto *dbwSetup=dynamic_cast<tunuino::DbwWidget*>(window.findChild<QMdiArea*>()->activeSubWindow()->widget());CHECK(dbwSetup&&dbwSetup->objectName()=="dbwSignalSetup");
+    CHECK(dbwSetup->findChild<QComboBox*>("dbwInput0")->count()==2);CHECK(!dbwSetup->findChild<QAction*>("dbwCaptureRest")->isEnabled());
+    openSensor("dbw.monitor");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->objectName()=="dbwSignalMonitor");
+    const auto dbwOriginal=project->capture(error);auto withDbw=dbwOriginal;auto dbwState=withDbw["dbw"].toObject();auto dbwRows=dbwState["signals"].toArray();auto dbwRow=dbwRows[0].toObject();dbwRow["input"]=9;dbwRow["rest"]=.5;dbwRow["full"]=4.5;dbwRows[0]=dbwRow;dbwState["signals"]=dbwRows;withDbw["dbw"]=dbwState;
+    CHECK(project->applyEdits(withDbw,error));CHECK(project->capture(error)["dbw"]==dbwState);CHECK(project->capture(error)["pages"]==dbwOriginal["pages"]);
+    CHECK(dbwSetup->findChild<QComboBox*>("dbwInput0")->count()==3&&dbwSetup->findChild<QComboBox*>("dbwInput0")->currentData()==9);
+    auto badDbw=withDbw;auto badDbwState=dbwState;badDbwState["disagreement"]=50;badDbw["dbw"]=badDbwState;CHECK(!project->apply(badDbw,error));CHECK(project->capture(error)["dbw"]==dbwState);
+    CHECK(!project->applyEdits(badDbw,error));CHECK(project->capture(error)["dbw"]==dbwState);
+    CHECK(project->save(temp.filePath("dbw.tnproj"),error));CHECK(project->applyEdits(dbwOriginal,error));CHECK(project->open(temp.filePath("dbw.tnproj"),error));CHECK(project->capture(error)["dbw"]==dbwState);
+    auto legacyDbw=project->capture(error);legacyDbw.remove("dbw");CHECK(project->apply(legacyDbw,error));CHECK(project->capture(error)["dbw"]==tunuino::DbwSignals::defaults());
+    CHECK(project->apply(dbwOriginal,error));
     checkpoint("project validation complete; desktop and menus");
     // Reference menus operate on layout/history only; ECU/project data stays intact.
     QStringList menuNames;for(auto *action:window.menuBar()->actions())menuNames<<action->text();CHECK(menuNames==QStringList({"File","Edit","Desktops","Tools","Window","Help","ECU"}));
