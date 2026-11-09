@@ -61,18 +61,21 @@ int main(int argc,char **argv){QApplication app(argc,argv);QTemporaryDir prefs;C
     auto *review=autotune.findChild<QTableWidget*>("autotuneTable");CHECK(review&&review->rowCount()==16&&review->item(0,0)->data(Qt::UserRole).toBool());CHECK(review->item(0,0)->text()=="40.0");
     auto *split=autotune.findChild<QSplitter*>("autotuneSplitter");CHECK(split&&split->orientation()==Qt::Horizontal);autotune.findChild<QAction*>("autotuneTableOnly")->trigger();CHECK(autotune.findChild<QWidget*>("autotuneSurface")->isHidden());autotune.findChild<QAction*>("autotuneSplitHorizontal")->trigger();CHECK(!autotune.findChild<QWidget*>("autotuneSurface")->isHidden());
 autotune.snapshot=[&]{return snapshot;};autotune.canStart=[]{return true;};SensorCalibrationCodec::put(snapshot.pages[3],70,4);autotune.findChild<QAction*>("autotuneStart")->trigger();CHECK(autotune.collecting());
-    std::array<double,7> values={2500,25,100,1.1,85,30,13.8};autotune.sample(values,1);QTest::qWait(2050);for(int i=0;i<6;++i){QTest::qWait(120);autotune.sample(values,1);} // Gap above 2s must reject transient/stale samples.
+    std::array<double,7> values={2500,25,80,1.1,85,30,13.8};autotune.sample(values,1);QTest::qWait(2050);for(int i=0;i<6;++i){QTest::qWait(120);autotune.sample(values,1);} // Gap above 2s must reject transient/stale samples.
     CHECK(autotune.proposal().isEmpty());QTest::qWait(1000);autotune.sample(values,1);QTest::qWait(1050);for(int i=0;i<6;++i){QTest::qWait(120);autotune.sample(values,1);}
-    autotune.findChild<QAction*>("autotuneStop")->trigger();CHECK(!autotune.collecting()&&!autotune.proposal().isEmpty());CHECK(SensorCalibrationCodec::u16(autotune.proposal(),64+2*(5*16+5))==5250);
-    CHECK(!review->item(10,5)->data(Qt::UserRole).toBool());
-    autotune.findChild<QAction*>("autotuneMode1")->trigger();CHECK(autotune.windowTitle()=="Autotune - ACTUAL LAMBDA"&&review->item(10,5)->text()=="1.100"&&review->item(0,0)->text()==QString::fromUtf8("—"));
-    autotune.findChild<QAction*>("autotuneMode2")->trigger();CHECK(review->item(10,5)->text().toUInt()>=5);
-    autotune.findChild<QAction*>("autotuneMode3")->trigger();CHECK(review->item(10,5)->text()=="0.100");
-    autotune.findChild<QAction*>("autotuneMode4")->trigger();CHECK(review->item(10,5)->text()=="2.5");
-    autotune.findChild<QAction*>("autotuneMode0")->trigger();review->setCurrentCell(10,5);review->item(10,5)->setSelected(true);CHECK(autotune.findChild<QAction*>("autotuneApply100")->isEnabled());
+    autotune.findChild<QAction*>("autotuneStop")->trigger();CHECK(!autotune.collecting()&&!autotune.proposal().isEmpty());CHECK(SensorCalibrationCodec::u16(autotune.proposal(),64+2*(4*16+5))==5250);
+    CHECK(review->horizontalHeaderItem(5)->text()=="2500"&&review->verticalHeaderItem(11)->text()=="80");
+    CHECK(review->verticalHeaderItem(0)->text()=="300"&&review->verticalHeaderItem(15)->text()=="0");
+    CHECK(review->item(10,5)->data(Qt::UserRole).toBool());
+    CHECK(!review->item(11,5)->data(Qt::UserRole).toBool());
+    autotune.findChild<QAction*>("autotuneMode1")->trigger();CHECK(autotune.windowTitle()=="Autotune - ACTUAL LAMBDA"&&review->item(11,5)->text()=="1.100"&&review->item(0,0)->text()==QString::fromUtf8("—"));
+    autotune.findChild<QAction*>("autotuneMode2")->trigger();CHECK(review->item(11,5)->text().toUInt()>=5);
+    autotune.findChild<QAction*>("autotuneMode3")->trigger();CHECK(review->item(11,5)->text()=="0.100");
+    autotune.findChild<QAction*>("autotuneMode4")->trigger();CHECK(review->item(11,5)->text()=="2.5");
+    autotune.findChild<QAction*>("autotuneMode0")->trigger();review->setCurrentCell(11,5);review->item(11,5)->setSelected(true);CHECK(autotune.findChild<QAction*>("autotuneApply100")->isEnabled());
     QByteArray local=snapshot.pages[1];int applications=0;autotune.applyToEditor=[&](const ToolSnapshot &b,const QByteArray &expected,const QByteArray &desired){CHECK(b.pages==snapshot.pages);if(expected!=local)return false;local=desired;++applications;return true;};
     const auto applySelected=[&](const char *name,bool accept){QTimer::singleShot(0,&autotune,[accept]{auto *dialog=qobject_cast<QMessageBox*>(QApplication::activeModalWidget());CHECK(dialog);dialog->button(accept?QMessageBox::Yes:QMessageBox::Cancel)->click();});autotune.findChild<QAction*>(name)->trigger();};
-    applySelected("autotuneApply50",false);CHECK(applications==0&&local==snapshot.pages[1]);applySelected("autotuneApply50",true);CHECK(applications==1&&SensorCalibrationCodec::u16(local,64+2*85)==5125);auto halfApplied=local;SensorCalibrationCodec::put(local,64,4999);auto editedLocal=local;applySelected("autotuneApply100",true);CHECK(applications==1&&local==editedLocal);local=halfApplied;applySelected("autotuneApply100",true);CHECK(applications==2&&SensorCalibrationCodec::u16(local,64+2*85)==5250);CHECK(local.left(64)==snapshot.pages[1].left(64)&&SensorCalibrationCodec::u16(local,64)==5000);
+    applySelected("autotuneApply50",false);CHECK(applications==0&&local==snapshot.pages[1]);applySelected("autotuneApply50",true);CHECK(applications==1&&SensorCalibrationCodec::u16(local,64+2*69)==5125);auto halfApplied=local;SensorCalibrationCodec::put(local,64,4999);auto editedLocal=local;applySelected("autotuneApply100",true);CHECK(applications==1&&local==editedLocal);local=halfApplied;applySelected("autotuneApply100",true);CHECK(applications==2&&SensorCalibrationCodec::u16(local,64+2*69)==5250);CHECK(local.left(64)==snapshot.pages[1].left(64)&&SensorCalibrationCodec::u16(local,64)==5000);
     setup(false,0);CHECK(!autotune.proposal().isEmpty());setup(true,10000);CHECK(autotune.proposal().isEmpty());setup(true,2000);CHECK(!autotune.proposal().isEmpty());
     if(!qEnvironmentVariable("TUNUINO_AUTOTUNE_PREVIEW").isEmpty()){app.processEvents();CHECK(autotune.grab().save(qEnvironmentVariable("TUNUINO_AUTOTUNE_PREVIEW")));}
     snapshot.generation=8;autotune.disconnected();CHECK(autotune.proposal().isEmpty());
