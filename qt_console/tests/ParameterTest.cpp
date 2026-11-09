@@ -81,8 +81,8 @@ int main(int argc,char **argv){QApplication app(argc,argv);
     const auto executable=qEnvironmentVariable("TUNUINO_FIRMWARE_HARNESS");if(executable.isEmpty()){std::cout<<"Parameter catalog/UI bounds passed; native firmware harness not supplied\n";return 0;}
     QProcess process;process.start(executable,{"--engine-profile"});CHECK(process.waitForStarted(3000));
     const auto exchange=[&](const QByteArray &q){const auto line=q.toHex()+"\n";CHECK(process.write(line)==line.size());CHECK(process.waitForBytesWritten(3000));while(!process.canReadLine())CHECK(process.waitForReadyRead(3000));return QByteArray::fromHex(process.readLine().trimmed());};
-    const auto identity=exchange("TUNUINO?");quint32 generation=u32(exchange("TUNUINO:V"),8);int operations=0;
-    for(const auto &b:blocks){Writer::Pages base;for(int p=1;p<=4;++p)for(int at=0;at<(p==1||p==4?256:576);at+=64)base[p-1]+=exchange(read(p,at,64)).mid(1);
+    const auto identity=exchange("TUNUINO?");quint32 generation=u32(exchange("TUNUINO:V"),8);int operations=0,unsupported=0;
+    for(const auto &b:blocks){if(b.page==6){ParameterWidget unavailable(b);unavailable.load(QByteArray(256,0),QByteArray(256,0),identity,generation);unavailable.setAvailable(true);bool called=false;unavailable.writeRequested=[&](int,const QByteArray&,const QByteArray&){called=true;};unavailable.save();CHECK(!called);++unsupported;continue;}Writer::Pages base;for(int p=1;p<=4;++p)for(int at=0;at<(p==1||p==4?256:576);at+=64)base[p-1]+=exchange(read(p,at,64)).mid(1);
         ParameterWidget widget(b);widget.load(base[0],base[3],identity,generation);widget.setAvailable(true);
         if(b.key=="ignition.firing"){auto *first=widget.findChild<QComboBox*>("order0"),*last=widget.findChild<QComboBox*>("order3");CHECK(first&&last);const auto selected=first->currentIndex();first->setCurrentIndex(last->currentIndex());last->setCurrentIndex(selected);CHECK(widget.findChild<QDoubleSpinBox*>("cylinders")->isEnabled());}
         else if(b.key=="inputs.pressure"){auto state=widget.editorState();auto values=state["values"].toObject();values["fuelPressureInput"]=7;state["values"]=values;QString error;CHECK(widget.restoreEditor(state,true,error));}
@@ -114,6 +114,6 @@ int main(int argc,char **argv){QApplication app(argc,argv);
             widget.findChild<QCheckBox*>("angleLock")->setChecked(false);widget.save();CHECK(invoked);
         }
     }
-    CHECK(operations==blocks.size()+1);process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
+    CHECK(unsupported==1&&operations==blocks.size()-unsupported+1);process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
     std::cout<<operations<<" parameter block writes against actual C dispatcher: one Burn each, full-page preservation and firing order independent of output wiring passed (host simulation)\n";
 }

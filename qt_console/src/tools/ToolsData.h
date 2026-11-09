@@ -1,6 +1,7 @@
 #pragma once
 #include "../protocol/SensorCalibrationCodec.h"
 #include "../protocol/MapPageCodec.h"
+#include "../protocol/VtecCodec.h"
 #include <QStringList>
 #include <QVector>
 #include <array>
@@ -8,8 +9,9 @@ namespace tunuino {
 struct ToolSnapshot {
     QByteArray identity;
     quint32 generation=0;
-    std::array<QByteArray,5> pages;
+    std::array<QByteArray,6> pages;
     bool valid() const {return identity.size()==32&&generation&&pages[0].size()==256&&pages[3].size()==256
+        &&(!VtecCodec::supported(identity)||(MapPageCodec::afrSupported(identity)&&VtecCodec::format(pages[5])))
         &&(pages[4].isEmpty()||MapPageCodec::valid(5,pages[4]))&&MapPageCodec::valid(2,pages[1])&&MapPageCodec::valid(3,pages[2]);}
 };
 struct Assignment {QString id,contact;QStringList functions;bool conflict=false;};
@@ -43,6 +45,7 @@ inline QVector<Assignment> outputAssignments(const ToolSnapshot &s){
         const QString roles[]={"Fuel pump","Fan","Main relay"};for(int i=0;i<3;++i){const int ch=quint8(h[150+i]);if(ch>0&&ch<=16)rows[ch-1].functions<<roles[i];}
     }
     if(a[0]==1){if(a[1]!=0&&quint8(a[2])>0&&quint8(a[2])<=16)rows[quint8(a[2])-1].functions<<"Idle";if(a[3]!=0&&quint8(a[4])>0&&quint8(a[4])<=16)rows[quint8(a[4])-1].functions<<"Boost";}
+    if(VtecCodec::format(s.pages[5])&&s.pages[5][1]&&quint8(s.pages[5][2])>=1&&quint8(s.pages[5][2])<=16)rows[quint8(s.pages[5][2])-1].functions<<"VTEC";
     for(auto &row:rows)row.conflict=row.functions.size()>1;return rows;
 }
 }

@@ -10,7 +10,7 @@ public:
     static constexpr quint16 ConfigPage = 1;
     static constexpr quint16 MaxChunk = 256;
     static QByteArray readPage(quint16 page, quint16 offset, quint16 count) {
-        if (page < 1 || page > 5 || count == 0 || count > MaxChunk) return {};
+        if (page < 1 || page > 6 || count == 0 || count > MaxChunk) return {};
         QByteArray request(7, char(0));
         request[0] = 'r';
         put16(request, 1, page);

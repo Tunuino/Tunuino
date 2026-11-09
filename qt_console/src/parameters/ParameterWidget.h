@@ -15,7 +15,7 @@ public:
     explicit ParameterWidget(ParameterBlock block,QWidget *parent=nullptr);
     QSize sizeHint()const override;
     const ParameterBlock &block()const{return block_;}
-    void load(const QByteArray &header,const QByteArray &aux,const QByteArray &identity,quint32 generation);
+    void load(const QByteArray &header,const QByteArray &aux,const QByteArray &identity,quint32 generation,const QByteArray &controls={});
     void setAvailable(bool available);
     void saved(){edited_=false;}
     void save();

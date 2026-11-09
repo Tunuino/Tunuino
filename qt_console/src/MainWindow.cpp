@@ -3,6 +3,7 @@
 #include "ui/GeneralOptions.h"
 #include "calibration/SensitivityCurve.h"
 #include "dbw/DbwWidget.h"
+#include "calibration/VtecMonitor.h"
 #include <QToolBar>
 #include "ui/ShortcutIcons.h"
 #include "ui/CalibrationAppearance.h"
@@ -535,7 +536,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("Traction control"), {{tr("Traction settings"),-1}});
     auto *vvtCategory=addCategory(tr("VVT"),{});
     unavailable(vvtCategory,tr("Continuous cam timing"),tr("Unavailable: cam phase feedback and native VVT control are not implemented."));
-    unavailable(vvtCategory,tr("Switched cam profile - VTEC"),tr("Unavailable: native switched-profile control, hysteresis and pressure confirmation are not implemented."));
+    parameterItem(vvtCategory,tr("Switched cam profile - VTEC"),"vtec.setup");
+    parameterItem(vvtCategory,tr("VTEC monitor"),"vtec.monitor");
     addCategory(tr("Sport"), {{tr("Sport mode"),-1}});
     addCategory(tr("Nitrous"), {{tr("Nitrous control"),-1}});
     addCategory(tr("Tables switching"), {{tr("Table selection"),-1}});
@@ -2237,6 +2239,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *camSensitivity=new tunuino::SensitivityCurve;auto *camSensitivityWindow=toolWindow(camSensitivity,tr("Digital inputs - CAM 1 sensitivity [V]"));(*parameterWindows)["inputs.cam1.sensitivity"]=camSensitivityWindow;camSensitivityWindow->resize(camSensitivity->sizeHint()+QSize(12,30));
     auto *cam2Monitor=new tunuino::VssMonitor(nullptr,tunuino::VssMonitor::Source::Cam2);auto *cam2Window=toolWindow(cam2Monitor,tr("CAM 2 - Live pulses"));(*parameterWindows)["inputs.cam2.monitor"]=cam2Window;cam2Window->resize(cam2Monitor->sizeHint()+QSize(12,30));
     auto *vssMonitor=new tunuino::VssMonitor;auto *vssWindow=toolWindow(vssMonitor,tr("Vehicle speed - Live readings"));(*parameterWindows)["speed.monitor"]=vssWindow;vssWindow->resize(vssMonitor->sizeHint()+QSize(12,30));
+    auto *vtecMonitor=new tunuino::VtecMonitor;auto *vtecWindow=toolWindow(vtecMonitor,tr("VTEC - ECU state"));(*parameterWindows)["vtec.monitor"]=vtecWindow;vtecWindow->resize(vtecMonitor->sizeHint()+QSize(12,30));
     auto sensorWizards=QSharedPointer<QMap<QString,QPointer<tunuino::SensorCurveWizard>>>::create();
     (*sensorWizards)["sensorwizard:IAT"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Iat,false,this);
     (*sensorWizards)["sensorwizard:CLT"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Clt,false,this);
@@ -2320,7 +2323,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto ecuGeneration = QSharedPointer<quint32>::create(0);
     struct MapBase { QByteArray bytes, identity; quint32 generation=0; };
     auto mapBases = QSharedPointer<std::array<MapBase,3>>::create();
-    struct SensorBase { QByteArray header,aux,identity;quint32 generation=0; };
+    struct SensorBase { QByteArray header,aux,identity,controls;quint32 generation=0; };
     auto sensorBase=QSharedPointer<SensorBase>::create();
     auto *mapProject=new tunuino::MapProject(this);
     auto projectLoaded=QSharedPointer<bool>::create(false);
@@ -2395,7 +2398,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto transfer = QSharedPointer<MapTransfer>::create();
     auto autoSync = QSharedPointer<bool>::create(false);
     auto sendChunk = [session, transfer]() -> bool {
-        const int total = (transfer->page == 1 || transfer->page == 4) ? 256 : 576;
+        const int total = (transfer->page == 1 || transfer->page == 4 || transfer->page == 6) ? 256 : 576;
         if (!transfer->page || transfer->offset >= total) return false;
         const int count = qMin(64, total - transfer->offset);
         QByteArray command(7, char(0));
@@ -2453,7 +2456,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     mapProject->capture=[=](QString &error){
         auto pages=*projectPages;if(pages.isEmpty())pages=tunuino::MapProject::defaultPages();
         const auto live=tools->snapshot?tools->snapshot():tunuino::ToolSnapshot{};
-        if(!*projectLoaded&&live.valid()){const QStringList names{"header","fuel","ignition","aux"};for(int i=0;i<4;++i)pages[names[i]]=QString::fromLatin1(live.pages[i].toHex());if(!live.pages[4].isEmpty())pages["afr"]=QString::fromLatin1(live.pages[4].toHex());}
+        if(!*projectLoaded&&live.valid()){const QStringList names{"header","fuel","ignition","aux"};for(int i=0;i<4;++i)pages[names[i]]=QString::fromLatin1(live.pages[i].toHex());if(!live.pages[4].isEmpty())pages["afr"]=QString::fromLatin1(live.pages[4].toHex());if(!live.pages[5].isEmpty())pages["controls"]=QString::fromLatin1(live.pages[5].toHex());}
         QJsonObject tables,parameters,sensors;
         const QList<QTableWidget*> grids{maps,ignitionMap,afrMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues};const QStringList names{"fuel","ignition","afr"};
         for(int i=0;i<3;++i){const auto state=tunuino::MapProject::tableState(grids[i],rpms[i]);if(!tunuino::MapProject::tableState(grids[i],rpms[i],state,i==1?-90:0,i==0?300:i==1?90:25,false,error))return QJsonObject{};tables[names[i]]=state;}
@@ -2482,6 +2485,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(!parameters.contains("inputs.cam1")){QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="inputs.cam1")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(storedHeader,field);parameters["inputs.cam1"]=QJsonObject{{"values",values}};}
         if(!parameters.contains("inputs.cam2")){const auto header=tunuino::Cam2Codec::defaults(storedHeader);QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="inputs.cam2")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(header,field);parameters["inputs.cam2"]=QJsonObject{{"values",values}};}
         for(const auto &key:{QString("inputs.vss"),QString("speed.vehicle")})if(!parameters.contains(key)){const auto header=tunuino::VssCodec::defaults(storedHeader);QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key==key)for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(header,field);parameters[key]=QJsonObject{{"values",values}};}
+        if(!parameters.contains("vtec.setup")){QJsonObject values;const auto storedControl=document["pages"].toObject().contains("controls")?QByteArray::fromHex(document["pages"].toObject()["controls"].toString().toLatin1()):QByteArray(256,0);if(!tunuino::VtecCodec::format(storedControl)){error=tr("Invalid VTEC configuration page.");return false;}const auto control=storedControl[0]?storedControl:tunuino::VtecCodec::defaults();for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="vtec.setup")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(control,field);parameters["vtec.setup"]=QJsonObject{{"values",values}};}
         if(parameters.size()!=parameterPanels->size()||sensors.size()!=sensorPanels->size()){error=tr("This map does not contain all supported parameters and sensors.");return false;}
         const QList<QTableWidget*> grids{maps,ignitionMap,afrMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues};const QStringList names{"fuel","ignition","afr"};
         for(int i=0;i<3;++i)if(!tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,false,error))return false;
@@ -2497,7 +2501,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const auto header=live.valid()?live.pages[0]:QByteArray::fromHex((*projectPages)["header"].toString().toLatin1());
         const auto aux=live.valid()?live.pages[3]:QByteArray::fromHex((*projectPages)["aux"].toString().toLatin1());
         QByteArray identity=live.valid()?live.identity:QByteArray(32,0);if(!live.valid())identity[19]=char(255);const quint32 generation=live.valid()?live.generation:1;
-        for(auto *panel:*parameterPanels){panel->keepProjectEdits(false);panel->load(header,aux,identity,generation);panel->restoreEditor(parameters[panel->block().key].toObject(),true,error);panel->keepProjectEdits(true);if(!live.valid())panel->setAvailable(false);}
+        for(auto *panel:*parameterPanels){panel->keepProjectEdits(false);panel->load(header,aux,identity,generation,live.valid()?live.pages[5]:document["pages"].toObject().contains("controls")?QByteArray::fromHex(document["pages"].toObject()["controls"].toString().toLatin1()):QByteArray(256,0));panel->restoreEditor(parameters[panel->block().key].toObject(),true,error);panel->keepProjectEdits(true);if(!live.valid())panel->setAvailable(false);}
         for(auto *panel:*sensorPanels){panel->keepProjectEdits(false);panel->load(header,aux,identity,generation);panel->restoreEditor(sensors[tunuino::SensorCalibrationCodec::name(panel->kind())].toObject(),true,error);panel->keepProjectEdits(true);if(!live.valid())panel->setAvailable(false);}
         triggerWizard->keepProjectEdits(false);if(live.valid())triggerWizard->load(header,aux,identity,generation);else triggerWizard->loadOffline(header,aux);triggerWizard->restoreEditor(document["trigger"].toObject(),true,error);triggerWizard->keepProjectEdits(true);if(!live.valid())triggerWizard->setAvailable(false);
         for(int i=0;i<3;++i)tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,true,error);
@@ -2595,7 +2599,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(!*ecuOnline||!*ecuClean||!*identityVerified||!session->isOpen()||*readBusy||*validationPending||writer->busy()||*writePending)return result;
         if(sensorBase->identity!=*ecuIdentity||sensorBase->generation!=*ecuGeneration)return result;
         for(int i=0;i<(tunuino::MapPageCodec::afrSupported(*ecuIdentity)?3:2);++i){const auto &base=(*mapBases)[i];if(base.identity!=*ecuIdentity||base.generation!=*ecuGeneration)return result;}
-        result.identity=*ecuIdentity;result.generation=*ecuGeneration;result.pages={sensorBase->header,(*mapBases)[0].bytes,(*mapBases)[1].bytes,sensorBase->aux,tunuino::MapPageCodec::afrSupported(*ecuIdentity)?(*mapBases)[2].bytes:QByteArray{}};return result;
+        result.identity=*ecuIdentity;result.generation=*ecuGeneration;result.pages={sensorBase->header,(*mapBases)[0].bytes,(*mapBases)[1].bytes,sensorBase->aux,tunuino::MapPageCodec::afrSupported(*ecuIdentity)?(*mapBases)[2].bytes:QByteArray{},tunuino::VtecCodec::supported(*ecuIdentity)?sensorBase->controls:QByteArray{}};return result;
     };
     const auto changeToolBusy=[=](bool busy){*toolBusy=busy;setProperty("ecuToolBusy",busy);updateWriteAvailability();};
     serviceTool->busyChanged=changeToolBusy;
@@ -2613,6 +2617,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         QTimer::singleShot(timeout+300,this,[=]{if(*toolReply&&*toolLease==lease){auto callback=std::move(*toolReply);*toolReply={};callback({});}});return true;
     };
     cam2Monitor->exchange=toolExchange;cam2Monitor->snapshot=tools->snapshot;cam2Monitor->ready=[=]{return !*toolBusy&&!*toolReply;};
+    vtecMonitor->exchange=toolExchange;vtecMonitor->snapshot=tools->snapshot;vtecMonitor->ready=[=]{return !*toolBusy&&!*toolReply;};
     vssMonitor->exchange=toolExchange;vssMonitor->snapshot=tools->snapshot;vssMonitor->ready=[=]{return !*toolBusy&&!*toolReply;};
     serviceTool->exchange=toolExchange;
     scopeTool->exchange=toolExchange;outputTestTool->exchange=toolExchange;
@@ -2768,7 +2773,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const auto base=*sensorBase;if(base.identity!=*ecuIdentity||base.generation!=*ecuGeneration)return false;
         if(QMessageBox::question(this,tr("Write parameters to ECU"),tr("Save %1? Engine must be stopped and outputs disarmed. Only this block is written; other window edits are separate.").arg(title),QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel)!=QMessageBox::Yes)return false;
         if(!*ecuOnline||!*identityVerified||!session->isOpen()||transfer->page||*ecuIdentity!=base.identity||*ecuGeneration!=base.generation)return false;
-        pendingWrite->sensor=-2;*activeSensorWrite=-1;*activeParameterFinished=std::move(done);pendingWrite->page=page;pendingWrite->desired=desired;pendingWrite->mask=mask;pendingWrite->base=page==1?base.header:base.aux;pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
+        pendingWrite->sensor=-2;*activeSensorWrite=-1;*activeParameterFinished=std::move(done);pendingWrite->page=page;pendingWrite->desired=desired;pendingWrite->mask=mask;pendingWrite->base=page==1?base.header:page==6?base.controls:base.aux;pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
         *writePending=true;setProperty("mapWriteBusy",true);writeWait->start();liveTimer->stop();validationAction->setEnabled(false);freezeMapEditing(true);updateWriteAvailability();writeLaunch->start();return true;
     };
     for(auto *panel:*parameterPanels)panel->writeRequested=[=](int page,const QByteArray &desired,const QByteArray &mask){queueParameters(panel->block().title,page,desired,mask,[panel](bool success,const QString&){if(success)panel->saved();});};
@@ -3018,7 +3023,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             return;
         }
         if (transfer->page) {
-            const int total = (transfer->page == 1 || transfer->page == 4) ? 256 : 576;
+            const int total = (transfer->page == 1 || transfer->page == 4 || transfer->page == 6) ? 256 : 576;
             const int count = qMin(64, total - transfer->offset);
             if (data.size() != count + 1 || quint8(data[0]) != 0) {
                 abortTransfer(tr("Invalid map response; table not updated"));
@@ -3040,7 +3045,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             };
             if (transfer->page == 1) {
                 const bool schemaValid=u16(0)==2;
-                if(schemaValid)sensorBase->header=transfer->bytes;
+                if(schemaValid){sensorBase->header=transfer->bytes;sensorBase->controls.clear();}
                 if(schemaValid&&*autoSync){transfer->page=0;transfer->offset=0;transfer->bytes.clear();QTimer::singleShot(0,this,[=]{startTransfer(2);});}
                 else abortTransfer(schemaValid?tr("Configuration page read"):tr("Unsupported ECU calibration schema"));
                 return;
@@ -3048,15 +3053,23 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if(transfer->page==4){
                 sensorBase->aux=transfer->bytes;sensorBase->identity=*ecuIdentity;sensorBase->generation=*ecuGeneration;
                 if(!*projectLoaded&&sensorBase->header.size()==256){*projectPages=QJsonObject{{"header",QString::fromLatin1(sensorBase->header.toHex())},{"fuel",QString::fromLatin1((*mapBases)[0].bytes.toHex())},{"ignition",QString::fromLatin1((*mapBases)[1].bytes.toHex())},{"aux",QString::fromLatin1(sensorBase->aux.toHex())}};}
-                if(sensorBase->header.size()==256){for(auto *panel:*inputPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*sensorPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*parameterPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);triggerWizard->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);}
+                if(sensorBase->header.size()==256){for(auto *panel:*inputPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*sensorPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*parameterPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration,sensorBase->controls);triggerWizard->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);}
                 if(*autoSync&&tunuino::MapPageCodec::afrSupported(*ecuIdentity)){transfer->page=0;transfer->bytes.clear();transfer->offset=0;QTimer::singleShot(0,this,[=]{startTransfer(5);});return;}
+                if(tunuino::VtecCodec::supported(*ecuIdentity)){transfer->page=0;transfer->bytes.clear();transfer->offset=0;QTimer::singleShot(0,this,[=]{startTransfer(6);});return;}
                 abortTransfer(tr("ECU synchronized: Fuel, Ignition and sensor calibrations."));return;
             }
             if(transfer->page==5){
                 const auto bytes=transfer->bytes;if(!tunuino::MapPageCodec::valid(5,bytes)){abortTransfer(tr("Invalid native AFR Target page; editor preserved."));return;}
                 (*mapBases)[2]={bytes,*ecuIdentity,*ecuGeneration};if(!*projectLoaded)(*projectPages)["afr"]=QString::fromLatin1(bytes.toHex());
                 if(!*projectLoaded&&bytes!=QByteArray(576,0)){QStringList loads;for(int i=0;i<16;++i){afrRpmValues->item(0,i)->setText(QString::number(u16(2*i)));loads.prepend(QString::number(u16(32+2*i)/100.));}afrMap->setVerticalHeaderLabels(loads);for(int r=0;r<16;++r)for(int c=0;c<16;++c)afrMap->item(15-r,c)->setText(QString::number(u16(64+2*(r*16+c))*14.7/1000.,'f',2));afrSurface->update();}
+                if(tunuino::VtecCodec::supported(*ecuIdentity)){transfer->page=0;transfer->bytes.clear();transfer->offset=0;QTimer::singleShot(0,this,[=]{startTransfer(6);});return;}
                 abortTransfer(bytes==QByteArray(576,0)?tr("ECU synchronized. AFR Target table is not configured; reference editor retained. Write the table, then explicitly enable RPM/MAP target mode."):tr("ECU synchronized including native AFR Target. AFR uses a 14.7 reference; control uses lambda."));return;
+            }
+            if(transfer->page==6){
+                if(!tunuino::VtecCodec::format(transfer->bytes)){sensorBase->controls.clear();abortTransfer(tr("Invalid VTEC page; editor preserved."));return;}
+                sensorBase->controls=transfer->bytes;if(!*projectLoaded)(*projectPages)["controls"]=QString::fromLatin1(transfer->bytes.toHex());
+                for(auto *panel:*parameterPanels)if(panel->block().page==6)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration,sensorBase->controls);
+                abortTransfer(tr("ECU synchronized including AFR Target and VTEC configuration."));return;
             }
             bool valid = true;
             for (int i = 0; i < 16; ++i) {

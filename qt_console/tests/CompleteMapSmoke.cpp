@@ -114,6 +114,10 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     CHECK(project->save(temp.filePath("dbw.tnproj"),error));CHECK(project->applyEdits(dbwOriginal,error));CHECK(project->open(temp.filePath("dbw.tnproj"),error));CHECK(project->capture(error)["dbw"]==dbwState);
     auto legacyDbw=project->capture(error);legacyDbw.remove("dbw");CHECK(project->apply(legacyDbw,error));CHECK(project->capture(error)["dbw"]==tunuino::DbwSignals::defaults());
     CHECK(project->apply(dbwOriginal,error));
+    openSensor("vtec.setup");auto *vtecPanel=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QMdiArea*>()->activeSubWindow()->widget());CHECK(vtecPanel&&vtecPanel->block().page==6);CHECK(!vtecPanel->findChild<QCheckBox*>("enabled")->isChecked());CHECK(vtecPanel->findChild<QComboBox*>("output")->count()==2);
+    openSensor("vtec.monitor");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->objectName()=="vtecMonitor");
+    const auto vtecBase=project->capture(error);auto legacyVtec=vtecBase;auto legacyVtecParams=legacyVtec["parameters"].toObject();legacyVtecParams.remove("vtec.setup");legacyVtec["parameters"]=legacyVtecParams;CHECK(project->apply(legacyVtec,error));CHECK(project->capture(error)["parameters"].toObject()["vtec.setup"].toObject()["values"].toObject()["enabled"]==0);
+    CHECK(project->capture(error)["pages"]==vtecBase["pages"]);CHECK(project->apply(vtecBase,error));
     checkpoint("project validation complete; desktop and menus");
     // Reference menus operate on layout/history only; ECU/project data stays intact.
     QStringList menuNames;for(auto *action:window.menuBar()->actions())menuNames<<action->text();CHECK(menuNames==QStringList({"File","Edit","Desktops","Tools","Window","Help","ECU"}));
