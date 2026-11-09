@@ -15,6 +15,12 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QLabel>
+#include <QFile>
+#include <QDoubleSpinBox>
+#include <QDialogButtonBox>
+#include <QDialog>
+#include <QTableWidget>
+#include <QSplitter>
 #include <iostream>
 #include <cstdlib>
 #define CHECK(x) do{if(!(x)){std::cerr<<"Failed: "<<#x<<" at "<<__LINE__<<std::endl;std::exit(1);}}while(false)
@@ -24,6 +30,7 @@ static ToolSnapshot base(){ToolSnapshot s;s.identity=QByteArray(32,0);s.identity
     MapPageValues m;for(int i=0;i<16;++i){m.rpm[i]=i*500;m.load[i]=i*20;}m.cells.fill(50);QString error;s.pages[1]=MapPageCodec::encode(2,m,error);s.pages[2]=MapPageCodec::encode(3,m,error);s.pages[3]=SensorCalibrationCodec::initialAux(SensorKind::Iat,QByteArray(256,0));return s;}
 static QPushButton *button(QWidget &w,const QString &name){for(auto *b:w.findChildren<QPushButton*>())if(b->text()==name)return b;std::cerr<<"Missing button "<<name.toStdString()<<std::endl;std::exit(1);}
 int main(int argc,char **argv){QApplication app(argc,argv);QTemporaryDir prefs;CHECK(prefs.isValid());app.setOrganizationName("TunuinoTests");app.setApplicationName("ToolsTest");QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,prefs.path());
+    if(!qEnvironmentVariable("TUNUINO_MENU_STYLE").isEmpty()){QFile css(qEnvironmentVariable("TUNUINO_MENU_STYLE"));CHECK(css.open(QIODevice::ReadOnly));app.setStyleSheet(QString::fromUtf8(css.readAll()));}
     auto snapshot=base();CHECK(snapshot.valid());auto inputs=inputAssignments(snapshot);CHECK(inputs.size()==18&&inputs[0].functions==QStringList{"MAP"}&&inputs[12].functions==QStringList{"CLT"});CHECK(inputs[0].contact=="J103 / 13");
     snapshot.pages[0][7]=1;inputs=inputAssignments(snapshot);CHECK(inputs[0].conflict);snapshot=base();
     auto &h=snapshot.pages[0];h[128]=3;h[129]=2;h[160]=0;h[161]=0;h[168]=1;h[169]=0;put32(h,170,36000);
@@ -47,10 +54,27 @@ int main(int argc,char **argv){QApplication app(argc,argv);QTemporaryDir prefs;C
     // No pulse is sent if the runtime reports a running engine.
     output.exchange=[&](const QByteArray &q,std::function<void(const QByteArray&)> reply){QByteArray b=q=="TUNUINO?"?snapshot.identity:QByteArray(101,0);if(q[0]=='O'){b.replace(1,31,snapshot.identity.mid(1));b[39]=1;b[40]=1;put32(b,41,1000000);put32(b,57,7);SensorCalibrationCodec::put(b,83,1619);}QTimer::singleShot(0,&output,[reply,b]{reply(b);});return true;};
     QTimer::singleShot(0,&output,[]{qobject_cast<QMessageBox*>(QApplication::activeModalWidget())->button(QMessageBox::Yes)->click();});button(output,"Test")->click();QTest::qWait(300);CHECK(!output.busy()&&pulses==1);
-    AutotuneWidget autotune;autotune.snapshot=[&]{return snapshot;};autotune.canStart=[]{return true;};SensorCalibrationCodec::put(snapshot.pages[3],70,4);button(autotune,"Start collection")->click();CHECK(autotune.collecting());
+    if(!qEnvironmentVariable("TUNUINO_AUTOTUNE_PREVIEW").isEmpty())QFile::remove(qEnvironmentVariable("TUNUINO_AUTOTUNE_PREVIEW")+"-setup.png");
+    AutotuneWidget autotune;autotune.resize(1100,600);autotune.show();
+    const auto setup=[&](bool accept,int delay){QTimer::singleShot(0,&autotune,[&,accept,delay]{auto *dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());CHECK(dialog&&dialog->objectName()=="autotuneSetup");CHECK(dialog->findChild<QTableWidget*>("autotuneSetupFields")->rowCount()==8);CHECK(!dialog->findChild<QDoubleSpinBox*>("veTable")->isEnabled());if(!qEnvironmentVariable("TUNUINO_AUTOTUNE_PREVIEW").isEmpty()&&!QFile::exists(qEnvironmentVariable("TUNUINO_AUTOTUNE_PREVIEW")+"-setup.png")){CHECK(dialog->grab().save(qEnvironmentVariable("TUNUINO_AUTOTUNE_PREVIEW")+"-setup.png"));}dialog->findChild<QDoubleSpinBox*>("delay")->setValue(delay);dialog->findChild<QDialogButtonBox*>()->button(accept?QDialogButtonBox::Ok:QDialogButtonBox::Cancel)->click();});autotune.configure();};
+    setup(false,900);CHECK(!QSettings().contains("autotune/delay"));setup(true,2000);CHECK(QSettings().value("autotune/delay").toInt()==2000);
+    auto *review=autotune.findChild<QTableWidget*>("autotuneTable");CHECK(review&&review->rowCount()==16&&review->item(0,0)->data(Qt::UserRole).toBool());CHECK(review->item(0,0)->text()=="40.0");
+    auto *split=autotune.findChild<QSplitter*>("autotuneSplitter");CHECK(split&&split->orientation()==Qt::Horizontal);autotune.findChild<QAction*>("autotuneTableOnly")->trigger();CHECK(autotune.findChild<QWidget*>("autotuneSurface")->isHidden());autotune.findChild<QAction*>("autotuneSplitHorizontal")->trigger();CHECK(!autotune.findChild<QWidget*>("autotuneSurface")->isHidden());
+autotune.snapshot=[&]{return snapshot;};autotune.canStart=[]{return true;};SensorCalibrationCodec::put(snapshot.pages[3],70,4);autotune.findChild<QAction*>("autotuneStart")->trigger();CHECK(autotune.collecting());
     std::array<double,7> values={2500,25,100,1.1,85,30,13.8};autotune.sample(values,1);QTest::qWait(2050);for(int i=0;i<6;++i){QTest::qWait(120);autotune.sample(values,1);} // Gap above 2s must reject transient/stale samples.
     CHECK(autotune.proposal().isEmpty());QTest::qWait(1000);autotune.sample(values,1);QTest::qWait(1050);for(int i=0;i<6;++i){QTest::qWait(120);autotune.sample(values,1);}
-    button(autotune,"Stop collection")->click();CHECK(!autotune.collecting()&&!autotune.proposal().isEmpty());CHECK(SensorCalibrationCodec::u16(autotune.proposal(),64+2*(5*16+5))==5250);
+    autotune.findChild<QAction*>("autotuneStop")->trigger();CHECK(!autotune.collecting()&&!autotune.proposal().isEmpty());CHECK(SensorCalibrationCodec::u16(autotune.proposal(),64+2*(5*16+5))==5250);
+    CHECK(!review->item(10,5)->data(Qt::UserRole).toBool());
+    autotune.findChild<QAction*>("autotuneMode1")->trigger();CHECK(autotune.windowTitle()=="Autotune - ACTUAL LAMBDA"&&review->item(10,5)->text()=="1.100"&&review->item(0,0)->text()==QString::fromUtf8("—"));
+    autotune.findChild<QAction*>("autotuneMode2")->trigger();CHECK(review->item(10,5)->text().toUInt()>=5);
+    autotune.findChild<QAction*>("autotuneMode3")->trigger();CHECK(review->item(10,5)->text()=="0.100");
+    autotune.findChild<QAction*>("autotuneMode4")->trigger();CHECK(review->item(10,5)->text()=="2.5");
+    autotune.findChild<QAction*>("autotuneMode0")->trigger();review->setCurrentCell(10,5);review->item(10,5)->setSelected(true);CHECK(autotune.findChild<QAction*>("autotuneApply100")->isEnabled());
+    QByteArray local=snapshot.pages[1];int applications=0;autotune.applyToEditor=[&](const ToolSnapshot &b,const QByteArray &expected,const QByteArray &desired){CHECK(b.pages==snapshot.pages);if(expected!=local)return false;local=desired;++applications;return true;};
+    const auto applySelected=[&](const char *name,bool accept){QTimer::singleShot(0,&autotune,[accept]{auto *dialog=qobject_cast<QMessageBox*>(QApplication::activeModalWidget());CHECK(dialog);dialog->button(accept?QMessageBox::Yes:QMessageBox::Cancel)->click();});autotune.findChild<QAction*>(name)->trigger();};
+    applySelected("autotuneApply50",false);CHECK(applications==0&&local==snapshot.pages[1]);applySelected("autotuneApply50",true);CHECK(applications==1&&SensorCalibrationCodec::u16(local,64+2*85)==5125);auto halfApplied=local;SensorCalibrationCodec::put(local,64,4999);auto editedLocal=local;applySelected("autotuneApply100",true);CHECK(applications==1&&local==editedLocal);local=halfApplied;applySelected("autotuneApply100",true);CHECK(applications==2&&SensorCalibrationCodec::u16(local,64+2*85)==5250);CHECK(local.left(64)==snapshot.pages[1].left(64)&&SensorCalibrationCodec::u16(local,64)==5000);
+    setup(false,0);CHECK(!autotune.proposal().isEmpty());setup(true,10000);CHECK(autotune.proposal().isEmpty());setup(true,2000);CHECK(!autotune.proposal().isEmpty());
+    if(!qEnvironmentVariable("TUNUINO_AUTOTUNE_PREVIEW").isEmpty()){app.processEvents();CHECK(autotune.grab().save(qEnvironmentVariable("TUNUINO_AUTOTUNE_PREVIEW")));}
     snapshot.generation=8;autotune.disconnected();CHECK(autotune.proposal().isEmpty());
     std::cout<<"Tools menu, assignment conflicts/shared coils, Scope chunks, output test gates and autotune provenance passed (host simulation)\n";
 }

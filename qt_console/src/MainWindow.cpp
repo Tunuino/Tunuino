@@ -534,14 +534,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("Timers"), {{tr("Timers setup"),-1}});
     addCategory(tr("DSG Gearbox"), {{tr("Gearbox settings"),-1}});
     addCategory(tr("CAN, Serial"), {{tr("Communication settings"),-1}});
-    addCategory(tr("Log"), {{tr("Scope"),11},{tr("Graph Log"),4},{tr("Tune Display"),10},{tr("Autotune"),12}});
+    addCategory(tr("Log"), {{tr("Scope"),11},{tr("Graph Log"),4},{tr("Tune Display"),10},{tr("Autotune"),17}});
     addCategory(tr("Gauges"), {{tr("Runtime gauges"),13},{tr("Engine Status"),9}});
     auto engineStatusDockRef = QSharedPointer<QPointer<QDockWidget>>::create();
     connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, openSettingsPage, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows, afrGraphWindowRef, openTuneDisplay, toolNavigation, parameterNavigation](QTreeWidgetItem *item, int) {
         if(!item->data(0,Qt::UserRole).isValid()){item->setExpanded(!item->isExpanded());return;}
         const int index = item->data(0, Qt::UserRole).toInt();
         if(item->data(0,Qt::UserRole+1).isValid()){if(*parameterNavigation)(*parameterNavigation)(item->data(0,Qt::UserRole+1).toString());}
-        else if(item->parent()&&(index==11||index==12)){if(*toolNavigation)(*toolNavigation)(index);}
+        else if(item->parent()&&(index==11||index==12||index==17)){if(*toolNavigation)(*toolNavigation)(index);}
         else if(item->parent()&&index==13){if(*parameterNavigation)(*parameterNavigation)("runtime.gauges");}
         else if(item->parent()&&index==10){openTuneDisplay();}
         else if (item->parent() && index == 9) {
@@ -1641,11 +1641,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *autotuneTool=new tunuino::AutotuneWidget;
     const auto toolWindow=[=](QWidget *widget,const QString &title){auto *window=workspace->addSubWindow(widget);tunuino::CalibrationAppearance::frame(window);window->setWindowTitle(title);window->setAttribute(Qt::WA_DeleteOnClose,false);window->resize(900,640);boundsGuard->watch(window);window->hide();return window;};
     auto *serviceWindow=toolWindow(serviceTool,tr("ECU information and Logbook"));
-    auto *scopeWindow=toolWindow(scopeTool,tr("Scope"));auto *outputTestWindow=toolWindow(outputTestTool,tr("Test outputs"));auto *autotuneWindow=toolWindow(autotuneTool,tr("Autotune"));
+    auto *scopeWindow=toolWindow(scopeTool,tr("Scope"));auto *outputTestWindow=toolWindow(outputTestTool,tr("Test outputs"));auto *autotuneWindow=toolWindow(autotuneTool,autotuneTool->windowTitle());
     const auto showTool=[=](QMdiSubWindow *window){window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
-    *toolNavigation=[=](int index){showTool(index==11?scopeWindow:autotuneWindow);};
+    autotuneWindow->setProperty("desktopWindowId",QStringLiteral("Autotune|"));
+    connect(autotuneTool,&QWidget::windowTitleChanged,autotuneWindow,&QWidget::setWindowTitle);
+    const auto openAutotune=[=](bool parameters){if(parameters)autotuneTool->configure();else autotuneTool->review();showTool(autotuneWindow);};
+    *toolNavigation=[=](int index){if(index==11)showTool(scopeWindow);else openAutotune(index==12);};
     tools->openServiceData=[=](int page){showTool(serviceWindow);serviceTool->showPage(page);};
-    tools->openScope=[=]{showTool(scopeWindow);};tools->openOutputTest=[=]{showTool(outputTestWindow);};tools->openAutotune=[=]{showTool(autotuneWindow);};
+    tools->openScope=[=]{showTool(scopeWindow);};tools->openOutputTest=[=]{showTool(outputTestWindow);};tools->openAutotune=[=]{openAutotune(true);};
     auto *tuneDisplay=new tunuino::TuneDisplayWidget;
     auto *tuneSubWindow=workspace->addSubWindow(tuneDisplay);tunuino::CalibrationAppearance::frame(tuneSubWindow);
     tuneSubWindow->setWindowTitle(tr("Tune Display"));
@@ -2554,12 +2557,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     vssMonitor->exchange=toolExchange;vssMonitor->snapshot=tools->snapshot;vssMonitor->ready=[=]{return !*toolBusy&&!*toolReply;};
     serviceTool->exchange=toolExchange;
     scopeTool->exchange=toolExchange;outputTestTool->exchange=toolExchange;
-    autotuneTool->applyToEditor=[=](const tunuino::ToolSnapshot &base,const QByteArray &desired){
+    autotuneTool->previewPage=[=]{tunuino::MapPageValues values;bool valid=true;for(int i=0;i<16;++i){bool ok=false;values.rpm[i]=fuelRpmValues->item(0,i)->text().toDouble(&ok);valid&=ok;values.load[i]=maps->verticalHeaderItem(15-i)->text().toDouble(&ok);valid&=ok;}for(int r=0;r<16;++r)for(int c=0;c<16;++c){bool ok=false;values.cells[r*16+c]=maps->item(15-r,c)->text().toDouble(&ok);valid&=ok;}QString error;return valid?tunuino::MapPageCodec::encode(2,values,error):QByteArray{};};
+    autotuneTool->selectionChanged=[=](const QVector<int> &cells){maps->clearSelection();for(int cell:cells)maps->item(15-cell/16,cell%16)->setSelected(true);};
+    autotuneTool->applyToEditor=[=](const tunuino::ToolSnapshot &base,const QByteArray &expected,const QByteArray &desired){
         const auto current=tools->snapshot();if(current.identity!=base.identity||current.generation!=base.generation||current.pages!=base.pages||!tunuino::MapPageCodec::valid(2,desired))return false;
         tunuino::MapPageValues values;bool valid=true;
         for(int i=0;i<16;++i){bool ok=false;values.rpm[i]=fuelRpmValues->item(0,i)->text().toDouble(&ok);valid&=ok;values.load[i]=maps->verticalHeaderItem(15-i)->text().toDouble(&ok);valid&=ok;}
         for(int r=0;r<16;++r)for(int c=0;c<16;++c){bool ok=false;values.cells[r*16+c]=maps->item(15-r,c)->text().toDouble(&ok);valid&=ok;}
-        QString error;if(!valid||tunuino::MapPageCodec::encode(2,values,error)!=base.pages[1])return false;
+        QString error;if(!valid||tunuino::MapPageCodec::encode(2,values,error)!=expected)return false;
         for(int r=0;r<16;++r)for(int c=0;c<16;++c)maps->item(15-r,c)->setText(QString::number(tunuino::SensorCalibrationCodec::u16(desired,64+2*(r*16+c))/100.0,'f',2));return true;
     };
     auto *validationAction = new QAction(tr("Check ECU configuration (read-only)"),this);

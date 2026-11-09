@@ -3,6 +3,7 @@
 #include "MainWindow.h"
 #include "workspace/DesktopController.h"
 #include "calibration/SensitivityCurve.h"
+#include "tools/AutotuneWidget.h"
 #include "project/MapProject.h"
 #include "parameters/ParameterWidget.h"
 #include "parameters/TriggerPresetDialog.h"
@@ -134,6 +135,10 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     if(!qEnvironmentVariable("TUNUINO_OPTIONS_PREVIEW").isEmpty()){tunuino::GeneralOptionsDialog optionsPreview;optionsPreview.resize(590,1040);optionsPreview.show();app.processEvents();CHECK(optionsPreview.grab().save(qEnvironmentVariable("TUNUINO_OPTIONS_PREVIEW")+"-options.png"));optionsPreview.hide();tunuino::SensitivityCurve curvePreview;CHECK(curvePreview.restore(sensitivity->state(),true,error));curvePreview.resize(800,410);curvePreview.show();app.processEvents();CHECK(curvePreview.grab().save(qEnvironmentVariable("TUNUINO_OPTIONS_PREVIEW")+"-sensitivity.png"));}
     checkpoint("general options menu and toolbar");
     QAction *generalAction=nullptr;for(auto *action:window.findChildren<QAction*>())if(action->text()=="General options")generalAction=action;CHECK(generalAction);QTimer::singleShot(0,&window,[&]{auto *dialog=dynamic_cast<tunuino::GeneralOptionsDialog*>(QApplication::activeModalWidget());CHECK(dialog);dialog->findChild<QCheckBox*>("toolbar")->setChecked(false);dialog->findChild<QDoubleSpinBox*>("panelSize")->setValue(310);dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();});generalAction->trigger();CHECK(window.findChild<QToolBar*>("MainToolbar")->isHidden());QTimer::singleShot(0,&window,[&]{auto *dialog=dynamic_cast<tunuino::GeneralOptionsDialog*>(QApplication::activeModalWidget());CHECK(dialog);dialog->findChild<QCheckBox*>("toolbar")->setChecked(true);dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();});generalAction->trigger();CHECK(!window.findChild<QToolBar*>("MainToolbar")->isHidden());
+    // Fueling always offers parameters first; Cancel and OK both reveal the review.
+    auto *learner=window.findChild<QWidget*>("autotuneReview");CHECK(learner);QMdiSubWindow *learnerWindow=nullptr;for(auto *w:mdi->subWindowList())if(w->widget()==learner)learnerWindow=w;CHECK(learnerWindow);learnerWindow->hide();
+    for(bool accept:{false,true}){QTimer::singleShot(0,&window,[&,accept]{auto *dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());CHECK(dialog&&dialog->objectName()=="autotuneSetup");dialog->findChild<QDialogButtonBox*>()->button(accept?QDialogButtonBox::Ok:QDialogButtonBox::Cancel)->click();});QTreeWidgetItemIterator entry(tree);bool opened=false;while(*entry){if((*entry)->text(0)=="Autotune"&&(*entry)->parent()&&(*entry)->parent()->text(0)=="Fueling"){tree->itemClicked(*entry,0);opened=true;break;}++entry;}CHECK(opened&&learnerWindow->isVisible()&&mdi->activeSubWindow()==learnerWindow&&learnerWindow->windowTitle()=="Autotune - PROPOSED VE");learnerWindow->hide();}
+    CHECK(project->capture(error)==curveProject);CHECK(!learner->findChild<QAction*>("autotuneApply100")->isEnabled());
     checkpoint("all checks complete");
     std::cout<<"Real File/Save Project as from Firing order: full 6-cylinder map round-trip, all three tables, parameters, comment, atomic rejection and complete-project dialog and caption maximize/minimize/close/reopen passed offline\n"<<std::flush;
     std::_Exit(0);
