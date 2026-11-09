@@ -52,8 +52,8 @@ public:
     explicit LogPlot(const std::vector<LogSample> &samples,LogViewState &view,
                      const LogChartConfig &config,bool dots,QWidget *parent)
         : QWidget(parent),samples_(samples),view_(view),config_(config),dots_(dots) {
-        setMinimumHeight(155);setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);
-        setToolTip(tr("Pause display to inspect samples. Right-click to configure channels and axes."));
+        setMouseTracking(true);setMinimumHeight(155);setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);
+        setToolTip(tr("Hover to inspect samples. Shift-drag selects a time range for analysis. Right-click to configure channels and axes."));
     }
     std::function<void()> inspected;
     std::function<void(const QPoint&)> menuRequested;
@@ -63,8 +63,10 @@ protected:
         if (menuRequested) menuRequested(event->globalPos());
     }
     void mouseDoubleClickEvent(QMouseEvent *) override { if (configureRequested) configureRequested(); }
-    void mousePressEvent(QMouseEvent *event) override { if (event->button()==Qt::LeftButton) inspect(event); }
-    void mouseMoveEvent(QMouseEvent *event) override { if (event->buttons()&Qt::LeftButton) inspect(event); }
+    void mousePressEvent(QMouseEvent *event) override {if(event->button()==Qt::LeftButton){selecting_=event->modifiers()&Qt::ShiftModifier;inspect(event);if(selecting_&&view_.cursor>=0){view_.selectionBegin=samples_[view_.cursor].seconds;view_.selectionEnd=view_.selectionBegin;if(inspected)inspected();}}}
+    void mouseMoveEvent(QMouseEvent *event) override {inspect(event);if(selecting_&&(event->buttons()&Qt::LeftButton)&&view_.cursor>=0){view_.selectionEnd=samples_[view_.cursor].seconds;if(inspected)inspected();}}
+    void mouseReleaseEvent(QMouseEvent*)override{selecting_=false;}
+    void leaveEvent(QEvent*)override{view_.inspecting=false;if(inspected)inspected();}
     void paintEvent(QPaintEvent *) override {
         QPainter p(this);p.fillRect(rect(),QColor(31,33,37));
         const QRectF area(82,32,std::max(1,width()-164),std::max(1,height()-65));
@@ -82,6 +84,7 @@ protected:
             p.drawText(QRectF(x-38,area.bottom()+5,76,20),Qt::AlignCenter,
                 enabledOption("systemTime",false)&&view_.epochMs?QDateTime::fromMSecsSinceEpoch(view_.epochMs+qint64((begin+view_.span*i/4)*1000)).toString("HH:mm:ss"):QString::number(begin+view_.span*i/4,'f',2)+" s");
         }
+        if(view_.selectionBegin>=0&&view_.selectionEnd>=0){const double a=std::min(view_.selectionBegin,view_.selectionEnd),b=std::max(view_.selectionBegin,view_.selectionEnd);p.save();p.setClipRect(area);p.fillRect(QRectF(area.left()+(a-begin)/view_.span*area.width(),area.top(),(b-a)/view_.span*area.width(),area.height()),QColor(35,150,230,55));p.restore();}
         bool anyValid=false;
         const auto first=std::lower_bound(samples_.begin(),samples_.end(),begin-1e-9,
             [](const LogSample &s,double t){return s.seconds<t;});
@@ -139,7 +142,7 @@ protected:
     }
 private:
     void inspect(QMouseEvent *event) {
-        if(!view_.paused || samples_.empty())return;
+        if(samples_.empty())return;if(!QRect(82,32,std::max(1,width()-164),std::max(1,height()-65)).contains(event->position().toPoint())){view_.inspecting=false;if(inspected)inspected();return;}view_.inspecting=true;
         const double time=view_.end-view_.span+std::clamp((event->position().x()-82)/std::max(1,width()-164),0.0,1.0)*view_.span;
         auto it=std::lower_bound(samples_.begin(),samples_.end(),time,[](const LogSample &s,double t){return s.seconds<t;});
         if(it==samples_.end())--it;
@@ -149,7 +152,7 @@ private:
     const std::vector<LogSample> &samples_;
     LogViewState &view_;
     LogChartConfig config_;
-    bool dots_;
+    bool dots_;bool selecting_=false;
 };
 
 GraphLogWidget::GraphLogWidget(QWidget *parent,QSettings *settings) : QWidget(parent),
@@ -183,7 +186,7 @@ GraphLogWidget::GraphLogWidget(QWidget *parent,QSettings *settings) : QWidget(pa
             QMessageBox::warning(this,tr("Invalid log"),QString::fromStdString(error));return;
         }
         if(!confirmDiscard())return;
-        recording_=false;samples_=std::move(parsed);view_.epochMs=0;dirty_=false;
+        recording_=false;samples_=std::move(parsed);++revision_;view_.inspecting=false;view_.selectionBegin=view_.selectionEnd=-1;view_.epochMs=0;dirty_=false;
         view_.paused=true;view_.cursor=0;fit();refresh();
     });
     action("logSave",tr("Save CSV..."),QStyle::SP_DialogSaveButton,[this] {
@@ -271,10 +274,10 @@ void GraphLogWidget::rebuildPlots() {
                 auto *add=menu.addAction(tr("Add graph"));add->setEnabled(layout_[size_t(tabIndex)].charts.size()<MaxGraphsPerTab);
                 auto *remove=menu.addAction(tr("Remove graph"));remove->setEnabled(layout_[size_t(tabIndex)].charts.size()>1);
                 menu.addSeparator();auto *lines=menu.addAction(tr("Change line style"));
-                auto *full=menu.addAction(tr("Zoom full out"));
+                auto *full=menu.addAction(tr("Zoom full out"));auto *clearSelection=menu.addAction(tr("Clear selected time range"));
                 const auto *chosen=menu.exec(pos);
                 if(chosen==setup)configureChart(tabIndex,chartIndex);
-                else if(chosen==full)fit();
+                else if(chosen==full)fit();else if(chosen==clearSelection)selectRange(-1,-1);
                 else if(chosen==lines) {layout_[size_t(tabIndex)].dots=!layout_[size_t(tabIndex)].dots;saveLayout();rebuildPlots();refresh();}
                 else if(chosen==add) {LogChartConfig chart;chart.axes[0].channel=0;layout_[size_t(tabIndex)].charts.push_back(chart);saveLayout();rebuildPlots();}
                 else if(chosen==remove) {auto &charts=layout_[size_t(tabIndex)].charts;charts.erase(charts.begin()+chartIndex);saveLayout();rebuildPlots();}
@@ -347,7 +350,7 @@ void GraphLogWidget::appendRuntime(const std::array<double,LogChannelCount> &val
     if(samples_.size()>=MaxLogSamples) {recording_=false;view_.paused=true;refresh();return;}
     LogSample sample;sample.seconds=clock_.nsecsElapsed()/1e9;sample.values=values;
     if(!samples_.empty() && sample.seconds<=samples_.back().seconds)return;
-    samples_.push_back(sample);dirty_=true;follow();refresh();
+    samples_.push_back(sample);++revision_;dirty_=true;follow();refresh();
 }
 void GraphLogWidget::follow() {
     if(!view_.paused && !samples_.empty()) {view_.end=std::max(view_.span,samples_.back().seconds);view_.cursor=int(samples_.size())-1;}
@@ -357,12 +360,13 @@ void GraphLogWidget::fit() {
     view_.end=samples_.empty()?view_.span:samples_.back().seconds;refresh();
 }
 void GraphLogWidget::zoom(double factor) {view_.span=std::clamp(view_.span*factor,.1,1e7);refresh();}
-void GraphLogWidget::clearLog() {samples_.clear();dirty_=false;view_.cursor=-1;view_.span=30;view_.end=30;}
+void GraphLogWidget::clearLog() {++revision_;view_.inspecting=false;view_.selectionBegin=view_.selectionEnd=-1;samples_.clear();dirty_=false;view_.cursor=-1;view_.span=30;view_.end=30;}
 bool GraphLogWidget::confirmDiscard() {
     return !dirty_ || QMessageBox::question(this,tr("Unsaved log"),tr("Discard the unsaved log?"),
         QMessageBox::Discard|QMessageBox::Cancel,QMessageBox::Cancel)==QMessageBox::Discard;
 }
 void GraphLogWidget::refresh() {
+    if(inspectionChanged)inspectionChanged(view_.inspecting&&view_.cursor>=0&&view_.cursor<int(samples_.size())?&samples_[view_.cursor]:nullptr);
     record_->setEnabled(connected_);record_->setText(recording_?tr("Stop logging"):tr("Start logging"));
     pause_->setText(view_.paused?tr("Resume display"):tr("Pause display"));
     const int index=view_.cursor;
@@ -378,4 +382,9 @@ void GraphLogWidget::refresh() {
     if(samples_.size()>=MaxLogSamples)status_->setText(tr("Log full: recording stopped at 100000 samples. Save CSV before starting a new log."));
     for(auto *plot:plots_)if(plot->isVisible())plot->update();
 }
+void GraphLogWidget::selectRange(double begin,double end){if(!std::isfinite(begin)||!std::isfinite(end)||begin<0||end<0){begin=end=-1;}view_.selectionBegin=begin;view_.selectionEnd=end;refresh();}
+std::pair<double,double> GraphLogWidget::axisRange(int channel)const{
+ if(channel<0||channel>=LogChannelCount)return {0,1};const int tab=tabs_?tabs_->currentIndex():0;if(tab>=0)for(const auto &chart:layout_[tab].charts)for(const auto &axis:chart.axes)if(axis.channel==channel&&!axis.autoscale)return {axis.minimum,axis.maximum};double lo=std::numeric_limits<double>::infinity(),hi=-lo;for(const auto &s:samples_)if(s.seconds>=view_.end-view_.span&&s.seconds<=view_.end&&std::isfinite(s.values[channel])){lo=std::min(lo,s.values[channel]);hi=std::max(hi,s.values[channel]);}if(!std::isfinite(lo))return {0,1};const double pad=std::max(.01,(hi-lo)*.05);lo-=pad;hi+=pad;return {lo,hi};
+}
+
 }

@@ -6,6 +6,9 @@
 #include "ui/ShortcutIcons.h"
 #include "ui/CalibrationAppearance.h"
 #include "project/MapProject.h"
+#include "project/ProjectComparator.h"
+#include "logging/TextLogWidget.h"
+#include "logging/ScatterPlotWidget.h"
 #include "NativeDfuFlash.h"
 #include "logging/GraphLogWidget.h"
 #include <QPainter>
@@ -534,7 +537,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("Timers"), {{tr("Timers setup"),-1}});
     addCategory(tr("DSG Gearbox"), {{tr("Gearbox settings"),-1}});
     addCategory(tr("CAN, Serial"), {{tr("Communication settings"),-1}});
-    addCategory(tr("Log"), {{tr("Scope"),11},{tr("Graph Log"),4},{tr("Tune Display"),10},{tr("Autotune"),17}});
+    auto *logCategory=addCategory(tr("Log"), {{tr("Scope"),11},{tr("Graph Log"),4},{tr("Tune Display"),10},{tr("Autotune"),17}});
+    parameterItem(logCategory,tr("Text Log"),"analysis.text");parameterItem(logCategory,tr("Scatter Plot"),"analysis.scatter");
     addCategory(tr("Gauges"), {{tr("Runtime gauges"),13},{tr("Engine Status"),9}});
     auto engineStatusDockRef = QSharedPointer<QPointer<QDockWidget>>::create();
     connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, openSettingsPage, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows, afrGraphWindowRef, openTuneDisplay, toolNavigation, parameterNavigation](QTreeWidgetItem *item, int) {
@@ -2208,6 +2212,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto sensorPanels=QSharedPointer<QVector<tunuino::SensorCalibrationWidget*>>::create();
     auto parameterPanels=QSharedPointer<QVector<tunuino::ParameterWidget*>>::create();
     auto parameterWindows=QSharedPointer<QMap<QString,QPointer<QMdiSubWindow>>>::create();
+    auto *textLog=new tunuino::TextLogWidget;auto *textWindow=toolWindow(textLog,tr("Text Log"));(*parameterWindows)["analysis.text"]=textWindow;
+    auto *scatter=new tunuino::ScatterPlotWidget(graphLog);auto *scatterWindow=toolWindow(scatter,tr("Scatter Plot"));(*parameterWindows)["analysis.scatter"]=scatterWindow;
+    graphLog->inspectionChanged=[=](const tunuino::LogSample *sample){textLog->inspect(sample);};
     auto *gaugeDisplay=new tunuino::TuneDisplayWidget(nullptr,true);auto *gaugeWindow=toolWindow(gaugeDisplay,tr("Gauges"));(*parameterWindows)["runtime.gauges"]=gaugeWindow;const int gaugeSizes[]={600,780,1020};gaugeWindow->resize(gaugeSizes[qBound(0,tunuino::option("gaugeSize",1),2)],560);
     QPushButton *tpsReadButton=nullptr;QLabel *tpsReadStatus=nullptr;
     for(auto kind:{tunuino::SensorKind::Tps,tunuino::SensorKind::Map,tunuino::SensorKind::Clt,tunuino::SensorKind::Iat,tunuino::SensorKind::Lambda,tunuino::SensorKind::Battery,tunuino::SensorKind::FuelPressure,tunuino::SensorKind::OilPressure}){
@@ -2343,7 +2350,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             for(auto *panel:*sensorPanels)panel->setAvailable(false);for(auto *panel:*inputPanels)panel->setAvailable(false);
             for(auto *panel:*parameterPanels)panel->setAvailable(false);triggerWizard->setAvailable(false);
             graphLog->setConnected(false);
-            tuneDisplay->setConnected(false);gaugeDisplay->setConnected(false);
+            tuneDisplay->setConnected(false);gaugeDisplay->setConnected(false);textLog->disconnected();
             autotuneTool->disconnected();
             for (auto *value : *liveReadings) value->setText(tr("Unavailable"));
             maps->clearOperatingPoint();
@@ -2497,6 +2504,30 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(groups&tunuino::TriggerPresets::Primary){triggerWizard->restoreEditor(desired["trigger"].toObject(),true,error);triggerWizard->keepProjectEdits(true);}
         statusBar()->showMessage(tr("Trigger preset applied to local editors. Review settings before Write to ECU."),10000);return true;
     };
+    mapProject->applyEdits=[=](const QJsonObject &desired,QString &error){
+        if(!mapProject->canUse()){error=tr("Wait for the active ECU operation to finish.");return false;}
+        const auto current=mapProject->capture(error);if(current.isEmpty())return false;
+        if(desired.keys()!=current.keys()||desired["target"]!=current["target"]||desired["pages"]!=current["pages"]){error=tr("Comparator cannot replace the ECU target or stored base pages.");return false;}
+        const auto params=desired["parameters"].toObject(),sensors=desired["sensors"].toObject(),tables=desired["tables"].toObject();
+        if(params.keys()!=current["parameters"].toObject().keys()||sensors.keys()!=current["sensors"].toObject().keys()||tables.keys()!=current["tables"].toObject().keys()){error=tr("Comparison requires compatible editor blocks.");return false;}
+        for(auto *panel:*parameterPanels)if(params[panel->block().key]!=current["parameters"].toObject()[panel->block().key]&&!panel->restoreEditor(params[panel->block().key].toObject(),false,error))return false;
+        for(auto *panel:*sensorPanels){auto key=tunuino::SensorCalibrationCodec::name(panel->kind());if(sensors[key]!=current["sensors"].toObject()[key]&&!panel->restoreEditor(sensors[key].toObject(),false,error))return false;}
+        const QList<QTableWidget*> grids{maps,ignitionMap,afrMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues};const QStringList names{"fuel","ignition","afr"};
+        for(int i=0;i<3;++i)if(tables[names[i]]!=current["tables"].toObject()[names[i]]&&!tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,false,error))return false;
+        if(desired["trigger"]!=current["trigger"]&&!triggerWizard->restoreEditor(desired["trigger"].toObject(),false,error))return false;
+        const auto curve=desired["curves"].toObject()["cam1Sensitivity"].toObject();if(!camSensitivity->restore(curve,false,error))return false;
+        if(!desired["service"].toObject()["comment"].isString()||desired["service"].toObject()["comment"].toString().size()>128){error=tr("Invalid project comment.");return false;}
+        // Validate the complete selection first; mutate only the changed editors.
+        for(auto *panel:*parameterPanels)if(params[panel->block().key]!=current["parameters"].toObject()[panel->block().key]){panel->restoreEditor(params[panel->block().key].toObject(),true,error);panel->keepProjectEdits(true);}
+        for(auto *panel:*sensorPanels){auto key=tunuino::SensorCalibrationCodec::name(panel->kind());if(sensors[key]!=current["sensors"].toObject()[key]){panel->restoreEditor(sensors[key].toObject(),true,error);panel->keepProjectEdits(true);}}
+        for(int i=0;i<3;++i)if(tables[names[i]]!=current["tables"].toObject()[names[i]])tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,true,error);
+        if(desired["trigger"]!=current["trigger"]){triggerWizard->restoreEditor(desired["trigger"].toObject(),true,error);triggerWizard->keepProjectEdits(true);}
+        if(desired["curves"]!=current["curves"])camSensitivity->restore(curve,true,error);
+        if(desired["service"]!=current["service"])serviceTool->setProjectComment(desired["service"].toObject()["comment"].toString());
+        statusBar()->showMessage(tr("Selected differences applied locally. No ECU write."),10000);return true;
+    };
+    auto *comparator=new tunuino::ProjectComparator(mapProject);auto *compareWindow=toolWindow(comparator,tr("Project Comparator"));
+    auto *compareAction=fileMenu->addAction(tr("Project Comparator..."));compareAction->setObjectName("fileCompareProject");connect(compareAction,&QAction::triggered,this,[=]{showTool(compareWindow);});
     serviceTool->saveMap=[mapProject]{mapProject->saveAs();};
     connect(openProject,&QAction::triggered,mapProject,&tunuino::MapProject::openDialog);
     connect(saveProject,&QAction::triggered,mapProject,&tunuino::MapProject::saveAs);
@@ -3122,7 +3153,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if (mask & 4) logValues[3] = u32(1 + 48) / 1000000.0;
             if (mask & 8) logValues[4] = qint32(u32(1 + 52)) / 1000.0;
             graphLog->setConnected(true);
-            graphLog->appendRuntime(logValues);
+            textLog->setReadings(logValues);graphLog->appendRuntime(logValues);
             tuneDisplay->setConnected(true);gaugeDisplay->setConnected(true);
             const double tuneTarget=sameSensorBase?tunuino::ecuTargetLambda(sensorBase->aux,data):std::numeric_limits<double>::quiet_NaN();
             tuneDisplay->setReadings(logValues,tuneTarget);gaugeDisplay->setReadings(logValues,tuneTarget);

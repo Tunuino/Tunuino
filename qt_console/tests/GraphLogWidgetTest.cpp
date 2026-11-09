@@ -1,4 +1,6 @@
 #include "logging/GraphLogWidget.h"
+#include "logging/TextLogWidget.h"
+#include "logging/ScatterPlotWidget.h"
 #include "ui/GeneralOptions.h"
 #include <QDir>
 #include <QFile>
@@ -20,12 +22,14 @@
 #include <QMenu>
 #include <QContextMenuEvent>
 #include <QTest>
+#include <QMouseEvent>
 #include <cstdlib>
 #include <iostream>
 #define CHECK(condition) do { if (!(condition)) { std::cerr << "Failed: " << #condition << " at " << __LINE__ << std::endl; std::exit(1); } } while (false)
 
 int main(int argc,char **argv) {
     QApplication app(argc,argv);
+    if(!qEnvironmentVariable("TUNUINO_MENU_STYLE").isEmpty()){QFile css(qEnvironmentVariable("TUNUINO_MENU_STYLE"));CHECK(css.open(QIODevice::ReadOnly));app.setStyleSheet(QString::fromUtf8(css.readAll()));}
     auto original=tunuino::defaultGraphLogLayout(),decoded=original;
     original[5].name="Custom test";original[5].dots=true;
     original[5].charts[0].axes[0]={3,false,.7,1.5};
@@ -124,5 +128,16 @@ int main(int argc,char **argv) {
     if(!screenshot.isEmpty())CHECK(widget.grab().save(screenshot));
     QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,temp.path());app.setOrganizationName("TunuinoOptionsTest");app.setApplicationName("Logging");QSettings().setValue("general/stopPaused",true);QSettings().setValue("general/autoSave",true);QSettings().setValue("general/logDirectory",temp.path()+"/automatic");QSettings().setValue("general/units",1);
     tunuino::GraphLogWidget controlled;controlled.setConnected(true);auto *record=controlled.findChild<QAction*>("logRecord");record->trigger();std::array<double,tunuino::LogChannelCount> optionsValues{};optionsValues[0]=1500;optionsValues[2]=100;optionsValues[4]=100;controlled.appendRuntime(optionsValues);auto *readings=controlled.findChild<QTableWidget*>("logCursorValues");CHECK(readings->item(2,2)->text()=="psi"&&readings->item(4,1)->text()=="212");controlled.findChild<QAction*>("logPause")->trigger();QTest::qWait(2);optionsValues[0]=2500;controlled.appendRuntime(optionsValues);controlled.findChild<QAction*>("logPause")->trigger();CHECK(readings->item(0,1)->text()=="1500");QTest::qWait(2);controlled.appendRuntime(optionsValues);record->trigger();const auto files=QDir(temp.path()+"/automatic").entryList({"*.csv"},QDir::Files);CHECK(files.size()==1);QFile autoLog(temp.path()+"/automatic/"+files[0]);CHECK(autoLog.open(QIODevice::ReadOnly));std::vector<tunuino::LogSample> savedSamples;std::string csvError;CHECK(tunuino::decodeLogCsv(autoLog.readAll().toStdString(),savedSamples,csvError)&&savedSamples.size()==2&&savedSamples[1].values[2]==100);CHECK(std::abs(tunuino::displayValue(2,100)-14.50377377)<.00001);QSettings().clear();
+    // Shared real log data drives scatter filtering and text cursor/live transitions.
+    QSettings analysisSettings(temp.path()+"/analysis.ini",QSettings::IniFormat);auto analysisLayout=tunuino::defaultGraphLogLayout();analysisLayout[0].charts[0].axes[0]={0,false,0,10000};analysisSettings.setValue("logging/graphLayoutV1",tunuino::encodeGraphLogLayout(analysisLayout));
+    tunuino::GraphLogWidget analysis(nullptr,&analysisSettings);analysis.setConnected(true);analysis.findChild<QAction*>("logRecord")->trigger();
+    for(int i=0;i<3;++i){std::array<double,7> sample{{1000.+i*1000,20.,40.+i*40,i==1?std::numeric_limits<double>::quiet_NaN():1.+i*.1,80,30,13.8}};QTest::qWait(2);analysis.appendRuntime(sample);}CHECK(analysis.samples().size()==3);
+    tunuino::ScatterPlotWidget scatter(&analysis);CHECK(scatter.points().size()==2);CHECK(scatter.setConfiguration({{0,2,-1}},{{2,1,1}},4,false));CHECK(scatter.points().size()==3&&scatter.points()[1].x==1500&&scatter.points()[2].x==2500);CHECK(analysis.axisRange(0).first==0&&analysis.axisRange(0).second==10000);CHECK(!scatter.setConfiguration({{7,2,3}},{{1,1,1}},3,false));
+    analysis.selectRange(analysis.samples()[1].seconds,analysis.samples()[2].seconds);scatter.rebuild();CHECK(scatter.points().size()==2&&scatter.points()[0].x==2000&&scatter.points()[1].x==2500);analysis.selectRange(-1,-1);scatter.rebuild();CHECK(scatter.points().size()==3);
+    tunuino::TextLogWidget textLog;textLog.setReadings(analysis.samples()[2].values);auto *textValues=textLog.findChild<QTableWidget*>("textLogGroup0");CHECK(textValues->item(0,1)->text()=="3000");textLog.inspect(&analysis.samples()[0]);CHECK(textValues->item(0,1)->text()=="1000"&&textValues->item(0,1)->font().italic());textLog.disconnected();CHECK(textValues->item(0,1)->text()=="1000");textLog.inspect(nullptr);CHECK(textValues->item(0,1)->text()==QString::fromUtf8("—"));CHECK(!textValues->item(0,1)->font().italic());
+    CHECK(textLog.addToCustom(0,2)&&textLog.addToCustom(0,0));CHECK(!textLog.addToCustom(3,0));tunuino::TextLogWidget textRestored;auto *custom=textRestored.findChild<QTableWidget*>("textLogGroup4");CHECK(custom->rowCount()==2&&custom->item(0,0)->text()=="MAP"&&custom->item(1,0)->text()=="RPM");
+    textLog.setReadings(analysis.samples()[2].values);analysis.inspectionChanged=[&](const tunuino::LogSample *sample){textLog.inspect(sample);};analysis.resize(900,600);analysis.show();app.processEvents();auto *analysisPlot=analysis.findChild<QWidget*>("logPlot_0_0");CHECK(analysisPlot);QMouseEvent hover(QEvent::MouseMove,QPointF(82,60),Qt::NoButton,Qt::NoButton,Qt::NoModifier);QApplication::sendEvent(analysisPlot,&hover);CHECK(textValues->item(0,1)->text()=="1000");QEvent leave(QEvent::Leave);QApplication::sendEvent(analysisPlot,&leave);CHECK(textValues->item(0,1)->text()=="3000"&&!textValues->item(0,1)->font().italic());
+    const auto preview=qEnvironmentVariable("TUNUINO_ANALYSIS_PREVIEW");if(!preview.isEmpty()){CHECK(scatter.setConfiguration({{0,2,3}},{{1,1,1}},5,false));scatter.resize(900,600);scatter.show();textLog.resize(700,420);textLog.show();app.processEvents();CHECK(scatter.grab().save(preview+"-scatter.png"));CHECK(textLog.grab().save(preview+"-text.png"));}
+    analysis.inspectionChanged={};textLog.inspect(nullptr);textLog.setReadings(analysis.samples()[2].values);QTest::qWait(2300);CHECK(textValues->item(0,1)->text()==QString::fromUtf8("—"));
     std::cout<<"Graph Log capture, pause, 12 tabs, shared cursor, dual axes, saved config, corrupt settings and rendering: passed\n";
 }

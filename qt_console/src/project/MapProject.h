@@ -10,6 +10,7 @@ public:
     std::function<QJsonObject(QString &)> capture;
     std::function<bool(const QJsonObject &,QString &)> apply;
     std::function<bool()> canUse;
+    std::function<bool(const QJsonObject &,QString &)> applyEdits;
     bool save(const QString &path,QString &error);
     bool open(const QString &path,QString &error);
     void saveAs();void openDialog();

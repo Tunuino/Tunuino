@@ -3,6 +3,7 @@
 #include "GraphLogLayout.h"
 #include <QWidget>
 #include <QElapsedTimer>
+#include <functional>
 class QAction;
 class QLabel;
 class QSettings;
@@ -13,6 +14,8 @@ class LogPlot;
 struct LogViewState {
     qint64 epochMs=0;
     bool paused=false;
+    bool inspecting=false;
+    double selectionBegin=-1,selectionEnd=-1;
     double span=30;
     double end=30;
     int cursor=-1;
@@ -22,7 +25,14 @@ public:
     explicit GraphLogWidget(QWidget *parent=nullptr,QSettings *settings=nullptr);
     void setConnected(bool connected);
     void appendRuntime(const std::array<double,LogChannelCount> &values);
+    const std::vector<LogSample> &samples()const{return samples_;}
+    const LogViewState &view()const{return view_;}
+    std::function<void(const LogSample*)> inspectionChanged;
+    std::pair<double,double> axisRange(int channel)const;
+    quint64 revision()const{return revision_;}
+    void selectRange(double begin,double end);
 private:
+    quint64 revision_=0;
     void autoSave();
     void refresh();
     void clearLog();
