@@ -18,6 +18,10 @@ QByteArray content(const QJsonObject &o){return QJsonDocument(o).toJson(QJsonDoc
 QString crc(const QByteArray &b){return QStringLiteral("%1").arg(ServiceDataCodec::crc32(b),8,16,QLatin1Char('0'));}
 }
 MapProject::MapProject(QWidget *window):QObject(window),window_(window){setObjectName("mapProject");}
+QJsonObject MapProject::vvtTableState(const QByteArray &page){
+    QJsonArray rpm,load,cells;const bool stored=MapPageCodec::valid(7,page)&&page!=QByteArray(576,0);
+    for(int i=0;i<16;++i){rpm.append(stored?int(SensorCalibrationCodec::u16(page,2*i)):500+500*i);load.append(stored?SensorCalibrationCodec::u16(page,32+2*(15-i))/100.:170-10*i);QJsonArray row;for(int c=0;c<16;++c)row.append(stored?qint16(SensorCalibrationCodec::u16(page,64+2*((15-i)*16+c)))/100.:0.);cells.append(row);}return {{"rpm",rpm},{"load",load},{"cells",cells}};
+}
 QJsonObject MapProject::defaultPages(){
     QByteArray h(256,0);SensorCalibrationCodec::put(h,0,2);h[3]=36;h[4]=1;h[26]=3;
     for(int at:{12,20})SensorCalibrationCodec::put(h,at,4095);SensorCalibrationCodec::put(h,34,2048);SensorCalibrationCodec::put(h,36,4095);SensorCalibrationCodec::put(h,96,12000);SensorCalibrationCodec::put(h,100,3300);
@@ -35,11 +39,11 @@ bool MapProject::decode(const QByteArray &bytes,QJsonObject &payload,QString &er
     const auto p=o["payload"].toObject();const auto raw=content(p);
     if(o["crc32"]!=crc(raw)||o["sha256"]!=QString::fromLatin1(QCryptographicHash::hash(raw,QCryptographicHash::Sha256).toHex()))return fail("Project checksum does not match; nothing was loaded.");
     if(p["target"].toObject()!=QJsonObject{{"family",1},{"mcu",1},{"hardwareRevision",7},{"schema",2}})return fail("Unsupported ECU target or configuration format.");
-    const auto pages=p["pages"].toObject();QStringList names{"header","fuel","ignition","aux"};if(pages.contains("afr"))names<<"afr";if(pages.contains("controls")){if(!pages.contains("afr"))return fail("VTEC requires the complete AFR and control page set.");names<<"controls";}if(pages.size()!=names.size())return fail("Project must contain all four configuration pages.");
-    for(int i=0;i<names.size();++i){const auto text=pages[names[i]].toString();const auto b=QByteArray::fromHex(text.toLatin1());if(text!=QString::fromLatin1(b.toHex())||b.size()!=(i==0||i==3||i==5?256:576)||(i==0&&SensorCalibrationCodec::u16(b,0)!=2)||(i==1&&!MapPageCodec::valid(2,b))||(i==2&&!MapPageCodec::valid(3,b))||(i==4&&!MapPageCodec::valid(5,b))||(i==5&&!VtecCodec::format(b)))return fail("Invalid project configuration page.");}
+    const auto pages=p["pages"].toObject();QStringList names{"header","fuel","ignition","aux"};if(pages.contains("afr"))names<<"afr";if(pages.contains("controls")){if(!pages.contains("afr"))return fail("VTEC requires the complete AFR and control page set.");names<<"controls";}if(pages.contains("vvt")){if(!pages.contains("controls"))return fail("VVT table requires the complete control page set.");names<<"vvt";}if(pages.size()!=names.size())return fail("Project must contain all four configuration pages.");
+    for(int i=0;i<names.size();++i){const auto text=pages[names[i]].toString();const auto b=QByteArray::fromHex(text.toLatin1());if(text!=QString::fromLatin1(b.toHex())||b.size()!=(i==0||i==3||i==5?256:576)||(i==0&&SensorCalibrationCodec::u16(b,0)!=2)||(i==1&&!MapPageCodec::valid(2,b))||(i==2&&!MapPageCodec::valid(3,b))||(i==4&&!MapPageCodec::valid(5,b))||(i==5&&!VtecCodec::format(b))||(i==6&&!MapPageCodec::valid(7,b)))return fail("Invalid project configuration page.");}
     for(const auto &key:{"tables","parameters","sensors","trigger","service"})if(!p[key].isObject())return fail("Incomplete project editor data.");
     if(p.contains("dbw")){DbwSignals dbw;if(!p["dbw"].isObject()||!dbw.restore(p["dbw"].toObject(),false,error))return false;}
-    if(p["tables"].toObject().size()!=3)return fail("Fuel, Ignition and AFR Target tables are required.");payload=p;return true;
+    const auto tables=p["tables"].toObject();if(!tables.contains("fuel")||!tables.contains("ignition")||!tables.contains("afr")||(tables.size()!=3&&(tables.size()!=4||!tables.contains("vvt"))))return fail("Fuel, Ignition and AFR Target tables are required; VVT is optional for legacy projects.");payload=p;return true;
 }
 bool MapProject::save(const QString &path,QString &error){
     if(canUse&&!canUse()){error="Wait for the active ECU operation to finish.";return false;}if(!capture){error="Project capture is unavailable.";return false;}

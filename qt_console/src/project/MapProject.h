@@ -19,6 +19,7 @@ public:
     static QJsonObject tableState(QTableWidget *table,QTableWidget *rpm);
     static bool tableState(QTableWidget *table,QTableWidget *rpm,const QJsonObject &,double low,double high,bool apply,QString &error);
     static QJsonObject defaultPages();
+    static QJsonObject vvtTableState(const QByteArray &page={});
     static QString defaultDirectory();
 private:
     QWidget *window_;QString path_;

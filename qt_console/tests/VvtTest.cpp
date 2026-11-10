@@ -7,6 +7,7 @@
 #include <QProcess>
 #include <QDoubleSpinBox>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QTest>
 #include <iostream>
 #include <cstdlib>
@@ -40,6 +41,29 @@ static void native(){
     process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
     std::cout<<"VVT verified six-page write with VTEC preserved against real firmware passed (host simulation).\n";
 }
+static void nativeMap(){
+    const auto exe=qEnvironmentVariable("TUNUINO_FIRMWARE_HARNESS");if(exe.isEmpty())return;
+    QProcess process;process.start(exe,{"--vvt-map"});CHECK(process.waitForStarted(3000));
+    const auto exchange=[&](const QByteArray &q){const auto line=q.toHex()+"\n";CHECK(process.write(line)==line.size());CHECK(process.waitForBytesWritten(3000));while(!process.canReadLine())CHECK(process.waitForReadyRead(3000));return QByteArray::fromHex(process.readLine().trimmed());};
+    const auto identity=exchange("TUNUINO?");CHECK(VvtCodec::tableSupported(identity));
+    const auto readAll=[&]{MapWriteTransaction::Pages p;for(int page=1;page<=7;++page)for(int at=0;at<(page==1||page==4||page==6?256:576);at+=64)p[size_t(page-1)]+=exchange(read(page,at,64)).mid(1);return p;};
+    auto base=readAll();auto h=base[0];h[6]=1;Codec::put(h,16,25000);
+    for(int at=0;at<256;at+=64){auto q=read(1,at,64);q[0]='w';q+=h.mid(at,64);CHECK(exchange(q)==QByteArray(1,0));}CHECK(exchange(QByteArray::fromHex("620001"))==QByteArray(1,0));
+    base=readAll();quint32 generation=ServiceDataCodec::u32(exchange("TUNUINO:V"),8);
+    MapPageValues v;for(int i=0;i<16;++i){v.rpm[i]=500+500*i;v.load[i]=20+10*i;}v.cells.fill(20);QString error;const auto table=MapPageCodec::encode(7,v,error);CHECK(table.size()==576&&MapPageCodec::valid(7,table));
+    MapWriteTransaction writer;QQueue<QByteArray> pending;int copies=0,burns=0;bool success=false;
+    writer.send=[&](const QByteArray &q,int){pending.enqueue(q);return true;};writer.savePrevious=[&](const QByteArray &id,quint32 gen,const MapWriteTransaction::Pages &pages){CHECK(id==identity&&gen==generation&&pages==base);++copies;return true;};
+    writer.completed=[&](bool okay,bool uncertain,const QString &message){if(!okay)std::cerr<<message.toStdString()<<std::endl;CHECK(!uncertain);success=okay;};
+    const auto pump=[&]{int guard=0;while(writer.busy()){CHECK(!pending.isEmpty()&&++guard<1000);const auto q=pending.dequeue();if(q[0]=='b')++burns;writer.receive(exchange(q));}};
+    auto older=identity;older[17]=1;CHECK(!writer.start(7,table,base[6],older,generation));
+    CHECK(writer.start(7,table,base[6],identity,generation));pump();CHECK(success&&copies==1&&burns==1);
+    auto actual=readAll();for(int i=0;i<7;++i)CHECK(actual[i]==(i==6?table:base[i]));base=actual;generation=writer.generation();
+    auto control=VvtCodec::defaults(VtecCodec::defaults());control[64]=2;control[123]=1;CHECK(VvtCodec::tableAllowed(control,base[0],base[6],error));auto noMap=base[0];noMap[6]=0;CHECK(!VvtCodec::tableAllowed(control,noMap,base[6],error));auto outside=table;Codec::put(outside,64,5000);CHECK(!VvtCodec::tableAllowed(control,base[0],outside,error));
+    QByteArray mask(256,char(255));CHECK(writer.startParameters(6,control,base[5],identity,generation,mask));pump();CHECK(success&&copies==2&&burns==2);actual=readAll();for(int i=0;i<7;++i)CHECK(actual[i]==(i==5?control:base[i]));
+    base=actual;generation=writer.generation();success=true;CHECK(writer.start(7,outside,base[6],identity,generation));pump();CHECK(!success&&copies==2&&burns==2&&readAll()==base);
+    process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
+    std::cout<<"VVT target seven-page native write, source selection, backup and travel rejection passed (host simulation).\n";
+}
 int main(int argc,char **argv){
     QApplication app(argc,argv);QString error;const auto prefix=VtecCodec::defaults();const auto page=VvtCodec::defaults(prefix);CHECK(VtecCodec::format(page)&&VvtCodec::extension(page)&&page.mid(1,27)==prefix.mid(1,27));
     auto invalid=page;Codec::put(invalid,90,5000);CHECK(!VtecCodec::format(invalid));invalid=page;invalid[255]=1;CHECK(!VvtCodec::extension(invalid));
@@ -53,6 +77,12 @@ int main(int argc,char **argv){
     reference.findChild<QDoubleSpinBox*>("reference")->setValue(91);auto unrelated=written;Codec::put(unrelated,4,6000);reference.load(h,a,id,2,unrelated);written.clear();reference.save();CHECK(!written.isEmpty()&&VvtCodec::u32(written,82)==9100&&Codec::u16(written,4)==6000);
     auto conflict=written;Codec::put(conflict,84,9200);reference.load(h,a,id,3,conflict);written.clear();reference.save();CHECK(written.isEmpty());reference.findChild<QAction*>("primaryDiscard")->trigger();reference.save();CHECK(VvtCodec::u32(written,82)==9200);
     id[17]=0;setup.load(h,a,id,4,prefix);written.clear();setup.save();CHECK(written.isEmpty());
+    // New target selector preserves the fixed setpoint and marks the extension explicitly.
+    id[17]=3;ParameterWidget targetPanel(target);targetPanel.load(h,a,id,1,page);targetPanel.setAvailable(true);targetPanel.findChild<QComboBox*>("tableSource")->setCurrentIndex(1);written.clear();targetPanel.writeRequested=[&](int,const QByteArray &bytes,const QByteArray &mask){written=bytes;CHECK(quint8(mask[64])==255&&quint8(mask[123])==255);};targetPanel.save();CHECK(written[64]==2&&written[123]==1&&written.mid(1,27)==prefix.mid(1,27));
+    auto oldTarget=targetPanel.editorState();auto oldValues=oldTarget["values"].toObject();oldValues.remove("tableSource");oldTarget["values"]=oldValues;CHECK(targetPanel.restoreEditor(oldTarget,true,error));CHECK(targetPanel.findChild<QComboBox*>("tableSource")->currentIndex()==0);
+    MapPageValues mapValues;for(int i=0;i<16;++i){mapValues.rpm[i]=500+500*i;mapValues.load[i]=20+10*i;}
+    ToolSnapshot snapshot;snapshot.identity=id;snapshot.generation=1;snapshot.pages={h,MapPageCodec::encode(2,mapValues,error),MapPageCodec::encode(3,mapValues,error),a,QByteArray{},page,MapPageCodec::encode(7,mapValues,error)};CHECK(snapshot.valid());
+    VvtMonitor monitor;monitor.snapshot=[&]{return snapshot;};monitor.ready=[] {return true;};QByteArray reply(40,0);reply[1]=2;reply[7]=1;reply[11]=1;reply[18]=1;reply[19]=1;Codec::put(reply,12,2000);monitor.exchange=[&](const QByteArray &,std::function<void(const QByteArray&)> done){done(reply);return true;};monitor.show();monitor.poll();auto *readings=monitor.findChild<QTableWidget*>("vvtReadings");CHECK(readings->item(0,1)->text().startsWith("20.00")&&readings->item(0,0)->text().contains("RPM/MAP"));reply[19]=2;reply[4]=12;monitor.poll();CHECK(readings->item(0,1)->text()=="---"&&readings->item(3,1)->text().contains("target unavailable"));reply[2]=1;reply[3]=1;reply[4]=0;monitor.poll();CHECK(readings->item(2,1)->text()=="---");monitor.hide();
     if(argc>1){setup.resize(720,610);setup.show();app.processEvents();setup.grab().save(QString::fromLocal8Bit(argv[1]));}
-    native();std::cout<<"VVT codec, controller editor, shared-page preservation, conflicts and old firmware checks passed.\n";
+    native();nativeMap();std::cout<<"VVT codec, controller editor, shared-page preservation, conflicts and old firmware checks passed.\n";
 }

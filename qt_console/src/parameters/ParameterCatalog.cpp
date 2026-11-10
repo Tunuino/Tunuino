@@ -95,8 +95,8 @@ QVector<ParameterBlock> ParameterCatalog::blocks(){
         <<number("trackingDelay","Tracking error delay",106,1,100,5000,1000,"ms")<<number("trackingTolerance","Tracking tolerance",108,100,.01,20,5,"°");all<<b;
     b=block("vvt.activation","VVT - CAM 1 - Activation",6,vvtHelp);
     b.fields<<number("minimumRpm","Minimum engine RPM",94,1,500,12000,1500,"rpm")<<number("rpmHysteresis","RPM hysteresis",96,1,0,11900,100,"rpm")<<number("minimumClt","Minimum coolant temperature",98,100,0,120,70,"°C")<<number("cltHysteresis","Coolant hysteresis",100,100,0,20,5,"°C")<<number("runtime","Minimum engine runtime",102,1,0,60000,10000,"ms")<<flag("oilRequired","Require oil pressure",110,0)<<number("oilOn","Engage minimum oil pressure",112,10,0,2000,200,"kPa")<<number("oilOff","Release minimum oil pressure",114,10,0,2000,150,"kPa");all<<b;
-    b=block("vvt.target","VVT - CAM 1 - Fixed target",6,vvtHelp+" This is one constant commissioning setpoint, not an RPM/MAP target map. Write requires the engine stopped and outputs disarmed, as for the other configuration windows.");
-    b.fields<<number("target","Target advance",90,100,-90,90,0,"°",true);all<<b;
+    b=block("vvt.target","VVT - CAM 1 - Target source",6,vvtHelp+" Fixed target is available for commissioning. For RPM/MAP control, write the Base target table first, then explicitly select it here. All cells must remain within the configured travel. Write requires the engine stopped and outputs disarmed.");
+    b.fields<<number("target","Fixed target advance",90,100,-90,90,0,"°",true);auto targetSource=number("tableSource","Target source",123,1,0,1,0,{},false,1);targetSource.choices={"Fixed commissioning target","RPM / MAP base table"};b.fields<<targetSource;all<<b;
     return all;
 }
 double ParameterCatalog::value(const QByteArray &p,const ParameterField &f){if(f.width==0)return f.initial;if(p.size()!=256)return 0;quint32 n=0;for(int i=0;i<f.width;++i)n=(n<<8)|quint8(p[f.offset+i]);if(f.bit)return (n&f.bit)?1:0;if(f.signedValue&&f.width==2)return qint16(n)/f.scale;return n/f.scale;}

@@ -537,7 +537,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     addCategory(tr("Traction control"), {{tr("Traction settings"),-1}});
     auto *vvtCategory=addCategory(tr("VVT"),{});
     auto *vvtTiming=new QTreeWidgetItem(vvtCategory,{tr("Continuous cam timing - CAM 1")});
-    parameterItem(vvtTiming,tr("Position"),"vvt.position");parameterItem(vvtTiming,tr("Solenoid and PID"),"vvt.actuator");parameterItem(vvtTiming,tr("Activation"),"vvt.activation");parameterItem(vvtTiming,tr("Fixed target"),"vvt.target");parameterItem(vvtTiming,tr("VVT monitor"),"vvt.monitor");
+    parameterItem(vvtTiming,tr("Position"),"vvt.position");parameterItem(vvtTiming,tr("Solenoid and PID"),"vvt.actuator");parameterItem(vvtTiming,tr("Activation"),"vvt.activation");parameterItem(vvtTiming,tr("Target source"),"vvt.target");parameterItem(vvtTiming,tr("Base target table"),"vvt.table");parameterItem(vvtTiming,tr("VVT monitor"),"vvt.monitor");
     parameterItem(vvtCategory,tr("Switched cam profile - VTEC"),"vtec.setup");
     parameterItem(vvtCategory,tr("VTEC monitor"),"vtec.monitor");
     addCategory(tr("Sport"), {{tr("Sport mode"),-1}});
@@ -919,10 +919,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // Offline map persistence; never sends data to the ECU.
     auto installMapFileActions = [this](QTableWidget *table, const QString &mapId,
                                         const QStringList &rpmAxis, const QStringList &mapAxis,
-                                        double maximum) {
+                                        double maximum, double minimum=0) {
         auto *openAction = new QAction(tr("Import table"), this);
         auto *saveAction = new QAction(tr("Export table"), this);
-        connect(saveAction, &QAction::triggered, this, [this, table, mapId, rpmAxis, mapAxis, maximum]() {
+        connect(saveAction, &QAction::triggered, this, [this, table, mapId, rpmAxis, mapAxis, maximum, minimum]() {
             QJsonArray rows;
             for (int row = 0; row < 16; ++row) {
                 QJsonArray values;
@@ -930,7 +930,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     bool ok = false;
                     const auto *item = table->item(row, col);
                     const double value = item ? item->text().toDouble(&ok) : 0.0;
-                    if (!ok || !std::isfinite(value) || value < 0.0 || value > maximum) {
+                    if (!ok || !std::isfinite(value) || value < minimum || value > maximum) {
                         QMessageBox::warning(this, tr("Invalid map"), tr("Invalid value at row %1, column %2.").arg(row+1).arg(col+1));
                         return;
                     }
@@ -939,8 +939,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 rows.append(values);
             }
             QJsonArray rpms, loads;
-            for (const QString &value : rpmAxis) rpms.append(value.toDouble());
-            for (int row = 15; row >= 0; --row) loads.append(mapAxis.at(row).toDouble());
+            auto *liveRpm=qobject_cast<QTableWidget*>(table->property("rpmGrid").value<QObject*>());
+            for(int i=0;i<16;++i)rpms.append(liveRpm?liveRpm->item(0,i)->text().toDouble():rpmAxis.at(i).toDouble());
+            for(int i=0;i<16;++i)loads.append(liveRpm?table->verticalHeaderItem(i)->text().toDouble():mapAxis.at(15-i).toDouble());
             QJsonObject doc;
             doc.insert(QStringLiteral("format"), QStringLiteral("tunuino-map-v1"));
             doc.insert(QStringLiteral("map"), mapId);
@@ -953,7 +954,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if (!file.open(QIODevice::WriteOnly) || file.write(QJsonDocument(doc).toJson(QJsonDocument::Indented)) < 0 || !file.commit())
                 QMessageBox::warning(this, tr("Save failed"), tr("Could not save map."));
         });
-        connect(openAction, &QAction::triggered, this, [this, table, mapId, rpmAxis, mapAxis, maximum]() {
+        connect(openAction, &QAction::triggered, this, [this, table, mapId, rpmAxis, mapAxis, maximum, minimum]() {
             const QString filename = QFileDialog::getOpenFileName(this, tr("Import table"), QString(), tr("Tunuino table (*.json)"));
             if (filename.isEmpty()) return;
             QFile file(filename);
@@ -971,15 +972,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 && obj.value(QStringLiteral("format")).toString() == QStringLiteral("tunuino-map-v1")
                 && obj.value(QStringLiteral("map")).toString() == mapId
                 && rows.size() == 16 && rpms.size() == 16 && loads.size() == 16;
+            auto *liveRpm=qobject_cast<QTableWidget*>(table->property("rpmGrid").value<QObject*>());
             for (int i = 0; valid && i < 16; ++i) {
                 if (!rpms.at(i).isDouble() || !loads.at(i).isDouble()
-                    || std::abs(rpms.at(i).toDouble() - rpmAxis.at(i).toDouble()) > 0.01
-                    || std::abs(loads.at(i).toDouble() - mapAxis.at(15-i).toDouble()) > 0.01
+                    || std::abs(rpms.at(i).toDouble() - (liveRpm?liveRpm->item(0,i)->text().toDouble():rpmAxis.at(i).toDouble())) > 0.01
+                    || std::abs(loads.at(i).toDouble() - (liveRpm?table->verticalHeaderItem(i)->text().toDouble():mapAxis.at(15-i).toDouble())) > 0.01
                     || !rows.at(i).isArray() || rows.at(i).toArray().size() != 16) { valid = false; break; }
                 const QJsonArray row = rows.at(i).toArray();
                 for (int j = 0; j < 16; ++j) {
                     const QJsonValue v = row.at(j);
-                    if (!v.isDouble() || !std::isfinite(v.toDouble()) || v.toDouble() < 0.0 || v.toDouble() > maximum) {
+                    if (!v.isDouble() || !std::isfinite(v.toDouble()) || v.toDouble() < minimum || v.toDouble() > maximum) {
                         valid = false; break;
                     }
                 }
@@ -990,7 +992,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             }
             for (int i = 0; i < 16; ++i)
                 for (int j = 0; j < 16; ++j)
-                    table->item(i, j)->setText(QString::number(rows.at(i).toArray().at(j).toDouble(), 'f', mapId == QStringLiteral("afr") ? 1 : 0));
+                    table->item(i, j)->setText(QString::number(rows.at(i).toArray().at(j).toDouble(), 'f', mapId == QStringLiteral("afr") ? 1 : mapId==QStringLiteral("vvt")?2:0));
         });
         return qMakePair(openAction, saveAction);
     };
@@ -1427,6 +1429,114 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     afrFoot->setWordWrap(true);
     afrLayout->addWidget(afrFoot);
     tabs->addTab(afrPage, tr("AFR Target"));
+
+    auto *vvtPage = new QWidget();
+    auto *vvtLayout = new QVBoxLayout(vvtPage);
+    // Title is displayed by the MDI window.
+    auto *vvtMap = new LiveMapTable(vvtPage);
+    vvtMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    vvtMap->horizontalHeader()->setDefaultSectionSize(38);
+    vvtMap->horizontalHeader()->setMinimumSectionSize(18);
+    vvtMap->verticalHeader()->setMinimumSectionSize(16);
+    vvtMap->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    vvtMap->verticalHeader()->setDefaultSectionSize(28);
+    vvtMap->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
+    vvtMap->setAlternatingRowColors(true);
+    vvtMap->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    vvtMap->setMinimumSize(220, 180);
+
+    QStringList vvtRpmHeaders, vvtLoadHeaders;
+    for (int i = 0; i < 16; ++i) {
+        vvtRpmHeaders.append(fuelRpmBins.at(i));
+        vvtLoadHeaders.append(fuelMapBins.at(15 - i));
+    }
+    vvtMap->setVerticalHeaderLabels(vvtLoadHeaders);
+    vvtMap->horizontalHeader()->hide();
+    for(int r=0;r<16;++r)for(int c=0;c<16;++c){auto *cell=new QTableWidgetItem(QStringLiteral("0.00"));cell->setTextAlignment(Qt::AlignCenter);vvtMap->setItem(r,c,cell);}
+    installMapHeatmap(vvtMap);
+    auto *vvtEditBar = new QHBoxLayout();
+    vvtEditBar->addStretch();
+    installTableEditControls(vvtEditBar, vvtMap, true);
+    // Context menu owns the editing actions; no right-side editing buttons.
+    const auto vvtFileActions = installMapFileActions(vvtMap, QStringLiteral("vvt"), fuelRpmBins, fuelMapBins, 90.0, -90.0);
+    auto *vvtGridPanel = new QWidget(vvtPage);
+    auto *vvtGridLayout = new QVBoxLayout(vvtGridPanel);
+    vvtGridLayout->setContentsMargins(0, 0, 0, 0);
+    vvtGridLayout->setSpacing(3);
+    auto *vvtAxisRow = new QHBoxLayout();
+    vvtAxisRow->setSpacing(5);
+    auto *vvtMapAxisLabel = new QLabel(tr("M\nA\nP\n\nk\nP\na"), vvtGridPanel);
+    vvtMapAxisLabel->setAlignment(Qt::AlignCenter);
+    vvtMapAxisLabel->setFixedWidth(24);
+    vvtMapAxisLabel->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
+    vvtAxisRow->addWidget(vvtMapAxisLabel, 0, Qt::AlignVCenter);
+    vvtAxisRow->addWidget(vvtMap, 1);
+    vvtGridLayout->addLayout(vvtAxisRow, 1);
+    connect(vvtMap->verticalHeader(), &QHeaderView::sectionDoubleClicked, vvtPage, [vvtMap](int row){
+        bool ok=false;const double value=QInputDialog::getDouble(vvtMap,QObject::tr("MAP breakpoint"),QObject::tr("MAP (kPa)"),vvtMap->verticalHeaderItem(row)->text().toDouble(),0,500,2,&ok);
+        if(ok)vvtMap->verticalHeaderItem(row)->setText(QString::number(value,'f',2));
+    });
+    auto *vvtRpmValues = new QTableWidget(1, 16, vvtGridPanel);
+    vvtRpmValues->horizontalHeader()->hide();
+    vvtRpmValues->verticalHeader()->hide();
+    vvtRpmValues->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
+    vvtRpmValues->setFocusPolicy(Qt::NoFocus);
+    vvtRpmValues->setSelectionMode(QAbstractItemView::NoSelection);
+    vvtRpmValues->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    vvtRpmValues->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    vvtRpmValues->setMinimumHeight(32);
+    vvtRpmValues->setMaximumHeight(32);
+    vvtRpmValues->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    vvtRpmValues->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    // Match the 16 RPM breakpoints to the exact 16 map column widths.
+    // Independent Stretch headers drift apart as the MDI window shrinks.
+    for (int col = 0; col < 16; ++col)
+        vvtRpmValues->setColumnWidth(col, vvtMap->columnWidth(col));
+    connect(vvtMap->horizontalHeader(), &QHeaderView::sectionResized,
+            vvtRpmValues, [vvtRpmValues](int column, int, int width) {
+                vvtRpmValues->setColumnWidth(column, width);
+            });
+    connect(vvtMap->verticalHeader(), &QHeaderView::sectionResized,
+            vvtMap, [vvtMap](int, int, int) {
+                const int rowHeight = vvtMap->rowHeight(0);
+                QFont f = vvtMap->verticalHeader()->font();
+                f.setPointSize((std::max)(5, (std::min)(9, rowHeight / 3)));
+                vvtMap->verticalHeader()->setFont(f);
+            });
+    QFont vvtRpmValuesFont = vvtRpmValues->font();
+    vvtRpmValuesFont.setPointSize(6);
+    vvtRpmValues->setFont(vvtRpmValuesFont);
+    for (int i = 0; i < 16; ++i) {
+        auto *cell = new QTableWidgetItem(fuelRpmBins.at(i));
+        cell->setTextAlignment(Qt::AlignCenter);
+        vvtRpmValues->setItem(0, i, cell);
+    }
+    auto *vvtBottomAxis = new QHBoxLayout();
+    vvtBottomAxis->setContentsMargins(vvtMapAxisLabel->width() + 5 + vvtMap->verticalHeader()->width(), 0, 0, 0);
+    vvtBottomAxis->addWidget(vvtRpmValues, 1);
+    vvtGridLayout->addLayout(vvtBottomAxis);
+    auto *vvtRpmLabel = new QLabel(tr("RPM (rev/min)"), vvtGridPanel);
+    vvtRpmLabel->setAlignment(Qt::AlignHCenter);
+    vvtRpmLabel->setStyleSheet(QStringLiteral("font-weight: 600; color: #e69a32;"));
+    vvtGridLayout->addWidget(vvtRpmLabel);
+    auto *vvtSurface = new MapSurfacePreview(vvtMap, vvtPage);
+    auto *vvtGraphWindow = workspace->addSubWindow(vvtSurface);tunuino::CalibrationAppearance::frame(vvtGraphWindow);
+    vvtGraphWindow->setWindowTitle(tr("VVT - CAM 1 - Base target | 3D Graph"));
+    vvtGraphWindow->setWindowFlags(Qt::SubWindow | Qt::WindowTitleHint |
+        Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
+    vvtGraphWindow->setAttribute(Qt::WA_DeleteOnClose, false);
+    vvtGraphWindow->resize(450, 420);
+    boundsGuard->watch(vvtGraphWindow);
+    vvtGraphWindow->hide();
+    installEcumasterToolbar(vvtLayout, vvtPage, vvtMap, vvtFileActions, vvtGraphWindow, tr("VVT - CAM 1 - Base target"));
+    vvtLayout->addWidget(vvtGridPanel, 1);
+    auto *vvtFoot = new QLabel(tr("Target advance in crank degrees. Write this table, then select RPM / MAP base table in Target source. Initial zero values are inactive references; review the actual engine calibration."), vvtPage);
+    vvtFoot->setWordWrap(true);
+    vvtLayout->addWidget(vvtFoot);
+    vvtMap->setProperty("rpmGrid",QVariant::fromValue(static_cast<QObject*>(vvtRpmValues)));vvtMap->setObjectName("vvtTargetTable");vvtRpmValues->setObjectName("vvtTargetRpm");
+    auto *vvtTableWindow=workspace->addSubWindow(vvtPage);tunuino::CalibrationAppearance::frame(vvtTableWindow);
+    vvtTableWindow->setWindowTitle(tr("VVT - CAM 1 - Base target"));vvtTableWindow->setProperty("desktopWindowId","parameter:vvt.table");
+    vvtTableWindow->setAttribute(Qt::WA_DeleteOnClose,false);vvtTableWindow->resize(1000,740);boundsGuard->watch(vvtTableWindow);vvtTableWindow->hide();
 
     // Each map is an independent MDI window. Keep its tab index reserved so
     // existing navigation indices for the other configuration pages stay stable.
@@ -2222,7 +2332,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     tabs->tabBar()->hide();
     auto sensorPanels=QSharedPointer<QVector<tunuino::SensorCalibrationWidget*>>::create();
     auto parameterPanels=QSharedPointer<QVector<tunuino::ParameterWidget*>>::create();
-    auto parameterWindows=QSharedPointer<QMap<QString,QPointer<QMdiSubWindow>>>::create();
+    auto parameterWindows=QSharedPointer<QMap<QString,QPointer<QMdiSubWindow>>>::create();(*parameterWindows)["vvt.table"]=vvtTableWindow;
     auto dbwSignals=std::make_shared<tunuino::DbwSignals>();
     auto *dbwSetup=new tunuino::DbwWidget(dbwSignals);auto *dbwSetupWindow=toolWindow(dbwSetup,tr("DBW - APS / TPS calibration"));(*parameterWindows)["dbw.signals"]=dbwSetupWindow;dbwSetupWindow->resize(dbwSetup->sizeHint()+QSize(12,30));
     auto *dbwMonitor=new tunuino::DbwWidget(dbwSignals,true);auto *dbwMonitorWindow=toolWindow(dbwMonitor,tr("DBW - Signal diagnostics"));(*parameterWindows)["dbw.monitor"]=dbwMonitorWindow;dbwMonitorWindow->resize(dbwMonitor->sizeHint()+QSize(12,30));
@@ -2281,7 +2391,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *operatingPointTimer = new QTimer(this);
     operatingPointTimer->setInterval(150);
     connect(operatingPointTimer, &QTimer::timeout, this,
-            [maps, ignitionMap, afrMap, liveReadings, fuelRpmBins, ignitionRpmBins, afrRpmBins]() {
+            [maps, ignitionMap, afrMap, vvtMap, vvtRpmValues, liveReadings, fuelRpmBins, ignitionRpmBins, afrRpmBins]() {
         bool rpmOk = false, mapOk = false;
         const double rpm = liveReadings->at(0)->text().section(QLatin1Char(' '), 0, 0).toDouble(&rpmOk);
         const QString mapText = liveReadings->at(2)->text();
@@ -2289,12 +2399,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if (!rpmOk || !mapOk) {
             maps->clearOperatingPoint();
             ignitionMap->clearOperatingPoint();
-            afrMap->clearOperatingPoint();
+            afrMap->clearOperatingPoint();vvtMap->clearOperatingPoint();
             return;
         }
         maps->setOperatingPoint(rpm, kpa, fuelRpmBins);
         ignitionMap->setOperatingPoint(rpm, kpa, ignitionRpmBins);
         afrMap->setOperatingPoint(rpm, kpa, afrRpmBins);
+        QStringList vvtBins;for(int i=0;i<16;++i)vvtBins<<vvtRpmValues->item(0,i)->text();vvtMap->setOperatingPoint(rpm,kpa,vvtBins);
     });
     operatingPointTimer->start();
 
@@ -2325,7 +2436,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto writePending = QSharedPointer<bool>::create(false);
     auto ecuGeneration = QSharedPointer<quint32>::create(0);
     struct MapBase { QByteArray bytes, identity; quint32 generation=0; };
-    auto mapBases = QSharedPointer<std::array<MapBase,3>>::create();
+    auto mapBases = QSharedPointer<std::array<MapBase,4>>::create();
     struct SensorBase { QByteArray header,aux,identity,controls;quint32 generation=0; };
     auto sensorBase=QSharedPointer<SensorBase>::create();
     auto *mapProject=new tunuino::MapProject(this);
@@ -2334,6 +2445,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto activeSensorWrite=QSharedPointer<int>::create(-1);
     auto activeParameterFinished=QSharedPointer<std::function<void(bool,const QString&)>>::create();
     auto *afrSave=new QPushButton(tr("Write to ECU"),this);afrSave->setObjectName("afrWriteToEcu");afrSave->hide();
+    auto *vvtSave=new QPushButton(tr("Write to ECU"),this);vvtSave->setObjectName("vvtWriteToEcu");vvtSave->hide();
     auto writeActionRef = QSharedPointer<QPointer<QAction>>::create();
     const auto updateWriteAvailability = [=]() {
         const bool ready = *ecuOnline && *ecuClean && *identityVerified && session->isOpen() && !writer->busy() && !*writePending && !*readBusy && !*validationPending && !*toolBusy && !*toolReply;
@@ -2341,6 +2453,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         fuelSave->setEnabled(ready && !fuelBase.bytes.isEmpty() && fuelBase.identity==*ecuIdentity && fuelBase.generation!=0 && fuelBase.generation==*ecuGeneration);
         ignitionSave->setEnabled(ready && !ignitionBase.bytes.isEmpty() && ignitionBase.identity==*ecuIdentity && ignitionBase.generation!=0 && ignitionBase.generation==*ecuGeneration);
         const auto &afrBase=(*mapBases)[2];afrSave->setEnabled(ready&&tunuino::MapPageCodec::afrSupported(*ecuIdentity)&&afrBase.bytes.size()==576&&afrBase.identity==*ecuIdentity&&afrBase.generation==*ecuGeneration);
+        const auto &vvtBase=(*mapBases)[3];vvtSave->setEnabled(ready&&tunuino::VvtCodec::tableSupported(*ecuIdentity)&&vvtBase.bytes.size()==576&&vvtBase.identity==*ecuIdentity&&vvtBase.generation==*ecuGeneration);
         const bool sensorReady=ready&&sensorBase->header.size()==256&&sensorBase->aux.size()==256
             &&sensorBase->identity==*ecuIdentity&&sensorBase->generation==*ecuGeneration;
         // Read-only target queries do not invalidate the ADC sample stream.
@@ -2354,6 +2467,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             (*writeActionRef)->setEnabled(((page==fuelPage || page==fuelSurface) && fuelSave->isEnabled())
                 || ((page==ignitionPage || page==ignitionSurface) && ignitionSave->isEnabled())
                 || ((page==afrPage || page==afrSurface) && afrSave->isEnabled())
+                || ((page==vvtPage || page==vvtSurface) && vvtSave->isEnabled())
                 || (sensorReady&&((sensorPage&&sensorPage->writeEnabled())||dynamic_cast<const tunuino::ParameterWidget*>(page)||(page==triggerWizard&&triggerWizard->reviewReady()))));
         }
     };
@@ -2459,10 +2573,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     mapProject->capture=[=](QString &error){
         auto pages=*projectPages;if(pages.isEmpty())pages=tunuino::MapProject::defaultPages();
         const auto live=tools->snapshot?tools->snapshot():tunuino::ToolSnapshot{};
-        if(!*projectLoaded&&live.valid()){const QStringList names{"header","fuel","ignition","aux"};for(int i=0;i<4;++i)pages[names[i]]=QString::fromLatin1(live.pages[i].toHex());if(!live.pages[4].isEmpty())pages["afr"]=QString::fromLatin1(live.pages[4].toHex());if(!live.pages[5].isEmpty())pages["controls"]=QString::fromLatin1(live.pages[5].toHex());}
+        if(!*projectLoaded&&live.valid()){const QStringList names{"header","fuel","ignition","aux"};for(int i=0;i<4;++i)pages[names[i]]=QString::fromLatin1(live.pages[i].toHex());if(!live.pages[4].isEmpty())pages["afr"]=QString::fromLatin1(live.pages[4].toHex());if(!live.pages[5].isEmpty())pages["controls"]=QString::fromLatin1(live.pages[5].toHex());if(!live.pages[6].isEmpty())pages["vvt"]=QString::fromLatin1(live.pages[6].toHex());}
         QJsonObject tables,parameters,sensors;
-        const QList<QTableWidget*> grids{maps,ignitionMap,afrMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues};const QStringList names{"fuel","ignition","afr"};
-        for(int i=0;i<3;++i){const auto state=tunuino::MapProject::tableState(grids[i],rpms[i]);if(!tunuino::MapProject::tableState(grids[i],rpms[i],state,i==1?-90:0,i==0?300:i==1?90:25,false,error))return QJsonObject{};tables[names[i]]=state;}
+        const QList<QTableWidget*> grids{maps,ignitionMap,afrMap,vvtMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues,vvtRpmValues};const QStringList names{"fuel","ignition","afr","vvt"};
+        for(int i=0;i<4;++i){const auto state=tunuino::MapProject::tableState(grids[i],rpms[i]);if(!tunuino::MapProject::tableState(grids[i],rpms[i],state,(i==1||i==3)?-90:0,i==0?300:(i==1||i==3)?90:25,false,error))return QJsonObject{};tables[names[i]]=state;}
         for(auto *panel:*parameterPanels)parameters[panel->block().key]=panel->editorState();
         for(auto *panel:*sensorPanels)sensors[tunuino::SensorCalibrationCodec::name(panel->kind())]=panel->editorState();
         const auto curve=camSensitivity->state();if(!camSensitivity->restore(curve,false,error))return QJsonObject{};
@@ -2471,7 +2585,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     mapProject->apply=[=](const QJsonObject &document,QString &error){
         const auto dbwState=document.contains("dbw")?document["dbw"].toObject():tunuino::DbwSignals::defaults();if(!dbwSignals->restore(dbwState,false,error))return false;
         const auto curve=document.contains("curves")?document["curves"].toObject()["cam1Sensitivity"].toObject():tunuino::SensitivityCurve::defaultState();if(!camSensitivity->restore(curve,false,error))return false;
-        const auto tables=document["tables"].toObject();auto parameters=document["parameters"].toObject();auto sensors=document["sensors"].toObject();
+        auto tables=document["tables"].toObject();if(!tables.contains("vvt"))tables["vvt"]=tunuino::MapProject::vvtTableState(QByteArray::fromHex(document["pages"].toObject()["vvt"].toString().toLatin1()));auto parameters=document["parameters"].toObject();auto sensors=document["sensors"].toObject();
         // Older v2 projects have six sensor editors. Add only the two new
         // pressure editors from their stored base; never discard legacy fields.
         const auto storedHeader=QByteArray::fromHex(document["pages"].toObject()["header"].toString().toLatin1());
@@ -2495,8 +2609,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(control,field);parameters[block.key]=QJsonObject{{"values",values}};
         }
         if(parameters.size()!=parameterPanels->size()||sensors.size()!=sensorPanels->size()){error=tr("This map does not contain all supported parameters and sensors.");return false;}
-        const QList<QTableWidget*> grids{maps,ignitionMap,afrMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues};const QStringList names{"fuel","ignition","afr"};
-        for(int i=0;i<3;++i)if(!tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,false,error))return false;
+        const QList<QTableWidget*> grids{maps,ignitionMap,afrMap,vvtMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues,vvtRpmValues};const QStringList names{"fuel","ignition","afr","vvt"};
+        for(int i=0;i<4;++i)if(!tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),(i==1||i==3)?-90:0,i==0?300:(i==1||i==3)?90:25,false,error))return false;
         for(auto *panel:*parameterPanels)if(!panel->restoreEditor(parameters[panel->block().key].toObject(),false,error))return false;
         for(auto *panel:*sensorPanels)if(!panel->restoreEditor(sensors[tunuino::SensorCalibrationCodec::name(panel->kind())].toObject(),false,error))return false;
         if(!triggerWizard->restoreEditor(document["trigger"].toObject(),false,error))return false;
@@ -2512,7 +2626,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         for(auto *panel:*parameterPanels){panel->keepProjectEdits(false);panel->load(header,aux,identity,generation,live.valid()?live.pages[5]:document["pages"].toObject().contains("controls")?QByteArray::fromHex(document["pages"].toObject()["controls"].toString().toLatin1()):QByteArray(256,0));panel->restoreEditor(parameters[panel->block().key].toObject(),true,error);panel->keepProjectEdits(true);if(!live.valid())panel->setAvailable(false);}
         for(auto *panel:*sensorPanels){panel->keepProjectEdits(false);panel->load(header,aux,identity,generation);panel->restoreEditor(sensors[tunuino::SensorCalibrationCodec::name(panel->kind())].toObject(),true,error);panel->keepProjectEdits(true);if(!live.valid())panel->setAvailable(false);}
         triggerWizard->keepProjectEdits(false);if(live.valid())triggerWizard->load(header,aux,identity,generation);else triggerWizard->loadOffline(header,aux);triggerWizard->restoreEditor(document["trigger"].toObject(),true,error);triggerWizard->keepProjectEdits(true);if(!live.valid())triggerWizard->setAvailable(false);
-        for(int i=0;i<3;++i)tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,true,error);
+        for(int i=0;i<4;++i)tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),(i==1||i==3)?-90:0,i==0?300:(i==1||i==3)?90:25,true,error);
         camSensitivity->restore(curve,true,error);serviceTool->setProjectComment(comment.toString());fuelSurface->update();ignitionSurface->update();afrSurface->update();
         statusBar()->showMessage(tr("Project opened locally. No ECU write was performed."),10000);return true;
     };
@@ -2551,8 +2665,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(params.keys()!=current["parameters"].toObject().keys()||sensors.keys()!=current["sensors"].toObject().keys()||tables.keys()!=current["tables"].toObject().keys()){error=tr("Comparison requires compatible editor blocks.");return false;}
         for(auto *panel:*parameterPanels)if(params[panel->block().key]!=current["parameters"].toObject()[panel->block().key]&&!panel->restoreEditor(params[panel->block().key].toObject(),false,error))return false;
         for(auto *panel:*sensorPanels){auto key=tunuino::SensorCalibrationCodec::name(panel->kind());if(sensors[key]!=current["sensors"].toObject()[key]&&!panel->restoreEditor(sensors[key].toObject(),false,error))return false;}
-        const QList<QTableWidget*> grids{maps,ignitionMap,afrMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues};const QStringList names{"fuel","ignition","afr"};
-        for(int i=0;i<3;++i)if(tables[names[i]]!=current["tables"].toObject()[names[i]]&&!tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,false,error))return false;
+        const QList<QTableWidget*> grids{maps,ignitionMap,afrMap,vvtMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues,vvtRpmValues};const QStringList names{"fuel","ignition","afr","vvt"};
+        for(int i=0;i<4;++i)if(tables[names[i]]!=current["tables"].toObject()[names[i]]&&!tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),(i==1||i==3)?-90:0,i==0?300:(i==1||i==3)?90:25,false,error))return false;
         if(desired["trigger"]!=current["trigger"]&&!triggerWizard->restoreEditor(desired["trigger"].toObject(),false,error))return false;
         const auto curve=desired["curves"].toObject()["cam1Sensitivity"].toObject();if(!camSensitivity->restore(curve,false,error))return false;
         if(!desired["service"].toObject()["comment"].isString()||desired["service"].toObject()["comment"].toString().size()>128){error=tr("Invalid project comment.");return false;}
@@ -2560,7 +2674,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(desired["dbw"]!=current["dbw"]){dbwSignals->restore(desired["dbw"].toObject(),true,error);dbwSetup->sync();dbwMonitor->sync();}
         for(auto *panel:*parameterPanels)if(params[panel->block().key]!=current["parameters"].toObject()[panel->block().key]){panel->restoreEditor(params[panel->block().key].toObject(),true,error);panel->keepProjectEdits(true);}
         for(auto *panel:*sensorPanels){auto key=tunuino::SensorCalibrationCodec::name(panel->kind());if(sensors[key]!=current["sensors"].toObject()[key]){panel->restoreEditor(sensors[key].toObject(),true,error);panel->keepProjectEdits(true);}}
-        for(int i=0;i<3;++i)if(tables[names[i]]!=current["tables"].toObject()[names[i]])tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,true,error);
+        for(int i=0;i<4;++i)if(tables[names[i]]!=current["tables"].toObject()[names[i]])tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),(i==1||i==3)?-90:0,i==0?300:(i==1||i==3)?90:25,true,error);
         if(desired["trigger"]!=current["trigger"]){triggerWizard->restoreEditor(desired["trigger"].toObject(),true,error);triggerWizard->keepProjectEdits(true);}
         if(desired["curves"]!=current["curves"])camSensitivity->restore(curve,true,error);
         if(desired["service"]!=current["service"])serviceTool->setProjectComment(desired["service"].toObject()["comment"].toString());
@@ -2606,8 +2720,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         tunuino::ToolSnapshot result;
         if(!*ecuOnline||!*ecuClean||!*identityVerified||!session->isOpen()||*readBusy||*validationPending||writer->busy()||*writePending)return result;
         if(sensorBase->identity!=*ecuIdentity||sensorBase->generation!=*ecuGeneration)return result;
-        for(int i=0;i<(tunuino::MapPageCodec::afrSupported(*ecuIdentity)?3:2);++i){const auto &base=(*mapBases)[i];if(base.identity!=*ecuIdentity||base.generation!=*ecuGeneration)return result;}
-        result.identity=*ecuIdentity;result.generation=*ecuGeneration;result.pages={sensorBase->header,(*mapBases)[0].bytes,(*mapBases)[1].bytes,sensorBase->aux,tunuino::MapPageCodec::afrSupported(*ecuIdentity)?(*mapBases)[2].bytes:QByteArray{},tunuino::VtecCodec::supported(*ecuIdentity)?sensorBase->controls:QByteArray{}};return result;
+        for(int i=0;i<(tunuino::VvtCodec::tableSupported(*ecuIdentity)?4:tunuino::MapPageCodec::afrSupported(*ecuIdentity)?3:2);++i){const auto &base=(*mapBases)[i];if(base.identity!=*ecuIdentity||base.generation!=*ecuGeneration)return result;}
+        result.identity=*ecuIdentity;result.generation=*ecuGeneration;result.pages={sensorBase->header,(*mapBases)[0].bytes,(*mapBases)[1].bytes,sensorBase->aux,tunuino::MapPageCodec::afrSupported(*ecuIdentity)?(*mapBases)[2].bytes:QByteArray{},tunuino::VtecCodec::supported(*ecuIdentity)?sensorBase->controls:QByteArray{},tunuino::VvtCodec::tableSupported(*ecuIdentity)?(*mapBases)[3].bytes:QByteArray{}};return result;
     };
     const auto changeToolBusy=[=](bool busy){*toolBusy=busy;setProperty("ecuToolBusy",busy);updateWriteAvailability();};
     serviceTool->busyChanged=changeToolBusy;
@@ -2685,14 +2799,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     };
     const auto freezeMapEditing = [=](bool frozen) {
         openProject->setEnabled(!frozen);saveProject->setEnabled(!frozen);
-        fuelPage->setEnabled(!frozen); ignitionPage->setEnabled(!frozen);afrPage->setEnabled(!frozen);
+        fuelPage->setEnabled(!frozen); ignitionPage->setEnabled(!frozen);afrPage->setEnabled(!frozen);vvtPage->setEnabled(!frozen);
         for(auto *panel:*sensorPanels)panel->setEnabled(!frozen);for(auto *panel:*parameterPanels)panel->setEnabled(!frozen);triggerWizard->setEnabled(!frozen);
         for (auto *action : {fuelFileActions.first,fuelFileActions.second,ignitionFileActions.first,ignitionFileActions.second,afrFileActions.first,afrFileActions.second})
             action->setEnabled(!frozen);
     };
     writer->completed = [=](bool success,bool uncertain,const QString &message) {
         *writePending=false; setProperty("mapWriteBusy",false); freezeMapEditing(false);
-        (*mapBases)[0]={}; (*mapBases)[1]={};(*mapBases)[2]={}; *sensorBase={};
+        (*mapBases)[0]={}; (*mapBases)[1]={};(*mapBases)[2]={};(*mapBases)[3]={}; *sensorBase={};
         if(*activeParameterFinished){auto done=std::move(*activeParameterFinished);*activeParameterFinished={};done(success,message);}
         if(success&&*activeSensorWrite>=0)for(auto *panel:*sensorPanels)if(int(panel->kind())==*activeSensorWrite)panel->saved();
         statusBar()->showMessage(message,30000);
@@ -2746,8 +2860,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     });
     const auto queueMapWrite = [=](int page) {
         if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page || *validationPending || writer->busy() || *writePending || *toolBusy || *toolReply) return;
-        auto *table=page==2?maps:page==3?ignitionMap:afrMap; auto *rpm=page==2?fuelRpmValues:page==3?ignitionRpmValues:afrRpmValues;
-        const auto base=(*mapBases)[size_t(page==5?2:page-2)];
+        auto *table=page==2?maps:page==3?ignitionMap:page==7?vvtMap:afrMap; auto *rpm=page==2?fuelRpmValues:page==3?ignitionRpmValues:page==7?vvtRpmValues:afrRpmValues;
+        const auto base=(*mapBases)[size_t(page==7?3:page==5?2:page-2)];
         if (base.bytes.isEmpty() || base.identity!=*ecuIdentity) return;
         tunuino::MapPageValues values;
         bool valid=true;
@@ -2762,7 +2876,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
         QString error;const QByteArray desired=tunuino::MapPageCodec::encode(page,values,error);
         if (!valid || desired.isEmpty()) { QMessageBox::warning(this,tr("Invalid ECU map"),error.isEmpty()?tr("All map values must be numeric."):error);return; }
-        const QString name=page==2?tr("Fuel Table"):page==3?tr("Ignition Table"):tr("AFR Target (14.7 reference)");
+        const QString name=page==2?tr("Fuel Table"):page==3?tr("Ignition Table"):page==7?tr("VVT CAM 1 target"):tr("AFR Target (14.7 reference)");
         if (QMessageBox::question(this,tr("Write to ECU"),tr("Save %1 to the connected ECU? The engine must be stopped and outputs disarmed. Other settings will be preserved.").arg(name),QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel)!=QMessageBox::Yes) return;
         if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page
             || *ecuIdentity!=base.identity || *ecuGeneration!=base.generation) {
@@ -2804,6 +2918,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(fuelSave,&QPushButton::clicked,this,[=] { queueMapWrite(2); });
     connect(ignitionSave,&QPushButton::clicked,this,[=] { queueMapWrite(3); });
     connect(afrSave,&QPushButton::clicked,this,[=] { queueMapWrite(5); });
+    connect(vvtSave,&QPushButton::clicked,this,[=] { queueMapWrite(7); });
     connect(workspace,&QMdiArea::subWindowActivated,this,[=](QMdiSubWindow*) { updateWriteAvailability(); });
     auto *helpMenu = menuBar()->addMenu(tr("Help"));
     auto *checkUpdates = new QAction(tr("Check for updates..."),this);tools->checkForUpdates=[checkUpdates]{checkUpdates->trigger();};
@@ -2911,6 +3026,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(page==fuelPage || page==fuelSurface)fuelSave->click();
         else if(page==ignitionPage || page==ignitionSurface)ignitionSave->click();
         else if(page==afrPage || page==afrSurface)afrSave->click();
+        else if(page==vvtPage || page==vvtSurface)vvtSave->click();
         else if(auto *sensor=dynamic_cast<tunuino::SensorCalibrationWidget*>(page))sensor->save();
         else if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(page))parameters->save();
         else if(page==triggerWizard)triggerWizard->save();
@@ -2997,7 +3113,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         setProperty("ecuTransportOpen", connected);
         if (!connected) {
             *writePending=false; *readBusy=false; setProperty("mapWriteBusy",false); freezeMapEditing(false);
-            (*mapBases)[0]={}; (*mapBases)[1]={};(*mapBases)[2]={}; *sensorBase={}; *ecuGeneration=0; *ecuClean=false;
+            (*mapBases)[0]={}; (*mapBases)[1]={};(*mapBases)[2]={};(*mapBases)[3]={}; *sensorBase={}; *ecuGeneration=0; *ecuClean=false;
             writer->transportFailed(tr("ECU disconnected during map write."));
             setConnectionIndicator(false);
             powerState->reset();
@@ -3092,7 +3208,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 if(!tunuino::VtecCodec::format(transfer->bytes)){sensorBase->controls.clear();abortTransfer(tr("Invalid VTEC page; editor preserved."));return;}
                 sensorBase->controls=transfer->bytes;if(!*projectLoaded)(*projectPages)["controls"]=QString::fromLatin1(transfer->bytes.toHex());
                 for(auto *panel:*parameterPanels)if(panel->block().page==6)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration,sensorBase->controls);
+                if(tunuino::VvtCodec::tableSupported(*ecuIdentity)){transfer->page=0;transfer->bytes.clear();transfer->offset=0;QTimer::singleShot(0,this,[=]{startTransfer(7);});return;}
                 abortTransfer(tr("ECU synchronized including AFR Target and VTEC configuration."));return;
+            }
+            if(transfer->page==7){
+                const auto bytes=transfer->bytes;if(!tunuino::MapPageCodec::valid(7,bytes)){abortTransfer(tr("Invalid VVT target table; editor preserved."));return;}
+                (*mapBases)[3]={bytes,*ecuIdentity,*ecuGeneration};if(!*projectLoaded){(*projectPages)["vvt"]=QString::fromLatin1(bytes.toHex());QString error;tunuino::MapProject::tableState(vvtMap,vvtRpmValues,tunuino::MapProject::vvtTableState(bytes),-90,90,true,error);vvtSurface->update();}
+                abortTransfer(tr("ECU synchronized including VVT target. Source selection is explicit; outputs remain disarmed."));return;
             }
             bool valid = true;
             for (int i = 0; i < 16; ++i) {
@@ -3182,7 +3304,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             }
             if (*ecuClean && !previouslyClean) connectionStatus_->setText(tr("Online | ECU connected"));
             if (!*ecuClean) {
-                (*mapBases)[0]={}; (*mapBases)[1]={};(*mapBases)[2]={};*sensorBase={};
+                (*mapBases)[0]={}; (*mapBases)[1]={};(*mapBases)[2]={};(*mapBases)[3]={};*sensorBase={};
                 connectionStatus_->setText(tr("Online | Temporary ECU changes; reset ECU before writing"));
             }
             const auto u32 = [&data](int at) -> quint32 {
@@ -3251,7 +3373,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             dbwSignals->observe(tools->snapshot?tools->snapshot():tunuino::ToolSnapshot{},data);
             for(auto *panel:*sensorPanels)panel->updateRaw(data);for(auto *panel:*inputPanels)panel->updateRaw(data);
             if (*ecuClean && previousGeneration && (previousGeneration!=*ecuGeneration || !previouslyClean || *autoSync) && !transfer->page && !*writePending) {
-                (*mapBases)[0]={}; (*mapBases)[1]={};(*mapBases)[2]={}; *sensorBase={}; *autoSync=true;
+                (*mapBases)[0]={}; (*mapBases)[1]={};(*mapBases)[2]={};(*mapBases)[3]={}; *sensorBase={}; *autoSync=true;
                 QTimer::singleShot(0,this,[=] { startTransfer(1); });
             }
             if (!transfer->page) updateWriteAvailability();
