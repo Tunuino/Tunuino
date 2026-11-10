@@ -44,6 +44,7 @@ bool MapWriteTransaction::startParameters(int page,const QByteArray &desired,con
     const QByteArray &identity,quint32 generation,const QByteArray &mask) {
     if(busy()||(page!=1&&page!=4&&page!=6)||desired.size()!=256||base.size()!=256||mask.size()!=256)return false;
     if(page==6&&(!VtecCodec::supported(identity)||!VtecCodec::format(desired)||!VtecCodec::format(base)))return false;
+    if(page==6&&desired[0]==2&&!VvtCodec::supported(identity))return false;
     for(int i=0;i<256;++i)if((quint8(desired[i])^quint8(base[i]))&~quint8(mask[i]))return false;
     // Autonomous operation is never changed by a parameter-window write.
     if(page==1&&desired[102]!=base[102])return false;
@@ -135,7 +136,7 @@ void MapWriteTransaction::receive(const QByteArray &b) {
             base_=read_;
             if(base_[size_t(page_-1)]!=baseMap_ || quint8(base_[0][0])!=0 || quint8(base_[0][1])!=2
                 || !MapPageCodec::valid(2,base_[1]) || !MapPageCodec::valid(3,base_[2]) || (pageCount_>=5&&!MapPageCodec::valid(5,base_[4])) || (pageCount_==6&&!VtecCodec::format(base_[5]))){reject();return;}
-            if(page_==6){QString error;if(!VtecCodec::allowed(desired_,base_[0],base_[3],error)){fail(error);return;}}
+            if(page_==6){QString error;if(!VtecCodec::allowed(desired_,base_[0],base_[3],error)||!VvtCodec::allowed(desired_,base_[0],base_[3],error)){fail(error);return;}}
             if(sensor_>=0){QString error;
                 if(!SensorCalibrationCodec::permitted(SensorKind(sensor_),baseMap_,desired_,base_[0],base_[3],error)){fail(error);return;}}
             issue(Phase::ConfirmBase,QByteArray("TUNUINO:V"));

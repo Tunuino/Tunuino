@@ -46,6 +46,7 @@ inline QVector<Assignment> outputAssignments(const ToolSnapshot &s){
     }
     if(a[0]==1){if(a[1]!=0&&quint8(a[2])>0&&quint8(a[2])<=16)rows[quint8(a[2])-1].functions<<"Idle";if(a[3]!=0&&quint8(a[4])>0&&quint8(a[4])<=16)rows[quint8(a[4])-1].functions<<"Boost";}
     if(VtecCodec::format(s.pages[5])&&s.pages[5][1]&&quint8(s.pages[5][2])>=1&&quint8(s.pages[5][2])<=16)rows[quint8(s.pages[5][2])-1].functions<<"VTEC";
+    if(VtecCodec::format(s.pages[5])&&s.pages[5][0]==2&&s.pages[5][65]&&quint8(s.pages[5][66])>=1&&quint8(s.pages[5][66])<=16)rows[quint8(s.pages[5][66])-1].functions<<"VVT CAM 1";
     for(auto &row:rows)row.conflict=row.functions.size()>1;return rows;
 }
 }

@@ -118,6 +118,10 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     openSensor("vtec.monitor");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->objectName()=="vtecMonitor");
     const auto vtecBase=project->capture(error);auto legacyVtec=vtecBase;auto legacyVtecParams=legacyVtec["parameters"].toObject();legacyVtecParams.remove("vtec.setup");legacyVtec["parameters"]=legacyVtecParams;CHECK(project->apply(legacyVtec,error));CHECK(project->capture(error)["parameters"].toObject()["vtec.setup"].toObject()["values"].toObject()["enabled"]==0);
     CHECK(project->capture(error)["pages"]==vtecBase["pages"]);CHECK(project->apply(vtecBase,error));
+    openSensor("vvt.position");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->findChild<QAction*>("vvtCaptureReference"));
+    openSensor("vvt.actuator");auto *vvtActuator=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QMdiArea*>()->activeSubWindow()->widget());CHECK(vvtActuator&&vvtActuator->block().key=="vvt.actuator"&&!vvtActuator->findChild<QCheckBox*>("enabled")->isChecked());
+    openSensor("vvt.monitor");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->objectName()=="vvtMonitor");
+    const auto beforeVvt=project->capture(error);auto legacyVvt=beforeVvt;auto legacyVvtParams=legacyVvt["parameters"].toObject();for(const auto &key:legacyVvtParams.keys())if(key.startsWith("vvt."))legacyVvtParams.remove(key);legacyVvt["parameters"]=legacyVvtParams;CHECK(project->apply(legacyVvt,error));CHECK(project->capture(error)["pages"]==beforeVvt["pages"]);CHECK(project->capture(error)["parameters"].toObject()["vvt.actuator"].toObject()["values"].toObject()["enabled"]==0);CHECK(project->apply(beforeVvt,error));
     checkpoint("project validation complete; desktop and menus");
     // Reference menus operate on layout/history only; ECU/project data stays intact.
     QStringList menuNames;for(auto *action:window.menuBar()->actions())menuNames<<action->text();CHECK(menuNames==QStringList({"File","Edit","Desktops","Tools","Window","Help","ECU"}));

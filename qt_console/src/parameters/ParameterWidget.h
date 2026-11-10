@@ -19,6 +19,7 @@ public:
     void setAvailable(bool available);
     void saved(){edited_=false;}
     void save();
+    std::function<void()> captureCamReference;
     std::function<void(int,const QByteArray&,const QByteArray&)> writeRequested;
 private:
     bool projectEdits_=false;

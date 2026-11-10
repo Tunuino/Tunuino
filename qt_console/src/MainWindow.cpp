@@ -4,6 +4,7 @@
 #include "calibration/SensitivityCurve.h"
 #include "dbw/DbwWidget.h"
 #include "calibration/VtecMonitor.h"
+#include "calibration/VvtMonitor.h"
 #include <QToolBar>
 #include "ui/ShortcutIcons.h"
 #include "ui/CalibrationAppearance.h"
@@ -535,7 +536,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     unavailable(dbwCategory,tr("Throttle motor control"),tr("Unavailable: native H-bridge driver and redundant DBW protection are not implemented."));
     addCategory(tr("Traction control"), {{tr("Traction settings"),-1}});
     auto *vvtCategory=addCategory(tr("VVT"),{});
-    unavailable(vvtCategory,tr("Continuous cam timing"),tr("Unavailable: cam phase feedback and native VVT control are not implemented."));
+    auto *vvtTiming=new QTreeWidgetItem(vvtCategory,{tr("Continuous cam timing - CAM 1")});
+    parameterItem(vvtTiming,tr("Position"),"vvt.position");parameterItem(vvtTiming,tr("Solenoid and PID"),"vvt.actuator");parameterItem(vvtTiming,tr("Activation"),"vvt.activation");parameterItem(vvtTiming,tr("Fixed target"),"vvt.target");parameterItem(vvtTiming,tr("VVT monitor"),"vvt.monitor");
     parameterItem(vvtCategory,tr("Switched cam profile - VTEC"),"vtec.setup");
     parameterItem(vvtCategory,tr("VTEC monitor"),"vtec.monitor");
     addCategory(tr("Sport"), {{tr("Sport mode"),-1}});
@@ -2240,6 +2242,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *cam2Monitor=new tunuino::VssMonitor(nullptr,tunuino::VssMonitor::Source::Cam2);auto *cam2Window=toolWindow(cam2Monitor,tr("CAM 2 - Live pulses"));(*parameterWindows)["inputs.cam2.monitor"]=cam2Window;cam2Window->resize(cam2Monitor->sizeHint()+QSize(12,30));
     auto *vssMonitor=new tunuino::VssMonitor;auto *vssWindow=toolWindow(vssMonitor,tr("Vehicle speed - Live readings"));(*parameterWindows)["speed.monitor"]=vssWindow;vssWindow->resize(vssMonitor->sizeHint()+QSize(12,30));
     auto *vtecMonitor=new tunuino::VtecMonitor;auto *vtecWindow=toolWindow(vtecMonitor,tr("VTEC - ECU state"));(*parameterWindows)["vtec.monitor"]=vtecWindow;vtecWindow->resize(vtecMonitor->sizeHint()+QSize(12,30));
+    auto *vvtMonitor=new tunuino::VvtMonitor;auto *vvtWindow=toolWindow(vvtMonitor,tr("VVT - CAM 1 - ECU state"));(*parameterWindows)["vvt.monitor"]=vvtWindow;vvtWindow->resize(vvtMonitor->sizeHint()+QSize(12,30));
     auto sensorWizards=QSharedPointer<QMap<QString,QPointer<tunuino::SensorCurveWizard>>>::create();
     (*sensorWizards)["sensorwizard:IAT"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Iat,false,this);
     (*sensorWizards)["sensorwizard:CLT"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Clt,false,this);
@@ -2486,6 +2489,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(!parameters.contains("inputs.cam2")){const auto header=tunuino::Cam2Codec::defaults(storedHeader);QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="inputs.cam2")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(header,field);parameters["inputs.cam2"]=QJsonObject{{"values",values}};}
         for(const auto &key:{QString("inputs.vss"),QString("speed.vehicle")})if(!parameters.contains(key)){const auto header=tunuino::VssCodec::defaults(storedHeader);QJsonObject values;for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key==key)for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(header,field);parameters[key]=QJsonObject{{"values",values}};}
         if(!parameters.contains("vtec.setup")){QJsonObject values;const auto storedControl=document["pages"].toObject().contains("controls")?QByteArray::fromHex(document["pages"].toObject()["controls"].toString().toLatin1()):QByteArray(256,0);if(!tunuino::VtecCodec::format(storedControl)){error=tr("Invalid VTEC configuration page.");return false;}const auto control=storedControl[0]?storedControl:tunuino::VtecCodec::defaults();for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key=="vtec.setup")for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(control,field);parameters["vtec.setup"]=QJsonObject{{"values",values}};}
+        for(const auto &block:tunuino::ParameterCatalog::blocks())if(block.key.startsWith("vvt.")&&!parameters.contains(block.key)){
+            const auto raw=document["pages"].toObject().contains("controls")?QByteArray::fromHex(document["pages"].toObject()["controls"].toString().toLatin1()):QByteArray(256,0);
+            const auto control=tunuino::VvtCodec::defaults(raw[0]?raw:tunuino::VtecCodec::defaults());QJsonObject values;
+            for(const auto &field:block.fields)values[field.key]=tunuino::ParameterCatalog::value(control,field);parameters[block.key]=QJsonObject{{"values",values}};
+        }
         if(parameters.size()!=parameterPanels->size()||sensors.size()!=sensorPanels->size()){error=tr("This map does not contain all supported parameters and sensors.");return false;}
         const QList<QTableWidget*> grids{maps,ignitionMap,afrMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues};const QStringList names{"fuel","ignition","afr"};
         for(int i=0;i<3;++i)if(!tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),i==1?-90:0,i==0?300:i==1?90:25,false,error))return false;
@@ -2617,6 +2625,21 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         QTimer::singleShot(timeout+300,this,[=]{if(*toolReply&&*toolLease==lease){auto callback=std::move(*toolReply);*toolReply={};callback({});}});return true;
     };
     cam2Monitor->exchange=toolExchange;cam2Monitor->snapshot=tools->snapshot;cam2Monitor->ready=[=]{return !*toolBusy&&!*toolReply;};
+    vvtMonitor->exchange=toolExchange;vvtMonitor->snapshot=tools->snapshot;vvtMonitor->ready=[=]{return !*toolBusy&&!*toolReply;};
+    for(auto *panel:*parameterPanels)if(panel->block().key=="vvt.position")panel->captureCamReference=[=]{
+        const auto base=tools->snapshot();if(!base.valid()||!tunuino::VvtCodec::supported(base.identity)||base.pages[5][65]){statusBar()->showMessage(tr("Read a supporting ECU and disable VVT in the stored ECU configuration before copying a base edge."),15000);return;}
+        const auto editor=panel->editorState();QElapsedTimer requested;requested.start();
+        if(!toolExchange("TUNUINO:H",[=](const QByteArray &reply){
+            const auto current=tools->snapshot();
+            if(current.identity!=base.identity||current.generation!=base.generation||current.pages!=base.pages||panel->editorState()!=editor||reply.size()!=32||reply[0]!=0||reply[1]!=1||(quint8(reply[2])&7)!=7||reply[3]||reply[31]||tunuino::ServiceDataCodec::u32(reply,24)!=base.generation||tunuino::SensorCalibrationCodec::u16(reply,28)!=quint8(base.pages[0][3])||quint8(reply[30])!=quint8(base.pages[0][4])){statusBar()->showMessage(tr("No current synchronized CAM 1 edge, or the ECU/editor changed. Reference preserved."),15000);return;}
+            const auto edge=tunuino::ServiceDataCodec::u64(reply,8),sample=tunuino::ServiceDataCodec::u64(reply,16);const auto raw=tunuino::ServiceDataCodec::u32(reply,4);
+            const double maxAge=editor["values"].toObject()["feedbackAge"].toDouble();
+            if(raw>=72000||sample<edge||sample-edge+quint64(requested.elapsed())*1000u>quint64(maxAge*1000)){statusBar()->showMessage(tr("CAM 1 feedback is too old. Reference preserved."),15000);return;}
+            auto state=editor;auto values=state["values"].toObject();values["reference"]=raw/100.0;state["values"]=values;QString error;
+            if(!panel->restoreEditor(state,true,error)){statusBar()->showMessage(error,15000);return;}panel->keepProjectEdits(true);
+            statusBar()->showMessage(tr("Measured CAM 1 edge copied locally. Verify the unpowered mechanical position and travel before writing. No output command was sent."),15000);
+        }))statusBar()->showMessage(tr("ECU communication busy. Reference preserved."),10000);
+    };
     vtecMonitor->exchange=toolExchange;vtecMonitor->snapshot=tools->snapshot;vtecMonitor->ready=[=]{return !*toolBusy&&!*toolReply;};
     vssMonitor->exchange=toolExchange;vssMonitor->snapshot=tools->snapshot;vssMonitor->ready=[=]{return !*toolBusy&&!*toolReply;};
     serviceTool->exchange=toolExchange;
