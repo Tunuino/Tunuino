@@ -9,8 +9,9 @@ namespace tunuino {
 struct ToolSnapshot {
     QByteArray identity;
     quint32 generation=0;
-    std::array<QByteArray,7> pages;
+    std::array<QByteArray,8> pages;
     bool valid() const {return identity.size()==32&&generation&&pages[0].size()==256&&pages[3].size()==256
+        &&(!VvtCodec::advancedSupported(identity)||MapPageCodec::valid(8,pages[7]))
         &&(!VvtCodec::tableSupported(identity)||MapPageCodec::valid(7,pages[6]))
         &&(!VtecCodec::supported(identity)||(MapPageCodec::afrSupported(identity)&&VtecCodec::format(pages[5])))
         &&(pages[4].isEmpty()||MapPageCodec::valid(5,pages[4]))&&MapPageCodec::valid(2,pages[1])&&MapPageCodec::valid(3,pages[2]);}

@@ -14,7 +14,7 @@ public:
     static bool afrSupported(const QByteArray &id){return id.size()==32&&(quint8(id[18])&64);}
     static QByteArray encode(int page,const MapPageValues &values,QString &error) {
         error.clear();
-        if(page!=2 && page!=3 && page!=5 && page!=7) {error=QStringLiteral("Unsupported ECU map page.");return {};}
+        if(page!=2 && page!=3 && page!=5 && page!=7 && page!=8) {error=QStringLiteral("Unsupported ECU map page.");return {};}
         QByteArray bytes(576,0);
         const auto put=[&](int offset,int value){bytes[offset]=char(unsigned(value)>>8);bytes[offset+1]=char(value);};
         const auto scaled=[&](double value,double scale,int low,int high,int &out) {
@@ -44,7 +44,7 @@ public:
     }
     static bool valid(int page,const QByteArray &bytes) {
         if(bytes.size()!=576)return false;
-        if((page==5||page==7)&&bytes==QByteArray(576,0))return true;
+        if((page==5||page==7||page==8)&&bytes==QByteArray(576,0))return true;
         const auto u16=[&](int at){return (unsigned(quint8(bytes[at]))<<8)|unsigned(quint8(bytes[at+1]));};
         MapPageValues v;
         for(int i=0;i<16;++i){v.rpm[i]=u16(2*i);v.load[i]=u16(32+2*i)/100.0;}

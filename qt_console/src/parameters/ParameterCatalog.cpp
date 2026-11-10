@@ -1,4 +1,6 @@
 #include "ParameterCatalog.h"
+#include "../protocol/VtecCodec.h"
+#include <QJsonObject>
 #include <cmath>
 namespace tunuino {
 namespace {
@@ -83,23 +85,40 @@ QVector<ParameterBlock> ParameterCatalog::blocks(){
         <<number("mapOn","Engage minimum MAP",14,100,10,500,60,"kPa")<<number("mapOff","Release minimum MAP",16,100,10,500,55,"kPa")
         <<number("cltMin","Minimum coolant temperature",18,100,0,149.99,70,"°C")<<number("cltMax","Maximum coolant temperature",20,100,.01,150,110,"°C")
         <<number("runtime","Minimum engine runtime",22,1,0,60000,10000,"ms")<<number("oilOn","Engage minimum oil pressure",24,10,0,2000,200,"kPa")<<number("oilOff","Release minimum oil pressure",26,10,0,2000,150,"kPa");all<<b;
-    const QString vvtHelp="Native fixed-target control for one CAM 1 selected edge per 720 degrees and one low-side PWM solenoid. Disabled by default. Positive position means advance: measured edge earlier than the unpowered reference. Full travel must remain inside the existing CAM 1 synchronization window and the same crank revolution. Measure the actual base position and mechanical travel first. Writing Position binds that reference to the current wheel, CAM window and input filters; changing those settings requires reviewing Position before enabling VVT. Configuration never arms outputs. Required feedback/pressure failures and persistent tracking errors latch VVT off until disarm/rearm. Multi-tooth wheels, CAM 2 phase, dual solenoids, RPM/MAP target tables and automatic tuning are not implemented.";
-    b=block("vvt.position","VVT - CAM 1 - Position",6,vvtHelp);
-    auto camSource=number("source","Position source",0,1,0,0,0,{},false,0);camSource.choices={"CAM 1 - selected synchronization edge"};b.fields<<camSource;
-    b.fields<<number("reference","Unpowered reference edge",82,100,0,719.99,0,"°",false,4)<<number("minimum","Minimum allowed advance",86,100,-90,90,0,"°",true)<<number("maximum","Maximum allowed advance",88,100,-90,90,40,"°",true)<<number("feedbackAge","Maximum feedback age",104,1,20,1000,250,"ms");all<<b;
-    b=block("vvt.actuator","VVT - CAM 1 - Solenoid and PID",6,vvtHelp);
-    b.fields<<flag("enabled","Enable VVT",65,0);auto vvtOutput=vtecOutput;vvtOutput.offset=66;b.fields<<vvtOutput;
-    auto direction=number("direction","Control direction",67,1,0,1,0,{},false,1);direction.choices={"Increasing duty advances","Decreasing duty advances"};b.fields<<direction;
-    b.fields<<number("frequency","PWM frequency",68,1,10,300,200,"Hz")<<number("minimumDuty","Minimum active duty",70,100,0,95,0,"%")<<number("maximumDuty","Maximum active duty",72,100,0,95,80,"%")<<number("steadyDuty","Steady state duty",74,100,0,95,40,"%")
-        <<number("kp","Proportional gain",76,1000,0,20,1,"%/°")<<number("ki","Integral gain",78,1000,0,20,1,"%/°/s")<<number("kd","Derivative gain",80,1000,0,5,0,"%·s/°")
-        <<number("trackingDelay","Tracking error delay",106,1,100,5000,1000,"ms")<<number("trackingTolerance","Tracking tolerance",108,100,.01,20,5,"°");all<<b;
-    b=block("vvt.activation","VVT - CAM 1 - Activation",6,vvtHelp);
-    b.fields<<number("minimumRpm","Minimum engine RPM",94,1,500,12000,1500,"rpm")<<number("rpmHysteresis","RPM hysteresis",96,1,0,11900,100,"rpm")<<number("minimumClt","Minimum coolant temperature",98,100,0,120,70,"°C")<<number("cltHysteresis","Coolant hysteresis",100,100,0,20,5,"°C")<<number("runtime","Minimum engine runtime",102,1,0,60000,10000,"ms")<<flag("oilRequired","Require oil pressure",110,0)<<number("oilOn","Engage minimum oil pressure",112,10,0,2000,200,"kPa")<<number("oilOff","Release minimum oil pressure",114,10,0,2000,150,"kPa");all<<b;
-    b=block("vvt.target","VVT - CAM 1 - Target source",6,vvtHelp+" Fixed target is available for commissioning. For RPM/MAP control, write the Base target table first, then explicitly select it here. All cells must remain within the configured travel. Write requires the engine stopped and outputs disarmed.");
-    b.fields<<number("target","Fixed target advance",90,100,-90,90,0,"°",true);auto targetSource=number("tableSource","Target source",123,1,0,1,0,{},false,1);targetSource.choices={"Fixed commissioning target","RPM / MAP base table"};b.fields<<targetSource;all<<b;
+    const QString vvtHelp="CAM 1 selected edge per 720 degrees and a single low-side VVTi solenoid. None disables control. Opening this window never arms outputs. CAM offset is the measured unpowered reference, not ignition TDC. Preserve the measured travel and synchronization window. Overrides still require all activation, fresh CAM feedback and output interlocks. CAM 2 phase, dual-solenoid control and oil-temperature acquisition are unavailable.";
+    b=block("vvt.parameters","CAM 1 - CAM1 parameters",6,vvtHelp);
+    b.fields<<number("reference","CAM offset",82,100,0,719.99,0,"°",false,4)<<number("maximum","Maximum retard/advance",88,100,-90,90,30,"°",true);
+    auto controlType=number("enabled","Control type",65,1,0,1,0,{},false,1);controlType.choices={"None","VVTi - single solenoid","Double Vanos - unavailable"};b.fields<<controlType;
+    b.fields<<flag("invert","Invert output",124,0)<<number("frequency","Output frequency",68,1,10,300,100,"Hz")<<number("minimumDuty","Min solenoid DC",70,100,0,95,20,"%")<<number("maximumDuty","Max solenoid DC",72,100,0,95,80,"%")
+        <<flag("overrideDc","Override DC",125,0)<<number("overriddenDc","Overridden DC",126,100,0,95,0,"%")<<flag("overrideTarget","Override target",128,0)<<number("overriddenTarget","Overridden target",130,100,-90,90,0,"°",true)<<number("steadyDuty","Steady pos DC",74,100,0,95,50,"%");
+    auto direction=number("direction","Higher DC",67,1,0,1,0,{},false,1);direction.choices={"increases cam angle","decreases cam angle"};b.fields<<direction;
+    b.fields<<number("minimumRpm","Min RPM",94,1,500,12000,1500,"rpm")<<number("minimumClt","Min coolant temp",98,100,0,120,70,"°C")<<number("oilTemp","Min oil temp",0,1,-40,-40,-40,"°C",true,0)<<number("runtime","Start delay",102,1000,0,60,0,"s");
+    auto vvtOutput=vtecOutput;vvtOutput.offset=66;b.fields<<vvtOutput;
+    b.fields<<number("minimum","Minimum allowed advance",86,100,-90,90,0,"°",true)<<number("feedbackAge","Maximum feedback age",104,1,20,1000,250,"ms")
+        <<number("rpmHysteresis","RPM hysteresis",96,1,0,11900,100,"rpm")<<number("cltHysteresis","Coolant hysteresis",100,100,0,20,5,"°C")<<flag("oilRequired","Require oil pressure",110,0)<<number("oilOn","Engage minimum oil pressure",112,10,0,2000,200,"kPa")<<number("oilOff","Release minimum oil pressure",114,10,0,2000,150,"kPa")
+        <<number("trackingDelay","Tracking error delay",106,1,100,5000,1000,"ms")<<number("trackingTolerance","Tracking tolerance",108,100,.01,20,5,"°")<<number("target","Fixed commissioning target",90,100,-90,90,0,"°",true);
+    auto targetSource=number("tableSource","Target table",123,1,0,2,0,{},false,1);targetSource.choices={"Fixed commissioning target","CAM1 angle 1","CAM1 angle 2"};b.fields<<targetSource;all<<b;
+    b=block("vvt.pid","CAM 1 - CAM1 PID",6,vvtHelp+" Output min/max are signed PID corrections added to Steady pos DC; final duty also respects Min/Max solenoid DC. Deadband holds the integral and removes proportional/derivative corrections inside the angle band.");
+    b.fields<<number("kp","Proportional gain",76,1000,0,20,1,"%/°")<<number("ki","Integral gain",78,1000,0,20,0,"%/(°·s)")<<number("kd","Derivative gain",80,1000,0,5,0,"%/(°/s)")
+        <<number("iMin","Integral term limit min",132,100,-100,0,-5,"%",true)<<number("iMax","Integral term limit max",134,100,0,100,5,"%",true)<<number("outputMin","Output min",136,100,-100,0,-15,"%",true)<<number("outputMax","Output max",138,100,0,100,15,"%",true)<<number("deadband","Deadband",140,100,0,20,.5,"°");all<<b;
     return all;
 }
 double ParameterCatalog::value(const QByteArray &p,const ParameterField &f){if(f.width==0)return f.initial;if(p.size()!=256)return 0;quint32 n=0;for(int i=0;i<f.width;++i)n=(n<<8)|quint8(p[f.offset+i]);if(f.bit)return (n&f.bit)?1:0;if(f.signedValue&&f.width==2)return qint16(n)/f.scale;return n/f.scale;}
 bool ParameterCatalog::put(QByteArray &p,const ParameterField &f,double v){if(f.width==0)return p.size()==256&&v==f.initial;if(p.size()!=256||!std::isfinite(v)||v<f.minimum||v>f.maximum)return false;const auto scaled=std::llround(v*f.scale);if(std::abs(v*f.scale-scaled)>1e-6)return false;quint32 n=quint32(scaled);if(f.bit){n=quint32(SensorCalibrationCodec::u16(p,f.offset));n=scaled?n|quint32(f.bit):n&~quint32(f.bit);}for(int i=f.width-1;i>=0;--i){p[f.offset+i]=char(n);n>>=8;}return true;}
 QByteArray ParameterCatalog::ownedMask(const ParameterBlock &b){QByteArray mask(256,0);for(const auto &f:b.fields)if(f.bit){mask[f.offset]|=char(f.bit>>8);mask[f.offset+1]|=char(f.bit);}else for(int i=0;i<f.width;++i)mask[f.offset+i]=char(255);return mask;}
+}
+
+namespace tunuino {
+QJsonObject ParameterCatalog::migrateVvt(QJsonObject parameters,const QByteArray &raw){
+    const bool present=raw.size()==256&&raw[0]==2&&raw[64];
+    const auto controls=VvtCodec::advanced(present?raw:VvtCodec::defaults(VtecCodec::defaults()),!present);
+    QJsonObject legacy;
+    for(const auto &key:{"vvt.position","vvt.actuator","vvt.activation","vvt.target"}){const auto values=parameters[key].toObject()["values"].toObject();for(auto it=values.begin();it!=values.end();++it)legacy[it.key()]=it.value();parameters.remove(key);}
+    for(const auto &block:blocks())if(block.key=="vvt.parameters"||block.key=="vvt.pid")if(!parameters.contains(block.key)){
+        QJsonObject values;const auto compatibility=VvtCodec::advanced(VvtCodec::defaults(VtecCodec::defaults()));for(const auto &field:block.fields)values[field.key]=legacy.contains(field.key)?QJsonValue(legacy[field.key]):QJsonValue(present?value(controls,field):!legacy.isEmpty()&&field.offset>=132?value(compatibility,field):field.initial);
+        if(legacy.contains("runtime")&&block.key=="vvt.parameters")values["runtime"]=legacy["runtime"].toDouble()/1000.;
+        parameters[block.key]=QJsonObject{{"values",values}};
+    }
+    return parameters;
+}
 }

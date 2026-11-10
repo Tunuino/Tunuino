@@ -21,6 +21,7 @@ int main(int argc,char **argv){
     if(argc>1&&strcmp(argv[1],"--vtec")==0)id.capabilities|=49152;
     if(argc>1&&strcmp(argv[1],"--vvt")==0)id.capabilities|=114688;
     if(argc>1&&strcmp(argv[1],"--vvt-map")==0)id.capabilities|=245760;
+    if(argc>1&&strcmp(argv[1],"--cam-control")==0)id.capabilities|=507904;
     tunuino_device_init(&device,save,clock_ms,NULL);device.output_command=output;
     if(argc>1){uint8_t config[TUNUINO_IO_SETTINGS_SIZE];memcpy(config,device.active,sizeof(config));uint8_t *p=config+128;
         p[0]=1;p[1]=4;const unsigned at[]={2,4,6,8,12,14};const unsigned v[]={5000,2000,1000,15000,9000,8500};

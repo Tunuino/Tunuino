@@ -114,6 +114,6 @@ int main(int argc,char **argv){QApplication app(argc,argv);
             widget.findChild<QCheckBox*>("angleLock")->setChecked(false);widget.save();CHECK(invoked);
         }
     }
-    CHECK(unsupported==5&&operations==blocks.size()-unsupported+1);process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
+    CHECK(unsupported==3&&operations==blocks.size()-unsupported+1);process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
     std::cout<<operations<<" parameter block writes against actual C dispatcher: one Burn each, full-page preservation and firing order independent of output wiring passed (host simulation)\n";
 }

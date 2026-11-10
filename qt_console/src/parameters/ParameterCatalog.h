@@ -3,6 +3,7 @@
 #include <QStringList>
 #include <QVector>
 #include <QByteArray>
+#include <QJsonObject>
 #include "../protocol/SensorCalibrationCodec.h"
 namespace tunuino {
 struct ParameterField {
@@ -17,6 +18,7 @@ struct ParameterBlock { QString key,title,help;int page=1;QVector<ParameterField
 class ParameterCatalog {
 public:
     static QVector<ParameterBlock> blocks();
+    static QJsonObject migrateVvt(QJsonObject parameters,const QByteArray &controls={});
     static double value(const QByteArray &page,const ParameterField &f);
     static bool put(QByteArray &page,const ParameterField &f,double value);
     static QByteArray ownedMask(const ParameterBlock &block);

@@ -20,6 +20,7 @@
 #include <QImage>
 #include <QPushButton>
 #include <QApplication>
+#include <QSplitter>
 #include <QStyleFactory>
 #include <QTemporaryDir>
 #include <QSettings>
@@ -118,16 +119,19 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     openSensor("vtec.monitor");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->objectName()=="vtecMonitor");
     const auto vtecBase=project->capture(error);auto legacyVtec=vtecBase;auto legacyVtecParams=legacyVtec["parameters"].toObject();legacyVtecParams.remove("vtec.setup");legacyVtec["parameters"]=legacyVtecParams;CHECK(project->apply(legacyVtec,error));CHECK(project->capture(error)["parameters"].toObject()["vtec.setup"].toObject()["values"].toObject()["enabled"]==0);
     CHECK(project->capture(error)["pages"]==vtecBase["pages"]);CHECK(project->apply(vtecBase,error));
-    openSensor("vvt.position");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->findChild<QAction*>("vvtCaptureReference"));
-    openSensor("vvt.actuator");auto *vvtActuator=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QMdiArea*>()->activeSubWindow()->widget());CHECK(vvtActuator&&vvtActuator->block().key=="vvt.actuator"&&!vvtActuator->findChild<QCheckBox*>("enabled")->isChecked());
+    openSensor("vvt.parameters");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->findChild<QAction*>("vvtCaptureReference"));
+    openSensor("vvt.parameters");auto *vvtActuator=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QMdiArea*>()->activeSubWindow()->widget());CHECK(vvtActuator&&vvtActuator->block().key=="vvt.parameters"&&vvtActuator->findChild<QComboBox*>("enabled")->currentIndex()==0);
     openSensor("vvt.monitor");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->objectName()=="vvtMonitor");
-    openSensor("vvt.table");auto *vvtTargetWindow=window.findChild<QMdiArea*>()->activeSubWindow();CHECK(vvtTargetWindow&&vvtTargetWindow->windowTitle()=="VVT - CAM 1 - Base target");
+    openSensor("vvt.table");auto *vvtTargetWindow=window.findChild<QMdiArea*>()->activeSubWindow();CHECK(vvtTargetWindow&&vvtTargetWindow->windowTitle()=="CAM 1 - CAM1 angle 1 [°]");
     auto *vvtCells=window.findChild<QTableWidget*>("vvtTargetTable");auto *vvtRpm=window.findChild<QTableWidget*>("vvtTargetRpm");CHECK(vvtCells&&vvtRpm&&vvtCells->rowCount()==16&&vvtCells->columnCount()==16);vvtCells->item(0,0)->setText("-12.34");vvtRpm->item(0,0)->setText("501");
     auto vvtDraft=project->capture(error);CHECK(vvtDraft["tables"].toObject()["vvt"].toObject()["cells"].toArray()[0].toArray()[0].toDouble()==-12.34);CHECK(project->apply(vvtDraft,error));CHECK(project->capture(error)==vvtDraft);
-    auto oldVvtMap=vvtDraft;auto oldTables=oldVvtMap["tables"].toObject();oldTables.remove("vvt");oldVvtMap["tables"]=oldTables;CHECK(project->apply(oldVvtMap,error));CHECK(project->capture(error)["tables"].toObject()["vvt"]==tunuino::MapProject::vvtTableState());
+    auto oldVvtMap=vvtDraft;auto oldTables=oldVvtMap["tables"].toObject();oldTables.remove("vvt");oldTables.remove("vvt2");oldVvtMap["tables"]=oldTables;CHECK(project->apply(oldVvtMap,error));CHECK(project->capture(error)["tables"].toObject()["vvt"]==tunuino::MapProject::vvtTableState());
     CHECK(project->apply(vvtDraft,error));
     if(!qEnvironmentVariable("TUNUINO_VVT_MAP_PREVIEW").isEmpty()){vvtTargetWindow->resize(900,620);vvtTargetWindow->move(0,0);app.processEvents();vvtTargetWindow->grab().save(qEnvironmentVariable("TUNUINO_VVT_MAP_PREVIEW"));vvtTargetWindow->resize(620,450);app.processEvents();vvtTargetWindow->grab().save(qEnvironmentVariable("TUNUINO_VVT_MAP_PREVIEW")+"-small.png");}
-    const auto beforeVvt=project->capture(error);auto legacyVvt=beforeVvt;auto legacyVvtParams=legacyVvt["parameters"].toObject();for(const auto &key:legacyVvtParams.keys())if(key.startsWith("vvt."))legacyVvtParams.remove(key);legacyVvt["parameters"]=legacyVvtParams;CHECK(project->apply(legacyVvt,error));CHECK(project->capture(error)["pages"]==beforeVvt["pages"]);CHECK(project->capture(error)["parameters"].toObject()["vvt.actuator"].toObject()["values"].toObject()["enabled"]==0);CHECK(project->apply(beforeVvt,error));
+    auto *vvtSplit=window.findChild<QSplitter*>("cam1Angle1Split");CHECK(vvtSplit&&vvtSplit->count()==2&&!vvtSplit->widget(0)->isHidden()&&!vvtSplit->widget(1)->isHidden());
+    openSensor("vvt.table2");auto *secondWindow=window.findChild<QMdiArea*>()->activeSubWindow();CHECK(secondWindow->windowTitle()=="CAM 1 - CAM1 angle 2 [°]");auto *secondCells=window.findChild<QTableWidget*>("vvtTargetTable2");CHECK(secondCells&&secondCells!=vvtCells);secondCells->item(0,0)->setText("15.67");const auto twoTables=project->capture(error);CHECK(twoTables["tables"].toObject()["vvt2"].toObject()["cells"].toArray()[0].toArray()[0].toDouble()==15.67&&twoTables["tables"].toObject()["vvt"]==vvtDraft["tables"].toObject()["vvt"]);CHECK(project->apply(twoTables,error));
+    if(!qEnvironmentVariable("TUNUINO_CAM_REFERENCE_PREVIEW").isEmpty()){openSensor("vvt.parameters");auto *w=window.findChild<QMdiArea*>()->activeSubWindow();w->resize(620,620);app.processEvents();w->grab().save(qEnvironmentVariable("TUNUINO_CAM_REFERENCE_PREVIEW")+"-parameters.png");openSensor("vvt.pid");w=window.findChild<QMdiArea*>()->activeSubWindow();w->resize(620,390);app.processEvents();w->grab().save(qEnvironmentVariable("TUNUINO_CAM_REFERENCE_PREVIEW")+"-pid.png");openSensor("vvt.table");vvtTargetWindow->resize(1000,540);app.processEvents();vvtTargetWindow->grab().save(qEnvironmentVariable("TUNUINO_CAM_REFERENCE_PREVIEW")+"-table.png");}
+    const auto beforeVvt=project->capture(error);auto legacyVvt=beforeVvt;auto legacyVvtParams=legacyVvt["parameters"].toObject();for(const auto &key:legacyVvtParams.keys())if(key.startsWith("vvt."))legacyVvtParams.remove(key);legacyVvt["parameters"]=legacyVvtParams;CHECK(project->apply(legacyVvt,error));CHECK(project->capture(error)["pages"]==beforeVvt["pages"]);CHECK(project->capture(error)["parameters"].toObject()["vvt.parameters"].toObject()["values"].toObject()["enabled"]==0);CHECK(project->apply(beforeVvt,error));
     checkpoint("project validation complete; desktop and menus");
     // Reference menus operate on layout/history only; ECU/project data stays intact.
     QStringList menuNames;for(auto *action:window.menuBar()->actions())menuNames<<action->text();CHECK(menuNames==QStringList({"File","Edit","Desktops","Tools","Window","Help","ECU"}));
