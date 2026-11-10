@@ -23,7 +23,7 @@ int main(int argc,char **argv){
     if(argc>1&&strcmp(argv[1],"--vvt-map")==0)id.capabilities|=245760;
     if(argc>1&&strcmp(argv[1],"--cam-control")==0)id.capabilities|=507904;
     tunuino_device_init(&device,save,clock_ms,NULL);device.output_command=output;
-    if(argc>1){uint8_t config[TUNUINO_IO_SETTINGS_SIZE];memcpy(config,device.active,sizeof(config));uint8_t *p=config+128;
+    if(argc>1&&strcmp(argv[1],"--usb-only")!=0){uint8_t config[TUNUINO_IO_SETTINGS_SIZE];memcpy(config,device.active,sizeof(config));uint8_t *p=config+128;
         p[0]=1;p[1]=4;const unsigned at[]={2,4,6,8,12,14};const unsigned v[]={5000,2000,1000,15000,9000,8500};
         for(unsigned i=0;i<6;++i){p[at[i]]=(uint8_t)(v[i]>>8);p[at[i]+1]=(uint8_t)v[i];}
         const unsigned angle[]={0,54000,18000,36000};
@@ -32,6 +32,7 @@ int main(int argc,char **argv){
     }
     tunuino_dispatch_context context={&id,&device.live,&device.ve,&device.ignition,&device};
     char line[16384];uint8_t q[4096],packet[4102],response[4102];uint16_t raw[16]={0};raw[11]=1619;
+    for(int i=1;i<argc;++i)if(strcmp(argv[i],"--usb-only")==0)raw[11]=0;
     while(fgets(line,sizeof(line),stdin)){
         size_t length=strcspn(line,"\r\n");if(length%2||length/2>sizeof(q))return 2;
         for(size_t i=0;i<length/2;++i){char byte[3]={line[2*i],line[2*i+1],0};q[i]=(uint8_t)strtoul(byte,NULL,16);}

@@ -99,8 +99,11 @@ bool MapWriteTransaction::runtime(const QByteArray &b,quint32 generation,bool di
     if(b.size()!=101 || quint8(b[0])!=0 || b.mid(1,31)!=identity_.mid(1,31)
         || !(quint8(b[40])&1) || bool(quint8(b[40])&2)!=dirty || ((quint8(b[32])&15)!=0 && (quint8(b[32])&15)!=3)
         || u32(b,41)!=0 || u32(b,97)!=0 || u32(b,57)!=generation)return false;
-    const unsigned raw=(unsigned(quint8(b[83]))<<8)|unsigned(quint8(b[84]));
-    return raw<4095 && raw*(3.3*9.2/4095.0)>=6.0;
+    // The ECU can read and persist calibration while powered by USB. The
+    // external-supply ADC is not a prerequisite for a calibration write.
+    // Identity, clean/staged generation, stopped engine and disarmed outputs
+    // remain checked throughout the transaction; actuator tests are separate.
+    return true;
 }
 void MapWriteTransaction::beginRead(Phase phase){phase_=phase;read_={};readPage_=1;offset_=0;requestRead();}
 void MapWriteTransaction::requestRead() {

@@ -16,9 +16,11 @@ struct FakeEcu {
     QByteArray identity=QByteArray(32,0);
     quint32 generation=5;
     int writes=0,burns=0,runtimes=0;
+    unsigned supplyRaw=1619;
     bool dirty=false,persisted=true,armed=false,badIdentity=false,badValidation=false,
         badCrc=false,corruptStage=false,corruptPermanent=false,failBurn=false,notPersisted=false,
-        losePowerBeforeBurn=false,changedIdentityBeforeBurn=false,engineStartsBeforeBurn=false;
+        losePowerBeforeBurn=false,changedIdentityBeforeBurn=false,engineStartsBeforeBurn=false,
+        invalidAdc=false,changedGenerationBeforeBurn=false;
     int rejectWrite=0;
     FakeEcu() {
         identity.replace(1,7,"TUNUINO");identity[8]=1;identity[9]=1;identity[10]=1;identity[12]=7;identity[14]=2;identity[19]=15;identity[20]=42;
@@ -39,12 +41,13 @@ struct FakeEcu {
             QByteArray b(24,0);b[1]=1;b[2]=armed?1:0;put32(b,4,armed?1:0);return b;
         }
         if(q[0]=='O') {
-            ++runtimes;QByteArray b(101,0);b.replace(1,31,identity.mid(1));b[40]=char(1|(dirty?2:0)|(persisted?4:0));
-            put32(b,57,generation);b[83]=6;b[84]=83; // 12 V, ADC 1619.
+            ++runtimes;QByteArray b(101,0);b.replace(1,31,identity.mid(1));b[40]=char((invalidAdc?0:1)|(dirty?2:0)|(persisted?4:0));
+            put32(b,57,generation);b[83]=char(supplyRaw>>8);b[84]=char(supplyRaw);
             if(runtimes==3) {
                 if(losePowerBeforeBurn){b[83]=0;b[84]=0;}
                 if(changedIdentityBeforeBurn)b[20]=43;
                 if(engineStartsBeforeBurn)put32(b,41,1000000);
+                if(changedGenerationBeforeBurn)put32(b,57,generation+1);
             }
             return b;
         }
@@ -92,10 +95,11 @@ struct Run {
         if(success && !unchanged){CHECK(ecu.pages[size_t(page-1)]==desired);CHECK(ecu.pages[0]==copied[0] && ecu.pages[3]==copied[3]);CHECK(ecu.pages[size_t(page==2?2:1)]==copied[size_t(page==2?2:1)]);}
     }
 };
-static void nativeFirmware(bool afr=false) {
+static void nativeFirmware(bool afr=false,bool usbOnly=false) {
     const QString executable=qEnvironmentVariable("TUNUINO_FIRMWARE_HARNESS");
     if(executable.isEmpty())return;
-    QProcess process;process.start(executable,afr?QStringList{"--afr"}:QStringList{});CHECK(process.waitForStarted(3000));
+    QStringList arguments;if(afr)arguments<<"--afr";if(usbOnly)arguments<<"--usb-only";
+    QProcess process;process.start(executable,arguments);CHECK(process.waitForStarted(3000));
     const auto exchange=[&](const QByteArray &q) {
         const auto line=q.toHex()+"\n";CHECK(process.write(line)==line.size());CHECK(process.waitForBytesWritten(3000));
         while(!process.canReadLine())CHECK(process.waitForReadyRead(3000));
@@ -122,13 +126,15 @@ static void nativeFirmware(bool afr=false) {
     }
     CHECK(copies==(afr?3:2) && totalBurns==(afr?3:2));
     process.closeWriteChannel();CHECK(process.waitForFinished(3000) && process.exitCode()==0);
-    std::cout<<"Real firmware dispatcher, page validation, persistence callback and generation: passed (host simulation)\n";
+    std::cout<<"Real firmware dispatcher, page validation, persistence callback and generation: passed (host simulation, external supply "<<(usbOnly?"0 V":"12 V")<<")\n";
 }
 int main(int argc,char **argv) {
     QCoreApplication app(argc,argv);
     CHECK(Writer::crc32("123456789")==0xcbf43926u);
     {Run r;r.run();CHECK(r.success && !r.uncertain && r.ecu.writes==9 && r.ecu.burns==1 && r.copies==1);}
     {Run r;r.run(false,3);CHECK(r.success && r.ecu.burns==1);}
+    {Run r;r.ecu.supplyRaw=0;r.run();CHECK(r.success && r.ecu.writes==9 && r.ecu.burns==1 && r.copies==1);}
+    {Run r;r.ecu.supplyRaw=0;r.run(false,3);CHECK(r.success && r.ecu.burns==1 && r.copies==1);}
     {Run r;r.run(true);CHECK(r.success && r.ecu.writes==0 && r.ecu.burns==0 && r.copies==0);}
     {Run r;r.ecu.generation=0xffffffffu;r.run();CHECK(r.success && r.writer.generation()==1);}
     {Run r;r.staleBase=true;r.run();CHECK(!r.success && r.ecu.writes==0);}
@@ -141,7 +147,9 @@ int main(int argc,char **argv) {
     {Run r;r.copyFails=true;r.run();CHECK(!r.success && r.ecu.writes==0);}
     {Run r;r.ecu.rejectWrite=4;r.run();CHECK(!r.success && !r.uncertain && r.ecu.burns==0);}
     {Run r;r.ecu.corruptStage=true;r.run();CHECK(!r.success && r.ecu.burns==0);}
-    {Run r;r.ecu.losePowerBeforeBurn=true;r.run();CHECK(!r.success && r.ecu.burns==0);}
+    {Run r;r.ecu.losePowerBeforeBurn=true;r.run();CHECK(r.success && r.ecu.burns==1);}
+    {Run r;r.ecu.invalidAdc=true;r.run();CHECK(!r.success && r.ecu.writes==0 && r.ecu.burns==0);}
+    {Run r;r.ecu.changedGenerationBeforeBurn=true;r.run();CHECK(!r.success && r.ecu.burns==0);}
     {Run r;r.ecu.changedIdentityBeforeBurn=true;r.run();CHECK(!r.success && r.ecu.burns==0);}
     {Run r;r.ecu.engineStartsBeforeBurn=true;r.run();CHECK(!r.success && r.ecu.burns==0);}
     {Run r;r.ecu.failBurn=true;r.run();CHECK(!r.success && r.uncertain && r.ecu.burns==1);}
@@ -162,6 +170,6 @@ int main(int argc,char **argv) {
     CHECK(!invalid.start(5,afrPage,QByteArray(576,0),ecu.identity,5));
     badMap.cells[0]=9;CHECK(tunuino::MapPageCodec::encode(5,badMap,codecError).isEmpty());
     badMap.cells[0]=20;CHECK(tunuino::MapPageCodec::encode(5,badMap,codecError).isEmpty());
-    nativeFirmware();nativeFirmware(true);
+    nativeFirmware();nativeFirmware(true);nativeFirmware(false,true);nativeFirmware(true,true);
     std::cout<<"Fuel/Ignition write, clean base, unchanged pages, readback, save failure and no Burn retry: passed\n";
 }
