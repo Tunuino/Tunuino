@@ -2521,6 +2521,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     statusLayout->addSpacing(12);
     statusLayout->addWidget(identityTitle);
     connectionStatus_ = new QLabel(tr("ECU disconnected"), statusPanel);
+    connectionStatus_->setObjectName(QStringLiteral("EcuConnectionStatus"));
     connectionStatus_->setWordWrap(true);
     connectionStatus_->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     statusLayout->addWidget(connectionStatus_);
@@ -3397,25 +3398,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             *ecuGeneration=(quint32(quint8(data[57]))<<24)|(quint32(quint8(data[58]))<<16)
                 |(quint32(quint8(data[59]))<<8)|quint32(quint8(data[60]));
             const bool wasOnline = *ecuOnline;
+            const bool wasPowered = powerState->online();
             const bool powered = powerState->update(data, connectionClock->elapsed());
-            if (!powered) {
-                setConnectionIndicator(false);
-                validationAction->setEnabled(false);
-                fuelRead->setEnabled(false);
-                ignitionRead->setEnabled(false);
-                if (tpsReadButton) tpsReadButton->setEnabled(false);
-                updateWriteAvailability();
-                connectionStatus_->setText(tr("Offline | Waiting for ECU power"));
-                statusBar()->showMessage(tr("OFFLINE | USB detected; waiting for external ECU power"));
-                return;
-            }
+            // A verified runtime reply establishes communication even on USB
+            // power alone. Supply monitoring must not prevent map sync or
+            // sensor setup; actuator tests retain their own power checks.
+            const QString connectedText = powered ? tr("Online | ECU connected")
+                : tr("Online | USB bench connection; external ECU power not confirmed");
             if (!wasOnline) {
                 setConnectionIndicator(true);
-                connectionStatus_->setText(tr("Online | ECU connected"));
                 validationAction->setEnabled(true);
                 if (*ecuClean) { *autoSync = true; startTransfer(1); }
             }
-            if (*ecuClean && !previouslyClean) connectionStatus_->setText(tr("Online | ECU connected"));
+            if (!wasOnline || wasPowered != powered || (*ecuClean && !previouslyClean)) {
+                connectionStatus_->setText(connectedText);
+                if (!powered) statusBar()->showMessage(tr("ONLINE | USB bench connection; external ECU power not confirmed"), 5000);
+            }
             if (!*ecuClean) {
                 (*mapBases)[0]={}; (*mapBases)[1]={};(*mapBases)[2]={};(*mapBases)[3]={};(*mapBases)[4]={};*sensorBase={};
                 connectionStatus_->setText(tr("Online | Temporary ECU changes; reset ECU before writing"));
@@ -3508,7 +3506,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         *ecuIdentity = data;
         *identityVerified = true;
         powerState->reset();
-        connectionStatus_->setText(tr("Offline | Waiting for ECU power"));
+        connectionStatus_->setText(tr("Connecting | ECU identified; waiting for runtime data"));
         liveTimer->start();
         requestLive();
     });

@@ -1,6 +1,7 @@
 // Integration check using the real Console and its File menu.
 // Offline only; settings/files are isolated in a temporary directory.
 #include "MainWindow.h"
+#include "ecu/SerialSession.h"
 #include "dbw/DbwWidget.h"
 #include "workspace/DesktopController.h"
 #include "calibration/SensitivityCurve.h"
@@ -18,6 +19,7 @@
 #include <QListView>
 #include <QScrollBar>
 #include <QImage>
+#include <QLabel>
 #include <QPushButton>
 #include <QApplication>
 #include <QSplitter>
@@ -193,6 +195,29 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
         }
         mapWindow->close();mapWindow->showNormal();app.processEvents();CHECK(!mapWindow->grab().isNull());mapWindow->hide();
     }
+    checkpoint("USB-only runtime connection (simulated transport replies)");
+    auto *session=window.findChild<tunuino::SerialSession*>();
+    auto *badge=window.findChild<QLabel*>("EcuConnectionBadge");
+    auto *connectionStatus=window.findChild<QLabel*>("EcuConnectionStatus");
+    CHECK(session&&badge&&connectionStatus&&badge->text()=="OFFLINE");
+    QByteArray identity(32,0);identity.replace(1,7,"TUNUINO");
+    identity[8]=1;identity[9]=1;identity[10]=1;identity[12]=7;identity[20]=42;
+    session->responseReceived(identity);
+    CHECK(badge->text()=="OFFLINE"); // Identity alone cannot establish runtime communication.
+    QByteArray usbRuntime(101,0);usbRuntime.replace(0,32,identity);usbRuntime[60]=1;
+    session->responseReceived(usbRuntime); // ADC unavailable must not block communication.
+    CHECK(badge->text()=="ONLINE"&&connectionStatus->text().contains("USB bench"));
+    usbRuntime[40]=1; // ADC valid, external supply reads zero volts.
+    session->responseReceived(usbRuntime);
+    CHECK(badge->text()=="ONLINE"&&connectionStatus->text().contains("USB bench"));
+    auto poweredRuntime=usbRuntime;const unsigned supplyRaw=1619;
+    poweredRuntime[83]=char(supplyRaw>>8);poweredRuntime[84]=char(supplyRaw);
+    session->responseReceived(poweredRuntime);QTest::qWait(300);session->responseReceived(poweredRuntime);
+    CHECK(badge->text()=="ONLINE"&&!connectionStatus->text().contains("USB bench"));
+    session->responseReceived(usbRuntime);
+    CHECK(badge->text()=="ONLINE"&&connectionStatus->text().contains("USB bench"));
+    session->connectionChanged(false);
+    CHECK(badge->text()=="OFFLINE"); // Actual transport loss still disconnects the UI.
     checkpoint("all checks complete");
     std::cout<<"Real File/Save Project as from Firing order: full 6-cylinder map round-trip, all three tables, parameters, comment, atomic rejection and complete-project dialog and caption maximize/minimize/close/reopen passed offline\n"<<std::flush;
     std::_Exit(0);

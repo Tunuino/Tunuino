@@ -14,7 +14,8 @@ struct AutoPort {
     quint16 product = 0;
 };
 // Discovery is independent of the transport and never marks an ECU online.
-// A successful open must still pass identity and external-power validation.
+// A successful open must still pass identity and runtime validation.
+// External supply is monitored separately from USB communication.
 class AutoConnection final : public QObject {
 public:
     struct Hooks {

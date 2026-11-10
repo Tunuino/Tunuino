@@ -9,6 +9,7 @@ namespace tunuino {
 // 12V_RAW -> divider -> U1501 pad 43 / ADC1_IN7. board_io.c places
 // ADC1_IN7 at raw[11]; runtime exposes it at offset 60+2*11.
 // This measures external ECU supply, never USB presence or engine RPM.
+// Its result is supply status, not permission to communicate over USB.
 class EcuPowerState {
 public:
     static bool supportedIdentity(const QByteArray &body) {
