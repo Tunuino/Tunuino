@@ -2,6 +2,9 @@
 // Offline only; settings/files are isolated in a temporary directory.
 #include "MainWindow.h"
 #include "ecu/SerialSession.h"
+#include "tools/ToolsSuite.h"
+#include "tools/ScopeWidget.h"
+#include "parameters/TriggerWizard.h"
 #include "dbw/DbwWidget.h"
 #include "workspace/DesktopController.h"
 #include "calibration/SensitivityCurve.h"
@@ -46,6 +49,21 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     QElapsedTimer elapsed;elapsed.start();const auto checkpoint=[&](const char *stage){std::cout<<"CompleteMapSmoke ["<<elapsed.elapsed()<<" ms] "<<stage<<std::endl;};
     checkpoint("construct main window");
     MainWindow window;window.show();app.processEvents();auto *project=dynamic_cast<tunuino::MapProject*>(window.findChild<QObject*>("mapProject"));CHECK(project);
+    if(!qEnvironmentVariable("TUNUINO_SERIAL_TEST_PORT").isEmpty()){
+        auto *session=window.findChild<tunuino::SerialSession*>();CHECK(session);CHECK(session->open(qEnvironmentVariable("TUNUINO_SERIAL_TEST_PORT")));CHECK(session->exchange("TUNUINO?"));
+        tunuino::ToolsSuite *tools=nullptr;for(auto *object:window.findChildren<QObject*>())if(auto *candidate=dynamic_cast<tunuino::ToolsSuite*>(object))tools=candidate;CHECK(tools);
+        tunuino::ScopeWidget *scope=nullptr;for(auto *widget:window.findChildren<QWidget*>())if(auto *candidate=dynamic_cast<tunuino::ScopeWidget*>(widget))scope=candidate;CHECK(scope&&scope->snapshot);
+        for(int n=0;n<500&&!scope->snapshot().diagnosticValid();++n)QTest::qWait(20);
+        const auto base=scope->snapshot();CHECK(base.diagnosticValid()&&base.pages[0][128]==0);
+        CHECK(tools->snapshot().valid()==qEnvironmentVariable("TUNUINO_SERIAL_FAULT").isEmpty());
+        auto *wizard=dynamic_cast<tunuino::TriggerWizard*>(window.findChild<QWidget*>("triggerWizard"));CHECK(wizard);wizard->next();CHECK(wizard->currentId()==2&&wizard->reviewReady());
+        auto localDraft=wizard->editorState();localDraft["capture"]=false;CHECK(wizard->restoreEditor(localDraft,true,error));wizard->keepProjectEdits(true);wizard->loadOffline(base.pages[0],base.pages[3]);CHECK(!wizard->reviewReady());
+        QPushButton *capture=nullptr;for(auto *button:scope->findChildren<QPushButton*>())if(button->text()=="Capture")capture=button;CHECK(capture);capture->click();
+        for(int n=0;n<200&&scope->busy();++n)QTest::qWait(20);CHECK(!scope->busy()&&scope->findChild<QLabel*>("triggerScopeStatus")->text().contains("No crank/cam edges"));
+        CHECK(wizard->hasCurrentBase(base.pages[0],base.pages[3],base.identity,base.generation));CHECK(wizard->editorState()["capture"].toBool()==false);wizard->next();CHECK(wizard->reviewReady());
+        const auto preview=qEnvironmentVariable("TUNUINO_TRIGGER_BOOTSTRAP_PREVIEW");if(!preview.isEmpty()){wizard->resize(720,540);app.processEvents();wizard->grab().save(preview+"-review.png");scope->resize(720,480);scope->grab().save(preview+"-scope.png");}
+        session->close();std::cout<<"Real MainWindow serial bootstrap without engine profile passed.\n";return 0;
+    }
     auto *sensorTree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(sensorTree);auto *sensorRoot=sensorTree->topLevelItem(0);CHECK(sensorRoot->text(0)=="Sensors and inputs");
     const QStringList expectedSensorGroups{"Analog inputs","Analog input monitor","Digital inputs","Oxygen Sensor","TPS, PPS","Switches","IAT, CLT","MAP, BARO","Pressure","Temperature","Other sensors","VSS and Gearbox"};CHECK(sensorRoot->childCount()==expectedSensorGroups.size());for(int i=0;i<expectedSensorGroups.size();++i)CHECK(sensorRoot->child(i)->text(0)==expectedSensorGroups[i]);
     CHECK(sensorRoot->child(2)->child(2)->flags()&Qt::ItemIsEnabled);CHECK(!(sensorRoot->child(2)->child(5)->flags()&Qt::ItemIsEnabled));CHECK(sensorRoot->child(8)->childCount()==13&&sensorRoot->child(9)->childCount()==11&&sensorRoot->child(11)->childCount()==10);

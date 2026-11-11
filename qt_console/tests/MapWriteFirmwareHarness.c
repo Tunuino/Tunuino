@@ -2,12 +2,18 @@
  * and its firmware/include directory. Simulates storage and idle board outputs,
  * while executing the real firmware dispatcher and configuration validation. */
 #include "tunuino/device.h"
+#include "tunuino/trigger_scope.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 static tunuino_device device;
 static uint8_t saved[TUNUINO_IO_SETTINGS_SIZE];
 static unsigned saves;
+static tunuino_trigger_scope trigger_scope;
+static bool scope_command(void *user,const uint8_t *q,size_t n,uint8_t *out,size_t cap,size_t *written){
+    (void)user;if(trigger_scope.generation!=device.generation)tunuino_scope_reset(&trigger_scope,device.generation);
+    return tunuino_scope_reply(&trigger_scope,device.active[2]!=0,q,n,out,cap,written);
+}
 static uint64_t now;
 static bool save(void *user,const uint8_t *bytes,size_t size){(void)user;if(size!=sizeof(saved))return false;++saves;memcpy(saved,bytes,size);return true;}
 static uint64_t clock_ms(void *user){(void)user;return now;}
@@ -22,8 +28,10 @@ int main(int argc,char **argv){
     if(argc>1&&strcmp(argv[1],"--vvt")==0)id.capabilities|=114688;
     if(argc>1&&strcmp(argv[1],"--vvt-map")==0)id.capabilities|=245760;
     if(argc>1&&strcmp(argv[1],"--cam-control")==0)id.capabilities|=507904;
-    tunuino_device_init(&device,save,clock_ms,NULL);device.output_command=output;
-    if(argc>1&&strcmp(argv[1],"--usb-only")!=0){uint8_t config[TUNUINO_IO_SETTINGS_SIZE];memcpy(config,device.active,sizeof(config));uint8_t *p=config+128;
+    if(argc>1&&strcmp(argv[1],"--empty-advanced")==0)id.capabilities|=507920;
+    tunuino_device_init(&device,save,clock_ms,NULL);device.output_command=output;device.scope_command=scope_command;
+    if(argc>1&&strcmp(argv[1],"--empty-advanced")==0){uint8_t config[TUNUINO_IO_SETTINGS_SIZE];memcpy(config,device.active,sizeof(config));config[2]=1;if(!tunuino_device_restore(&device,config,sizeof(config)))return 5;}
+    if(argc>1&&strcmp(argv[1],"--usb-only")!=0&&strcmp(argv[1],"--empty-advanced")!=0){uint8_t config[TUNUINO_IO_SETTINGS_SIZE];memcpy(config,device.active,sizeof(config));uint8_t *p=config+128;
         p[0]=1;p[1]=4;const unsigned at[]={2,4,6,8,12,14};const unsigned v[]={5000,2000,1000,15000,9000,8500};
         for(unsigned i=0;i<6;++i){p[at[i]]=(uint8_t)(v[i]>>8);p[at[i]+1]=(uint8_t)v[i];}
         const unsigned angle[]={0,54000,18000,36000};

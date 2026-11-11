@@ -2577,7 +2577,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         dbwSignals->available=*ecuOnline&&*ecuClean&&*identityVerified&&session->isOpen()&&!writer->busy()&&!*writePending&&!*readBusy&&!*validationPending&&!*toolBusy&&sensorBase->header.size()==256&&sensorBase->aux.size()==256&&sensorBase->identity==*ecuIdentity&&sensorBase->generation==*ecuGeneration;
         if(!dbwSignals->available)dbwSignals->invalidate();
         for(auto *panel:*sensorPanels)panel->setAvailable(sensorReady);for(auto *panel:*inputPanels)panel->setAvailable(sensorReady);
-        for(auto *panel:*parameterPanels)panel->setAvailable(sensorReady);triggerWizard->setAvailable(sensorReady);
+        for(auto *panel:*parameterPanels)panel->setAvailable(sensorReady);
+        if(sensorReady&&!triggerWizard->hasCurrentBase(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration))triggerWizard->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);
+        triggerWizard->setAvailable(sensorReady);
         if (*writeActionRef) {
             const auto *window=workspace->activeSubWindow(); auto *page=window?window->widget():nullptr;
             const auto *sensorPage=dynamic_cast<const tunuino::SensorCalibrationWidget*>(page);
@@ -2839,9 +2841,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     const auto changeToolBusy=[=](bool busy){*toolBusy=busy;setProperty("ecuToolBusy",busy);updateWriteAvailability();};
     serviceTool->busyChanged=changeToolBusy;
     scopeTool->busyChanged=changeToolBusy;outputTestTool->busyChanged=changeToolBusy;autotuneTool->busyChanged=changeToolBusy;
-    scopeTool->ready=[=]{const auto base=tools->snapshot();return base.valid()&&(quint8(base.identity[19])&16)&&(!*toolBusy||scopeTool->busy());};
+    const auto triggerSnapshot=[=]{
+        tunuino::ToolSnapshot result;
+        if(!*ecuOnline||!*ecuClean||!*identityVerified||!session->isOpen()||*readBusy||*validationPending||writer->busy()||*writePending)return result;
+        if(sensorBase->identity!=*ecuIdentity||sensorBase->generation!=*ecuGeneration)return result;
+        result.identity=*ecuIdentity;result.generation=*ecuGeneration;result.pages[0]=sensorBase->header;result.pages[3]=sensorBase->aux;return result;
+    };
+    scopeTool->ready=[=]{return *ecuOnline&&*identityVerified&&session->isOpen()&&!writer->busy()&&!*writePending&&!*readBusy&&!*validationPending&&(!*toolBusy||scopeTool->busy());};
     serviceTool->snapshot=tools->snapshot;serviceTool->canStart=[=]{return !*toolBusy&&!*toolReply;};
-    scopeTool->snapshot=tools->snapshot;
+    scopeTool->snapshot=triggerSnapshot;
     outputTestTool->snapshot=tools->snapshot;autotuneTool->snapshot=tools->snapshot;
     outputTestTool->canStart=[=]{return !*toolBusy&&!*toolReply;};autotuneTool->canStart=outputTestTool->canStart;
     const auto toolExchange=[=](const QByteArray &request,std::function<void(const QByteArray&)> reply){
@@ -3300,7 +3308,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if (transfer->page == 1) {
                 const bool schemaValid=u16(0)==2;
                 if(schemaValid){sensorBase->header=transfer->bytes;sensorBase->controls.clear();}
-                if(schemaValid&&*autoSync){transfer->page=0;transfer->offset=0;transfer->bytes.clear();QTimer::singleShot(0,this,[=]{startTransfer(2);});}
+                if(schemaValid&&*autoSync){transfer->page=0;transfer->offset=0;transfer->bytes.clear();QTimer::singleShot(0,this,[=]{startTransfer(4);});}
                 else abortTransfer(schemaValid?tr("Configuration page read"):tr("Unsupported ECU calibration schema"));
                 return;
             }
@@ -3308,8 +3316,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 sensorBase->aux=transfer->bytes;sensorBase->identity=*ecuIdentity;sensorBase->generation=*ecuGeneration;
                 if(!*projectLoaded&&sensorBase->header.size()==256){*projectPages=QJsonObject{{"header",QString::fromLatin1(sensorBase->header.toHex())},{"fuel",QString::fromLatin1((*mapBases)[0].bytes.toHex())},{"ignition",QString::fromLatin1((*mapBases)[1].bytes.toHex())},{"aux",QString::fromLatin1(sensorBase->aux.toHex())}};}
                 if(sensorBase->header.size()==256){for(auto *panel:*inputPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*sensorPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*parameterPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration,sensorBase->controls);triggerWizard->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);}
-                if(*autoSync&&tunuino::MapPageCodec::afrSupported(*ecuIdentity)){transfer->page=0;transfer->bytes.clear();transfer->offset=0;QTimer::singleShot(0,this,[=]{startTransfer(5);});return;}
-                if(tunuino::VtecCodec::supported(*ecuIdentity)){transfer->page=0;transfer->bytes.clear();transfer->offset=0;QTimer::singleShot(0,this,[=]{startTransfer(6);});return;}
+                if(*autoSync){transfer->page=0;transfer->bytes.clear();transfer->offset=0;QTimer::singleShot(0,this,[=]{startTransfer(2);});return;}
                 abortTransfer(tr("ECU synchronized: Fuel, Ignition and sensor calibrations."));return;
             }
             if(transfer->page==5){
@@ -3378,7 +3385,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 transfer->page = 0;
                 transfer->offset = 0;
                 transfer->bytes.clear();
-                QTimer::singleShot(0, this, [=]() { startTransfer(page+1); });
+                const int next=page==2?3:tunuino::MapPageCodec::afrSupported(*ecuIdentity)?5:0;
+                if(next)QTimer::singleShot(0,this,[=]{startTransfer(next);});else abortTransfer(tr("ECU configuration and maps loaded."));
             } else {
                 const bool completed = *autoSync && page == 3;
                 abortTransfer(completed

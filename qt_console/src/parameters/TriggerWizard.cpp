@@ -64,9 +64,9 @@ void TriggerWizard::discard(){if(pending_||header_.size()!=256)return;dirty_=fal
 void TriggerWizard::refresh(){
     const bool profile=TriggerSetupPlan::hasProfile(header_);for(QWidget *w:QList<QWidget*>{angle_,first_,last_,invert_})w->setEnabled(profile&&!pending_);
     const QStringList modes{tr("Sequential"),tr("Semi-sequential / wasted COP"),tr("Batch / wasted COP"),tr("Semi-sequential / shared coils"),tr("Batch / shared coils")};
-    profileInfo_->setText(profile?tr("ECU profile: %1 cylinders, %2. Cylinder order and connector assignments are preserved.").arg(quint8(header_[129])).arg(modes.value(quint8(header_[156]))):tr("No engine profile. Configure the primary wheel here, then create the profile in Firing order before editing cylinder phase."));
+    profileInfo_->setText(profile?tr("ECU profile: %1 cylinders, %2. Cylinder order and connector assignments are preserved.").arg(quint8(header_[129])).arg(modes.value(quint8(header_[156]))):tr("No engine profile. Saving the primary wheel does not require a cylinder profile. Create the profile in Firing order to configure cylinder phase."));
     QString error;const auto desired=TriggerSetupPlan::apply(header_,aux_,settings(),error);const auto old=TriggerSetupPlan::read(header_);
-    review_->setText(tr("ECU generation %1. Saved value → proposed value").arg(generation_));
+    review_->setText(hasEcuBase()?tr("ECU generation %1. Saved value → proposed value").arg(generation_):tr("Local trigger draft. ECU configuration has not been read; writing is unavailable."));
     const auto onOff=[this](bool on){return on?tr("On"):tr("Off");};
     const QStringList values{
         QString("%1-%2 → %3-%4").arg(old.teeth).arg(old.missing).arg(teeth_->value()).arg(missing_->value()),
@@ -78,16 +78,19 @@ void TriggerWizard::refresh(){
     for(int i=0;i<values.size();++i){auto *value=new QTableWidgetItem(values[i]);value->setForeground(QColor("#8de522"));reviewTable_->setItem(i,1,value);}
     if(header_.size()==256&&header_[28]!=0)review_->setText(review_->text()+tr(" — IGNITION ANGLE LOCK is active in the saved ECU configuration."));
     evidence_->setText(scopeEvidence_.isEmpty()?tr("No ECU Scope capture observed for this configuration."):scopeEvidence_);
-    const QString state=pending_?tr("Saving. Wait for verified readback; no automatic retries."):conflict_?tr("The ECU trigger/profile changed while editing. Right-click and discard local edits before writing."):!available_?tr("Connect and synchronize the ECU before writing."):desired.isEmpty()?error:tr("Ready to write reviewed trigger parameters. Physical timing verification remains pending.");state_->setText(state);
-    if(auto *finish=button(QWizard::FinishButton))finish->setEnabled(currentId()==2&&available_&&!conflict_&&!pending_&&!desired.isEmpty());
+    const QString state=pending_?tr("Saving. Wait for verified readback; no automatic retries."):conflict_?tr("The ECU trigger/profile changed while editing. Right-click and discard local edits before writing."):(!available_||!hasEcuBase())?tr("Waiting for the ECU configuration to load. Engine synchronisation and a cylinder profile are not required to save the primary wheel."):desired.isEmpty()?error:tr("Ready to write reviewed trigger parameters. Physical timing verification remains pending.");state_->setText(state);
+    if(auto *finish=button(QWizard::FinishButton))finish->setEnabled(currentId()==2&&available_&&hasEcuBase()&&!conflict_&&!pending_&&!desired.isEmpty());
     for(auto which:{QWizard::BackButton,QWizard::NextButton,QWizard::CancelButton})if(auto *b=button(which))b->setEnabled(!pending_&&(which!=QWizard::BackButton||currentId()>0));
 }
-bool TriggerWizard::validateCurrentPage(){QString error;if(currentId()==0&&!TriggerSetupPlan::primaryValid(settings(),error)){QMessageBox::warning(this,tr("Primary trigger"),error);return false;}if(currentId()==1&&TriggerSetupPlan::apply(header_,aux_,settings(),error).isEmpty()){QMessageBox::warning(this,tr("Trigger configuration"),error);return false;}return true;}
-bool TriggerWizard::reviewReady()const{QString error;return currentId()==2&&available_&&!conflict_&&!pending_&&!TriggerSetupPlan::apply(header_,aux_,settings(),error).isEmpty();}
-void TriggerWizard::save(){if(currentId()!=2||!available_||conflict_||pending_||!writeRequested){refresh();return;}QString error;const auto desired=TriggerSetupPlan::apply(header_,aux_,settings(),error);if(desired.isEmpty()){state_->setText(error);return;}if(writeRequested(1,desired,TriggerSetupPlan::mask(TriggerSetupPlan::hasProfile(header_)))){pending_=true;refresh();}}
+bool TriggerWizard::hasEcuBase()const{return header_.size()==256&&SensorCalibrationCodec::u16(header_,0)==2&&aux_.size()==256&&generation_&&EcuPowerState::supportedIdentity(identity_);}
+bool TriggerWizard::hasCurrentBase(const QByteArray &h,const QByteArray &a,const QByteArray &identity,quint32 generation)const{return hasEcuBase()&&header_==h&&aux_==a&&identity_==identity&&generation_==generation;}
+int TriggerWizard::nextId()const{if(currentId()==0&&!TriggerSetupPlan::hasProfile(header_))return 2;return QWizard::nextId();}
+bool TriggerWizard::validateCurrentPage(){QString error;if(currentId()==0&&!TriggerSetupPlan::primaryValid(settings(),error)){QMessageBox::warning(this,tr("Primary trigger"),error);return false;}if(currentId()==1&&header_.size()==256&&aux_.size()==256&&TriggerSetupPlan::apply(header_,aux_,settings(),error).isEmpty()){QMessageBox::warning(this,tr("Trigger configuration"),error);return false;}return true;}
+bool TriggerWizard::reviewReady()const{QString error;return currentId()==2&&available_&&hasEcuBase()&&!conflict_&&!pending_&&!TriggerSetupPlan::apply(header_,aux_,settings(),error).isEmpty();}
+void TriggerWizard::save(){if(currentId()!=2||!available_||!hasEcuBase()||conflict_||pending_||!writeRequested){refresh();return;}QString error;const auto desired=TriggerSetupPlan::apply(header_,aux_,settings(),error);if(desired.isEmpty()){state_->setText(error);return;}if(writeRequested(1,desired,TriggerSetupPlan::mask(TriggerSetupPlan::hasProfile(header_)))){pending_=true;refresh();}}
 void TriggerWizard::writeFinished(bool success,const QString &message){pending_=false;if(success){dirty_=false;conflict_=false;scopeEvidence_.clear();}refresh();state_->setText(message);}
 bool TriggerWizard::observeScope(const ToolSnapshot &source,const QByteArray &h,const QByteArray &samples){
-    if(!source.valid()||source.identity!=identity_||source.generation!=generation_||source.pages[0]!=header_||h.size()!=21||h[0]!=0||h[1]!=1||h[2]!=1||u32(h,5)!=generation_||!u32(h,9))return false;
+    if(!source.diagnosticValid()||source.identity!=identity_||source.generation!=generation_||source.pages[0]!=header_||h.size()!=21||h[0]!=0||h[1]!=1||h[2]!=1||u32(h,5)!=generation_||!u32(h,9))return false;
     const int count=SensorCalibrationCodec::u16(h,3);if(count<1||count>256||samples.size()!=5*count||u32(samples,0)!=0)return false;int crank=0,cam=0;quint32 previous=0;
     for(int i=0;i<count;++i){const auto time=u32(samples,5*i);const auto kind=quint8(samples[5*i+4]);if((i&&time<previous)||(kind!=1&&kind!=2))return false;previous=time;if(kind==1)++crank;else ++cam;}
     scopeEvidence_=tr("Last ECU Scope capture: %1 crank / %2 cam edges over %3 ms, generation %4, ECU wheel %5-%6. This capture describes the saved ECU geometry; draft edits are not measured until written.").arg(crank).arg(cam).arg(previous/1000.0,0,'f',2).arg(generation_).arg(quint8(source.pages[0][3])).arg(quint8(source.pages[0][4]));refresh();return true;

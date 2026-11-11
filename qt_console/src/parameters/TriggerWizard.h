@@ -20,6 +20,8 @@ public:
     bool observeScope(const ToolSnapshot &source,const QByteArray &header,const QByteArray &samples);
     bool busy()const{return pending_;}
     bool reviewReady()const;
+    bool hasCurrentBase(const QByteArray &h,const QByteArray &a,const QByteArray &identity,quint32 generation)const;
+    int nextId()const override;
     std::function<bool(int,const QByteArray&,const QByteArray&)> writeRequested;
     std::function<void()> openScope,openFiringOrder;
     QSize sizeHint()const override{return QSize(720,540);}
@@ -30,6 +32,7 @@ protected:
     void closeEvent(QCloseEvent *event)override;
 private:
     bool projectEdits_=false;
+    bool hasEcuBase()const;
     TriggerSetup settings()const;
     void edited();
     void refresh();

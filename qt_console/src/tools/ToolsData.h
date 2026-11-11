@@ -10,6 +10,9 @@ struct ToolSnapshot {
     QByteArray identity;
     quint32 generation=0;
     std::array<QByteArray,8> pages;
+    // Read-only trigger diagnostics use the actual header/aux, not tuning maps.
+    bool diagnosticValid() const {return identity.size()==32&&generation&&pages[0].size()==256
+        &&SensorCalibrationCodec::u16(pages[0],0)==2&&pages[3].size()==256;}
     bool valid() const {return identity.size()==32&&generation&&pages[0].size()==256&&pages[3].size()==256
         &&(!VvtCodec::advancedSupported(identity)||MapPageCodec::valid(8,pages[7]))
         &&(!VvtCodec::tableSupported(identity)||MapPageCodec::valid(7,pages[6]))
