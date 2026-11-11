@@ -38,6 +38,14 @@ int main(int argc,char **argv){QApplication app(argc,argv);QByteArray header(256
     CHECK(widget.findChild<QTableWidget*>("parameters")->horizontalHeader()->isHidden());auto *count=widget.findChild<QDoubleSpinBox*>("cylinders");CHECK(count&&count->isEnabled());count->setValue(6);CHECK(widget.findChild<QTableWidget*>("engineProfileAssignments")->rowCount()==6);CHECK(widget.findChild<QComboBox*>("engineInjector4")->currentText()=="Not assigned");bool emitted=false;widget.writeRequested=[&](int,const QByteArray&,const QByteArray&){emitted=true;};widget.save();CHECK(!emitted);const auto message=widget.findChild<QLabel*>("parameterStatus")->text();widget.setAvailable(true);CHECK(widget.findChild<QLabel*>("parameterStatus")->text()==message);
     // Firing-order defaults must not reset hidden fuel or coil calibration.
     auto calibrated=built;Codec::put(calibrated,130,6200);Codec::put(calibrated,132,3300);Codec::put(calibrated,134,400);Codec::put(calibrated,136,17000);calibrated[155]=1;
+    // An unconfigured ECU must offer a route to the shared draft without writing or inventing wiring.
+    ParameterWidget emptyOutputs(coilBlock);emptyOutputs.load(header,aux,identity,2);emptyOutputs.setAvailable(true);
+    bool opened=false,unexpectedWrite=false;
+    emptyOutputs.writeRequested=[&](int,const QByteArray&,const QByteArray&){unexpectedWrite=true;};
+    emptyOutputs.configureEngineAssignments=[&]{opened=true;widget.showEngineAssignments();};
+    auto *configure=emptyOutputs.findChild<QPushButton*>("configureEngineAssignments");CHECK(configure);configure->click();
+    CHECK(opened&&!unexpectedWrite);CHECK(widget.findChild<QToolButton*>("engineProfileToggle")->isChecked());
+    CHECK(!widget.findChild<QScrollArea*>("engineProfileScroll")->isHidden());
     ParameterWidget defaults(firing);defaults.load(calibrated,aux,identity,2);defaults.setAvailable(true);
     QTimer::singleShot(0,&defaults,[]{for(auto *window:QApplication::topLevelWidgets())if(auto *box=qobject_cast<QMessageBox*>(window))box->button(QMessageBox::Yes)->click();});
     defaults.findChild<QToolBar*>("parameterToolbar")->actions()[2]->trigger();bool defaultsWritten=false;defaults.writeRequested=[&](int,const QByteArray &result,const QByteArray&){defaultsWritten=true;CHECK(result.mid(130,8)==calibrated.mid(130,8)&&result[155]==0);};defaults.save();CHECK(defaultsWritten);

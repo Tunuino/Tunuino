@@ -19,6 +19,8 @@ public:
     void setAvailable(bool available);
     void saved(){edited_=false;}
     void save();
+    void showEngineAssignments();
+    std::function<void()> configureEngineAssignments;
     std::function<void()> captureCamReference;
     std::function<void(int,const QByteArray&,const QByteArray&)> writeRequested;
 private:

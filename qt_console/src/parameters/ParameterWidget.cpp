@@ -73,6 +73,13 @@ ParameterWidget::ParameterWidget(ParameterBlock block,QWidget *parent):QWidget(p
     }
     if(block_.key=="vvt.parameters"){auto *advanced=new QToolButton(this);advanced->setObjectName("vvtAdvanced");advanced->setText(tr("Advanced / assignments and protections"));advanced->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);advanced->setCheckable(true);advanced->setArrowType(Qt::RightArrow);layout->addWidget(advanced);for(int row=17;row<table_->rowCount();++row)table_->setRowHidden(row,true);connect(advanced,&QToolButton::toggled,this,[this,advanced](bool show){advanced->setArrowType(show?Qt::DownArrow:Qt::RightArrow);for(int row=17;row<table_->rowCount();++row)table_->setRowHidden(row,!show);});}
     table_->verticalHeader()->setDefaultSectionSize(block_.key=="vvt.parameters"?26:30);layout->addWidget(table_,1);if(auto *advanced=findChild<QToolButton*>("vvtAdvanced")){layout->removeWidget(advanced);layout->addWidget(advanced);}if(block_.key=="ignition.firing")setupProfile();status_=new QLabel(tr("Offline editing. Connect and synchronize the ECU before writing."),this);status_->setObjectName("parameterStatus");status_->setWordWrap(true);layout->addWidget(status_);save_=new QPushButton(tr("Write to ECU"),this);save_->setObjectName("parameterSave");layout->addWidget(save_,0,Qt::AlignLeft);connect(save_,&QPushButton::clicked,this,[this]{save();});save_->hide();status_->hide();
+    if(block_.key.endsWith(".outputs")){
+        auto *configure=new QPushButton(tr("Configure engine / cylinder assignments..."),this);
+        configure->setObjectName("configureEngineAssignments");
+        configure->setToolTip(tr("Open the shared engine profile to assign injectors and ignition outputs. Changes require an explicit Write to ECU."));
+        layout->insertWidget(layout->indexOf(status_),configure,0,Qt::AlignLeft);
+        connect(configure,&QPushButton::clicked,this,[this]{if(configureEngineAssignments)configureEngineAssignments();});
+    }
     table_->setContextMenuPolicy(Qt::ActionsContextMenu);if(auto *capture=findChild<QAction*>("vvtCaptureReference"))table_->addAction(capture);writeContext_=new QAction(tr("Write to ECU (F2)"),table_);writeContext_->setObjectName("parameterWriteContext");table_->addAction(writeContext_);connect(writeContext_,&QAction::triggered,this,[this]{save();});if(block_.page==6||block_.key=="ignition.primary"||block_.key=="inputs.analog"||digitalInput(block_.key)||block_.key=="inputs.pressure"||pulseBlock(block_.key)){table_->setContextMenuPolicy(Qt::ActionsContextMenu);auto *discard=new QAction(tr("Discard local edits / use ECU values"),table_);discard->setObjectName("primaryDiscard");table_->addAction(discard);connect(discard,&QAction::triggered,this,[this]{edited_=false;profileConflict_=false;load(profileHeader_,profileAux_,identity_,generation_,block_.page==6?base_:QByteArray{});});}edited_=false;refresh();
 }
 double ParameterWidget::value(int row)const{auto *w=table_->cellWidget(row,1);if(auto *check=qobject_cast<QCheckBox*>(w))return check->isChecked()?1:0;if(auto *c=qobject_cast<QComboBox*>(w))return (connectorField(block_,block_.fields[row]))?c->currentData().toInt():c->currentIndex();return qobject_cast<QDoubleSpinBox*>(w)->value();}
@@ -206,7 +213,7 @@ bool ParameterWidget::eventFilter(QObject *object,QEvent *event){
 void ParameterWidget::setupProfile(){
     profile_.emplace();profile_->load({},{});
     auto *layout=static_cast<QVBoxLayout*>(this->layout());
-    auto *toggle=new QToolButton(this);toggle->setObjectName("engineProfileToggle");toggle->setText(tr("Advanced"));toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);toggle->setArrowType(Qt::RightArrow);toggle->setCheckable(true);layout->addWidget(toggle,0,Qt::AlignLeft);toggle->hide();auto *advancedAction=new QAction(tr("Advanced engine profile"),table_);advancedAction->setCheckable(true);table_->addAction(advancedAction);connect(advancedAction,&QAction::toggled,toggle,&QToolButton::setChecked);connect(toggle,&QToolButton::toggled,advancedAction,&QAction::setChecked);
+    auto *toggle=new QToolButton(this);toggle->setObjectName("engineProfileToggle");toggle->setText(tr("Engine profile / cylinder assignments"));toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);toggle->setArrowType(Qt::RightArrow);toggle->setCheckable(true);layout->addWidget(toggle,0,Qt::AlignLeft);auto *advancedAction=new QAction(tr("Advanced engine profile"),table_);advancedAction->setCheckable(true);table_->addAction(advancedAction);connect(advancedAction,&QAction::toggled,toggle,&QToolButton::setChecked);connect(toggle,&QToolButton::toggled,advancedAction,&QAction::setChecked);
     advanced_=new QGroupBox(tr("Engine profile and connector assignments"),this);advanced_->setObjectName("engineProfileAdvanced");auto *form=new QFormLayout(advanced_);
     auto *note=new QLabel(tr("A cylinder-count change proposes evenly spaced firing angles. Verify the actual engine angles below. New cylinders have no outputs assigned. All editing is local until Write to ECU."),advanced_);note->setWordWrap(true);form->addRow(note);
     operation_=new QComboBox(advanced_);operation_->setObjectName("engineOperation");operation_->addItems({tr("Sequential / individual coils"),tr("Semi-sequential / wasted COP"),tr("Batch / wasted COP"),tr("Semi-sequential / shared coils"),tr("Batch / shared coils")});form->addRow(tr("Injection / ignition mode"),operation_);
@@ -222,6 +229,10 @@ void ParameterWidget::setupProfile(){
     for(int i=0;i<12;++i)connect(qobject_cast<QComboBox*>(table_->cellWidget(i+1,1)),&QComboBox::currentIndexChanged,this,[this,i](int cylinder){if(loading_||i>=profile_->count())return;profile_->setOrder(i,cylinder-1);edited_=true;syncProfile();});
     connect(qobject_cast<QCheckBox*>(table_->cellWidget(13,1)),&QCheckBox::toggled,this,[this](bool on){if(!loading_){profile_->inverted=on;edited_=true;}});
     table_->setContextMenuPolicy(Qt::ActionsContextMenu);auto *discard=new QAction(tr("Discard local edits / use ECU values"),table_);table_->addAction(discard);connect(discard,&QAction::triggered,this,[this]{discardProfileEdits();});syncProfile();
+}
+void ParameterWidget::showEngineAssignments(){
+    if(auto *toggle=findChild<QToolButton*>("engineProfileToggle"))toggle->setChecked(true);
+    if(assignments_)assignments_->setFocus(Qt::OtherFocusReason);
 }
 void ParameterWidget::discardProfileEdits(){if(profileHeader_.size()!=256)return;profile_->load(profileHeader_,profileAux_);profileConflict_=false;edited_=false;syncProfile();refresh();}
 void ParameterWidget::syncProfile(){

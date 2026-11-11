@@ -2467,6 +2467,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     (*sensorWizards)["sensorwizard:MAP"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Map,false,this);
     (*sensorWizards)["sensorwizard:Pressure"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Map,false,this,true);
     for(const auto &block:tunuino::ParameterCatalog::blocks()){auto *panel=new tunuino::ParameterWidget(block);parameterPanels->append(panel);auto *window=toolWindow(panel,block.title);window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)[block.key]=window;}
+    for(auto *panel:*parameterPanels)if(panel->block().key.endsWith(".outputs")){
+        panel->configureEngineAssignments=[=]{
+            if(*parameterNavigation)(*parameterNavigation)("ignition.firing");
+            auto *window=parameterWindows->value("ignition.firing").data();
+            if(window)if(auto *profile=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))profile->showEngineAssignments();
+        };
+    }
     auto *manualTriggerWindow=toolWindow(triggerWizard,tr("Triggers - Manual setup"));
     manualTriggerWindow->resize(triggerWizard->sizeHint()+QSize(12,30));
     auto *triggerPresets=new tunuino::TriggerPresetDialog(this);
