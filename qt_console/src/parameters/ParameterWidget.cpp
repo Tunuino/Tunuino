@@ -1,3 +1,4 @@
+#include "../ui/WriteButtonState.h"
 #include "ParameterWidget.h"
 #include "../protocol/VtecCodec.h"
 #include "../ui/CalibrationAppearance.h"
@@ -45,12 +46,12 @@ ParameterWidget::ParameterWidget(ParameterBlock block,QWidget *parent):QWidget(p
     if(block_.key=="vvt.parameters"){auto *capture=new QAction(CalibrationAppearance::icon(CalibrationAppearance::Wizard),tr("Copy current CAM 1 edge as reference"),this);capture->setObjectName("vvtCaptureReference");connect(capture,&QAction::triggered,this,[this]{if(captureCamReference)captureCamReference();});}
     table_=new QTableWidget(block_.fields.size(),2,this);table_->setObjectName("parameters");table_->setFont(QFont("Segoe UI",10));table_->setFrameShape(QFrame::NoFrame);table_->horizontalHeader()->hide();table_->verticalHeader()->hide();table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);table_->setSelectionMode(QAbstractItemView::SingleSelection);table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     for(int row=0;row<block_.fields.size();++row){const auto &f=block_.fields[row];table_->setItem(row,0,new QTableWidgetItem(f.label));
-        if(f.choices==QStringList({"Disabled","Enabled"})&&f.minimum==0&&f.maximum==1){table_->item(row,0)->setForeground(QColor("#43cddd"));auto *check=new QCheckBox(table_);check->setObjectName(f.key);table_->setCellWidget(row,1,check);connect(check,&QCheckBox::toggled,this,[this]{if(!loading_){edited_=true;if(block_.key=="ignition.primary"||block_.key=="vvt.parameters")refresh();}});}
+        if(f.choices==QStringList({"Disabled","Enabled"})&&f.minimum==0&&f.maximum==1){table_->item(row,0)->setForeground(QColor("#43cddd"));auto *check=new QCheckBox(table_);check->setObjectName(f.key);table_->setCellWidget(row,1,check);connect(check,&QCheckBox::toggled,this,[this]{if(!loading_){edited_=true;refresh();}});}
         else if(!f.choices.isEmpty()){auto *combo=new QComboBox(table_);combo->setObjectName(f.key);combo->addItems(f.choices);if(block_.key=="inputs.analog"||digitalInput(block_.key)||block_.key=="inputs.pressure"||pulseBlock(block_.key))SensorUi::choices(combo);table_->setCellWidget(row,1,combo);connect(combo,&QComboBox::currentIndexChanged,this,[this,row,combo]{if(loading_)return;
             const auto &field=block_.fields[row];const bool custom=connectorField(block_,field);
-            if(custom&&combo->currentData().toInt()==-1){const int previous=combo->itemData(0).toInt();bool okay=false;const auto chosen=QInputDialog::getItem(this,tr("Customise connector assignment"),field.label,field.choices,previous,false,&okay);setValue(row,okay?field.choices.indexOf(chosen):previous);if(okay)edited_=true;}else {if(block_.key=="inputs.pressure"){const int selected=combo->currentData().toInt();setValue(row,selected);}edited_=true;if(block_.key=="vvt.parameters")refresh();}
+            if(custom&&combo->currentData().toInt()==-1){const int previous=combo->itemData(0).toInt();bool okay=false;const auto chosen=QInputDialog::getItem(this,tr("Customise connector assignment"),field.label,field.choices,previous,false,&okay);setValue(row,okay?field.choices.indexOf(chosen):previous);if(okay){edited_=true;refresh();}}else {if(block_.key=="inputs.pressure"){const int selected=combo->currentData().toInt();setValue(row,selected);}edited_=true;refresh();}
         });}
-        else {auto *spin=new QDoubleSpinBox(table_);spin->setKeyboardTracking(false);spin->setButtonSymbols(QAbstractSpinBox::NoButtons);spin->setObjectName(f.key);spin->setRange(f.minimum,f.maximum);spin->setDecimals(f.scale==1000?3:f.scale==100?2:f.scale==10?1:0);spin->setSingleStep(1/f.scale);spin->setSuffix(f.unit.isEmpty()?QString{}:" "+f.unit);table_->setCellWidget(row,1,spin);connect(spin,&QDoubleSpinBox::valueChanged,this,[this]{if(!loading_)edited_=true;});}
+        else {auto *spin=new QDoubleSpinBox(table_);spin->setKeyboardTracking(false);spin->setButtonSymbols(QAbstractSpinBox::NoButtons);spin->setObjectName(f.key);spin->setRange(f.minimum,f.maximum);spin->setDecimals(f.scale==1000?3:f.scale==100?2:f.scale==10?1:0);spin->setSingleStep(1/f.scale);spin->setSuffix(f.unit.isEmpty()?QString{}:" "+f.unit);table_->setCellWidget(row,1,spin);connect(spin,&QDoubleSpinBox::valueChanged,this,[this]{if(!loading_){edited_=true;refresh();}});}
         table_->cellWidget(row,1)->setProperty("parameterRow",row);table_->cellWidget(row,1)->installEventFilter(this);for(auto *child:table_->cellWidget(row,1)->findChildren<QWidget*>()){child->setProperty("parameterRow",row);child->installEventFilter(this);}
         if(block_.key=="ignition.firing"&&row>=1&&row<=12)table_->item(row,0)->setForeground(QColor("#8de522"));setValue(row,f.initial);if(block_.key.endsWith(".outputs"))table_->setRowHidden(row,true);
     }
@@ -71,7 +72,7 @@ ParameterWidget::ParameterWidget(ParameterBlock block,QWidget *parent):QWidget(p
         if(qobject_cast<QCheckBox*>(table_->cellWidget(row,1)))table_->cellWidget(row,1)->setStyleSheet(QString("QCheckBox::indicator{border:2px solid %1;background:transparent;}QCheckBox::indicator:checked{background:%1;}").arg(color));
     }
     if(block_.key=="vvt.parameters"){auto *advanced=new QToolButton(this);advanced->setObjectName("vvtAdvanced");advanced->setText(tr("Advanced / assignments and protections"));advanced->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);advanced->setCheckable(true);advanced->setArrowType(Qt::RightArrow);layout->addWidget(advanced);for(int row=17;row<table_->rowCount();++row)table_->setRowHidden(row,true);connect(advanced,&QToolButton::toggled,this,[this,advanced](bool show){advanced->setArrowType(show?Qt::DownArrow:Qt::RightArrow);for(int row=17;row<table_->rowCount();++row)table_->setRowHidden(row,!show);});}
-    table_->verticalHeader()->setDefaultSectionSize(block_.key=="vvt.parameters"?26:30);layout->addWidget(table_,1);if(auto *advanced=findChild<QToolButton*>("vvtAdvanced")){layout->removeWidget(advanced);layout->addWidget(advanced);}if(block_.key=="ignition.firing")setupProfile();status_=new QLabel(tr("Offline editing. Connect and synchronize the ECU before writing."),this);status_->setObjectName("parameterStatus");status_->setWordWrap(true);layout->addWidget(status_);save_=new QPushButton(tr("Write to ECU"),this);save_->setObjectName("parameterSave");layout->addWidget(save_,0,Qt::AlignLeft);connect(save_,&QPushButton::clicked,this,[this]{save();});save_->hide();status_->hide();
+    table_->verticalHeader()->setDefaultSectionSize(block_.key=="vvt.parameters"?26:30);layout->addWidget(table_,1);if(auto *advanced=findChild<QToolButton*>("vvtAdvanced")){layout->removeWidget(advanced);layout->addWidget(advanced);}if(block_.key=="ignition.firing")setupProfile();status_=new QLabel(tr("Offline editing. Connect and synchronize the ECU before writing."),this);status_->setObjectName("parameterStatus");status_->setWordWrap(true);layout->addWidget(status_);save_=new QPushButton(tr("Write to ECU"),this);save_->setObjectName("parameterSave");layout->addWidget(save_,0,Qt::AlignLeft);connect(save_,&QPushButton::clicked,this,[this]{save();});status_->hide();
     if(block_.key.endsWith(".outputs")){
         auto *configure=new QPushButton(tr("Configure engine / cylinder assignments..."),this);
         configure->setObjectName("configureEngineAssignments");
@@ -114,6 +115,29 @@ void ParameterWidget::load(const QByteArray &h,const QByteArray &a,const QByteAr
 void ParameterWidget::status(const QString &text,bool important){status_->setText(text);status_->setVisible(important);table_->setToolTip(text);}
 void ParameterWidget::setAvailable(bool available){if(available_==available)return;available_=available;refresh();}
 void ParameterWidget::refresh(){
+    if (!save_ || loading_) return;
+    bool pending = false;
+    if (edited_ && base_.size() == 256) {
+        if (profile_) {
+            QString error;
+            const auto candidate = profile_->build(error);
+            pending = !candidate.isEmpty() && candidate.mid(128) != base_.mid(128);
+        } else {
+            const bool extension=(block_.page==6&&base_[0]==0)||(block_.key.startsWith("vvt.")&&base_[64]==0)||(block_.key=="inputs.pressure"&&base_[38]==0)||(pulseBlock(block_.key)&&base_[block_.key=="inputs.cam2"?57:82]==0)||(block_.key=="fuel.guard"&&base_[240]==0)||(block_.page==4&&base_[68]==0)||(block_.key=="fuel.corrections"&&base_.mid(103,25)==QByteArray(25,0));
+            const auto baseline = block_.key.startsWith("vvt.") && base_[64] && base_[64] != 3
+                ? VvtCodec::advanced(base_) : base_;
+            for (int i = 0; i < block_.fields.size(); ++i) {
+                const auto &field = block_.fields[i];
+                if (field.width && (!block_.key.endsWith(".outputs") || !table_->isRowHidden(i)) &&
+                    qAbs(value(i) - (extension ? field.initial : ParameterCatalog::value(baseline, field))) > 0.000001) {
+                    pending = true;
+                    break;
+                }
+            }
+        }
+    }
+    showPendingWrite(save_, pending);
+
     if(block_.key=="vvt.parameters"||block_.key=="vvt.pid"){
         const bool newer=identity_.isEmpty()||(identity_.size()==32&&(identity_[19]==char(255)||VvtCodec::advancedSupported(identity_)));
         for(int i=0;i<block_.fields.size();++i){const auto &f=block_.fields[i];auto *w=table_->cellWidget(i,1);
@@ -220,13 +244,13 @@ void ParameterWidget::setupProfile(){
     const QStringList labels{tr("Required fuel ms"),tr("Dwell ms"),tr("Injector dead time ms"),tr("Maximum injection time ms"),tr("Tooth zero angle °"),tr("First cam window tooth"),tr("Last cam window tooth")};
     const double low[]={.1,.1,0,.1,0,0,0},high[]={30,5,5,20,719.99,119,119};
     for(int i=0;i<labels.size();++i){auto *spin=new QDoubleSpinBox(advanced_);spin->setObjectName(QString("engineProfileValue%1").arg(i));spin->setRange(low[i],high[i]);spin->setDecimals(i<4?3:i==4?2:0);spin->setSingleStep(i<4?.001:i==4?.01:1);profileValues_<<spin;form->addRow(labels[i],spin);
-        connect(spin,&QDoubleSpinBox::valueChanged,this,[this,i](double value){if(loading_)return;const int n=int(std::lround(value*(i<4?1000:i==4?100:1)));switch(i){case 0:profile_->requiredFuel=n;break;case 1:profile_->dwell=n;break;case 2:profile_->deadTime=n;break;case 3:profile_->maximumInjection=n;break;case 4:profile_->toothZero=quint32(n);break;case 5:profile_->camFirst=n;break;case 6:profile_->camLast=n;break;}edited_=true;});
+        connect(spin,&QDoubleSpinBox::valueChanged,this,[this,i](double value){if(loading_)return;const int n=int(std::lround(value*(i<4?1000:i==4?100:1)));switch(i){case 0:profile_->requiredFuel=n;break;case 1:profile_->dwell=n;break;case 2:profile_->deadTime=n;break;case 3:profile_->maximumInjection=n;break;case 4:profile_->toothZero=quint32(n);break;case 5:profile_->camFirst=n;break;case 6:profile_->camLast=n;break;}edited_=true;refresh();});
     }
     assignments_=new QTableWidget(0,4,advanced_);assignments_->setObjectName("engineProfileAssignments");assignments_->setHorizontalHeaderLabels({tr("Cylinder"),tr("Injector"),tr("Ignition"),tr("TDC °")});assignments_->verticalHeader()->hide();assignments_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);assignments_->setEditTriggers(QAbstractItemView::NoEditTriggers);assignments_->setMinimumHeight(180);form->addRow(assignments_);auto *scroll=new QScrollArea(this);scroll->setObjectName("engineProfileScroll");scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);scroll->setMinimumHeight(120);scroll->setMaximumHeight(300);scroll->setWidget(advanced_);layout->addWidget(scroll);scroll->hide();
     connect(toggle,&QToolButton::toggled,this,[scroll,toggle](bool shown){scroll->setVisible(shown);toggle->setArrowType(shown?Qt::DownArrow:Qt::RightArrow);});
     connect(qobject_cast<QDoubleSpinBox*>(table_->cellWidget(0,1)),&QDoubleSpinBox::valueChanged,this,[this](double n){if(loading_)return;profile_->resize(int(n));edited_=true;syncProfile();});
     for(int i=0;i<12;++i)connect(qobject_cast<QComboBox*>(table_->cellWidget(i+1,1)),&QComboBox::currentIndexChanged,this,[this,i](int cylinder){if(loading_||i>=profile_->count())return;profile_->setOrder(i,cylinder-1);edited_=true;syncProfile();});
-    connect(qobject_cast<QCheckBox*>(table_->cellWidget(13,1)),&QCheckBox::toggled,this,[this](bool on){if(!loading_){profile_->inverted=on;edited_=true;}});
+    connect(qobject_cast<QCheckBox*>(table_->cellWidget(13,1)),&QCheckBox::toggled,this,[this](bool on){if(!loading_){profile_->inverted=on;edited_=true;refresh();}});
     table_->setContextMenuPolicy(Qt::ActionsContextMenu);auto *discard=new QAction(tr("Discard local edits / use ECU values"),table_);table_->addAction(discard);connect(discard,&QAction::triggered,this,[this]{discardProfileEdits();});syncProfile();
 }
 void ParameterWidget::showEngineAssignments(){

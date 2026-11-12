@@ -1,3 +1,4 @@
+#include "../ui/WriteButtonState.h"
 #include "SensorCalibrationWidget.h"
 #include "SensorUi.h"
 #include <QFileDialog>
@@ -43,7 +44,7 @@ SensorCalibrationWidget::SensorCalibrationWidget(SensorKind kind,QWidget *parent
     layout->addWidget(table_,1);
     if(kind_==SensorKind::Battery){auto *notice=new QLabel(tr("Use a suitable external divider. Never apply battery voltage directly to an AV input. Calibration does not enable voltage compensation or protection."),this);notice->setWordWrap(true);layout->addWidget(notice);}
     live_=new QLabel(tr("No live sample"),this);live_->setObjectName("sensorLive");layout->addWidget(live_);status_=new QLabel(this);status_->setObjectName("sensorStatus");status_->setWordWrap(true);layout->addWidget(status_);
-    save_=new QPushButton(tr("Write to ECU"),this);save_->setObjectName("sensorSave");layout->addWidget(save_,0,Qt::AlignLeft);connect(save_,&QPushButton::clicked,this,[this]{save();});save_->hide();
+    save_=new QPushButton(tr("Write to ECU"),this);save_->setObjectName("sensorSave");layout->addWidget(save_,0,Qt::AlignLeft);connect(save_,&QPushButton::clicked,this,[this]{save();});
     table_->setContextMenuPolicy(Qt::ActionsContextMenu);writeContext_=new QAction(tr("Write to ECU (F2)"),table_);writeContext_->setObjectName("sensorWriteContext");table_->addAction(writeContext_);connect(writeContext_,&QAction::triggered,this,[this]{save();});
     auto *timer=new QTimer(this);timer->setInterval(500);connect(timer,&QTimer::timeout,this,[this]{refresh();});timer->start();refresh();
 }
@@ -111,6 +112,7 @@ void SensorCalibrationWidget::refresh(){
     if(loaded){desired=SensorCalibrationCodec::apply(kind_,configuration(),header_,aux_,error);
         if(!desired.isEmpty()&&!SensorCalibrationCodec::permitted(kind_,SensorCalibrationCodec::auxiliary(kind_)?aux_:header_,desired,header_,aux_,error))desired.clear();}
     const bool supported=!SensorCalibrationCodec::pressure(kind_)||SensorCalibrationCodec::pressureSupported(identity_);
+    showPendingWrite(save_, edited_ && supported && !desired.isEmpty() && desired != (SensorCalibrationCodec::auxiliary(kind_) ? aux_ : header_));
     save_->setEnabled(available_&&loaded&&supported&&!desired.isEmpty());writeContext_->setEnabled(save_->isEnabled());restore_->setEnabled(loaded);
     status_->setText(!loaded?tr("Connect the ECU to read its calibration."):(!supported&&available_)?tr("This ECU firmware does not support fuel/oil pressure calibration. Update firmware before writing."):!error.isEmpty()?error:edited_?tr("Unsaved calibration edits. Other ECU settings will be preserved."):((kind_==SensorKind::Iat||kind_==SensorKind::Battery)&&aux_[68]!=1)?tr("No calibration stored. Select an input and enter measured points."):tr("Calibration read from ECU."));
     const int channel=input_->currentData().toInt();

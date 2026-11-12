@@ -1,3 +1,4 @@
+#include "ui/WriteButtonState.h"
 #include "MainWindow.h"
 #include "workspace/DesktopController.h"
 #include "ui/GeneralOptions.h"
@@ -609,11 +610,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     fuelSave->setEnabled(false);
     fuelRead->setToolTip(QString());
     fuelSave->setToolTip(tr("Write the active Fuel Table through ECU > Write to ECU (F2)."));
-    // Automatic ECU synchronization replaces the per-page read control.
-    // Writing is owned by the verified map transaction in the ECU menu.
+    fuelRead->hide();
+    fuelActionsLayout->addWidget(fuelSave);
     fuelActionsLayout->addStretch();
-    // Editing is exposed by the table context menu, not a button row.
-    fuelActions->hide();
+    fuelLayout->addWidget(fuelActions);
     const QStringList defaultRpmAxis = {QStringLiteral("200"), QStringLiteral("400"), QStringLiteral("600"), QStringLiteral("800"), QStringLiteral("1000"), QStringLiteral("1500"), QStringLiteral("2000"), QStringLiteral("2500"), QStringLiteral("3000"), QStringLiteral("3500"), QStringLiteral("4000"), QStringLiteral("4500"), QStringLiteral("5000"), QStringLiteral("5500"), QStringLiteral("6000"), QStringLiteral("7000")};
     const QStringList defaultMapAxis = {QStringLiteral("105"), QStringLiteral("100"), QStringLiteral("90"), QStringLiteral("80"), QStringLiteral("75"), QStringLiteral("70"), QStringLiteral("65"), QStringLiteral("60"), QStringLiteral("55"), QStringLiteral("50"), QStringLiteral("45"), QStringLiteral("40"), QStringLiteral("35"), QStringLiteral("30"), QStringLiteral("25"), QStringLiteral("20")};
     // Tunuino default offline tables: 16x16 cells in ascending MAP order.
@@ -1190,10 +1190,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *ignitionSave = new QPushButton(tr("Write to ECU"), ignitionActions);
     ignitionRead->setEnabled(false);
     ignitionSave->setEnabled(false);
-    // Automatic ECU synchronization replaces the per-page read control.
-    // Writing is owned by the verified map transaction in the ECU menu.
+    ignitionRead->hide();
+    ignitionActionsLayout->addWidget(ignitionSave);
     ignitionActionsLayout->addStretch();
-    ignitionActions->hide();
+    ignitionLayout->addWidget(ignitionActions);
     auto *ignitionMap = new LiveMapTable(ignitionPage);
     ignitionMap->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     ignitionMap->horizontalHeader()->setDefaultSectionSize(38);
@@ -2534,11 +2534,52 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto projectPages=QSharedPointer<QJsonObject>::create();
     auto activeSensorWrite=QSharedPointer<int>::create(-1);
     auto activeParameterFinished=QSharedPointer<std::function<void(bool,const QString&)>>::create();
-    auto *afrSave=new QPushButton(tr("Write to ECU"),this);afrSave->setObjectName("afrWriteToEcu");afrSave->hide();
-    auto *vvtSave=new QPushButton(tr("Write to ECU"),this);vvtSave->setObjectName("vvtWriteToEcu");vvtSave->hide();
-    auto *camSecondSave=new QPushButton(tr("Write to ECU"),this);camSecondSave->setObjectName("vvtWriteToEcu2");camSecondSave->hide();
+    auto *afrSave=new QPushButton(tr("Write to ECU"),this);afrSave->setObjectName("afrWriteToEcu");afrLayout->addWidget(afrSave, 0, Qt::AlignLeft);
+    auto *vvtSave=new QPushButton(tr("Write to ECU"),this);vvtSave->setObjectName("vvtWriteToEcu");vvtLayout->addWidget(vvtSave, 0, Qt::AlignLeft);
+    auto *camSecondSave=new QPushButton(tr("Write to ECU"),this);camSecondSave->setObjectName("vvtWriteToEcu2");camSecondLayout->addWidget(camSecondSave, 0, Qt::AlignLeft);
+    const auto mapEditorBytes = [=](int page, QString &error) -> QByteArray {
+        auto *table=page==2?maps:page==3?ignitionMap:page==7?vvtMap:page==8?camSecondMap:afrMap; auto *rpm=page==2?fuelRpmValues:page==3?ignitionRpmValues:page==7?vvtRpmValues:page==8?camSecondRpmValues:afrRpmValues;
+        tunuino::MapPageValues values;
+        bool valid=true;
+        for (int i=0;i<16;++i) {
+            bool ok=false; const auto *point=rpm->item(0,i); values.rpm[i]=point?point->text().toDouble(&ok):0; valid &= ok;
+            const auto *load=table->verticalHeaderItem(15-i); ok=false;
+            values.load[i]=load?load->text().toDouble(&ok):0; valid &= ok;
+        }
+        for (int row=0;row<16;++row) for(int col=0;col<16;++col) {
+            const auto *cell=table->item(15-row,col);bool ok=false;
+            values.cells[size_t(row*16+col)]=cell?cell->text().toDouble(&ok):0;valid &= ok;
+        }
+        if (!valid) {
+            error = tr("All map values must be numeric.");
+            return {};
+        }
+        return tunuino::MapPageCodec::encode(page, values, error);
+    };
+    const auto refreshMapWriteColors = [=] {
+        const int pages[] = {2, 3, 5, 7, 8};
+        QPushButton *buttons[] = {fuelSave, ignitionSave, afrSave, vvtSave, camSecondSave};
+        for (int i = 0; i < 5; ++i) {
+            const auto &base = (*mapBases)[i];
+            QString error;
+            const auto edited = base.bytes.isEmpty() ? QByteArray{} : mapEditorBytes(pages[i], error);
+            tunuino::showPendingWrite(buttons[i], !edited.isEmpty() && edited != base.bytes);
+        }
+    };
+    auto *writeColorTimer = new QTimer(this);
+    writeColorTimer->setSingleShot(true);
+    connect(writeColorTimer, &QTimer::timeout, this, refreshMapWriteColors);
+    const auto scheduleWriteColors = [writeColorTimer] { writeColorTimer->start(0); };
+    for (auto *table : {static_cast<QTableWidget*>(maps), static_cast<QTableWidget*>(ignitionMap),
+                        static_cast<QTableWidget*>(afrMap), static_cast<QTableWidget*>(vvtMap),
+                        static_cast<QTableWidget*>(camSecondMap), fuelRpmValues, ignitionRpmValues,
+                        afrRpmValues, vvtRpmValues, camSecondRpmValues}) {
+        connect(table, &QTableWidget::itemChanged, this, scheduleWriteColors);
+        connect(table->model(), &QAbstractItemModel::headerDataChanged, this, scheduleWriteColors);
+    }
     auto writeActionRef = QSharedPointer<QPointer<QAction>>::create();
     const auto updateWriteAvailability = [=]() {
+        refreshMapWriteColors();
         const bool ready = *ecuOnline && *ecuClean && *identityVerified && session->isOpen() && !writer->busy() && !*writePending && !*readBusy && !*validationPending && !*toolBusy && !*toolReply;
         const auto &fuelBase=(*mapBases)[0]; const auto &ignitionBase=(*mapBases)[1];
         fuelSave->setEnabled(ready && !fuelBase.bytes.isEmpty() && fuelBase.identity==*ecuIdentity && fuelBase.generation!=0 && fuelBase.generation==*ecuGeneration);
@@ -2956,22 +2997,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     });
     const auto queueMapWrite = [=](int page) {
         if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page || *validationPending || writer->busy() || *writePending || *toolBusy || *toolReply) return;
-        auto *table=page==2?maps:page==3?ignitionMap:page==7?vvtMap:page==8?camSecondMap:afrMap; auto *rpm=page==2?fuelRpmValues:page==3?ignitionRpmValues:page==7?vvtRpmValues:page==8?camSecondRpmValues:afrRpmValues;
         const auto base=(*mapBases)[size_t(page==8?4:page==7?3:page==5?2:page-2)];
         if (base.bytes.isEmpty() || base.identity!=*ecuIdentity) return;
-        tunuino::MapPageValues values;
-        bool valid=true;
-        for (int i=0;i<16;++i) {
-            bool ok=false; values.rpm[i]=rpm->item(0,i)->text().toDouble(&ok); valid &= ok;
-            const auto *load=table->verticalHeaderItem(15-i); ok=false;
-            values.load[i]=load?load->text().toDouble(&ok):0; valid &= ok;
+        QString error;
+        const auto desired = mapEditorBytes(page, error);
+        if (desired.isEmpty()) {
+            QMessageBox::warning(this, tr("Invalid ECU map"), error);
+            return;
         }
-        for (int row=0;row<16;++row) for(int col=0;col<16;++col) {
-            const auto *cell=table->item(15-row,col);bool ok=false;
-            values.cells[size_t(row*16+col)]=cell?cell->text().toDouble(&ok):0;valid &= ok;
-        }
-        QString error;const QByteArray desired=tunuino::MapPageCodec::encode(page,values,error);
-        if (!valid || desired.isEmpty()) { QMessageBox::warning(this,tr("Invalid ECU map"),error.isEmpty()?tr("All map values must be numeric."):error);return; }
         const QString name=page==2?tr("Fuel Table"):page==3?tr("Ignition Table"):page==7?tr("CAM1 angle 1"):page==8?tr("CAM1 angle 2"):tr("AFR Target (14.7 reference)");
         if (QMessageBox::question(this,tr("Write to ECU"),tr("Save %1 to the connected ECU? The engine must be stopped and outputs disarmed. Other settings will be preserved.").arg(name),QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel)!=QMessageBox::Yes) return;
         if (!*ecuOnline || !*identityVerified || !session->isOpen() || transfer->page

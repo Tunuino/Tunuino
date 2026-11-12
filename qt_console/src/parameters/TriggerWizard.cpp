@@ -1,3 +1,4 @@
+#include "../ui/WriteButtonState.h"
 #include "TriggerWizard.h"
 #include "../ecu/EcuPowerState.h"
 #include <QVBoxLayout>
@@ -79,7 +80,10 @@ void TriggerWizard::refresh(){
     if(header_.size()==256&&header_[28]!=0)review_->setText(review_->text()+tr(" — IGNITION ANGLE LOCK is active in the saved ECU configuration."));
     evidence_->setText(scopeEvidence_.isEmpty()?tr("No ECU Scope capture observed for this configuration."):scopeEvidence_);
     const QString state=pending_?tr("Saving. Wait for verified readback; no automatic retries."):conflict_?tr("The ECU trigger/profile changed while editing. Right-click and discard local edits before writing."):(!available_||!hasEcuBase())?tr("Waiting for the ECU configuration to load. Engine synchronisation and a cylinder profile are not required to save the primary wheel."):desired.isEmpty()?error:tr("Ready to write reviewed trigger parameters. Physical timing verification remains pending.");state_->setText(state);
-    if(auto *finish=button(QWizard::FinishButton))finish->setEnabled(currentId()==2&&available_&&hasEcuBase()&&!conflict_&&!pending_&&!desired.isEmpty());
+    if (auto *finish = button(QWizard::FinishButton)) {
+        showPendingWrite(finish, hasEcuBase() && dirty_ && !desired.isEmpty() && desired != header_);
+        finish->setEnabled(currentId()==2&&available_&&hasEcuBase()&&!conflict_&&!pending_&&!desired.isEmpty());
+    }
     for(auto which:{QWizard::BackButton,QWizard::NextButton,QWizard::CancelButton})if(auto *b=button(which))b->setEnabled(!pending_&&(which!=QWizard::BackButton||currentId()>0));
 }
 bool TriggerWizard::hasEcuBase()const{return header_.size()==256&&SensorCalibrationCodec::u16(header_,0)==2&&aux_.size()==256&&generation_&&EcuPowerState::supportedIdentity(identity_);}
