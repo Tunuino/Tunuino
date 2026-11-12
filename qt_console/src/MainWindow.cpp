@@ -484,7 +484,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     navigationDock->setMinimumWidth(210);
     navigationDock->setWidget(navigationPanel);
     addDockWidget(Qt::LeftDockWidgetArea, navigationDock);
-    // Tab IDs are explicit: unsupported features are visible but never open dummy controls.
     const auto addCategory = [=](const QString &name, const QList<QPair<QString,int>> &children) {
         auto *category = new QTreeWidgetItem(navigationTree, QStringList(name));
         QFont font = category->font(0);
@@ -493,23 +492,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         for (const auto &child : children) {
             auto *item = new QTreeWidgetItem(category, QStringList(child.first));
             item->setData(0, Qt::UserRole, child.second);
-            if (child.second < 0) {
-                // Do not present unfinished ECU functions as clickable controls.
-                // They remain visible in the intended navigation structure.
-                item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-                item->setForeground(0, QColor(QStringLiteral("#858585")));
-                item->setToolTip(0, tr("Not available: ECU firmware and configuration protocol not implemented yet"));
-            }
         }
         return category;
     };
     auto *sensorsCategory=addCategory(tr("Sensors and inputs"),{});
     const auto parameterItem=[=](QTreeWidgetItem *parent,const QString &name,const QString &key){auto *item=new QTreeWidgetItem(parent,{name});item->setIcon(0,tunuino::CalibrationAppearance::icon(key.endsWith("wizard")?tunuino::CalibrationAppearance::Wizard:tunuino::CalibrationAppearance::Parameters));item->setData(0,Qt::UserRole,100);item->setData(0,Qt::UserRole+1,key);return item;};
     tunuino::populateSensorNavigation(sensorsCategory);
-    addCategory(tr("Engine start"), {{tr("Cranking"),-1},{tr("Afterstart"),-1}});
     auto *fuelingCategory=addCategory(tr("Fueling"),{{tr("Autotune"),12}});
     parameterItem(fuelingCategory,tr("General"),"fuel.general");parameterItem(fuelingCategory,tr("Fuel cut"),"fuel.cut");
-    const auto unavailable=[=](QTreeWidgetItem *parent,const QString &title,const QString &reason){auto *item=new QTreeWidgetItem(parent,{title});item->setFlags(item->flags()&~Qt::ItemIsEnabled);item->setToolTip(0,reason);return item;};
     parameterItem(fuelingCategory,tr("Lambda guard"),"fuel.guard");
     parameterItem(fuelingCategory,tr("Acceleration"),"fuel.acceleration");
     auto *fuelCorrections=new QTreeWidgetItem(fuelingCategory,{tr("Corrections")});parameterItem(fuelCorrections,tr("Warmup"),"fuel.corrections");
@@ -520,7 +510,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     parameterItem(fuelTables,tr("Target lambda"),"fuel.target");auto *afrItem=new QTreeWidgetItem(fuelTables,{tr("AFR Target")});afrItem->setData(0,Qt::UserRole,2);
     parameterItem(fuelingCategory,tr("Flex fuel"),"fuel.flex");
     auto *injectors=new QTreeWidgetItem(fuelingCategory,{tr("Injectors")});parameterItem(injectors,tr("Injector outputs"),"injectors.outputs");parameterItem(injectors,tr("Injector dead time"),"injectors.deadtime");parameterItem(injectors,tr("Voltage compensation"),"voltage.compensation");
-    unavailable(fuelingCategory,tr("Secondary injectors"),tr("Not implemented: staged secondary injection."));
     auto *ignitionCategory=addCategory(tr("Ignition"),{});
     parameterItem(ignitionCategory,tr("Trigger wizard"),"ignition.wizard");
     parameterItem(ignitionCategory,tr("Firing order"),"ignition.firing");
@@ -529,31 +518,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *ignTables=new QTreeWidgetItem(ignitionCategory,{tr("Ign. tables")});auto *ignTable=new QTreeWidgetItem(ignTables,{tr("Ignition Table")});ignTable->setData(0,Qt::UserRole,1);auto *ignGraphItem=new QTreeWidgetItem(ignTables,{tr("Ignition 3D Graph")});ignGraphItem->setData(0,Qt::UserRole,8);
     parameterItem(ignitionCategory,tr("Rev limiters"),"ignition.limit");auto *triggers=new QTreeWidgetItem(ignitionCategory,{tr("Triggers")});parameterItem(triggers,tr("Primary trigger"),"ignition.primary");parameterItem(triggers,tr("Phase"),"ignition.phase");
     for(auto *group:{coils,sparkCorrections,ignTables,triggers,injectors,fuelCorrections,fuelTables})group->setIcon(0,tunuino::CalibrationAppearance::icon(tunuino::CalibrationAppearance::Group));
-    addCategory(tr("Overrun"), {{tr("Fuel cut"),-1}});
-    addCategory(tr("Knock sensors"), {{tr("Knock settings"),-1}});
-    addCategory(tr("Idle"), {{tr("Idle control"),-1}});
-    addCategory(tr("Functions"), {{tr("General functions"),-1}});
-    addCategory(tr("Outputs"), {{tr("Output configuration"),-1}});
-    addCategory(tr("Boost"), {{tr("Boost control"),-1}});
-    auto *dbwCategory=addCategory(tr("DBW"),{});
-    parameterItem(dbwCategory,tr("APS / TPS calibration"),"dbw.signals");
-    parameterItem(dbwCategory,tr("Signal diagnostics"),"dbw.monitor");
-    unavailable(dbwCategory,tr("Throttle motor control"),tr("Unavailable: native H-bridge driver and redundant DBW protection are not implemented."));
-    addCategory(tr("Traction control"), {{tr("Traction settings"),-1}});
     auto *vvtCategory=addCategory(tr("VVT"),{});
     parameterItem(vvtCategory,tr("VTEC Control"),"vtec.setup");
     auto *cam1=new QTreeWidgetItem(vvtCategory,{tr("CAM 1")});cam1->setIcon(0,tunuino::CalibrationAppearance::icon(tunuino::CalibrationAppearance::Group));
     parameterItem(cam1,tr("Parameters"),"vvt.parameters");parameterItem(cam1,tr("PID"),"vvt.pid");parameterItem(cam1,tr("CAM1 angle 1"),"vvt.table")->setIcon(0,style()->standardIcon(QStyle::SP_FileDialogDetailedView));parameterItem(cam1,tr("CAM1 angle 2"),"vvt.table2")->setIcon(0,style()->standardIcon(QStyle::SP_FileDialogDetailedView));
-    auto *cam2=new QTreeWidgetItem(vvtCategory,{tr("CAM 2")});cam2->setIcon(0,tunuino::CalibrationAppearance::icon(tunuino::CalibrationAppearance::Group));
-    for(const auto &name:{tr("Parameters"),tr("PID"),tr("CAM2 angle 1"),tr("CAM2 angle 2")})unavailable(cam2,name,tr("Unavailable: CAM 2 currently supplies pulse/frequency acquisition, without the phase feedback required for a second VVT controller."));
     parameterItem(vvtCategory,tr("VVT"),"vvt.monitor");parameterItem(vvtCategory,tr("VTEC monitor"),"vtec.monitor");
-    addCategory(tr("Sport"), {{tr("Sport mode"),-1}});
-    addCategory(tr("Nitrous"), {{tr("Nitrous control"),-1}});
-    addCategory(tr("Tables switching"), {{tr("Table selection"),-1}});
-    addCategory(tr("Engine protection"), {{tr("Protection settings"),-1}});
-    addCategory(tr("Timers"), {{tr("Timers setup"),-1}});
-    addCategory(tr("DSG Gearbox"), {{tr("Gearbox settings"),-1}});
-    addCategory(tr("CAN, Serial"), {{tr("Communication settings"),-1}});
     auto *logCategory=addCategory(tr("Log"), {{tr("Scope"),11},{tr("Graph Log"),4},{tr("Tune Display"),10},{tr("Autotune"),17}});
     parameterItem(logCategory,tr("Text Log"),"analysis.text");parameterItem(logCategory,tr("Scatter Plot"),"analysis.scatter");
     addCategory(tr("Gauges"), {{tr("Runtime gauges"),13},{tr("Engine Status"),9}});
@@ -2441,8 +2410,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto parameterPanels=QSharedPointer<QVector<tunuino::ParameterWidget*>>::create();
     auto parameterWindows=QSharedPointer<QMap<QString,QPointer<QMdiSubWindow>>>::create();(*parameterWindows)["vvt.table"]=vvtTableWindow;(*parameterWindows)["vvt.table2"]=camSecondTableWindow;
     auto dbwSignals=std::make_shared<tunuino::DbwSignals>();
-    auto *dbwSetup=new tunuino::DbwWidget(dbwSignals);auto *dbwSetupWindow=toolWindow(dbwSetup,tr("DBW - APS / TPS calibration"));(*parameterWindows)["dbw.signals"]=dbwSetupWindow;dbwSetupWindow->resize(dbwSetup->sizeHint()+QSize(12,30));
-    auto *dbwMonitor=new tunuino::DbwWidget(dbwSignals,true);auto *dbwMonitorWindow=toolWindow(dbwMonitor,tr("DBW - Signal diagnostics"));(*parameterWindows)["dbw.monitor"]=dbwMonitorWindow;dbwMonitorWindow->resize(dbwMonitor->sizeHint()+QSize(12,30));
+    auto *dbwSetup = new tunuino::DbwWidget(dbwSignals);
+    dbwSetup->setParent(this);
+    dbwSetup->hide();
+    auto *dbwMonitor = new tunuino::DbwWidget(dbwSignals, true);
+    dbwMonitor->setParent(this);
+    dbwMonitor->hide();
     auto *textLog=new tunuino::TextLogWidget;auto *textWindow=toolWindow(textLog,tr("Text Log"));(*parameterWindows)["analysis.text"]=textWindow;
     auto *scatter=new tunuino::ScatterPlotWidget(graphLog);auto *scatterWindow=toolWindow(scatter,tr("Scatter Plot"));(*parameterWindows)["analysis.scatter"]=scatterWindow;
     graphLog->inspectionChanged=[=](const tunuino::LogSample *sample){textLog->inspect(sample);};
@@ -2455,7 +2428,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto inputPanels=QSharedPointer<QVector<tunuino::SensorInputsWidget*>>::create();
     const QStringList inputKeys{"inputs.analog","inputs.crank","inputs.cam1","inputs.temperature","inputs.pressure"};
     for(int mode=0;mode<5;++mode){auto *panel=new tunuino::SensorInputsWidget(tunuino::SensorInputsWidget::Mode(mode));inputPanels->append(panel);panel->openScope=[=]{showTool(scopeWindow);};auto *window=toolWindow(panel,panel->title());window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)[mode==0?"inputs.monitor":mode==2?"inputs.cam1.monitor":mode==4?"inputs.pressure.monitor":inputKeys[mode]]=window;}
-    auto *camSensitivity=new tunuino::SensitivityCurve;auto *camSensitivityWindow=toolWindow(camSensitivity,tr("Digital inputs - CAM 1 sensitivity [V]"));(*parameterWindows)["inputs.cam1.sensitivity"]=camSensitivityWindow;camSensitivityWindow->resize(camSensitivity->sizeHint()+QSize(12,30));
+    // Retain reference data when reopening older projects.
+    auto *camSensitivity = new tunuino::SensitivityCurve(this);
+    camSensitivity->hide();
     auto *cam2Monitor=new tunuino::VssMonitor(nullptr,tunuino::VssMonitor::Source::Cam2);auto *cam2Window=toolWindow(cam2Monitor,tr("CAM 2 - Live pulses"));(*parameterWindows)["inputs.cam2.monitor"]=cam2Window;cam2Window->resize(cam2Monitor->sizeHint()+QSize(12,30));
     auto *vssMonitor=new tunuino::VssMonitor;auto *vssWindow=toolWindow(vssMonitor,tr("Vehicle speed - Live readings"));(*parameterWindows)["speed.monitor"]=vssWindow;vssWindow->resize(vssMonitor->sizeHint()+QSize(12,30));
     auto *vtecMonitor=new tunuino::VtecMonitor;auto *vtecWindow=toolWindow(vtecMonitor,tr("VTEC - ECU state"));(*parameterWindows)["vtec.monitor"]=vtecWindow;vtecWindow->resize(vtecMonitor->sizeHint()+QSize(12,30));

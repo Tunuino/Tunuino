@@ -47,23 +47,15 @@ ToolsSuite::ToolsSuite(QMainWindow *window,QTreeWidget *navigation):QObject(wind
 }
 void ToolsSuite::populate(QMenu *menu,QAction *graph,QAction *tune){
     menu->setToolTipsVisible(true);menu->removeAction(graph);menu->removeAction(tune);
-    const auto unsupported=[&](const QString &name,const QString &reason){auto *a=menu->addAction(name);a->setEnabled(false);a->setToolTip(reason);};
-    unsupported(tr("Device password"),tr("ECU firmware has no persistent password/access-control protocol."));
-    unsupported(tr("DBW calibration tool"),tr("Requires a DBW controller, redundant TPS/PPS acquisition and an H-bridge driver in the ECU firmware."));
-    unsupported(tr("Calibrate WBO circuit"),tr("The supported ECU firmware reads an external wideband controller; it has no internal WBO circuit calibration driver."));
     auto *test=menu->addAction(tr("Test outputs"));connect(test,&QAction::triggered,this,[this]{if(openOutputTest)openOutputTest();});
-    unsupported(tr("Diff. oil bleed"),tr("Requires the vehicle differential pump/CAN service protocol, which is not implemented in this firmware."));
     auto *autotune=menu->addAction(tr("Autotune"));connect(autotune,&QAction::triggered,this,[this]{if(openAutotune)openAutotune();});
     menu->addSeparator();
     menu->addAction(tr("Logbook"),this,[this]{if(openServiceData)openServiceData(2);});
-    unsupported(tr("User defined CAN stream"),tr("Requires CAN transport and persistent frame mappings in the ECU firmware."));
-    unsupported(tr("Set EDL-1 datalogger time"),tr("No EDL-1 transport or clock protocol is implemented for this ECU."));
     menu->addAction(tr("Show assigned outputs"),this,[this]{assignments(true);});menu->addAction(tr("Show assigned inputs"),this,[this]{assignments(false);});
     auto *names=menu->addMenu(tr("User names..."));names->addAction(tr("Outputs"),this,[this]{userNames(true);});names->addAction(tr("Analog inputs"),this,[this]{userNames(false);});
     menu->addSeparator();auto *scope=menu->addAction(tr("Scope"));scope->setShortcut(QKeySequence("F5"));connect(scope,&QAction::triggered,this,[this]{if(openScope)openScope();});
     menu->addAction(graph);menu->addAction(tune);menu->addSeparator();
     menu->addAction(tr("Customize keys"),this,[this]{customizeKeys();});menu->addAction(tr("General options"),this,[this]{generalOptions();});menu->addAction(tr("Available strategies"),this,[this]{strategies();});
-    menu->addSeparator();unsupported(tr("Decode VW coding..."),tr("Vehicle-specific CAN coding definitions and capture transport are not implemented."));
     menu->addSeparator();menu->addAction(tr("Vehicle VIN..."),this,[this]{if(openServiceData)openServiceData(0);});menu->addAction(tr("Project comment..."),this,[this]{if(openServiceData)openServiceData(1);});
 }
 QString ToolsSuite::alias(const QString &id,const ToolSnapshot &base)const{return QSettings().value(namesKey(base,id)).toString().left(16);}
