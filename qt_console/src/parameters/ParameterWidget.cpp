@@ -62,10 +62,21 @@ ParameterWidget::ParameterWidget(ParameterBlock block,QWidget *parent):QWidget(p
         if(block_.key.endsWith(".outputs")||block_.key=="inputs.pressure"||((block_.key=="vtec.setup"||block_.key=="vvt.parameters")&&f.key=="output"))color="#8bff00";
         if(f.choices.size()==2)color="#31d4df";
         if(block_.key=="ignition.primary"&&(f.key=="angleLock"||f.key=="lockedAngle"))color="#f1e326";
-        if(block_.key=="inputs.analog"){const QStringList colors{"#8bff00","#ec58c9","#25dce5","#ff761b","#25b8ff","#f1e326"};color=row<22?colors[(row/2)%6]:colors[0];if(f.width==0){table_->cellWidget(row,1)->setEnabled(false);table_->cellWidget(row,1)->setToolTip(tr("Fixed Proteus v0.7 resistor network. No software switching is present."));}}
-        if(digitalInput(block_.key)||block_.key=="inputs.pressure"||pulseBlock(block_.key)){color=row==0?"#8bff00":"#25dce5";if(f.width==0){auto *combo=qobject_cast<QComboBox*>(table_->cellWidget(row,1));auto *model=qobject_cast<QStandardItemModel*>(combo->model());for(int i=1;i<combo->count();++i)model->item(i)->setEnabled(false);combo->view()->setStyleSheet(combo->view()->styleSheet()+"QListView::item:disabled{color:#92928b;}");combo->setToolTip(pulseBlock(block_.key)?block_.help:tr("Physical MAX9924 circuit / external wiring. No software control or hardware readback. Unsupported choices are disabled."));}else table_->cellWidget(row,1)->setToolTip(f.key=="inputFilter"?tr("Native blanking: None, Low 5 us, Medium 10 us, High 20 us. Not pulse-width filtering."):block_.help);}
-        if(block_.key=="vvt.parameters"){if(row<2||(row>=13&&row<=15))color="#8bff00";else if(row==2||row==16)color="#ec58c9";else if(row>=7&&row<=10)color="#ff761b";else if(row==11||row==12)color="#25b8ff";else color="#25dce5";
-            if(f.key=="oilTemp"){table_->setRowHidden(row,true);table_->cellWidget(row,1)->setEnabled(false);table_->cellWidget(row,1)->setToolTip(tr("Unavailable: there is no native calibrated oil-temperature channel. This disabled reference does not replace a measured temperature."));}
+        if (block_.key=="inputs.analog") {
+            const QStringList colors{"#8bff00","#ec58c9","#25dce5","#ff761b","#25b8ff","#f1e326"};
+            color=row<22?colors[(row/2)%6]:colors[0];
+        }
+        if (digitalInput(block_.key)||block_.key=="inputs.pressure"||pulseBlock(block_.key)) {
+            color="#25dce5";
+            table_->cellWidget(row,1)->setToolTip(f.key=="inputFilter"
+                ? tr("Native blanking: None, Low 5 us, Medium 10 us, High 20 us.")
+                : block_.help);
+        }
+        if(block_.key=="vvt.parameters"){if(row<2||(row>=13&&row<=15))color="#8bff00";else if(row==2||row==16)color="#ec58c9";else if(row>=7&&row<=10)color="#ff761b";else if(row==11||row==12)color="#25b8ff";else color="#25dce5";}
+        // Keep fixed fields in the project format, but leave them out of the editor.
+        if (f.width == 0 && block_.key != "ignition.firing") {
+            table_->setRowHidden(row,true);
+            table_->cellWidget(row,1)->setEnabled(false);
         }
         if(block_.key=="vvt.pid")color=row<3?"#ec58c9":row==5||row==6?"#ff761b":"#25dce5";
         table_->item(row,0)->setForeground(QColor(color));table_->cellWidget(row,1)->setStyleSheet(QString("*{color:%1;}QDoubleSpinBox:focus,QDoubleSpinBox:focus QLineEdit{color:#172126;}QDoubleSpinBox:disabled,QDoubleSpinBox:disabled QLineEdit,QComboBox:disabled{color:#93989a;}").arg(color));
