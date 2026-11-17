@@ -26,6 +26,18 @@ static QByteArray read(int page,int at,int count){QByteArray q(7,0);q[0]='r';Cod
 int main(int argc,char **argv){QApplication app(argc,argv);QByteArray header(256,0),aux(256,0);Codec::put(header,0,2);header[3]=36;header[4]=1;Codec::put(header,96,12000);QString error;EngineProfileDraft draft;draft.load(header,aux);
     CHECK(draft.count()==4&&draft.build(error).isEmpty());for(int i=0;i<4;++i){CHECK(draft.cylinders[i].injector==-1&&draft.cylinders[i].coil==-1);CHECK(draft.assign(i,false,i,error)&&draft.assign(i,true,i,error));}
     auto built=draft.build(error);CHECK(built.size()==256&&built.left(128)==header.left(128)&&built[128]==1&&built[129]==4);
+    auto auxiliaryDraft=draft.json();
+    auxiliaryDraft["auxiliaryOutputs"]=QJsonArray{9,10,11};
+    EngineProfileDraft auxiliaryProfile;auxiliaryProfile.load(built,aux);
+    CHECK(auxiliaryProfile.import(auxiliaryDraft,error));
+    const auto auxiliaryHeader=auxiliaryProfile.build(error);
+    CHECK(auxiliaryHeader.size()==256 && auxiliaryHeader[150]==9 &&
+          auxiliaryHeader[151]==10 && auxiliaryHeader[152]==11);
+    auto legacyDraft=auxiliaryDraft;legacyDraft.remove("auxiliaryOutputs");
+    CHECK(auxiliaryProfile.import(legacyDraft,error));
+    CHECK(auxiliaryProfile.build(error)==auxiliaryHeader);
+    auxiliaryDraft["auxiliaryOutputs"]=QJsonArray{17,10,11};
+    CHECK(!auxiliaryProfile.import(auxiliaryDraft,error));
     CHECK(!draft.assign(1,false,0,error)&&draft.cylinders[1].injector==1);CHECK(draft.resize(6));CHECK(draft.cylinders[0].injector==0&&draft.cylinders[4].injector==-1&&draft.cylinders[5].coil==-1&&draft.build(error).isEmpty());
     for(int i=4;i<6;++i){CHECK(draft.assign(i,false,i,error));CHECK(draft.assign(i,true,i,error));}CHECK(!draft.build(error).isEmpty());CHECK(draft.resize(2)&&draft.resize(6));CHECK(draft.cylinders[5].injector==5);
     draft.resize(4);draft.operation=3;CHECK(draft.assign(2,true,0,error)&&draft.assign(3,true,1,error));CHECK(!draft.build(error).isEmpty());CHECK(draft.assign(0,true,5,error));CHECK(draft.cylinders[0].coil==5&&draft.cylinders[2].coil==5);CHECK(!draft.assign(1,true,5,error));

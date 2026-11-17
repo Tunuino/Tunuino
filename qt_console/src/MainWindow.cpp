@@ -1,3 +1,4 @@
+#include "calibration/IoConfigurationWidget.h"
 #include "ui/WriteButtonState.h"
 #include "MainWindow.h"
 #include "workspace/DesktopController.h"
@@ -2456,6 +2457,113 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     triggerWizard->openScope=[=]{showTool(scopeWindow);};triggerWizard->openFiringOrder=[=]{if(*parameterNavigation)(*parameterNavigation)("ignition.firing");};
     scopeTool->captured=[=](const tunuino::ToolSnapshot &source,const QByteArray &header,const QByteArray &samples){triggerWizard->observeScope(source,header,samples);};
     *parameterNavigation=[=](const QString &key){if((*sensorWizards).contains(key)){(*sensorWizards)[key]->open();return;}if(key=="ignition.wizard"){triggerPresets->open();return;}auto *window=(*parameterWindows).value(key).data();if(!window)return;if(!window->property("parameterOpened").toBool()){if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))window->resize(parameters->sizeHint()+QSize(12,30));window->setProperty("parameterOpened",true);}window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
+    auto *ioConfiguration = new tunuino::IoConfigurationWidget;
+    auto *ioWindow = toolWindow(ioConfiguration, tr("Inputs and outputs"));
+    ioWindow->resize(1000, 660);
+    (*parameterWindows)["io.configuration"] = ioWindow;
+    auto *ioItem = new QTreeWidgetItem(QStringList{tr("Inputs and outputs")});
+    ioItem->setData(0, Qt::UserRole, 100);
+    ioItem->setData(0, Qt::UserRole + 1, "io.configuration");
+    navigationTree->insertTopLevelItem(0, ioItem);
+    const int avContacts[] = {13,24,14,25,15,26,16,27,17,28,18};
+    const int atContacts[] = {19,30,20,31};
+    for (auto *sensor : *sensorPanels) {
+        const auto name = tunuino::SensorCalibrationCodec::name(sensor->kind());
+        const bool temperature = tunuino::SensorCalibrationCodec::temperature(sensor->kind());
+        QStringList choices{tr("Disabled")};
+        for (int i = 0; i < (temperature ? 4 : 11); ++i)
+            choices << QString("%1%2 — J103 / %3").arg(temperature ? "AT" : "AV")
+                .arg(i + 1).arg(temperature ? atContacts[i] : avContacts[i]);
+        ioConfiguration->add({name, temperature ? "AT" : "AV", choices,
+            [sensor] { return sensor->editorState()["input"].toInt(); },
+            [sensor](int input, QString &error) {
+                auto state = sensor->editorState();
+                state["input"] = input;
+                return sensor->restoreEditor(state, true, error);
+            },
+            [] { return true; },
+            [=] { (*parameterNavigation)("sensor:" + name); },
+            sensor->findChild<QPushButton*>("sensorSave")});
+    }
+    for (auto *parameters : *parameterPanels) {
+        const auto key = parameters->block().key;
+        const bool cylinders = key.endsWith(".outputs");
+        const bool analog = key == "fuel.flex";
+        const bool solenoid = key == "vtec.setup" || key == "vvt.parameters";
+        const bool digital = key == "inputs.vss" || key == "inputs.cam2";
+        if (!cylinders && !analog && !solenoid && !digital) continue;
+        for (int row = 0; row < parameters->block().fields.size(); ++row) {
+            const auto field = parameters->block().fields[row];
+            if (!cylinders && field.key != (analog ? "input" : solenoid ? "output"
+                    : key == "inputs.vss" ? "vssInput" : "cam2Input")) continue;
+            const QString name = cylinders
+                ? (key == "coils.outputs" ? tr("Ignition — cylinder %1") : tr("Injector — cylinder %1")).arg(row + 1)
+                : analog ? tr("Flex fuel") : key == "vtec.setup" ? tr("VTEC solenoid")
+                : key == "vvt.parameters" ? tr("VVT CAM 1 solenoid")
+                : key == "inputs.vss" ? tr("Vehicle speed") : tr("CAM 2 pulses");
+            auto choices = field.choices;
+            if (cylinders) choices.prepend(tr("Select connection..."));
+            auto *grid = parameters->findChild<QTableWidget*>("parameters");
+            ioConfiguration->add({name, analog ? "AV" : key == "coils.outputs" ? "IGN" : cylinders || solenoid ? "LS" : key,
+                choices,
+                [parameters, field, cylinders] {
+                    return parameters->editorState()["values"].toObject()[field.key].toInt() + (cylinders ? 1 : 0);
+                },
+                [parameters, field, cylinders](int index, QString &error) {
+                    if (cylinders && !index) { error = tr("Select a physical output. Cylinder assignments are configured with the engine profile."); return false; }
+                    auto state = parameters->editorState();
+                    auto values = state["values"].toObject();
+                    values[field.key] = index - (cylinders ? 1 : 0);
+                    state["values"] = values;
+                    return parameters->restoreEditor(state, true, error);
+                },
+                [grid, row, cylinders] { return !cylinders || !grid->isRowHidden(row); },
+                [=] { (*parameterNavigation)(key); },
+                parameters->findChild<QPushButton*>("parameterSave"),
+                [grid, row, name, cylinders, key] {
+                    if (!cylinders) return name;
+                    return (key == "coils.outputs" ? tr("Ignition — %1") : tr("Injector — %1"))
+                        .arg(grid->item(row,0)->text());
+                }});
+        }
+    }
+    for (auto *trigger : *parameterPanels) if (trigger->block().key == "ignition.primary") {
+        ioConfiguration->add({tr("Crankshaft sensor"), "Crank",
+            {tr("Disabled"), tr("J101 / 5 (+), 13 (-)")},
+            [trigger] { return trigger->editorState()["values"].toObject()["capture"].toInt(); },
+            [trigger](int input, QString &error) {
+                auto state = trigger->editorState();
+                auto values = state["values"].toObject();
+                values["capture"] = input;
+                state["values"] = values;
+                return trigger->restoreEditor(state, true, error);
+            },
+            [] { return true; },
+            [=] { (*parameterNavigation)("ignition.primary"); },
+            trigger->findChild<QPushButton*>("parameterSave")});
+    }
+    for (auto *profile : *parameterPanels) if (profile->block().key == "ignition.firing") {
+        const QStringList roles{tr("Fuel pump relay"), tr("Cooling fan relay"), tr("Main relay")};
+        const int pins[] = {3,15,4,16,5,6,7,19,8,20,9,21,10,11,12,23};
+        QStringList choices{tr("Disabled")};
+        for (int i = 0; i < 16; ++i) choices << QString("LS%1 — J102 / %2").arg(i+1).arg(pins[i]);
+        for (int i = 0; i < roles.size(); ++i) {
+            ioConfiguration->add({roles[i], "LS", choices,
+                [profile, i] { return profile->editorState()["engineProfile"].toObject()["auxiliaryOutputs"].toArray()[i].toInt(); },
+                [profile, i](int output, QString &error) {
+                    auto state = profile->editorState();
+                    auto engine = state["engineProfile"].toObject();
+                    auto outputs = engine["auxiliaryOutputs"].toArray();
+                    outputs[i] = output;
+                    engine["auxiliaryOutputs"] = outputs;
+                    state["engineProfile"] = engine;
+                    return profile->restoreEditor(state, true, error);
+                },
+                [] { return true; },
+                [=] { (*parameterNavigation)("ignition.firing"); },
+                profile->findChild<QPushButton*>("parameterSave")});
+        }
+    }
     auto *dock = new QDockWidget(tr("Engine Status"), this);
     dock->setObjectName("EngineStatusDock");
     auto *statusPanel = new QWidget(dock);

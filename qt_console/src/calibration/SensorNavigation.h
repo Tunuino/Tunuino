@@ -6,8 +6,9 @@ inline void populateSensorNavigation(QTreeWidgetItem *root){
     using namespace CalibrationAppearance;
     const auto group=[](QTreeWidgetItem *parent,const QString &name){auto *item=new QTreeWidgetItem(parent,{name});item->setIcon(0,icon(Group));return item;};
     const auto page=[](QTreeWidgetItem *parent,const QString &name,const QString &key,Glyph glyph=Parameters){auto *item=new QTreeWidgetItem(parent,{name});item->setIcon(0,icon(glyph));item->setData(0,Qt::UserRole,100);item->setData(0,Qt::UserRole+1,key);return item;};
-    page(root,"Analog inputs","inputs.analog");
     page(root,"Analog input monitor","inputs.monitor");
+    auto *advanced=group(root,"Advanced");
+    page(advanced,"Analog input filters","inputs.analog");
     auto *digital=group(root,"Digital inputs");
     page(digital,"Primary trigger","inputs.primary");
     page(digital,"CAM 1","inputs.cam1");

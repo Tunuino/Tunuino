@@ -64,9 +64,19 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
         const auto preview=qEnvironmentVariable("TUNUINO_TRIGGER_BOOTSTRAP_PREVIEW");if(!preview.isEmpty()){wizard->resize(720,540);app.processEvents();wizard->grab().save(preview+"-review.png");scope->resize(720,480);scope->grab().save(preview+"-scope.png");}
         session->close();std::cout<<"Real MainWindow serial bootstrap without engine profile passed.\n";return 0;
     }
-    auto *sensorTree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(sensorTree);auto *sensorRoot=sensorTree->topLevelItem(0);CHECK(sensorRoot->text(0)=="Sensors and inputs");
+    auto *sensorTree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(sensorTree);QTreeWidgetItem *sensorRoot=nullptr;for(int i=0;i<sensorTree->topLevelItemCount();++i)if(sensorTree->topLevelItem(i)->text(0)=="Sensors and inputs")sensorRoot=sensorTree->topLevelItem(i);CHECK(sensorRoot);CHECK(sensorRoot->text(0)=="Sensors and inputs");
     for(QTreeWidgetItemIterator item(sensorTree);*item;++item) CHECK((*item)->flags() & Qt::ItemIsEnabled);
     const auto openSensor=[&](const QString &key){QTreeWidgetItemIterator sensorItem(sensorTree);while(*sensorItem){if((*sensorItem)->data(0,Qt::UserRole+1).toString()==key){sensorTree->itemClicked(*sensorItem,0);app.processEvents();return;}++sensorItem;}CHECK(false);};
+    openSensor("io.configuration");
+    CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->objectName()=="ioConfiguration");
+    auto *ioTable=window.findChild<QTableWidget*>("ioAssignments");
+    CHECK(ioTable && ioTable->rowCount() >= 13);
+    CHECK(ioTable->item(0,0)->text() != "Ain 1 digital filter");
+    if(!qEnvironmentVariable("TUNUINO_IO_PREVIEW").isEmpty()){
+        auto *ioWindow=window.findChild<QMdiArea*>()->activeSubWindow();
+        app.processEvents();
+        CHECK(ioWindow->grab().save(qEnvironmentVariable("TUNUINO_IO_PREVIEW")));
+    }
     openSensor("inputs.analog");auto *inputWindow=window.findChild<QMdiArea*>()->activeSubWindow();CHECK(inputWindow&&inputWindow->windowTitle()=="Sensors and inputs - Analog inputs");inputWindow->close();
     openSensor("inputs.primary");auto *primaryInputWindow=window.findChild<QMdiArea*>()->activeSubWindow();CHECK(primaryInputWindow&&primaryInputWindow->windowTitle()=="Digital inputs - Primary trigger");auto *primaryFields=primaryInputWindow->widget()->findChild<QTableWidget*>("parameters");CHECK(primaryFields&&primaryFields->rowCount()==4&&primaryFields->isRowHidden(0)&&primaryFields->isRowHidden(1)&&primaryFields->isRowHidden(2)&&!primaryFields->isRowHidden(3));primaryInputWindow->close();
     openSensor("inputs.cam1");auto *camInputWindow=window.findChild<QMdiArea*>()->activeSubWindow();CHECK(camInputWindow&&camInputWindow->windowTitle()=="Digital inputs - CAM 1");auto *camFields=camInputWindow->widget()->findChild<QTableWidget*>("parameters");CHECK(camFields&&camFields->rowCount()==3&&camFields->isRowHidden(0)&&camFields->isRowHidden(1)&&!camFields->isRowHidden(2));camInputWindow->close();
