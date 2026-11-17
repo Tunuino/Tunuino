@@ -85,7 +85,7 @@ QVector<ParameterBlock> ParameterCatalog::blocks(){
         <<number("mapOn","Engage minimum MAP",14,100,10,500,60,"kPa")<<number("mapOff","Release minimum MAP",16,100,10,500,55,"kPa")
         <<number("cltMin","Minimum coolant temperature",18,100,0,149.99,70,"°C")<<number("cltMax","Maximum coolant temperature",20,100,.01,150,110,"°C")
         <<number("runtime","Minimum engine runtime",22,1,0,60000,10000,"ms")<<number("oilOn","Engage minimum oil pressure",24,10,0,2000,200,"kPa")<<number("oilOff","Release minimum oil pressure",26,10,0,2000,150,"kPa");all<<b;
-    const QString vvtHelp="CAM 1 selected edge per 720 degrees and a single low-side VVTi solenoid. None disables control. Opening this window never arms outputs. CAM offset is the measured unpowered reference, not ignition TDC. Preserve the measured travel and synchronization window. Overrides still require all activation, fresh CAM feedback and output interlocks. CAM 2 phase, dual-solenoid control and oil-temperature acquisition are unavailable.";
+    const QString vvtHelp="CAM 1 selected edge per 720 degrees and a single low-side VVTi solenoid. None disables control. Opening this window never arms outputs. CAM offset is the measured unpowered reference, not ignition TDC. Preserve the measured travel and synchronization window. Overrides still require all activation, fresh CAM feedback and output interlocks. Dual-solenoid control and oil-temperature acquisition are unavailable.";
     b=block("vvt.parameters","CAM 1 - CAM1 parameters",6,vvtHelp);
     b.fields<<number("reference","CAM offset",82,100,0,719.99,0,"°",false,4)<<number("maximum","Maximum retard/advance",88,100,-90,90,30,"°",true);
     auto controlType=number("enabled","Control type",65,1,0,1,0,{},false,1);controlType.choices={"None","VVTi - single solenoid"};b.fields<<controlType;
@@ -101,6 +101,13 @@ QVector<ParameterBlock> ParameterCatalog::blocks(){
     b=block("vvt.pid","CAM 1 - CAM1 PID",6,vvtHelp+" Output min/max are signed PID corrections added to Steady pos DC; final duty also respects Min/Max solenoid DC. Deadband holds the integral and removes proportional/derivative corrections inside the angle band.");
     b.fields<<number("kp","Proportional gain",76,1000,0,20,1,"%/°")<<number("ki","Integral gain",78,1000,0,20,0,"%/(°·s)")<<number("kd","Derivative gain",80,1000,0,5,0,"%/(°/s)")
         <<number("iMin","Integral term limit min",132,100,-100,0,-5,"%",true)<<number("iMax","Integral term limit max",134,100,0,100,5,"%",true)<<number("outputMin","Output min",136,100,-100,0,-15,"%",true)<<number("outputMax","Output max",138,100,0,100,15,"%",true)<<number("deadband","Deadband",140,100,0,20,.5,"°");all<<b;
+    const auto existing=all;
+    for(auto source:existing)if(source.key=="vvt.parameters"||source.key=="vvt.pid"){
+        source.key.replace("vvt.","vvt.cam2.");source.title.replace("CAM 1","CAM 2").replace("CAM1","CAM2");source.help.replace("CAM 1","CAM 2");source.page=9;
+        for(auto &field:source.fields)for(auto &choice:field.choices)choice.replace("CAM1","CAM2");
+        if(source.key=="vvt.cam2.parameters")source.fields<<number("windowFirst","First crank tooth in CAM 2 travel window",118,1,0,119,0,{},false,1)<<number("windowLast","Last crank tooth in CAM 2 travel window",119,1,0,119,2,{},false,1)<<number("windowPhase","CAM 2 revolution (0 or 1)",120,1,0,1,0,{},false,1);
+        all<<source;
+    }
     return all;
 }
 double ParameterCatalog::value(const QByteArray &p,const ParameterField &f){if(f.width==0)return f.initial;if(p.size()!=256)return 0;quint32 n=0;for(int i=0;i<f.width;++i)n=(n<<8)|quint8(p[f.offset+i]);if(f.bit)return (n&f.bit)?1:0;if(f.signedValue&&f.width==2)return qint16(n)/f.scale;return n/f.scale;}
@@ -114,9 +121,10 @@ QJsonObject ParameterCatalog::migrateVvt(QJsonObject parameters,const QByteArray
     const auto controls=VvtCodec::advanced(present?raw:VvtCodec::defaults(VtecCodec::defaults()),!present);
     QJsonObject legacy;
     for(const auto &key:{"vvt.position","vvt.actuator","vvt.activation","vvt.target"}){const auto values=parameters[key].toObject()["values"].toObject();for(auto it=values.begin();it!=values.end();++it)legacy[it.key()]=it.value();parameters.remove(key);}
-    for(const auto &block:blocks())if(block.key=="vvt.parameters"||block.key=="vvt.pid")if(!parameters.contains(block.key)){
+    for(const auto &block:blocks())if(block.key=="vvt.parameters"||block.key=="vvt.pid"||block.page==9)if(!parameters.contains(block.key)){
         QJsonObject values;const auto compatibility=VvtCodec::advanced(VvtCodec::defaults(VtecCodec::defaults()));for(const auto &field:block.fields)values[field.key]=legacy.contains(field.key)?QJsonValue(legacy[field.key]):QJsonValue(present?value(controls,field):!legacy.isEmpty()&&field.offset>=132?value(compatibility,field):field.initial);
         if(legacy.contains("runtime")&&block.key=="vvt.parameters")values["runtime"]=legacy["runtime"].toDouble()/1000.;
+        if(block.page==9){values={};for(const auto &field:block.fields)values[field.key]=field.initial;}
         parameters[block.key]=QJsonObject{{"values",values}};
     }
     return parameters;

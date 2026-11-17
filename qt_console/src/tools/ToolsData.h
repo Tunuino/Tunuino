@@ -2,6 +2,7 @@
 #include "../protocol/SensorCalibrationCodec.h"
 #include "../protocol/MapPageCodec.h"
 #include "../protocol/VtecCodec.h"
+#include "../protocol/Vvt2Codec.h"
 #include <QStringList>
 #include <QVector>
 #include <array>
@@ -9,11 +10,12 @@ namespace tunuino {
 struct ToolSnapshot {
     QByteArray identity;
     quint32 generation=0;
-    std::array<QByteArray,8> pages;
+    std::array<QByteArray,11> pages;
     // Read-only trigger diagnostics use the actual header/aux, not tuning maps.
     bool diagnosticValid() const {return identity.size()==32&&generation&&pages[0].size()==256
         &&SensorCalibrationCodec::u16(pages[0],0)==2&&pages[3].size()==256;}
     bool valid() const {return identity.size()==32&&generation&&pages[0].size()==256&&pages[3].size()==256
+        &&(!Vvt2Codec::supported(identity)||(Vvt2Codec::format(pages[8])&&MapPageCodec::valid(10,pages[9])&&MapPageCodec::valid(11,pages[10])))
         &&(!VvtCodec::advancedSupported(identity)||MapPageCodec::valid(8,pages[7]))
         &&(!VvtCodec::tableSupported(identity)||MapPageCodec::valid(7,pages[6]))
         &&(!VtecCodec::supported(identity)||(MapPageCodec::afrSupported(identity)&&VtecCodec::format(pages[5])))
@@ -52,6 +54,7 @@ inline QVector<Assignment> outputAssignments(const ToolSnapshot &s){
     if(a[0]==1){if(a[1]!=0&&quint8(a[2])>0&&quint8(a[2])<=16)rows[quint8(a[2])-1].functions<<"Idle";if(a[3]!=0&&quint8(a[4])>0&&quint8(a[4])<=16)rows[quint8(a[4])-1].functions<<"Boost";}
     if(VtecCodec::format(s.pages[5])&&s.pages[5][1]&&quint8(s.pages[5][2])>=1&&quint8(s.pages[5][2])<=16)rows[quint8(s.pages[5][2])-1].functions<<"VTEC";
     if(VtecCodec::format(s.pages[5])&&s.pages[5][0]==2&&s.pages[5][65]&&quint8(s.pages[5][66])>=1&&quint8(s.pages[5][66])<=16)rows[quint8(s.pages[5][66])-1].functions<<"VVT CAM 1";
+    if(Vvt2Codec::format(s.pages[8])&&s.pages[8][65]&&quint8(s.pages[8][66])>=1&&quint8(s.pages[8][66])<=16)rows[quint8(s.pages[8][66])-1].functions<<"VVT CAM 2";
     for(auto &row:rows)row.conflict=row.functions.size()>1;return rows;
 }
 }

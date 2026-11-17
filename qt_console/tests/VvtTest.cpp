@@ -2,6 +2,8 @@
 #include "parameters/ParameterWidget.h"
 #include "ecu/MapWriteTransaction.h"
 #include "calibration/VvtMonitor.h"
+#include "protocol/Vvt2Codec.h"
+#include "calibration/CamSignalWidget.h"
 #include <QApplication>
 #include <QQueue>
 #include <QProcess>
@@ -65,6 +67,34 @@ static void nativeMap(bool advanced=false){
     process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
     std::cout<<"VVT target seven-page native write, source selection, backup and travel rejection passed (host simulation).\n";
 }
+
+static void nativeDual(){
+ const auto exe=qEnvironmentVariable("TUNUINO_FIRMWARE_HARNESS");if(exe.isEmpty())return;
+ QProcess process;process.start(exe,{"--dual-cam"});CHECK(process.waitForStarted(3000));
+ const auto exchange=[&](const QByteArray &q){const auto line=q.toHex()+"\n";CHECK(process.write(line)==line.size());CHECK(process.waitForBytesWritten(3000));while(!process.canReadLine()){if(!process.waitForReadyRead(3000)){std::cerr<<"Dual firmware request failed: "<<q.toHex().constData()<<" exit "<<process.exitCode()<<" stderr "<<process.readAllStandardError().constData()<<std::endl;CHECK(false);}}return QByteArray::fromHex(process.readLine().trimmed());};
+ const auto id=exchange("TUNUINO?");CHECK(Vvt2Codec::supported(id)&&Vvt2Codec::pulsesSupported(id));
+ MapWriteTransaction::Pages base;for(int page=1;page<=11;++page)for(int at=0;at<(page==1||page==4||page==6||page==9?256:576);at+=64)base[page-1]+=exchange(read(page,at,64)).mid(1);
+ CHECK(Vvt2Codec::format(base[8])&&MapPageCodec::valid(10,base[9])&&MapPageCodec::valid(11,base[10]));
+ auto desired=Vvt2Codec::defaults();Vvt2Codec::bind(desired,base[0]);CHECK(Vvt2Codec::format(desired));
+ const quint32 generation=ServiceDataCodec::u32(exchange("TUNUINO:V"),8);QQueue<QByteArray> requests;bool done=false,success=false;int snapshots=0;QString result;
+ MapWriteTransaction transaction;transaction.send=[&](const QByteArray &q,int){requests.enqueue(q);return true;};transaction.savePrevious=[&](const QByteArray &identity,quint32 g,const MapWriteTransaction::Pages &pages){CHECK(identity==id&&g==generation&&pages==base);++snapshots;return true;};transaction.completed=[&](bool ok,bool uncertain,const QString &message){done=true;success=ok;result=message;CHECK(!uncertain);};
+ CHECK(transaction.startParameters(9,desired,base[8],id,generation,QByteArray(256,char(255))));
+ int limit=0;while(!done&&++limit<2000){CHECK(!requests.isEmpty());const auto request=requests.dequeue();transaction.receive(exchange(request));}if(!success)std::cerr<<result.toStdString()<<std::endl;CHECK(done&&success&&snapshots==1);
+ CHECK(exchange(read(9,0,64)).mid(1)==desired.left(64));CHECK(exchange(read(6,0,64)).mid(1)==base[5].left(64));
+ // Both native queries carry the new generation; no simulated phase is invented.
+ const auto phase=exchange("TUNUINO:G"),pulses=exchange("TUNUINO:C");CHECK(phase.size()==32&&phase[2]==0&&ServiceDataCodec::u32(phase,24)==generation+1);CHECK(pulses.size()==28&&pulses[2]==0&&ServiceDataCodec::u32(pulses,20)==generation+1);
+ // Both new signed target maps can be written through the same full readback transaction.
+ for(int page:{10,11}){
+  MapPageValues values;for(int i=0;i<16;++i){values.rpm[i]=500+500*i;values.load[i]=20+10*i;}for(auto &cell:values.cells)cell=page==10?12.34:-5.67;QString error;const auto target=MapPageCodec::encode(page,values,error);CHECK(target.size()==576);
+  MapWriteTransaction::Pages previous;for(int p=1;p<=11;++p)for(int at=0;at<(p==1||p==4||p==6||p==9?256:576);at+=64)previous[p-1]+=exchange(read(p,at,64)).mid(1);
+  done=false;success=false;const auto g=ServiceDataCodec::u32(exchange("TUNUINO:V"),8);
+  transaction.savePrevious=[&](const QByteArray&,quint32 savedGeneration,const MapWriteTransaction::Pages &pages){CHECK(savedGeneration==g&&pages==previous);return true;};
+  CHECK(transaction.start(page,target,previous[page-1],id,g));limit=0;while(!done&&++limit<2000){CHECK(!requests.isEmpty());transaction.receive(exchange(requests.dequeue()));}if(!success)std::cerr<<result.toStdString()<<std::endl;CHECK(done&&success);
+  CHECK(exchange(read(page,64,64)).mid(1)==target.mid(64,64));
+ }
+ process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
+}
+
 int main(int argc,char **argv){
     QApplication app(argc,argv);QString error;const auto prefix=VtecCodec::defaults();const auto page=VvtCodec::defaults(prefix);CHECK(VtecCodec::format(page)&&VvtCodec::extension(page)&&page.mid(1,27)==prefix.mid(1,27));
     auto invalid=page;Codec::put(invalid,90,5000);CHECK(!VtecCodec::format(invalid));invalid=page;invalid[255]=1;CHECK(!VvtCodec::extension(invalid));
@@ -79,7 +109,7 @@ int main(int argc,char **argv){
     auto conflict=written;Codec::put(conflict,84,9200);setup.load(h,a,id,3,conflict);written.clear();setup.save();CHECK(written.isEmpty());setup.findChild<QAction*>("primaryDiscard")->trigger();setup.save();CHECK(VvtCodec::u32(written,82)==9200);
     auto draft=setup.editorState();auto draftValues=draft["values"].toObject();draftValues["overrideDc"]=1;draftValues["overriddenDc"]=35;draftValues["overrideTarget"]=1;draftValues["overriddenTarget"]=10;CHECK(setup.restoreEditor(QJsonObject{{"values",draftValues}},true,error));setup.save();CHECK(written[125]==1&&written[128]==1&&Codec::u16(written,126)==3500&&Codec::u16(written,130)==1000);
     id[17]=0;setup.load(h,a,id,4,prefix);written.clear();setup.save();CHECK(written.isEmpty());
-    const QJsonObject oldBlocks{{"vvt.position",QJsonObject{{"values",QJsonObject{{"reference",12.34},{"maximum",45}}}}},{"vvt.actuator",QJsonObject{{"values",QJsonObject{{"kp",2.5},{"ki",1.0},{"enabled",1}}}}},{"vvt.activation",QJsonObject{{"values",QJsonObject{{"runtime",12345}}}}}};const auto migrated=ParameterCatalog::migrateVvt(oldBlocks);CHECK(migrated["vvt.pid"].toObject()["values"].toObject()["iMax"].toDouble()==100&&migrated["vvt.pid"].toObject()["values"].toObject()["deadband"].toDouble()==0);CHECK(migrated.size()==2&&migrated["vvt.parameters"].toObject()["values"].toObject()["runtime"].toDouble()==12.345&&migrated["vvt.pid"].toObject()["values"].toObject()["kp"].toDouble()==2.5&&migrated["vvt.parameters"].toObject()["values"].toObject()["reference"].toDouble()==12.34);
+    const QJsonObject oldBlocks{{"vvt.position",QJsonObject{{"values",QJsonObject{{"reference",12.34},{"maximum",45}}}}},{"vvt.actuator",QJsonObject{{"values",QJsonObject{{"kp",2.5},{"ki",1.0},{"enabled",1}}}}},{"vvt.activation",QJsonObject{{"values",QJsonObject{{"runtime",12345}}}}}};const auto migrated=ParameterCatalog::migrateVvt(oldBlocks);CHECK(migrated["vvt.pid"].toObject()["values"].toObject()["iMax"].toDouble()==100&&migrated["vvt.pid"].toObject()["values"].toObject()["deadband"].toDouble()==0);CHECK(migrated.size()==4&&migrated["vvt.parameters"].toObject()["values"].toObject()["runtime"].toDouble()==12.345&&migrated["vvt.pid"].toObject()["values"].toObject()["kp"].toDouble()==2.5&&migrated["vvt.parameters"].toObject()["values"].toObject()["reference"].toDouble()==12.34);
     if(argc>1){setup.resize(620,620);setup.show();app.processEvents();setup.grab().save(QString::fromLocal8Bit(argv[1]));}
-    native();nativeMap();nativeMap(true);std::cout<<"CAM parameters/PID layout, advanced codec, independent eight-page native writes, migration and conflicts passed.\n";
+    native();nativeMap();nativeMap(true);nativeDual();std::cout<<"CAM parameters/PID layout, advanced codec, independent eight-page native writes, migration and conflicts passed.\n";
 }
