@@ -19,12 +19,16 @@ public:
     void setAvailable(bool available);
     void saved(){edited_=false;}
     void save();
+    void centralizeAssignments();
     void showEngineAssignments();
     std::function<void()> configureEngineAssignments;
     std::function<void()> captureCamReference;
     std::function<void(int,const QByteArray&,const QByteArray&)> writeRequested;
 private:
     bool projectEdits_=false;
+    bool centralizedAssignments_=false;
+    bool assignmentField(const ParameterField &field) const;
+    bool cylinderAssignmentVisible(int row) const;
     void refresh();
     void status(const QString &text,bool important=true);
     QAction *writeContext_=nullptr;

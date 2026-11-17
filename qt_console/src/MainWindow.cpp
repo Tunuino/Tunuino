@@ -2472,12 +2472,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             connect(assistant,&QAction::triggered,this,[=]{(*sensorWizards)[wizardKey]->open();});
         }
     }
-    for(const auto &block:tunuino::ParameterCatalog::blocks()){auto *panel=new tunuino::ParameterWidget(block);parameterPanels->append(panel);auto *window=toolWindow(panel,block.title);window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)[block.key]=window;}
+    for(const auto &block:tunuino::ParameterCatalog::blocks()){
+        auto *panel=new tunuino::ParameterWidget(block);
+        parameterPanels->append(panel);
+        if(block.key.endsWith(".outputs")||block.key=="inputs.pressure"){
+            panel->setParent(this);
+            panel->hide();
+            continue;
+        }
+        auto *window=toolWindow(panel,block.title);
+        window->resize(panel->sizeHint()+QSize(12,30));
+        (*parameterWindows)[block.key]=window;
+    }
+    for(auto *panel:*parameterPanels)panel->centralizeAssignments();
     for(auto *panel:*parameterPanels)if(panel->block().key.endsWith(".outputs")){
         panel->configureEngineAssignments=[=]{
-            if(*parameterNavigation)(*parameterNavigation)("ignition.firing");
-            auto *window=parameterWindows->value("ignition.firing").data();
-            if(window)if(auto *profile=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))profile->showEngineAssignments();
+            if(*parameterNavigation)(*parameterNavigation)("io.configuration");
         };
     }
     auto *manualTriggerWindow=toolWindow(triggerWizard,tr("Triggers - Manual setup"));
@@ -2517,44 +2527,78 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             sensor->findChild<QPushButton*>("sensorSave")});
     }
     for (auto *parameters : *parameterPanels) {
-        const auto key = parameters->block().key;
-        const bool cylinders = key.endsWith(".outputs");
-        const bool analog = key == "fuel.flex";
-        const bool solenoid = key == "vtec.setup" || key == "vvt.parameters";
-        const bool digital = key == "inputs.vss" || key == "inputs.cam2";
-        if (!cylinders && !analog && !solenoid && !digital) continue;
-        for (int row = 0; row < parameters->block().fields.size(); ++row) {
-            const auto field = parameters->block().fields[row];
-            if (!cylinders && field.key != (analog ? "input" : solenoid ? "output"
-                    : key == "inputs.vss" ? "vssInput" : "cam2Input")) continue;
-            const QString name = cylinders
-                ? (key == "coils.outputs" ? tr("Ignition — cylinder %1") : tr("Injector — cylinder %1")).arg(row + 1)
-                : analog ? tr("Flex fuel") : key == "vtec.setup" ? tr("VTEC solenoid")
-                : key == "vvt.parameters" ? tr("VVT CAM 1 solenoid")
-                : key == "inputs.vss" ? tr("Vehicle speed") : tr("CAM 2 pulses");
-            auto choices = field.choices;
-            if (cylinders) choices.prepend(tr("Select connection..."));
-            auto *grid = parameters->findChild<QTableWidget*>("parameters");
-            ioConfiguration->add({name, analog ? "AV" : key == "coils.outputs" ? "IGN" : cylinders || solenoid ? "LS" : key,
-                choices,
-                [parameters, field, cylinders] {
-                    return parameters->editorState()["values"].toObject()[field.key].toInt() + (cylinders ? 1 : 0);
+        const auto key=parameters->block().key;
+        const bool analog=key=="fuel.flex";
+        const bool solenoid=key=="vtec.setup"||key=="vvt.parameters";
+        const bool digital=key=="inputs.vss"||key=="inputs.cam2";
+        if(!analog&&!solenoid&&!digital)continue;
+        for(const auto &field:parameters->block().fields){
+            if(field.key!=(analog?"input":solenoid?"output":key=="inputs.vss"?"vssInput":"cam2Input"))continue;
+            const QString name=analog?tr("Flex fuel"):key=="vtec.setup"?tr("VTEC solenoid"):
+                key=="vvt.parameters"?tr("VVT CAM 1 solenoid"):
+                key=="inputs.vss"?tr("Vehicle speed"):tr("CAM 2 pulses");
+            ioConfiguration->add({name,analog?"AV":solenoid?"LS":key,field.choices,
+                [parameters,field]{return parameters->editorState()["values"].toObject()[field.key].toInt();},
+                [parameters,field](int selected,QString &error){
+                    auto state=parameters->editorState();
+                    auto values=state["values"].toObject();
+                    values[field.key]=selected;
+                    state["values"]=values;
+                    return parameters->restoreEditor(state,true,error);
                 },
-                [parameters, field, cylinders](int index, QString &error) {
-                    if (cylinders && !index) { error = tr("Select a physical output. Cylinder assignments are configured with the engine profile."); return false; }
-                    auto state = parameters->editorState();
-                    auto values = state["values"].toObject();
-                    values[field.key] = index - (cylinders ? 1 : 0);
-                    state["values"] = values;
-                    return parameters->restoreEditor(state, true, error);
+                []{return true;},
+                [=]{ioConfiguration->openConfiguration(key);},
+                parameters->findChild<QPushButton*>("parameterSave")});
+        }
+    }
+    for(auto *profile:*parameterPanels)if(profile->block().key=="ignition.firing"){
+        const auto partner=[](const QJsonObject &engine,int row){
+            if(engine["operation"].toInt()<3)return -1;
+            const auto cylinders=engine["cylinders"].toArray();
+            if(row>=cylinders.size())return -1;
+            const int angle=cylinders[row].toObject()["tdc"].toInt();
+            for(int i=0;i<cylinders.size();++i)
+                if(i!=row&&qAbs(cylinders[i].toObject()["tdc"].toInt()-angle)==36000)return i;
+            return -1;
+        };
+        const int ls[]={3,15,4,16,5,6,7,19,8,20,9,21,10,11,12,23};
+        const int ign[]={35,34,22,33,32,31,30,29,28,27,26,25};
+        for(bool spark:{false,true})for(int row=0;row<12;++row){
+            const QString field=spark?"coil":"injector";
+            const QString name=(spark?tr("Ignition — cylinder %1"):tr("Injector — cylinder %1")).arg(row+1);
+            QStringList choices{tr("Not assigned")};
+            for(int port=0;port<(spark?12:16);++port)
+                choices<<QString("%1%2 — J102 / %3").arg(spark?"IGN":"LS").arg(port+1).arg(spark?ign[port]:ls[port]);
+            ioConfiguration->add({name,spark?"IGN":"LS",choices,
+                [profile,row,field]{
+                    const auto cylinders=profile->editorState()["engineProfile"].toObject()["cylinders"].toArray();
+                    return row<cylinders.size()?cylinders[row].toObject()[field].toInt(-1)+1:0;
                 },
-                [grid, row, cylinders] { return !cylinders || !grid->isRowHidden(row); },
-                [=] { ioConfiguration->openConfiguration(key); },
-                parameters->findChild<QPushButton*>("parameterSave"),
-                [grid, row, name, cylinders, key] {
-                    if (!cylinders) return name;
-                    return (key == "coils.outputs" ? tr("Ignition — %1") : tr("Injector — %1"))
-                        .arg(grid->item(row,0)->text());
+                [profile,row,field,spark,partner](int selected,QString &error){
+                    auto state=profile->editorState();
+                    auto engine=state["engineProfile"].toObject();
+                    auto cylinders=engine["cylinders"].toArray();
+                    if(row>=cylinders.size()){error=tr("Configure the cylinder count first.");return false;}
+                    auto cylinder=cylinders[row].toObject();
+                    cylinder[field]=selected-1;
+                    cylinders[row]=cylinder;
+                    const int pair=spark?partner(engine,row):-1;
+                    if(pair>=0){auto other=cylinders[pair].toObject();other[field]=selected-1;cylinders[pair]=other;}
+                    engine["cylinders"]=cylinders;
+                    state["engineProfile"]=engine;
+                    return profile->restoreEditor(state,true,error);
+                },
+                [profile,row,spark,partner]{
+                    const auto engine=profile->editorState()["engineProfile"].toObject();
+                    if(row>=engine["cylinders"].toArray().size())return false;
+                    const int pair=spark?partner(engine,row):-1;
+                    return pair<0||pair>row;
+                },
+                [=]{ioConfiguration->openConfiguration(spark?"coils.dwell":"injectors.deadtime");},
+                profile->findChild<QPushButton*>("parameterSave"),
+                [profile,row,spark,partner,name]{
+                    const int pair=spark?partner(profile->editorState()["engineProfile"].toObject(),row):-1;
+                    return pair>=0?tr("Ignition — cylinders %1 / %2").arg(row+1).arg(pair+1):name;
                 }});
         }
     }

@@ -87,15 +87,27 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     openSensor("inputs.primary");auto *primaryInputWindow=window.findChild<QMdiArea*>()->activeSubWindow();CHECK(primaryInputWindow&&primaryInputWindow->windowTitle()=="Digital inputs - Primary trigger");auto *primaryFields=primaryInputWindow->widget()->findChild<QTableWidget*>("parameters");CHECK(primaryFields&&primaryFields->rowCount()==4&&primaryFields->isRowHidden(0)&&primaryFields->isRowHidden(1)&&primaryFields->isRowHidden(2)&&!primaryFields->isRowHidden(3));primaryInputWindow->close();
     openSensor("inputs.cam1");auto *camInputWindow=window.findChild<QMdiArea*>()->activeSubWindow();CHECK(camInputWindow&&camInputWindow->windowTitle()=="Digital inputs - CAM 1");auto *camFields=camInputWindow->widget()->findChild<QTableWidget*>("parameters");CHECK(camFields&&camFields->rowCount()==3&&camFields->isRowHidden(0)&&camFields->isRowHidden(1)&&!camFields->isRowHidden(2));camInputWindow->close();
     openSensor("inputs.cam2");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle()=="Digital inputs - CAM 2");
-    openSensor("inputs.pressure");auto *pressureParametersWindow=window.findChild<QMdiArea*>()->activeSubWindow();CHECK(pressureParametersWindow&&pressureParametersWindow->windowTitle()=="Pressure - Parameters");CHECK(pressureParametersWindow->widget()->findChild<QTableWidget*>("parameters")->rowCount()==2);pressureParametersWindow->close();
+    auto *pressureAssignmentEditor=window.findChild<QWidget*>("inputs.pressure");CHECK(pressureAssignmentEditor&&pressureAssignmentEditor->isHidden());
     openSensor("inputs.vss");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle()=="Digital inputs - VSS");openSensor("speed.vehicle");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle()=="VSS and Gearbox - Vehicle speed");
-    auto *iat=dynamic_cast<tunuino::SensorCalibrationWidget*>(window.findChild<QWidget*>("sensorIAT"));CHECK(iat);const auto beforeWizard=project->capture(error);const QJsonValue oldInput=iat->editorState()["input"];
+    auto *iat=dynamic_cast<tunuino::SensorCalibrationWidget*>(window.findChild<QWidget*>("sensorIAT"));CHECK(iat);CHECK(iat->findChild<QTableWidget*>("sensorPoints")->isRowHidden(0));const auto beforeWizard=project->capture(error);const QJsonValue oldInput=iat->editorState()["input"];
     openSensor("sensorwizard:IAT");auto *sensorWizard=dynamic_cast<tunuino::SensorCurveWizard*>(window.findChild<QDialog*>("iatSensorWizard"));CHECK(sensorWizard&&sensorWizard->isVisible()&&sensorWizard->isModal());auto *sensorOk=sensorWizard->findChild<QPushButton*>("sensorWizardOk");CHECK(sensorOk&&!sensorOk->isEnabled());
     for(int i=0;i<3;++i)sensorWizard->findChild<QDoubleSpinBox*>(QString("sensorWizardValue%1").arg(i))->setValue(i==1?3950:2500);CHECK(sensorOk->isEnabled());sensorOk->click();CHECK(!sensorWizard->isVisible());CHECK(iat->editorState()["input"]==oldInput);CHECK(project->capture(error)["parameters"]==beforeWizard["parameters"]&&project->capture(error)["pages"]==beforeWizard["pages"]);
     const auto prepared=project->capture(error);openSensor("sensorwizard:IAT");sensorWizard->reject();CHECK(project->capture(error)==prepared);
     openSensor("sensorwizard:Pressure");auto *pressureWizard=dynamic_cast<tunuino::SensorCurveWizard*>(window.findChild<QDialog*>("pressureSensorWizard"));CHECK(pressureWizard&&pressureWizard->isVisible());pressureWizard->findChild<QDoubleSpinBox*>("sensorWizardValue0")->setValue(.5);pressureWizard->findChild<QDoubleSpinBox*>("sensorWizardValue2")->setValue(4.5);pressureWizard->findChild<QDoubleSpinBox*>("sensorWizardValue3")->setValue(300);pressureWizard->findChild<QPushButton*>("sensorWizardOk")->click();CHECK(!pressureWizard->isVisible());
     CHECK(project->capture(error)["sensors"].toObject()["Fuel pressure"].toObject()["volts"].toArray()==QJsonArray({.5,4.5}));
-    auto *firing=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QWidget*>("ignition.firing"));CHECK(firing);firing->findChild<QDoubleSpinBox*>("cylinders")->setValue(6);
+    auto *firing=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QWidget*>("ignition.firing"));CHECK(firing);CHECK(firing->findChild<QTableWidget*>("engineProfileAssignments")->isColumnHidden(1)&&firing->findChild<QTableWidget*>("engineProfileAssignments")->isColumnHidden(2));firing->findChild<QDoubleSpinBox*>("cylinders")->setValue(6);
+    const auto profileBeforeConnection=firing->editorState();
+    bool foundInjectorConnection=false;
+    for(int row=0;row<ioTable->rowCount();++row)if(ioTable->item(row,0)->text()=="Injector — cylinder 1"){
+        auto *connection=qobject_cast<QComboBox*>(ioTable->cellWidget(row,1));CHECK(connection);
+        connection->setCurrentIndex(1);
+        CHECK(QMetaObject::invokeMethod(connection,"activated",Qt::DirectConnection,Q_ARG(int,1)));
+        CHECK(firing->editorState()["engineProfile"].toObject()["cylinders"].toArray()[0].toObject()["injector"].toInt()==0);
+        CHECK(firing->restoreEditor(profileBeforeConnection,true,error));
+        foundInjectorConnection=true;
+    }
+    CHECK(foundInjectorConnection);
+
     auto *tree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(tree);QTreeWidgetItemIterator it(tree);while(*it){if((*it)->data(0,Qt::UserRole+1).toString()=="ignition.firing"){tree->itemClicked(*it,0);break;}++it;}app.processEvents();CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle()=="Ignition - Firing order");
     auto data=project->capture(error);CHECK(!data.isEmpty());auto tables=data["tables"].toObject();for(const auto &name:{"fuel","ignition","afr"}){auto t=tables[name].toObject();auto rows=t["cells"].toArray(),row=rows[0].toArray();row[0]=QString(name)=="fuel"?123.45:QString(name)=="ignition"?-12.34:12.8;rows[0]=row;t["cells"]=rows;tables[name]=t;}data["tables"]=tables;
     auto parameters=data["parameters"].toObject();auto general=parameters["fuel.general"].toObject(),values=general["values"].toObject();values["requiredFuel"]=6.75;general["values"]=values;parameters["fuel.general"]=general;data["parameters"]=parameters;data["service"]=QJsonObject{{"comment","Full six-cylinder map"}};
@@ -149,12 +161,33 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     CHECK(project->save(temp.filePath("dbw.tnproj"),error));CHECK(project->applyEdits(dbwOriginal,error));CHECK(project->open(temp.filePath("dbw.tnproj"),error));CHECK(project->capture(error)["dbw"]==dbwState);
     auto legacyDbw=project->capture(error);legacyDbw.remove("dbw");CHECK(project->apply(legacyDbw,error));CHECK(project->capture(error)["dbw"]==tunuino::DbwSignals::defaults());
     CHECK(project->apply(dbwOriginal,error));
-    openSensor("vtec.setup");auto *vtecPanel=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QMdiArea*>()->activeSubWindow()->widget());CHECK(vtecPanel&&vtecPanel->block().page==6);CHECK(!vtecPanel->findChild<QCheckBox*>("enabled")->isChecked());CHECK(vtecPanel->findChild<QComboBox*>("output")->count()==2);
+    openSensor("vtec.setup");auto *vtecPanel=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QMdiArea*>()->activeSubWindow()->widget());CHECK(vtecPanel&&vtecPanel->block().page==6);CHECK(!vtecPanel->findChild<QCheckBox*>("enabled")->isChecked());CHECK(vtecPanel->findChild<QComboBox*>("output")->count()==2);CHECK(vtecPanel->findChild<QTableWidget*>("parameters")->isRowHidden(1));
+    const auto vtecBeforeAssignment=vtecPanel->editorState();
+    bool foundVtecConnection=false;
+    for(int row=0;row<ioTable->rowCount();++row)if(ioTable->item(row,0)->text()=="VTEC solenoid"){
+        auto *connection=qobject_cast<QComboBox*>(ioTable->cellWidget(row,1));CHECK(connection);
+        connection->setCurrentIndex(1);
+        CHECK(QMetaObject::invokeMethod(connection,"activated",Qt::DirectConnection,Q_ARG(int,1)));
+        CHECK(vtecPanel->editorState()["values"].toObject()["output"].toInt()==1);
+        CHECK(vtecPanel->findChild<QTableWidget*>("parameters")->isRowHidden(1));
+        CHECK(vtecPanel->restoreEditor(vtecBeforeAssignment,true,error));
+        foundVtecConnection=true;
+    }
+    CHECK(foundVtecConnection);
+    if(!qEnvironmentVariable("TUNUINO_VTEC_UI_PREVIEW").isEmpty()){
+        app.processEvents();
+        CHECK(vtecPanel->grab().save(qEnvironmentVariable("TUNUINO_VTEC_UI_PREVIEW")));
+    }
     openSensor("vtec.monitor");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->objectName()=="vtecMonitor");
     const auto vtecBase=project->capture(error);auto legacyVtec=vtecBase;auto legacyVtecParams=legacyVtec["parameters"].toObject();legacyVtecParams.remove("vtec.setup");legacyVtec["parameters"]=legacyVtecParams;CHECK(project->apply(legacyVtec,error));CHECK(project->capture(error)["parameters"].toObject()["vtec.setup"].toObject()["values"].toObject()["enabled"]==0);
     CHECK(project->capture(error)["pages"]==vtecBase["pages"]);CHECK(project->apply(vtecBase,error));
     openSensor("vvt.parameters");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->findChild<QAction*>("vvtCaptureReference"));
-    openSensor("vvt.parameters");auto *vvtActuator=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QMdiArea*>()->activeSubWindow()->widget());CHECK(vvtActuator&&vvtActuator->block().key=="vvt.parameters"&&vvtActuator->findChild<QComboBox*>("enabled")->currentIndex()==0);
+    openSensor("vvt.parameters");auto *vvtActuator=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QMdiArea*>()->activeSubWindow()->widget());CHECK(vvtActuator&&vvtActuator->block().key=="vvt.parameters"&&vvtActuator->findChild<QComboBox*>("enabled")->currentIndex()==0);for(int row=0;row<vvtActuator->block().fields.size();++row)if(vvtActuator->block().fields[row].key=="output"){
+        auto *grid=vvtActuator->findChild<QTableWidget*>("parameters");
+        CHECK(grid->isRowHidden(row));
+        vvtActuator->findChild<QToolButton*>("vvtAdvanced")->setChecked(true);
+        CHECK(grid->isRowHidden(row));
+    }
     openSensor("vvt.monitor");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->objectName()=="vvtMonitor");
     openSensor("vvt.table");auto *vvtTargetWindow=window.findChild<QMdiArea*>()->activeSubWindow();CHECK(vvtTargetWindow&&vvtTargetWindow->windowTitle()=="CAM 1 - CAM1 angle 1 [°]");
     auto *vvtCells=window.findChild<QTableWidget*>("vvtTargetTable");auto *vvtRpm=window.findChild<QTableWidget*>("vvtTargetRpm");CHECK(vvtCells&&vvtRpm&&vvtCells->rowCount()==16&&vvtCells->columnCount()==16);vvtCells->item(0,0)->setText("-12.34");vvtRpm->item(0,0)->setText("501");

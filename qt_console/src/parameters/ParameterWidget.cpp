@@ -82,10 +82,10 @@ ParameterWidget::ParameterWidget(ParameterBlock block,QWidget *parent):QWidget(p
         table_->item(row,0)->setForeground(QColor(color));table_->cellWidget(row,1)->setStyleSheet(QString("*{color:%1;}QDoubleSpinBox:focus,QDoubleSpinBox:focus QLineEdit{color:#172126;}QDoubleSpinBox:disabled,QDoubleSpinBox:disabled QLineEdit,QComboBox:disabled{color:#93989a;}").arg(color));
         if(qobject_cast<QCheckBox*>(table_->cellWidget(row,1)))table_->cellWidget(row,1)->setStyleSheet(QString("QCheckBox::indicator{border:2px solid %1;background:transparent;}QCheckBox::indicator:checked{background:%1;}").arg(color));
     }
-    if(block_.key=="vvt.parameters"){auto *advanced=new QToolButton(this);advanced->setObjectName("vvtAdvanced");advanced->setText(tr("Output and activation conditions"));advanced->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);advanced->setCheckable(true);advanced->setArrowType(Qt::RightArrow);layout->addWidget(advanced);for(int row=17;row<table_->rowCount();++row)table_->setRowHidden(row,true);connect(advanced,&QToolButton::toggled,this,[this,advanced](bool show){advanced->setArrowType(show?Qt::DownArrow:Qt::RightArrow);for(int row=17;row<table_->rowCount();++row)table_->setRowHidden(row,!show);});}
+    if(block_.key=="vvt.parameters"){auto *advanced=new QToolButton(this);advanced->setObjectName("vvtAdvanced");advanced->setText(tr("Output and activation conditions"));advanced->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);advanced->setCheckable(true);advanced->setArrowType(Qt::RightArrow);layout->addWidget(advanced);for(int row=17;row<table_->rowCount();++row)table_->setRowHidden(row,true);connect(advanced,&QToolButton::toggled,this,[this,advanced](bool show){advanced->setArrowType(show?Qt::DownArrow:Qt::RightArrow);for(int row=17;row<table_->rowCount();++row)table_->setRowHidden(row,!show||(centralizedAssignments_&&assignmentField(block_.fields[row])));});}
     table_->verticalHeader()->setDefaultSectionSize(block_.key=="vvt.parameters"?26:30);layout->addWidget(table_,1);if(auto *advanced=findChild<QToolButton*>("vvtAdvanced")){layout->removeWidget(advanced);layout->addWidget(advanced);}if(block_.key=="ignition.firing")setupProfile();status_=new QLabel(tr("Offline editing. Connect and synchronize the ECU before writing."),this);status_->setObjectName("parameterStatus");status_->setWordWrap(true);layout->addWidget(status_);save_=new QPushButton(tr("Write to ECU"),this);save_->setObjectName("parameterSave");layout->addWidget(save_,0,Qt::AlignLeft);connect(save_,&QPushButton::clicked,this,[this]{save();});status_->hide();
     if(block_.key.endsWith(".outputs")){
-        auto *configure=new QPushButton(tr("Configure engine / cylinder assignments..."),this);
+        auto *configure=new QPushButton(tr("Open Inputs and outputs"),this);
         configure->setObjectName("configureEngineAssignments");
         configure->setToolTip(tr("Open the shared engine profile to assign injectors and ignition outputs. Changes require an explicit Write to ECU."));
         layout->insertWidget(layout->indexOf(status_),configure,0,Qt::AlignLeft);
@@ -125,21 +125,42 @@ void ParameterWidget::load(const QByteArray &h,const QByteArray &a,const QByteAr
 }
 void ParameterWidget::status(const QString &text,bool important){status_->setText(text);status_->setVisible(important);table_->setToolTip(text);}
 void ParameterWidget::setAvailable(bool available){if(available_==available)return;available_=available;refresh();}
+bool ParameterWidget::assignmentField(const ParameterField &field) const {
+    return block_.key.endsWith(".outputs")
+        || ((block_.key=="vtec.setup"||block_.key=="vvt.parameters")&&field.key=="output")
+        || (block_.key=="fuel.flex"&&field.key=="input")
+        || (block_.key=="inputs.pressure")
+        || field.key=="vssInput"||field.key=="cam2Input";
+}
+bool ParameterWidget::cylinderAssignmentVisible(int row) const {
+    if(base_.size()!=256||row<0||row>=quint8(base_[129]))return false;
+    if(block_.key=="coils.outputs"&&base_[128]==3)
+        for(int i=0;i<row;++i)if(base_[161+8*i]==base_[161+8*row])return false;
+    return true;
+}
+void ParameterWidget::centralizeAssignments(){
+    centralizedAssignments_=true;
+    if(assignments_){assignments_->setColumnHidden(1,true);assignments_->setColumnHidden(2,true);}
+    refresh();
+}
 void ParameterWidget::refresh(){
     if (!save_ || loading_) return;
+    if(centralizedAssignments_)
+        for(int i=0;i<block_.fields.size();++i)
+            if(assignmentField(block_.fields[i]))table_->setRowHidden(i,true);
     bool pending = false;
     if (edited_ && base_.size() == 256) {
         if (profile_) {
-            QString error;
-            const auto candidate = profile_->build(error);
-            pending = !candidate.isEmpty() && candidate.mid(128) != base_.mid(128);
+            EngineProfileDraft confirmed;
+            confirmed.load(profileHeader_,profileAux_);
+            pending = profile_->json() != confirmed.json();
         } else {
             const bool extension=(block_.page==6&&base_[0]==0)||(block_.key.startsWith("vvt.")&&base_[64]==0)||(block_.key=="inputs.pressure"&&base_[38]==0)||(pulseBlock(block_.key)&&base_[block_.key=="inputs.cam2"?57:82]==0)||(block_.key=="fuel.guard"&&base_[240]==0)||(block_.page==4&&base_[68]==0)||(block_.key=="fuel.corrections"&&base_.mid(103,25)==QByteArray(25,0));
             const auto baseline = block_.key.startsWith("vvt.") && base_[64] && base_[64] != 3
                 ? VvtCodec::advanced(base_) : base_;
             for (int i = 0; i < block_.fields.size(); ++i) {
                 const auto &field = block_.fields[i];
-                if (field.width && (!block_.key.endsWith(".outputs") || !table_->isRowHidden(i)) &&
+                if (field.width && (!block_.key.endsWith(".outputs") || cylinderAssignmentVisible(i)) &&
                     qAbs(value(i) - (extension ? field.initial : ParameterCatalog::value(baseline, field))) > 0.000001) {
                     pending = true;
                     break;
@@ -188,7 +209,7 @@ void ParameterWidget::save(){if(block_.page==6&&(profileConflict_||!(block_.key.
         QByteArray owned(256,0);for(int i=128;i<256;++i)owned[i]=char(255);writeRequested(1,header,owned);return;
     }
     if(block_.key=="coils.outputs"&&base_[128]==3){
-        for(int i=0;i<quint8(base_[129]);++i)if(!table_->isRowHidden(i)){const int port=int(value(i));desired[161+8*i]=char(port);for(int j=i+1;j<quint8(base_[129]);++j)if(base_[161+8*j]==base_[161+8*i])desired[161+8*j]=char(port);}
+        for(int i=0;i<quint8(base_[129]);++i)if(cylinderAssignmentVisible(i)){const int port=int(value(i));desired[161+8*i]=char(port);for(int j=i+1;j<quint8(base_[129]);++j)if(base_[161+8*j]==base_[161+8*i])desired[161+8*j]=char(port);}
         EngineProfileDraft checked;checked.load(desired,profileAux_);QString error;if(checked.build(error).isEmpty()){status(error);return;}writeRequested(1,desired,mask);return;
     }
     if(block_.page==6){
@@ -226,7 +247,7 @@ void ParameterWidget::defaults(){
     if(profile_){for(int i=0;i<profile_->count();++i)profile_->setOrder(i,i);profile_->inverted=false;
         // Reset only firing order/phase; preserve wiring, fuel, dwell and trigger geometry.
         syncProfile();edited_=true;return;}
-    loading_=true;for(int i=0;i<block_.fields.size();++i)setValue(i,block_.fields[i].initial);loading_=false;edited_=true;refresh();
+    loading_=true;for(int i=0;i<block_.fields.size();++i)if(!centralizedAssignments_||!assignmentField(block_.fields[i]))setValue(i,block_.fields[i].initial);loading_=false;edited_=true;refresh();
 }
 void ParameterWidget::file(bool writing){const auto path=writing?QFileDialog::getSaveFileName(this,tr("Save parameters"),{},tr("Tunuino parameters (*.tnparams)")):QFileDialog::getOpenFileName(this,tr("Open parameters"),{},tr("Tunuino parameters (*.tnparams)"));if(path.isEmpty())return;
     if(writing){QJsonObject values;for(int i=0;i<block_.fields.size();++i)values[block_.fields[i].key]=value(i);QJsonObject doc{{"format","tunuino-parameters-v1"},{"block",block_.key},{"values",values}};if(profile_)doc["engineProfile"]=profile_->json();QSaveFile file(path);const auto bytes=QJsonDocument(doc).toJson();if(!file.open(QIODevice::WriteOnly)||file.write(bytes)!=bytes.size()||!file.commit())QMessageBox::warning(this,tr("Parameters"),tr("Could not save parameters."));return;}
@@ -234,7 +255,7 @@ void ParameterWidget::file(bool writing){const auto path=writing?QFileDialog::ge
     for(const auto &f:block_.fields)valid&=values[f.key].isDouble()&&ParameterCatalog::put(sample,f,values[f.key].toDouble())&&(f.choices.isEmpty()||(values[f.key].toDouble()>=0&&values[f.key].toDouble()<f.choices.size()&&std::floor(values[f.key].toDouble())==values[f.key].toDouble()));if(!valid){QMessageBox::warning(this,tr("Parameters"),tr("File format, block or parameter values do not match this window."));return;}if(profile_){QString error;auto draft=*profile_;if(doc.contains("engineProfile")){if(!draft.import(doc["engineProfile"].toObject(),error)){QMessageBox::warning(this,tr("Engine profile"),error);return;}}
         else {draft.resize(values["cylinders"].toInt());for(int i=0;i<draft.count();++i)draft.setOrder(i,values[QString("order%1").arg(i)].toInt()-1);draft.inverted=values["invert"].toInt()!=0;}
         *profile_=draft;syncProfile();edited_=true;return;}
-    loading_=true;for(int i=0;i<block_.fields.size();++i)setValue(i,values[block_.fields[i].key].toDouble());loading_=false;edited_=true;refresh();
+    loading_=true;for(int i=0;i<block_.fields.size();++i)if(!centralizedAssignments_||!assignmentField(block_.fields[i]))setValue(i,values[block_.fields[i].key].toDouble());loading_=false;edited_=true;refresh();
 }
 QSize ParameterWidget::sizeHint()const{int rows=0;for(int i=0;i<table_->rowCount();++i)if(!table_->isRowHidden(i))++rows;return QSize(650,qBound(200,rows*30+86+(block_.key=="ignition.primary"?24:0),610));}
 bool ParameterWidget::eventFilter(QObject *object,QEvent *event){
@@ -247,8 +268,8 @@ bool ParameterWidget::eventFilter(QObject *object,QEvent *event){
 void ParameterWidget::setupProfile(){
     profile_.emplace();profile_->load({},{});
     auto *layout=static_cast<QVBoxLayout*>(this->layout());
-    auto *toggle=new QToolButton(this);toggle->setObjectName("engineProfileToggle");toggle->setText(tr("Engine profile / cylinder assignments"));toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);toggle->setArrowType(Qt::RightArrow);toggle->setCheckable(true);layout->addWidget(toggle,0,Qt::AlignLeft);auto *advancedAction=new QAction(tr("Cylinder assignments and timing"),table_);advancedAction->setCheckable(true);table_->addAction(advancedAction);connect(advancedAction,&QAction::toggled,toggle,&QToolButton::setChecked);connect(toggle,&QToolButton::toggled,advancedAction,&QAction::setChecked);
-    advanced_=new QGroupBox(tr("Engine profile and connector assignments"),this);advanced_->setObjectName("engineProfileAdvanced");auto *form=new QFormLayout(advanced_);
+    auto *toggle=new QToolButton(this);toggle->setObjectName("engineProfileToggle");toggle->setText(tr("Engine mode and timing"));toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);toggle->setArrowType(Qt::RightArrow);toggle->setCheckable(true);layout->addWidget(toggle,0,Qt::AlignLeft);auto *advancedAction=new QAction(tr("Cylinder timing"),table_);advancedAction->setCheckable(true);table_->addAction(advancedAction);connect(advancedAction,&QAction::toggled,toggle,&QToolButton::setChecked);connect(toggle,&QToolButton::toggled,advancedAction,&QAction::setChecked);
+    advanced_=new QGroupBox(tr("Engine mode and timing"),this);advanced_->setObjectName("engineProfileAdvanced");auto *form=new QFormLayout(advanced_);
     auto *note=new QLabel(tr("A cylinder-count change proposes evenly spaced firing angles. Verify the actual engine angles below. New cylinders have no outputs assigned. All editing is local until Write to ECU."),advanced_);note->setWordWrap(true);form->addRow(note);
     operation_=new QComboBox(advanced_);operation_->setObjectName("engineOperation");operation_->addItems({tr("Sequential / individual coils"),tr("Semi-sequential / wasted COP"),tr("Batch / wasted COP"),tr("Semi-sequential / shared coils"),tr("Batch / shared coils")});form->addRow(tr("Injection / ignition mode"),operation_);
     connect(operation_,&QComboBox::currentIndexChanged,this,[this](int index){if(!loading_){profile_->operation=index;edited_=true;syncProfile();}});
