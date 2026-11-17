@@ -3,6 +3,8 @@
 #include "ecu/MapWriteTransaction.h"
 #include "calibration/VvtMonitor.h"
 #include "protocol/Vvt2Codec.h"
+#include "protocol/EtbCodec.h"
+#include "dbw/EtbAutotune.h"
 #include "calibration/CamSignalWidget.h"
 #include <QApplication>
 #include <QQueue>
@@ -95,6 +97,32 @@ static void nativeDual(){
  process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
 }
 
+
+static void etbUi(){
+ ToolSnapshot source;source.identity=QByteArray(32,0);source.identity.replace(1,7,"TUNUINO");source.identity[8]=source.identity[9]=source.identity[10]=1;source.identity[12]=7;source.identity[14]=2;source.identity[17]=63;source.identity[18]=char(255);source.identity[19]=char(255);source.identity[20]=42;source.generation=4;
+ source.pages[0]=QByteArray(256,0);Codec::put(source.pages[0],0,2);source.pages[3]=QByteArray(256,0);source.pages[5]=source.pages[8]=QByteArray(256,0);source.pages[11]=EtbCodec::defaults();source.pages[11][49]=1;source.pages[11][129]=2;
+ MapPageValues grid;for(int i=0;i<16;++i){grid.rpm[i]=500+500*i;grid.load[i]=20+10*i;}QString error;for(int p:{2,3,5,7,8,10,11})source.pages[p-1]=MapPageCodec::encode(p,grid,error);CHECK(source.valid()&&EtbCodec::supported(source.identity));
+ EtbAutotune tuner(0);tuner.snapshot=[&]{return source;};tuner.ready=[] {return true;};int writes=0,applications=0,starts=0;bool owned=false;int phase=0;
+ tuner.busyChanged=[&](bool b){owned=b;};tuner.pidWriteEnabled=[] {return true;};tuner.pidPending=[] {return false;};tuner.writePid=[&]{++writes;};tuner.applyCandidate=[&](double p,double i,double d,QString&){CHECK(p==.7&&i==.2&&d==.04);++applications;return true;};
+ tuner.exchange=[&](const QByteArray &q,std::function<void(const QByteArray&)> callback){CHECK(q.startsWith("TUNUINO:X")&&quint8(q[10])==0);int op=quint8(q[9]);if(op==13){++starts;phase=1;callback(QByteArray(1,0));}else if(op==15){phase=3;callback(QByteArray(1,0));}else if(op==14){phase=4;callback(QByteArray(1,0));}else {CHECK(op==12);QByteArray p(64,0);p[1]=1;p[4]=1;Codec::put(p,10,source.generation);Codec::put(p,12,4000);Codec::put(p,14,4000);Codec::put(p,20,2100);Codec::put(p,22,2900);p[28]=char(phase);Codec::put(p,32,700);Codec::put(p,34,200);Codec::put(p,36,40);p[48]=p[49]=p[50]=1;p[51]=3;callback(p);}return true;};
+ tuner.show();QApplication::processEvents();tuner.start();CHECK(starts==1&&tuner.busy()&&owned&&writes==0&&applications==0);tuner.poll();CHECK(!tuner.busy()&&!owned&&writes==0&&applications==0);auto *apply=tuner.findChild<QPushButton*>("etbTuneApply");CHECK(apply&&apply->isEnabled());apply->click();CHECK(applications==1&&writes==0);
+ tuner.start();tuner.poll();CHECK(apply->isEnabled());++source.generation;apply->click();CHECK(applications==1&&writes==0);tuner.hide();
+}
+static void nativeEtb(){
+ const auto exe=qEnvironmentVariable("TUNUINO_FIRMWARE_HARNESS");if(exe.isEmpty())return;QProcess process;process.start(exe,{"--etb"});CHECK(process.waitForStarted(3000));
+ const auto exchange=[&](const QByteArray &q){const auto line=q.toHex()+"\n";CHECK(process.write(line)==line.size());CHECK(process.waitForBytesWritten(3000));while(!process.canReadLine())CHECK(process.waitForReadyRead(3000));return QByteArray::fromHex(process.readLine().trimmed());};
+ const auto id=exchange("TUNUINO?");CHECK(EtbCodec::supported(id));
+ const auto readAll=[&]{MapWriteTransaction::Pages pages;for(int p=1;p<=12;++p)for(int at=0;at<(p==1||p==4||p==6||p==9||p==12?256:576);at+=64)pages[p-1]+=exchange(read(p,at,64)).mid(1);return pages;};
+ auto base=readAll();CHECK(EtbCodec::format(base[11]));auto desired=EtbCodec::defaults();for(int i=0;i<6;++i)desired[1+i]=char(i==2?0:i+1);desired[49]=1;desired[129]=2;QString error;CHECK(EtbCodec::allowed(desired,base[0],base[3],error));
+ MapWriteTransaction transaction;QQueue<QByteArray> queue;bool complete=false,success=false;int snapshots=0;const auto generation=ServiceDataCodec::u32(exchange("TUNUINO:V"),8);
+ transaction.send=[&](const QByteArray &q,int){queue.enqueue(q);return true;};transaction.savePrevious=[&](const QByteArray &identity,quint32 gen,const MapWriteTransaction::Pages &p){CHECK(identity==id&&gen==generation&&p==base);++snapshots;return true;};transaction.completed=[&](bool ok,bool uncertain,const QString &message){if(!ok)std::cerr<<message.toStdString()<<std::endl;CHECK(!uncertain);complete=true;success=ok;};
+ CHECK(transaction.startParameters(12,desired,base[11],id,generation,QByteArray(256,char(255))));int limit=0;while(!complete&&++limit<3000){CHECK(!queue.isEmpty());transaction.receive(exchange(queue.dequeue()));}CHECK(success&&snapshots==1);const auto actual=readAll();for(int i=0;i<12;++i)CHECK(actual[i]==(i==11?desired:base[i]));
+ auto old=id;old[17]=char(quint8(old[17])&~32);MapWriteTransaction unsupported;bool sent=false;unsupported.send=[&](const QByteArray&,int){sent=true;return true;};CHECK(!unsupported.startParameters(12,desired,base[11],old,generation,QByteArray(256,char(255)))&&!sent);
+ auto conflict=desired;conflict[129]=1;CHECK(!EtbCodec::format(conflict));conflict=desired;conflict[2]=conflict[1];CHECK(!EtbCodec::format(conflict));
+ auto block=ParameterCatalog::blocks();const auto found=std::find_if(block.begin(),block.end(),[](const auto &b){return b.key=="etb.2.pid";});CHECK(found!=block.end());ParameterWidget pid(*found);pid.load(base[0],base[3],id,generation+1,desired);pid.setAvailable(true);auto state=pid.editorState();auto values=state["values"].toObject();values["kp"]=.85;state["values"]=values;CHECK(pid.restoreEditor(state,true,error));QByteArray written;pid.writeRequested=[&](int p,const QByteArray &v,const QByteArray &){CHECK(p==12);written=v;};pid.save();CHECK(written.size()==256&&Codec::u16(written,134)==850&&written.mid(48,80)==desired.mid(48,80));
+ process.closeWriteChannel();CHECK(process.waitForFinished(3000)&&process.exitCode()==0);
+}
+
 int main(int argc,char **argv){
     QApplication app(argc,argv);QString error;const auto prefix=VtecCodec::defaults();const auto page=VvtCodec::defaults(prefix);CHECK(VtecCodec::format(page)&&VvtCodec::extension(page)&&page.mid(1,27)==prefix.mid(1,27));
     auto invalid=page;Codec::put(invalid,90,5000);CHECK(!VtecCodec::format(invalid));invalid=page;invalid[255]=1;CHECK(!VvtCodec::extension(invalid));
@@ -109,7 +137,7 @@ int main(int argc,char **argv){
     auto conflict=written;Codec::put(conflict,84,9200);setup.load(h,a,id,3,conflict);written.clear();setup.save();CHECK(written.isEmpty());setup.findChild<QAction*>("primaryDiscard")->trigger();setup.save();CHECK(VvtCodec::u32(written,82)==9200);
     auto draft=setup.editorState();auto draftValues=draft["values"].toObject();draftValues["overrideDc"]=1;draftValues["overriddenDc"]=35;draftValues["overrideTarget"]=1;draftValues["overriddenTarget"]=10;CHECK(setup.restoreEditor(QJsonObject{{"values",draftValues}},true,error));setup.save();CHECK(written[125]==1&&written[128]==1&&Codec::u16(written,126)==3500&&Codec::u16(written,130)==1000);
     id[17]=0;setup.load(h,a,id,4,prefix);written.clear();setup.save();CHECK(written.isEmpty());
-    const QJsonObject oldBlocks{{"vvt.position",QJsonObject{{"values",QJsonObject{{"reference",12.34},{"maximum",45}}}}},{"vvt.actuator",QJsonObject{{"values",QJsonObject{{"kp",2.5},{"ki",1.0},{"enabled",1}}}}},{"vvt.activation",QJsonObject{{"values",QJsonObject{{"runtime",12345}}}}}};const auto migrated=ParameterCatalog::migrateVvt(oldBlocks);CHECK(migrated["vvt.pid"].toObject()["values"].toObject()["iMax"].toDouble()==100&&migrated["vvt.pid"].toObject()["values"].toObject()["deadband"].toDouble()==0);CHECK(migrated.size()==4&&migrated["vvt.parameters"].toObject()["values"].toObject()["runtime"].toDouble()==12.345&&migrated["vvt.pid"].toObject()["values"].toObject()["kp"].toDouble()==2.5&&migrated["vvt.parameters"].toObject()["values"].toObject()["reference"].toDouble()==12.34);
+    const QJsonObject oldBlocks{{"vvt.position",QJsonObject{{"values",QJsonObject{{"reference",12.34},{"maximum",45}}}}},{"vvt.actuator",QJsonObject{{"values",QJsonObject{{"kp",2.5},{"ki",1.0},{"enabled",1}}}}},{"vvt.activation",QJsonObject{{"values",QJsonObject{{"runtime",12345}}}}}};const auto migrated=ParameterCatalog::migrateVvt(oldBlocks);CHECK(migrated["vvt.pid"].toObject()["values"].toObject()["iMax"].toDouble()==100&&migrated["vvt.pid"].toObject()["values"].toObject()["deadband"].toDouble()==0);CHECK(migrated.size()==11&&migrated["vvt.parameters"].toObject()["values"].toObject()["runtime"].toDouble()==12.345&&migrated["vvt.pid"].toObject()["values"].toObject()["kp"].toDouble()==2.5&&migrated["vvt.parameters"].toObject()["values"].toObject()["reference"].toDouble()==12.34);
     if(argc>1){setup.resize(620,620);setup.show();app.processEvents();setup.grab().save(QString::fromLocal8Bit(argv[1]));}
-    native();nativeMap();nativeMap(true);nativeDual();std::cout<<"CAM parameters/PID layout, advanced codec, independent eight-page native writes, migration and conflicts passed.\n";
+    etbUi();native();nativeMap();nativeMap(true);nativeDual();nativeEtb();std::cout<<"CAM parameters/PID layout, advanced codec, independent eight-page native writes, migration and conflicts passed.\n";
 }

@@ -65,9 +65,9 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
         const auto preview=qEnvironmentVariable("TUNUINO_TRIGGER_BOOTSTRAP_PREVIEW");if(!preview.isEmpty()){wizard->resize(720,540);app.processEvents();wizard->grab().save(preview+"-review.png");scope->resize(720,480);scope->grab().save(preview+"-scope.png");}
         session->close();std::cout<<"Real MainWindow serial bootstrap without engine profile passed.\n";return 0;
     }
-    auto *sensorTree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(sensorTree);CHECK(sensorTree->topLevelItemCount()==7);
+    auto *sensorTree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(sensorTree);CHECK(sensorTree->topLevelItemCount()==8);
     QStringList roots;for(int i=0;i<sensorTree->topLevelItemCount();++i)roots<<sensorTree->topLevelItem(i)->text(0);
-    CHECK(roots==QStringList({"Inputs and outputs","Engine setup","Fueling","Ignition","VVT","Diagnostics","Logs"}));
+    CHECK(roots==QStringList({"Inputs and outputs","Engine setup","Fueling","Ignition","VVT","ETB","Diagnostics","Logs"}));
     for(QTreeWidgetItemIterator item(sensorTree);*item;++item) CHECK((*item)->flags() & Qt::ItemIsEnabled);
     const auto openSensor=[&](const QString &key){QTreeWidgetItemIterator sensorItem(sensorTree);while(*sensorItem){if((*sensorItem)->data(0,Qt::UserRole+1).toString()==key){sensorTree->itemClicked(*sensorItem,0);app.processEvents();return;}++sensorItem;}
         auto *central=dynamic_cast<tunuino::IoConfigurationWidget*>(window.findChild<QWidget*>("ioConfiguration"));
@@ -210,6 +210,16 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
         openSensor("vvt.cam2.pid");w=window.findChild<QMdiArea*>()->activeSubWindow();w->resize(620,390);app.processEvents();CHECK(w->grab().save(cam2Preview+"-pid.png"));
         openSensor("vvt.cam2.table");w=window.findChild<QMdiArea*>()->activeSubWindow();w->resize(900,540);app.processEvents();CHECK(w->grab().save(cam2Preview+"-table.png"));
         CHECK(window.grab().save(cam2Preview+"-workspace.png"));
+    }
+    for(int channel=1;channel<=2;++channel){const QString prefix=QString("etb.%1.").arg(channel);for(const auto &key:{"setup","sensors","pid","autotune"}){openSensor(prefix+key);CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle().startsWith(QString("ETB %1").arg(channel)));}
+        openSensor(prefix+"setup");auto *panel=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QMdiArea*>()->activeSubWindow()->widget());CHECK(panel&&panel->block().page==12);for(int row=0;row<panel->block().fields.size();++row)if(panel->block().fields[row].key=="bridge")CHECK(panel->findChild<QTableWidget*>("parameters")->isRowHidden(row));
+        openSensor(prefix+"sensors");panel=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QMdiArea*>()->activeSubWindow()->widget());CHECK(panel);for(int row=0;row<panel->block().fields.size();++row)if(panel->block().fields[row].key.startsWith("input"))CHECK(panel->findChild<QTableWidget*>("parameters")->isRowHidden(row));CHECK(panel->findChild<QAction*>("etbCaptureRest")&&panel->findChild<QAction*>("etbCaptureFull"));
+        openSensor(prefix+"pid");panel=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QMdiArea*>()->activeSubWindow()->widget());panel->findChild<QDoubleSpinBox*>("kp")->setValue(channel==1?.65:.85);
+    }
+    const auto etbProject=project->capture(error);CHECK(etbProject["parameters"].toObject()["etb.1.pid"].toObject()["values"].toObject()["kp"].toDouble()==.65);CHECK(etbProject["parameters"].toObject()["etb.2.pid"].toObject()["values"].toObject()["kp"].toDouble()==.85);CHECK(project->save(temp.path()+"/etb.tnproj",error)&&project->open(temp.path()+"/etb.tnproj",error)&&project->capture(error)==etbProject);
+    const auto etbPreview=qEnvironmentVariable("TUNUINO_ETB_UI_PREVIEW");if(!etbPreview.isEmpty()){
+        for(const auto &key:{"setup","sensors","pid","autotune"}){openSensor(QString("etb.1.")+key);auto *w=window.findChild<QMdiArea*>()->activeSubWindow();w->resize(QString(key)=="autotune"?850:650,QString(key)=="autotune"?500:QString(key)=="setup"?590:420);app.processEvents();CHECK(w->grab().save(etbPreview+"-"+key+".png"));}
+        for(int i=0;i<sensorTree->topLevelItemCount();++i){auto *root=sensorTree->topLevelItem(i);root->setExpanded(root->text(0)=="ETB");if(root->text(0)=="ETB")for(int j=0;j<root->childCount();++j)root->child(j)->setExpanded(true);}app.processEvents();CHECK(window.grab().save(etbPreview+"-workspace.png"));
     }
     if(!qEnvironmentVariable("TUNUINO_CAM_REFERENCE_PREVIEW").isEmpty()){openSensor("vvt.parameters");auto *w=window.findChild<QMdiArea*>()->activeSubWindow();w->resize(620,620);app.processEvents();w->grab().save(qEnvironmentVariable("TUNUINO_CAM_REFERENCE_PREVIEW")+"-parameters.png");openSensor("vvt.pid");w=window.findChild<QMdiArea*>()->activeSubWindow();w->resize(620,390);app.processEvents();w->grab().save(qEnvironmentVariable("TUNUINO_CAM_REFERENCE_PREVIEW")+"-pid.png");openSensor("vvt.table");vvtTargetWindow->resize(1000,540);app.processEvents();vvtTargetWindow->grab().save(qEnvironmentVariable("TUNUINO_CAM_REFERENCE_PREVIEW")+"-table.png");}
     const auto beforeVvt=project->capture(error);auto legacyVvt=beforeVvt;auto legacyVvtParams=legacyVvt["parameters"].toObject();for(const auto &key:legacyVvtParams.keys())if(key.startsWith("vvt."))legacyVvtParams.remove(key);legacyVvt["parameters"]=legacyVvtParams;CHECK(project->apply(legacyVvt,error));CHECK(project->capture(error)["pages"]==beforeVvt["pages"]);CHECK(project->capture(error)["parameters"].toObject()["vvt.parameters"].toObject()["values"].toObject()["enabled"]==0);CHECK(project->apply(beforeVvt,error));

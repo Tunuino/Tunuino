@@ -1,6 +1,7 @@
 #include "MapWriteTransaction.h"
 #include "EcuPowerState.h"
 #include "../protocol/Vvt2Codec.h"
+#include "../protocol/EtbCodec.h"
 #include "../protocol/VtecCodec.h"
 #include "../protocol/VssCodec.h"
 #include "../protocol/Cam2Codec.h"
@@ -10,7 +11,7 @@
 namespace tunuino {
 namespace {
 constexpr int Chunk=64;
-int pageSize(int page){return page==1 || page==4 || page==6 || page==9?256:576;}
+int pageSize(int page){return page==1 || page==4 || page==6 || page==9 || page==12?256:576;}
 QByteArray outputQuery(){return QByteArray("TUNUINO:X",9)+QByteArray(1,0);}
 QByteArray runtimeQuery(){QByteArray q(5,0);q[0]='O';q[4]=100;return q;}
 quint32 nextGeneration(quint32 generation){return generation==0xffffffffu?1:generation+1;}
@@ -46,7 +47,8 @@ bool MapWriteTransaction::startSensor(SensorKind kind,const QByteArray &desired,
 }
 bool MapWriteTransaction::startParameters(int page,const QByteArray &desired,const QByteArray &base,
     const QByteArray &identity,quint32 generation,const QByteArray &mask) {
-    if(busy()||(page!=1&&page!=4&&page!=6&&page!=9)||desired.size()!=256||base.size()!=256||mask.size()!=256)return false;
+    if(busy()||(page!=1&&page!=4&&page!=6&&page!=9&&page!=12)||desired.size()!=256||base.size()!=256||mask.size()!=256)return false;
+    if(page==12&&(!EtbCodec::supported(identity)||!EtbCodec::format(desired)||!EtbCodec::format(base)))return false;
     if(page==9&&(!Vvt2Codec::supported(identity)||!Vvt2Codec::format(desired)||!Vvt2Codec::format(base)))return false;
     if(page==6&&(!VtecCodec::supported(identity)||!VtecCodec::format(desired)||!VtecCodec::format(base)))return false;
     if(page==6&&desired[0]==2&&!VvtCodec::supported(identity))return false;
@@ -70,7 +72,7 @@ bool MapWriteTransaction::begin(int page,const QByteArray &desired,const QByteAr
     const QByteArray &identity,quint32 generation) {
     if(busy() || !send || !savePrevious || !completed || generation==0
         || !EcuPowerState::supportedIdentity(identity) || !(quint8(identity[19])&8))return false;
-    pageCount_=Vvt2Codec::supported(identity)?11:VvtCodec::advancedSupported(identity)?8:VvtCodec::tableSupported(identity)?7:VtecCodec::supported(identity)?6:MapPageCodec::afrSupported(identity)?5:4;
+    pageCount_=EtbCodec::supported(identity)?12:Vvt2Codec::supported(identity)?11:VvtCodec::advancedSupported(identity)?8:VvtCodec::tableSupported(identity)?7:VtecCodec::supported(identity)?6:MapPageCodec::afrSupported(identity)?5:4;
     page_=page;desired_=desired;baseMap_=baseMap;identity_=identity;generation_=resultGeneration_=generation;
     burnRequested_=writeRequested_=identityMatched_=false;base_={};expected_={};read_={};
     issue(Phase::Identity,QByteArray("TUNUINO?"));return true;
@@ -148,12 +150,13 @@ void MapWriteTransaction::receive(const QByteArray &b) {
                 || !MapPageCodec::valid(2,base_[1]) || !MapPageCodec::valid(3,base_[2]) || (pageCount_>=5&&!MapPageCodec::valid(5,base_[4])) || (pageCount_>=6&&!VtecCodec::format(base_[5])) || (pageCount_>=7&&!MapPageCodec::valid(7,base_[6])) || (pageCount_>=8&&!MapPageCodec::valid(8,base_[7]))){reject();return;}
             if(page_==6){QString error;if(!VtecCodec::allowed(desired_,base_[0],base_[3],error)||!VvtCodec::allowed(desired_,base_[0],base_[3],error)){fail(error);return;}}
             if(pageCount_>=7){QString error;const auto control=page_==6?desired_:base_[5];const auto h=page_==1?desired_:base_[0];const int targetPage=control[123]==2?8:7;const auto table=page_==targetPage?desired_:base_[targetPage-1];if(!VvtCodec::tableAllowed(control,h,table,error)){fail(error);return;}}
-            if(pageCount_==11){
+            if(pageCount_>=11){
                 QString error;const auto second=page_==9?desired_:base_[8];const auto first=page_==6?desired_:base_[5];const auto header=page_==1?desired_:base_[0];const auto auxiliary=page_==4?desired_:base_[3];
                 if(!Vvt2Codec::format(base_[8])||!MapPageCodec::valid(10,base_[9])||!MapPageCodec::valid(11,base_[10])){reject();return;}
                 const int targetPage=second[123]==2?11:10;
                 if(!Vvt2Codec::allowed(second,header,auxiliary,first,error)||!VvtCodec::tableAllowed(second,header,page_==targetPage?desired_:base_[targetPage-1],error)){fail(error);return;}
             }
+            if(pageCount_==12){QString error;if(!EtbCodec::format(base_[11])||!EtbCodec::allowed(page_==12?desired_:base_[11],page_==1?desired_:base_[0],page_==4?desired_:base_[3],error)){fail(error);return;}}
             if(sensor_>=0){QString error;
                 if(!SensorCalibrationCodec::permitted(SensorKind(sensor_),baseMap_,desired_,base_[0],base_[3],error)){fail(error);return;}}
             issue(Phase::ConfirmBase,QByteArray("TUNUINO:V"));

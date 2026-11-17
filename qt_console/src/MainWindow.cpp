@@ -5,6 +5,7 @@
 #include "ui/GeneralOptions.h"
 #include "calibration/SensitivityCurve.h"
 #include "dbw/DbwWidget.h"
+#include "dbw/EtbAutotune.h"
 #include "calibration/VtecMonitor.h"
 #include "calibration/VvtMonitor.h"
 #include <QToolBar>
@@ -538,6 +539,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     parameterItem(vvtCategory,tr("CAM 2 PID"),"vvt.cam2.pid");
     parameterItem(vvtCategory,tr("CAM 2 target 1"),"vvt.cam2.table");
     parameterItem(vvtCategory,tr("CAM 2 target 2"),"vvt.cam2.table2");
+
+    auto *etbCategory=addCategory(tr("ETB"),{});
+    parameterItem(etbCategory,tr("Accelerator pedal"),"etb.pedal");
+    for(int channel=1;channel<=2;++channel){auto *child=new QTreeWidgetItem(etbCategory,QStringList(tr("ETB %1").arg(channel)));const QString prefix=QString("etb.%1.").arg(channel);parameterItem(child,tr("Parameters"),prefix+"setup");parameterItem(child,tr("TPS calibration"),prefix+"sensors");parameterItem(child,tr("PID"),prefix+"pid");parameterItem(child,tr("Autotune"),prefix+"autotune");}
 
     auto *diagnosticsCategory=addCategory(tr("Diagnostics"),{
         {tr("Trigger Scope"),11},{tr("Live gauges"),13},{tr("Engine Status"),9}});
@@ -2698,6 +2703,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         window->resize(panel->sizeHint()+QSize(12,30));
         (*parameterWindows)[block.key]=window;
     }
+    auto *etbTune1=new tunuino::EtbAutotune(0),*etbTune2=new tunuino::EtbAutotune(1);
+    for(auto *tune:{etbTune1,etbTune2}){const int channel=tune==etbTune1?1:2;auto *window=toolWindow(tune,tr("ETB %1 - PID Autotune").arg(channel));window->resize(tune->sizeHint()+QSize(12,30));(*parameterWindows)[QString("etb.%1.autotune").arg(channel)]=window;}
     for(auto *panel:*parameterPanels)panel->centralizeAssignments();
     for(auto *panel:*parameterPanels)if(panel->block().key.endsWith(".outputs")){
         panel->configureEngineAssignments=[=]{
@@ -2722,6 +2729,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     navigationTree->insertTopLevelItem(0, ioItem);
     const int avContacts[] = {13,24,14,25,15,26,16,27,17,28,18};
     const int atContacts[] = {19,30,20,31};
+
     for (auto *sensor : *sensorPanels) {
         const auto name = tunuino::SensorCalibrationCodec::name(sensor->kind());
         const bool temperature = tunuino::SensorCalibrationCodec::temperature(sensor->kind());
@@ -2738,7 +2746,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             },
             [] { return true; },
             [=] { ioConfiguration->openConfiguration("sensor:" + name); },
-            sensor->findChild<QPushButton*>("sensorSave")});
+            sensor->findChild<QPushButton*>("sensorSave"),[sensor,name]{return sensor->kind()==tunuino::SensorKind::Tps?tr("TPS / ETB 1 main"):name;}});
     }
     for (auto *parameters : *parameterPanels) {
         const auto key=parameters->block().key;
@@ -2765,6 +2773,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 parameters->findChild<QPushButton*>("parameterSave")});
         }
     }
+    for(auto *panel:*parameterPanels)if(panel->block().page==12){for(const auto &field:panel->block().fields){
+        const bool bridge=field.key=="bridge",input=field.key.startsWith("input");if(!bridge&&!input)continue;
+        const int index=input?field.key.mid(5).toInt():-1;QStringList choices;
+        if(bridge)choices=field.choices;else{choices<<tr("Disabled");for(int i=0;i<11;++i)choices<<QString("AV%1 — J103 / %2").arg(i+1).arg(avContacts[i]);}
+        const QStringList roles{tr("Accelerator pedal main"),tr("Accelerator pedal check"),tr("ETB 1 main"),tr("ETB 1 check"),tr("ETB 2 main"),tr("ETB 2 check")};
+        const QString name=bridge?(panel->block().key=="etb.1.setup"?tr("ETB 1 motor"):tr("ETB 2 motor")):roles.value(index);
+        ioConfiguration->add({name,bridge?"HBRIDGE":"AV",choices,
+            [panel,field]{return panel->editorState()["values"].toObject()[field.key].toInt();},
+            [panel,field](int selected,QString &error){auto state=panel->editorState();auto values=state["values"].toObject();values[field.key]=selected;state["values"]=values;return panel->restoreEditor(state,true,error);},
+            []{return true;},
+            [=]{(*parameterNavigation)(panel->block().key);},panel->findChild<QPushButton*>("parameterSave")});
+    }}
     for(auto *profile:*parameterPanels)if(profile->block().key=="ignition.firing"){
         const auto partner=[](const QJsonObject &engine,int row){
             if(engine["operation"].toInt()<3)return -1;
@@ -2928,7 +2948,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto ecuGeneration = QSharedPointer<quint32>::create(0);
     struct MapBase { QByteArray bytes, identity; quint32 generation=0; };
     auto mapBases = QSharedPointer<std::array<MapBase,7>>::create();
-    struct SensorBase { QByteArray header,aux,identity,controls,controls2;quint32 generation=0; };
+    struct SensorBase { QByteArray header,aux,identity,controls,controls2,etb;quint32 generation=0; };
     auto sensorBase=QSharedPointer<SensorBase>::create();
     auto *mapProject=new tunuino::MapProject(this);
     auto projectLoaded=QSharedPointer<bool>::create(false);
@@ -3057,7 +3077,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto transfer = QSharedPointer<MapTransfer>::create();
     auto autoSync = QSharedPointer<bool>::create(false);
     auto sendChunk = [session, transfer]() -> bool {
-        const int total = (transfer->page == 1 || transfer->page == 4 || transfer->page == 6 || transfer->page == 9) ? 256 : 576;
+        const int total = (transfer->page == 1 || transfer->page == 4 || transfer->page == 6 || transfer->page == 9 || transfer->page == 12) ? 256 : 576;
         if (!transfer->page || transfer->offset >= total) return false;
         const int count = qMin(64, total - transfer->offset);
         QByteArray command(7, char(0));
@@ -3116,6 +3136,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         auto pages=*projectPages;if(pages.isEmpty())pages=tunuino::MapProject::defaultPages();
         const auto live=tools->snapshot?tools->snapshot():tunuino::ToolSnapshot{};
         if(!*projectLoaded&&live.valid()){const QStringList names{"header","fuel","ignition","aux"};for(int i=0;i<4;++i)pages[names[i]]=QString::fromLatin1(live.pages[i].toHex());if(!live.pages[4].isEmpty())pages["afr"]=QString::fromLatin1(live.pages[4].toHex());if(!live.pages[5].isEmpty())pages["controls"]=QString::fromLatin1(live.pages[5].toHex());if(!live.pages[6].isEmpty())pages["vvt"]=QString::fromLatin1(live.pages[6].toHex());if(!live.pages[7].isEmpty())pages["vvt2"]=QString::fromLatin1(live.pages[7].toHex());if(!live.pages[8].isEmpty())for(int i=8;i<11;++i)pages[QStringList{"cam2Controls","cam2Target1","cam2Target2"}[i-8]]=QString::fromLatin1(live.pages[i].toHex());}
+        if(!*projectLoaded&&live.valid()&&!live.pages[11].isEmpty())pages["etb"]=QString::fromLatin1(live.pages[11].toHex());
         QJsonObject tables,parameters,sensors;
         const QList<QTableWidget*> grids{maps,ignitionMap,afrMap,vvtMap,camSecondMap,camTwoMap,camTwoSecondMap},rpms{fuelRpmValues,ignitionRpmValues,afrRpmValues,vvtRpmValues,camSecondRpmValues,camTwoRpmValues,camTwoSecondRpmValues};const QStringList names{"fuel","ignition","afr","vvt","vvt2","cam2Target1","cam2Target2"};
         for(int i=0;i<7;++i){const auto state=tunuino::MapProject::tableState(grids[i],rpms[i]);if(!tunuino::MapProject::tableState(grids[i],rpms[i],state,(i==1||i>=3)?-90:0,i==0?300:(i==1||i>=3)?90:25,false,error))return QJsonObject{};tables[names[i]]=state;}
@@ -3161,7 +3182,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const auto header=live.valid()?live.pages[0]:QByteArray::fromHex((*projectPages)["header"].toString().toLatin1());
         const auto aux=live.valid()?live.pages[3]:QByteArray::fromHex((*projectPages)["aux"].toString().toLatin1());
         QByteArray identity=live.valid()?live.identity:QByteArray(32,0);if(!live.valid())identity[19]=char(255);const quint32 generation=live.valid()?live.generation:1;
-        for(auto *panel:*parameterPanels){panel->keepProjectEdits(false);panel->load(header,aux,identity,generation,panel->block().page==9?(live.valid()&&!live.pages[8].isEmpty()?live.pages[8]:document["pages"].toObject().contains("cam2Controls")?QByteArray::fromHex(document["pages"].toObject()["cam2Controls"].toString().toLatin1()):QByteArray(256,0)):(live.valid()?live.pages[5]:document["pages"].toObject().contains("controls")?QByteArray::fromHex(document["pages"].toObject()["controls"].toString().toLatin1()):QByteArray(256,0)));panel->restoreEditor(parameters[panel->block().key].toObject(),true,error);panel->keepProjectEdits(true);if(!live.valid())panel->setAvailable(false);}
+        for(auto *panel:*parameterPanels){panel->keepProjectEdits(false);panel->load(header,aux,identity,generation,panel->block().page==12?(live.valid()&&!live.pages[11].isEmpty()?live.pages[11]:document["pages"].toObject().contains("etb")?QByteArray::fromHex(document["pages"].toObject()["etb"].toString().toLatin1()):QByteArray(256,0)):panel->block().page==9?(live.valid()&&!live.pages[8].isEmpty()?live.pages[8]:document["pages"].toObject().contains("cam2Controls")?QByteArray::fromHex(document["pages"].toObject()["cam2Controls"].toString().toLatin1()):QByteArray(256,0)):(live.valid()?live.pages[5]:document["pages"].toObject().contains("controls")?QByteArray::fromHex(document["pages"].toObject()["controls"].toString().toLatin1()):QByteArray(256,0)));panel->restoreEditor(parameters[panel->block().key].toObject(),true,error);panel->keepProjectEdits(true);if(!live.valid())panel->setAvailable(false);}
         for(auto *panel:*sensorPanels){panel->keepProjectEdits(false);panel->load(header,aux,identity,generation);panel->restoreEditor(sensors[tunuino::SensorCalibrationCodec::name(panel->kind())].toObject(),true,error);panel->keepProjectEdits(true);if(!live.valid())panel->setAvailable(false);}
         triggerWizard->keepProjectEdits(false);if(live.valid())triggerWizard->load(header,aux,identity,generation);else triggerWizard->loadOffline(header,aux);triggerWizard->restoreEditor(document["trigger"].toObject(),true,error);triggerWizard->keepProjectEdits(true);if(!live.valid())triggerWizard->setAvailable(false);
         for(int i=0;i<7;++i)tunuino::MapProject::tableState(grids[i],rpms[i],tables[names[i]].toObject(),(i==1||i>=3)?-90:0,i==0?300:(i==1||i>=3)?90:25,true,error);
@@ -3259,7 +3280,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(!*ecuOnline||!*ecuClean||!*identityVerified||!session->isOpen()||*readBusy||*validationPending||writer->busy()||*writePending)return result;
         if(sensorBase->identity!=*ecuIdentity||sensorBase->generation!=*ecuGeneration)return result;
         for(int i=0;i<(tunuino::Vvt2Codec::supported(*ecuIdentity)?7:tunuino::VvtCodec::advancedSupported(*ecuIdentity)?5:tunuino::VvtCodec::tableSupported(*ecuIdentity)?4:tunuino::MapPageCodec::afrSupported(*ecuIdentity)?3:2);++i){const auto &base=(*mapBases)[i];if(base.identity!=*ecuIdentity||base.generation!=*ecuGeneration)return result;}
-        result.identity=*ecuIdentity;result.generation=*ecuGeneration;result.pages={sensorBase->header,(*mapBases)[0].bytes,(*mapBases)[1].bytes,sensorBase->aux,tunuino::MapPageCodec::afrSupported(*ecuIdentity)?(*mapBases)[2].bytes:QByteArray{},tunuino::VtecCodec::supported(*ecuIdentity)?sensorBase->controls:QByteArray{},tunuino::VvtCodec::tableSupported(*ecuIdentity)?(*mapBases)[3].bytes:QByteArray{},tunuino::VvtCodec::advancedSupported(*ecuIdentity)?(*mapBases)[4].bytes:QByteArray{},tunuino::Vvt2Codec::supported(*ecuIdentity)?sensorBase->controls2:QByteArray{},tunuino::Vvt2Codec::supported(*ecuIdentity)?(*mapBases)[5].bytes:QByteArray{},tunuino::Vvt2Codec::supported(*ecuIdentity)?(*mapBases)[6].bytes:QByteArray{}};return result;
+        result.identity=*ecuIdentity;result.generation=*ecuGeneration;result.pages={sensorBase->header,(*mapBases)[0].bytes,(*mapBases)[1].bytes,sensorBase->aux,tunuino::MapPageCodec::afrSupported(*ecuIdentity)?(*mapBases)[2].bytes:QByteArray{},tunuino::VtecCodec::supported(*ecuIdentity)?sensorBase->controls:QByteArray{},tunuino::VvtCodec::tableSupported(*ecuIdentity)?(*mapBases)[3].bytes:QByteArray{},tunuino::VvtCodec::advancedSupported(*ecuIdentity)?(*mapBases)[4].bytes:QByteArray{},tunuino::Vvt2Codec::supported(*ecuIdentity)?sensorBase->controls2:QByteArray{},tunuino::Vvt2Codec::supported(*ecuIdentity)?(*mapBases)[5].bytes:QByteArray{},tunuino::Vvt2Codec::supported(*ecuIdentity)?(*mapBases)[6].bytes:QByteArray{},tunuino::EtbCodec::supported(*ecuIdentity)?sensorBase->etb:QByteArray{}};return result;
     };
     const auto changeToolBusy=[=](bool busy){*toolBusy=busy;setProperty("ecuToolBusy",busy);updateWriteAvailability();};
     serviceTool->busyChanged=changeToolBusy;
@@ -3282,6 +3303,26 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(!session->exchange(request,timeout)){*toolReply={};return false;}
         QTimer::singleShot(timeout+300,this,[=]{if(*toolReply&&*toolLease==lease){auto callback=std::move(*toolReply);*toolReply={};callback({});}});return true;
     };
+    for(auto *tune:{etbTune1,etbTune2}){
+        tune->configurationPending=[=]{for(auto *panel:*parameterPanels)if(panel->block().page==12&&panel->findChild<QPushButton*>("parameterSave")->property("ecuWritePending").toBool())return true;for(auto *panel:*sensorPanels)if(panel->kind()==tunuino::SensorKind::Tps&&panel->findChild<QPushButton*>("sensorSave")->property("ecuWritePending").toBool())return true;return false;};
+        tune->exchange=toolExchange;tune->snapshot=tools->snapshot;tune->busyChanged=changeToolBusy;tune->ready=[=]{return !*toolReply&&(!*toolBusy||tune->busy());};
+        const QString key=tune==etbTune1?"etb.1.pid":"etb.2.pid";
+        for(auto *panel:*parameterPanels)if(panel->block().key==key){
+            tune->applyCandidate=[panel](double kp,double ki,double kd,QString &error){auto state=panel->editorState();auto values=state["values"].toObject();values["kp"]=kp;values["ki"]=ki;values["kd"]=kd;state["values"]=values;const bool okay=panel->restoreEditor(state,true,error);if(okay)panel->keepProjectEdits(true);return okay;};
+            tune->writePid=[panel]{panel->save();};tune->pidWriteEnabled=[panel]{return panel->findChild<QPushButton*>("parameterSave")->isEnabled();};tune->pidPending=[panel]{return panel->findChild<QPushButton*>("parameterSave")->property("ecuWritePending").toBool();};
+        }
+    }
+    for(auto *panel:*parameterPanels)if(panel->block().page==12&&(panel->block().key=="etb.pedal"||panel->block().key.endsWith(".sensors"))){
+        panel->captureEtbCalibration=[=](bool full){
+            const auto base=tools->snapshot();if(!base.valid()||!tunuino::EtbCodec::supported(base.identity)||*toolBusy){statusBar()->showMessage(tr("Connect a supporting ECU and stop other ECU tools before capturing ETB signals."),10000);return;}
+            const auto editor=panel->editorState();for(const auto &field:panel->block().fields)if(field.key.startsWith("input")&&editor["values"].toObject()[field.key].toInt()!=quint8(base.pages[11][field.offset])){statusBar()->showMessage(tr("Write the central input assignment before capturing its voltage."),15000);return;}
+            const bool pedal=panel->block().key=="etb.pedal";const int channel=panel->block().key=="etb.2.sensors"?1:0;QElapsedTimer requested;requested.start();
+            toolExchange(QByteArray("TUNUINO:X",9)+char(12)+char(channel),[=](const QByteArray &reply){
+                const auto current=tools->snapshot();if(current.identity!=base.identity||current.generation!=base.generation||panel->editorState()!=editor||requested.elapsed()>1000||!tunuino::EtbCodec::reply(reply,channel,base.generation)||!reply[49]||!reply[50]){statusBar()->showMessage(tr("Capture requires current raw ADC data, stopped engine and all outputs disarmed."),15000);return;}
+                const int offset=pedal?24:20;auto state=editor;auto values=state["values"].toObject();for(int i=0;i<2;++i){const int voltage=tunuino::SensorCalibrationCodec::u16(reply,offset+2*i);if(voltage<125||voltage>4750){statusBar()->showMessage(tr("Signal is too close to ground or supply. Calibration preserved."),15000);return;}const int index=pedal?i:2+2*channel+i;values[QString(full?"full%1":"rest%1").arg(index)]=voltage/1000.;}state["values"]=values;QString error;if(panel->restoreEditor(state,true,error))panel->keepProjectEdits(true);else statusBar()->showMessage(error,15000);
+            });
+        };
+    }
     cam1PulseMonitor->exchange=toolExchange;cam1PulseMonitor->snapshot=triggerSnapshot;cam1PulseMonitor->ready=[=]{return !*toolBusy&&!*toolReply;};
     for(auto *panel:{cam1Signal,cam2Signal}){panel->exchange=toolExchange;panel->snapshot=triggerSnapshot;panel->ready=[=]{return !*toolBusy&&!*toolReply;};}
     secondVvtMonitor->exchange=toolExchange;secondVvtMonitor->snapshot=tools->snapshot;secondVvtMonitor->ready=[=]{return !*toolBusy&&!*toolReply;};
@@ -3450,7 +3491,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const auto base=*sensorBase;if(base.identity!=*ecuIdentity||base.generation!=*ecuGeneration)return false;
         if(QMessageBox::question(this,tr("Write parameters to ECU"),tr("Save %1? Engine must be stopped and outputs disarmed. Only this block is written; other window edits are separate.").arg(title),QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel)!=QMessageBox::Yes)return false;
         if(!*ecuOnline||!*identityVerified||!session->isOpen()||transfer->page||*ecuIdentity!=base.identity||*ecuGeneration!=base.generation)return false;
-        pendingWrite->sensor=-2;*activeSensorWrite=-1;*activeParameterFinished=std::move(done);pendingWrite->page=page;pendingWrite->desired=desired;pendingWrite->mask=mask;pendingWrite->base=page==1?base.header:page==6?base.controls:page==9?base.controls2:base.aux;pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
+        pendingWrite->sensor=-2;*activeSensorWrite=-1;*activeParameterFinished=std::move(done);pendingWrite->page=page;pendingWrite->desired=desired;pendingWrite->mask=mask;pendingWrite->base=page==1?base.header:page==6?base.controls:page==9?base.controls2:page==12?base.etb:base.aux;pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
         *writePending=true;setProperty("mapWriteBusy",true);writeWait->start();liveTimer->stop();validationAction->setEnabled(false);freezeMapEditing(true);updateWriteAvailability();writeLaunch->start();return true;
     };
     for(auto *panel:*parameterPanels)panel->writeRequested=[=](int page,const QByteArray &desired,const QByteArray &mask){queueParameters(panel->block().title,page,desired,mask,[panel](bool success,const QString&){if(success)panel->saved();});};
@@ -3708,7 +3749,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             return;
         }
         if (transfer->page) {
-            const int total = (transfer->page == 1 || transfer->page == 4 || transfer->page == 6 || transfer->page == 9) ? 256 : 576;
+            const int total = (transfer->page == 1 || transfer->page == 4 || transfer->page == 6 || transfer->page == 9 || transfer->page == 12) ? 256 : 576;
             const int count = qMin(64, total - transfer->offset);
             if (data.size() != count + 1 || quint8(data[0]) != 0) {
                 abortTransfer(tr("Invalid map response; table not updated"));
@@ -3730,7 +3771,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             };
             if (transfer->page == 1) {
                 const bool schemaValid=u16(0)==2;
-                if(schemaValid){sensorBase->header=transfer->bytes;sensorBase->controls.clear();sensorBase->controls2.clear();}
+                if(schemaValid){sensorBase->header=transfer->bytes;sensorBase->controls.clear();sensorBase->controls2.clear();sensorBase->etb.clear();}
                 if(schemaValid&&*autoSync){transfer->page=0;transfer->offset=0;transfer->bytes.clear();QTimer::singleShot(0,this,[=]{startTransfer(4);});}
                 else abortTransfer(schemaValid?tr("Configuration page read"):tr("Unsupported ECU calibration schema"));
                 return;
@@ -3738,7 +3779,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if(transfer->page==4){
                 sensorBase->aux=transfer->bytes;sensorBase->identity=*ecuIdentity;sensorBase->generation=*ecuGeneration;
                 if(!*projectLoaded&&sensorBase->header.size()==256){*projectPages=QJsonObject{{"header",QString::fromLatin1(sensorBase->header.toHex())},{"fuel",QString::fromLatin1((*mapBases)[0].bytes.toHex())},{"ignition",QString::fromLatin1((*mapBases)[1].bytes.toHex())},{"aux",QString::fromLatin1(sensorBase->aux.toHex())}};}
-                if(sensorBase->header.size()==256){for(auto *panel:*inputPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*sensorPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*parameterPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration,panel->block().page==9?sensorBase->controls2:sensorBase->controls);triggerWizard->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);}
+                if(sensorBase->header.size()==256){for(auto *panel:*inputPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*sensorPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);for(auto *panel:*parameterPanels)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration,panel->block().page==12?sensorBase->etb:panel->block().page==9?sensorBase->controls2:sensorBase->controls);triggerWizard->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration);}
                 if(*autoSync){transfer->page=0;transfer->bytes.clear();transfer->offset=0;QTimer::singleShot(0,this,[=]{startTransfer(2);});return;}
                 abortTransfer(tr("ECU synchronized: Fuel, Ignition and sensor calibrations."));return;
             }
@@ -3752,7 +3793,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             if(transfer->page==6){
                 if(!tunuino::VtecCodec::format(transfer->bytes)){sensorBase->controls.clear();abortTransfer(tr("Invalid VTEC page; editor preserved."));return;}
                 sensorBase->controls=transfer->bytes;if(!*projectLoaded)(*projectPages)["controls"]=QString::fromLatin1(transfer->bytes.toHex());
-                for(auto *panel:*parameterPanels)if(panel->block().page==6)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration,panel->block().page==9?sensorBase->controls2:sensorBase->controls);
+                for(auto *panel:*parameterPanels)if(panel->block().page==6)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration,panel->block().page==12?sensorBase->etb:panel->block().page==9?sensorBase->controls2:sensorBase->controls);
                 if(tunuino::VvtCodec::tableSupported(*ecuIdentity)){transfer->page=0;transfer->bytes.clear();transfer->offset=0;QTimer::singleShot(0,this,[=]{startTransfer(7);});return;}
                 abortTransfer(tr("ECU synchronized including AFR Target and VTEC configuration."));return;
             }
@@ -3780,7 +3821,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 (*mapBases)[page==10?5:6]={bytes,*ecuIdentity,*ecuGeneration};
                 if(!*projectLoaded){(*projectPages)[page==10?"cam2Target1":"cam2Target2"]=QString::fromLatin1(bytes.toHex());QString error;tunuino::MapProject::tableState(page==10?camTwoMap:camTwoSecondMap,page==10?camTwoRpmValues:camTwoSecondRpmValues,tunuino::MapProject::vvtTableState(bytes),-90,90,true,error);(page==10?camTwoSurface:camTwoSecondSurface)->update();}
                 if(page==10){transfer->page=0;transfer->bytes.clear();transfer->offset=0;QTimer::singleShot(0,this,[=]{startTransfer(11);});return;}
+                if(tunuino::EtbCodec::supported(*ecuIdentity)){transfer->page=0;transfer->bytes.clear();transfer->offset=0;QTimer::singleShot(0,this,[=]{startTransfer(12);});return;}
                 abortTransfer(tr("ECU synchronized including independent CAM 1 and CAM 2 VVT controls and target maps."));return;
+            }
+            if(transfer->page==12){
+                if(!tunuino::EtbCodec::format(transfer->bytes)){abortTransfer(tr("Invalid ETB configuration; editor preserved."));return;}
+                sensorBase->etb=transfer->bytes;if(!*projectLoaded)(*projectPages)["etb"]=QString::fromLatin1(transfer->bytes.toHex());
+                for(auto *panel:*parameterPanels)if(panel->block().page==12)panel->load(sensorBase->header,sensorBase->aux,*ecuIdentity,*ecuGeneration,sensorBase->etb);
+                abortTransfer(tr("ECU synchronized including both ETB controllers and native calibrations."));return;
             }
             bool valid = true;
             for (int i = 0; i < 16; ++i) {
@@ -3893,8 +3941,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             // Auxiliary readings use stored calibrations and the actual selected ADC inputs.
             // Never manufacture these readings from unrelated raw ADC channels.
             double calibratedTps=0;
+            const bool etbTps=tunuino::EtbCodec::supported(*ecuIdentity)&&sensorBase->etb.size()==256&&sensorBase->etb[0]&&(sensorBase->etb[48]||sensorBase->etb[128]);
             const bool tpsValid=sensorBase->generation==*ecuGeneration&&sensorBase->identity==*ecuIdentity
-                &&tunuino::SensorCalibrationCodec::tpsPercent(sensorBase->aux,data,calibratedTps);
+                &&(etbTps?tunuino::EtbCodec::primaryTps(sensorBase->etb,sensorBase->aux,sensorBase->header,data,calibratedTps):tunuino::SensorCalibrationCodec::tpsPercent(sensorBase->aux,data,calibratedTps));
             setReading(1,tpsValid,QString::number(calibratedTps,'f',2)+QStringLiteral(" %"));
             double calibratedIat=0,calibratedBattery=0;
             const bool sameSensorBase=sensorBase->generation==*ecuGeneration&&sensorBase->identity==*ecuIdentity;

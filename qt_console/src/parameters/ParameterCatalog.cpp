@@ -1,5 +1,6 @@
 #include "ParameterCatalog.h"
 #include "../protocol/VtecCodec.h"
+#include "../protocol/EtbCodec.h"
 #include <QJsonObject>
 #include <cmath>
 namespace tunuino {
@@ -108,6 +109,15 @@ QVector<ParameterBlock> ParameterCatalog::blocks(){
         if(source.key=="vvt.cam2.parameters")source.fields<<number("windowFirst","First crank tooth in CAM 2 travel window",118,1,0,119,0,{},false,1)<<number("windowLast","Last crank tooth in CAM 2 travel window",119,1,0,119,2,{},false,1)<<number("windowPhase","CAM 2 revolution (0 or 1)",120,1,0,1,0,{},false,1);
         all<<source;
     }
+    const QString etbHelp="Dedicated Proteus ETB H-bridges. Assign APS/TPS inputs and bridge only in Inputs and outputs. Both redundant tracks need real independent calibration and at least 1 V travel. The two hardware PWM channels share one frequency. Driver current/diagnostic SPI is not wired on this PCB. Opening or writing never arms outputs. Autotune is a bounded PID experiment with stopped engine, disarmed engine outputs and released pedal; proposals require explicit application and write.";
+    b=block("etb.pedal","ETB - Accelerator pedal",12,etbHelp);
+    for(int i=0;i<2;++i){auto input=number(QString("input%1").arg(i),i?"APS check input":"APS main input",1+i,1,0,11,0,{},false,1);input.choices={"Disabled"};for(int j=1;j<=11;++j)input.choices<<QString("AV%1").arg(j);b.fields<<input<<number(QString("rest%1").arg(i),i?"APS check at 0%":"APS main at 0%",8+4*i,1000,.125,4.75,i?4.5:.5,"V")<<number(QString("full%1").arg(i),i?"APS check at 100%":"APS main at 100%",10+4*i,1000,.125,4.75,i?.5:4.5,"V");}
+    b.fields<<number("disagreement","Maximum pedal disagreement",32,100,1,10,5,"%");all<<b;
+    for(int channel=0;channel<2;++channel){const int base=48+80*channel;const QString key=QString("etb.%1.").arg(channel+1),title=QString("ETB %1 - ").arg(channel+1);
+        b=block(key+"setup",title+"Parameters",12,etbHelp);b.fields<<flag("enabled","Enable ETB",base,0);auto output=number("bridge","H-bridge output",base+1,1,0,2,0,{},false,1);output.choices={"Disabled","ETB bridge 1 — J101 / 7 (+), 6 (-)","ETB bridge 2 — J101 / 15 (+), 8 (-)"};b.fields<<output<<flag("invert","Invert motor direction",base+2,0)<<number("frequency","Output frequency (shared timer)",base+4,1,100,5000,1000,"Hz")<<number("maximumDuty","Maximum motor duty",base+16,100,5,95,60,"%")<<number("targetMinimum","Minimum target",base+20,100,0,100,0,"%")<<number("targetMaximum","Maximum target",base+22,100,0,100,100,"%")<<number("slew","Maximum target rate",base+24,100,1,500,50,"%/s")<<number("disagreement","Main/check tolerance",base+26,100,1,10,5,"%")<<number("trackingError","Maximum tracking error",base+28,100,1,30,10,"%")<<number("trackingDelay","Tracking error delay",base+30,1,100,2000,500,"ms")<<number("feedbackAge","Maximum sample interval",base+32,1,2,20,10,"ms")<<flag("noRpm","Disable when no RPM",base+36,0)<<number("limp","Unpowered limp position",base+38,100,0,30,10,"%");all<<b;
+        b=block(key+"pid",title+"PID",12,etbHelp);b.fields<<number("kp","Proportional gain",base+6,1000,0,20,.5,"%/%")<<number("ki","Integral gain",base+8,1000,0,20,0,"%/(%·s)")<<number("kd","Derivative gain",base+10,1000,0,5,0,"%/(%/s)")<<number("iMin","Integral limit min",base+12,100,-95,0,-20,"%",true)<<number("iMax","Integral limit max",base+14,100,0,95,20,"%",true)<<number("deadband","Position deadband",base+18,100,0,2,.5,"%")<<number("feedOpen","Feedforward above limp",base+40,100,-95,95,0,"%",true)<<number("feedClose","Feedforward below limp",base+42,100,-95,95,0,"%",true);all<<b;
+        b=block(key+"sensors",title+"TPS calibration",12,etbHelp);for(int t=0;t<2;++t){int i=2+2*channel+t;auto input=number(QString("input%1").arg(i),t?"TPS check input":"TPS main input",1+i,1,0,11,0,{},false,1);input.choices={"Disabled"};for(int j=1;j<=11;++j)input.choices<<QString("AV%1").arg(j);if(i!=2)b.fields<<input;b.fields<<number(QString("rest%1").arg(i),t?"Check voltage at closed throttle":"Main voltage at closed throttle",8+4*i,1000,.125,4.75,t?4.5:.5,"V")<<number(QString("full%1").arg(i),t?"Check voltage at full throttle":"Main voltage at full throttle",10+4*i,1000,.125,4.75,t?.5:4.5,"V");}all<<b;
+    }
     return all;
 }
 double ParameterCatalog::value(const QByteArray &p,const ParameterField &f){if(f.width==0)return f.initial;if(p.size()!=256)return 0;quint32 n=0;for(int i=0;i<f.width;++i)n=(n<<8)|quint8(p[f.offset+i]);if(f.bit)return (n&f.bit)?1:0;if(f.signedValue&&f.width==2)return qint16(n)/f.scale;return n/f.scale;}
@@ -121,10 +131,10 @@ QJsonObject ParameterCatalog::migrateVvt(QJsonObject parameters,const QByteArray
     const auto controls=VvtCodec::advanced(present?raw:VvtCodec::defaults(VtecCodec::defaults()),!present);
     QJsonObject legacy;
     for(const auto &key:{"vvt.position","vvt.actuator","vvt.activation","vvt.target"}){const auto values=parameters[key].toObject()["values"].toObject();for(auto it=values.begin();it!=values.end();++it)legacy[it.key()]=it.value();parameters.remove(key);}
-    for(const auto &block:blocks())if(block.key=="vvt.parameters"||block.key=="vvt.pid"||block.page==9)if(!parameters.contains(block.key)){
+    for(const auto &block:blocks())if(block.key=="vvt.parameters"||block.key=="vvt.pid"||block.page==9||block.page==12)if(!parameters.contains(block.key)){
         QJsonObject values;const auto compatibility=VvtCodec::advanced(VvtCodec::defaults(VtecCodec::defaults()));for(const auto &field:block.fields)values[field.key]=legacy.contains(field.key)?QJsonValue(legacy[field.key]):QJsonValue(present?value(controls,field):!legacy.isEmpty()&&field.offset>=132?value(compatibility,field):field.initial);
         if(legacy.contains("runtime")&&block.key=="vvt.parameters")values["runtime"]=legacy["runtime"].toDouble()/1000.;
-        if(block.page==9){values={};for(const auto &field:block.fields)values[field.key]=field.initial;}
+        if(block.page==9||block.page==12){values={};for(const auto &field:block.fields)values[field.key]=field.initial;}
         parameters[block.key]=QJsonObject{{"values",values}};
     }
     return parameters;
