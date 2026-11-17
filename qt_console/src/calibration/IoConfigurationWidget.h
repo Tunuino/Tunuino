@@ -13,6 +13,7 @@
 namespace tunuino {
 class IoConfigurationWidget final : public QWidget {
 public:
+    std::function<void(const QString &)> openConfiguration;
     struct Binding {
         QString name;
         QString resource;

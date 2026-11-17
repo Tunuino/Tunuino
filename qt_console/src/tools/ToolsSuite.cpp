@@ -51,11 +51,11 @@ void ToolsSuite::populate(QMenu *menu,QAction *graph,QAction *tune){
     auto *autotune=menu->addAction(tr("Autotune"));connect(autotune,&QAction::triggered,this,[this]{if(openAutotune)openAutotune();});
     menu->addSeparator();
     menu->addAction(tr("Logbook"),this,[this]{if(openServiceData)openServiceData(2);});
-    menu->addAction(tr("Show assigned outputs"),this,[this]{assignments(true);});menu->addAction(tr("Show assigned inputs"),this,[this]{assignments(false);});
+    menu->addAction(tr("Show assigned outputs"),this,[this]{if(openIoConfiguration)openIoConfiguration();else assignments(true);});menu->addAction(tr("Show assigned inputs"),this,[this]{if(openIoConfiguration)openIoConfiguration();else assignments(false);});
     auto *names=menu->addMenu(tr("User names..."));names->addAction(tr("Outputs"),this,[this]{userNames(true);});names->addAction(tr("Analog inputs"),this,[this]{userNames(false);});
     menu->addSeparator();auto *scope=menu->addAction(tr("Scope"));scope->setShortcut(QKeySequence("F5"));connect(scope,&QAction::triggered,this,[this]{if(openScope)openScope();});
     menu->addAction(graph);menu->addAction(tune);menu->addSeparator();
-    menu->addAction(tr("Customize keys"),this,[this]{customizeKeys();});menu->addAction(tr("General options"),this,[this]{generalOptions();});menu->addAction(tr("Available strategies"),this,[this]{strategies();});
+    menu->addAction(tr("Customize keys"),this,[this]{customizeKeys();});menu->addAction(tr("General options"),this,[this]{generalOptions();});menu->addAction(tr("Navigation sections..."),this,[this]{strategies();});
     menu->addSeparator();menu->addAction(tr("Vehicle VIN..."),this,[this]{if(openServiceData)openServiceData(0);});menu->addAction(tr("Project comment..."),this,[this]{if(openServiceData)openServiceData(1);});
 }
 QString ToolsSuite::alias(const QString &id,const ToolSnapshot &base)const{return QSettings().value(namesKey(base,id)).toString().left(16);}
@@ -98,7 +98,7 @@ void ToolsSuite::customizeKeys(){
     connect(buttons->button(QDialogButtonBox::Apply),&QPushButton::clicked,&dialog,[&]{QSet<QString> seen;for(auto *edit:edits){const auto key=edit->keySequence().toString(QKeySequence::PortableText);if(!key.isEmpty()&&seen.contains(key)){QMessageBox::warning(&dialog,tr("Customize keys"),tr("The same key combination is assigned to more than one function."));return;}if(!key.isEmpty())seen.insert(key);}QSettings settings;for(int i=0;i<actions.size();++i){const auto key=edits[i]->keySequence();actions[i].action->setShortcut(key);settings.setValue(keyId(actions[i].id),key.toString(QKeySequence::PortableText));}dialog.accept();});dialog.exec();
 }
 void ToolsSuite::strategies(){
-    QDialog dialog(window_);dialog.setWindowTitle(tr("Available strategies"));auto *layout=new QVBoxLayout(&dialog);auto *note=new QLabel(tr("Choose the groups visible in the navigation tree. This changes the workspace only; it does not enable ECU strategies."),&dialog);note->setWordWrap(true);layout->addWidget(note);QVector<QCheckBox*> boxes;
+    QDialog dialog(window_);dialog.setWindowTitle(tr("Navigation sections..."));auto *layout=new QVBoxLayout(&dialog);auto *note=new QLabel(tr("Choose the sections shown in the navigation panel."),&dialog);note->setWordWrap(true);layout->addWidget(note);QVector<QCheckBox*> boxes;
     for(int i=0;i<navigation_->topLevelItemCount();++i){auto *item=navigation_->topLevelItem(i);auto *box=new QCheckBox(item->text(0),&dialog);box->setChecked(!item->isHidden());boxes<<box;layout->addWidget(box);}
     auto *buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,&dialog);layout->addWidget(buttons);connect(buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
     if(dialog.exec()==QDialog::Accepted){QSettings settings;for(int i=0;i<boxes.size();++i){auto *item=navigation_->topLevelItem(i);item->setHidden(!boxes[i]->isChecked());settings.setValue("tools/strategies/"+item->text(0),boxes[i]->isChecked());}}

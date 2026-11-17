@@ -1,3 +1,4 @@
+#include "calibration/IoConfigurationWidget.h"
 // Integration check using the real Console and its File menu.
 // Offline only; settings/files are isolated in a temporary directory.
 #include "MainWindow.h"
@@ -64,9 +65,13 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
         const auto preview=qEnvironmentVariable("TUNUINO_TRIGGER_BOOTSTRAP_PREVIEW");if(!preview.isEmpty()){wizard->resize(720,540);app.processEvents();wizard->grab().save(preview+"-review.png");scope->resize(720,480);scope->grab().save(preview+"-scope.png");}
         session->close();std::cout<<"Real MainWindow serial bootstrap without engine profile passed.\n";return 0;
     }
-    auto *sensorTree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(sensorTree);QTreeWidgetItem *sensorRoot=nullptr;for(int i=0;i<sensorTree->topLevelItemCount();++i)if(sensorTree->topLevelItem(i)->text(0)=="Sensors and inputs")sensorRoot=sensorTree->topLevelItem(i);CHECK(sensorRoot);CHECK(sensorRoot->text(0)=="Sensors and inputs");
+    auto *sensorTree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(sensorTree);CHECK(sensorTree->topLevelItemCount()==7);
+    QStringList roots;for(int i=0;i<sensorTree->topLevelItemCount();++i)roots<<sensorTree->topLevelItem(i)->text(0);
+    CHECK(roots==QStringList({"Inputs and outputs","Engine setup","Fueling","Ignition","VVT","Diagnostics","Logs"}));
     for(QTreeWidgetItemIterator item(sensorTree);*item;++item) CHECK((*item)->flags() & Qt::ItemIsEnabled);
-    const auto openSensor=[&](const QString &key){QTreeWidgetItemIterator sensorItem(sensorTree);while(*sensorItem){if((*sensorItem)->data(0,Qt::UserRole+1).toString()==key){sensorTree->itemClicked(*sensorItem,0);app.processEvents();return;}++sensorItem;}CHECK(false);};
+    const auto openSensor=[&](const QString &key){QTreeWidgetItemIterator sensorItem(sensorTree);while(*sensorItem){if((*sensorItem)->data(0,Qt::UserRole+1).toString()==key){sensorTree->itemClicked(*sensorItem,0);app.processEvents();return;}++sensorItem;}
+        auto *central=dynamic_cast<tunuino::IoConfigurationWidget*>(window.findChild<QWidget*>("ioConfiguration"));
+        CHECK(central && central->openConfiguration);central->openConfiguration(key);app.processEvents();};
     openSensor("io.configuration");
     CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->objectName()=="ioConfiguration");
     auto *ioTable=window.findChild<QTableWidget*>("ioAssignments");
@@ -76,6 +81,7 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
         auto *ioWindow=window.findChild<QMdiArea*>()->activeSubWindow();
         app.processEvents();
         CHECK(ioWindow->grab().save(qEnvironmentVariable("TUNUINO_IO_PREVIEW")));
+        CHECK(window.grab().save(qEnvironmentVariable("TUNUINO_IO_PREVIEW")+"-workspace.png"));
     }
     openSensor("inputs.analog");auto *inputWindow=window.findChild<QMdiArea*>()->activeSubWindow();CHECK(inputWindow&&inputWindow->windowTitle()=="Sensors and inputs - Analog inputs");inputWindow->close();
     openSensor("inputs.primary");auto *primaryInputWindow=window.findChild<QMdiArea*>()->activeSubWindow();CHECK(primaryInputWindow&&primaryInputWindow->windowTitle()=="Digital inputs - Primary trigger");auto *primaryFields=primaryInputWindow->widget()->findChild<QTableWidget*>("parameters");CHECK(primaryFields&&primaryFields->rowCount()==4&&primaryFields->isRowHidden(0)&&primaryFields->isRowHidden(1)&&primaryFields->isRowHidden(2)&&!primaryFields->isRowHidden(3));primaryInputWindow->close();
@@ -165,7 +171,19 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     QStringList menuNames;for(auto *action:window.menuBar()->actions())menuNames<<action->text();CHECK(menuNames==QStringList({"File","Edit","Desktops","Tools","Window","Help","ECU"}));
     const auto menuItems=[&](const QString &name){QStringList labels;auto *menu=window.findChild<QMenu*>(name);CHECK(menu);for(auto *action:menu->actions())if(!action->isSeparator())labels<<action->text();return labels;};
     CHECK(menuItems("EditMenu")==QStringList({"Undo","Redo","Show undo list..","Show/hide Tree view panel","Show/hide Event log"}));CHECK(menuItems("WindowMenu")==QStringList({"Tile Horizontally","Tile Vertically","Next","Previous","Close all windows"}));
-    auto *desktops=dynamic_cast<tunuino::DesktopController*>(window.findChild<QObject*>("desktopController"));CHECK(desktops);const auto projectBeforeMenus=project->capture(error);const auto originalLayout=desktops->document();CHECK(window.findChild<QTabBar*>("desktopTabs")->count()==18);CHECK(window.findChild<QAction*>("desktopNext")->shortcut()==QKeySequence("Ctrl+Shift+P"));
+    auto *desktops=dynamic_cast<tunuino::DesktopController*>(window.findChild<QObject*>("desktopController"));CHECK(desktops);const auto projectBeforeMenus=project->capture(error);const auto originalLayout=desktops->document();CHECK(window.findChild<QTabBar*>("desktopTabs")->count()==6);CHECK(window.findChild<QAction*>("desktopNext")->shortcut()==QKeySequence("Ctrl+Shift+P"));
+    auto legacyDesktopDocument=QJsonDocument::fromJson(originalLayout).object();
+    auto legacyDesktops=legacyDesktopDocument["desktops"].toArray();
+    legacyDesktops.append(QJsonObject{{"name","Extra 1"},{"windows",QJsonArray{}}});
+    auto retainedDesktop=legacyDesktops[0].toObject();
+    CHECK(!retainedDesktop["windows"].toArray().isEmpty());
+    retainedDesktop["name"]="Extra 2";
+    legacyDesktops.append(retainedDesktop);
+    legacyDesktopDocument["desktops"]=legacyDesktops;
+    legacyDesktopDocument["active"]=7;
+    CHECK(desktops->applyDocument(QJsonDocument(legacyDesktopDocument).toJson(),error));
+    CHECK(window.findChild<QTabBar*>("desktopTabs")->count()==7 && desktops->currentDesktop()==6);
+    CHECK(desktops->applyDocument(originalLayout,error));
     auto *desktopKey=window.findChild<QAction*>("desktopSwitch0");desktopKey->setShortcut(QKeySequence("Ctrl+Alt+1"));desktops->store();window.findChild<QAction*>("desktopNext")->trigger();CHECK(window.findChild<QAction*>("desktopSwitch0")==desktopKey&&desktopKey->shortcut()==QKeySequence("Ctrl+Alt+1"));CHECK(desktops->currentDesktop()==1);for(auto *w:mdi->subWindowList())CHECK(w->isHidden());openSensor("ignition.firing");CHECK(firing->findChild<QDoubleSpinBox*>("cylinders")->value()==6);auto *deskWindow=mdi->activeSubWindow();deskWindow->setGeometry(25,30,680,500);const auto deskRect=deskWindow->geometry();window.findChild<QAction*>("desktopPrevious")->trigger();CHECK(desktops->currentDesktop()==0);window.findChild<QAction*>("desktopNext")->trigger();CHECK(deskWindow->geometry()==deskRect&&!deskWindow->isHidden());CHECK(project->capture(error)==projectBeforeMenus);
     CHECK(desktops->restore(error));CHECK(desktops->currentDesktop()==0);auto brokenLayout=QJsonDocument::fromJson(originalLayout).object();brokenLayout["active"]=99;CHECK(!desktops->applyDocument(QJsonDocument(brokenLayout).toJson(),error));CHECK(desktops->currentDesktop()==0);
     openSensor("ignition.firing");openSensor("inputs.primary");window.findChild<QAction*>("windowHorizontal")->trigger();CHECK(mdi->activeSubWindow()->width()>300);window.findChild<QAction*>("windowVertical")->trigger();CHECK(mdi->activeSubWindow()->height()>100);window.findChild<QAction*>("windowCloseAll")->trigger();for(auto *w:mdi->subWindowList())CHECK(w->isHidden());CHECK(project->capture(error)==projectBeforeMenus);
@@ -184,7 +202,7 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
         CHECK(button->sizeHint().width()<40);
         bool shared=false;for(auto *menuAction:window.menuBar()->actions())if(menuAction->menu()&&menuAction->menu()->actions().contains(action))shared=true;CHECK(shared);
     }
-    CHECK(shortcuts==QStringList({"Write to ECU","Open Project...","Save Project as...","Restore desktops","Store desktops","Test outputs","Show assigned outputs","Show assigned inputs","Customize keys","Available strategies","Logbook","Autotune","General options","Scope","Graph Log","Tune Display"}));
+    CHECK(shortcuts==QStringList({"Write to ECU","Open Project...","Save Project as...","Restore desktops","Store desktops","Test outputs","Show assigned outputs","Show assigned inputs","Customize keys","Navigation sections...","Logbook","Autotune","General options","Scope","Graph Log","Tune Display"}));
     CHECK(!toolbar->actions().first()->isEnabled());
     if(!qEnvironmentVariable("TUNUINO_TOOLBAR_PREVIEW").isEmpty()){
         QToolBar preview;preview.setToolButtonStyle(toolbar->toolButtonStyle());preview.setIconSize(toolbar->iconSize());preview.setMovable(false);preview.setStyleSheet(toolbar->styleSheet());for(auto *action:toolbar->actions())preview.addAction(action);preview.resize(720,36);preview.show();app.processEvents();CHECK(preview.grab().save(qEnvironmentVariable("TUNUINO_TOOLBAR_PREVIEW")));

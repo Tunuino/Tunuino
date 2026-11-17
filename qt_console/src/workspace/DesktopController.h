@@ -41,7 +41,7 @@ public:
  DesktopController(QMainWindow *owner,QMdiArea *area,QDockWidget *treeDock,QTreeWidget *tree,QMenu *edit,QMenu *desktops,QMenu *windows,QMenu *help):QObject(owner),owner_(owner),area_(area),treeDock_(treeDock),tree_(tree){
   auto *deviceTimer=new QTimer(this);deviceTimer->setInterval(1000);connect(deviceTimer,&QTimer::timeout,this,[this]{if(!identitySupplier)return;const auto next=enabledOption("loadDesktops",true)?identitySupplier():QByteArray{};if(next==uid_)return;store();uid_=next;QString error;const auto saved=QSettings().value(storageKey()).toByteArray();if(!saved.isEmpty())applyDocument(saved,error);});deviceTimer->start();
   setObjectName("desktopController");auto *host=new QWidget(owner);auto *layout=new QVBoxLayout(host);layout->setContentsMargins(0,0,0,0);layout->setSpacing(0);tabs_=new QTabBar(host);tabs_->setObjectName("desktopTabs");tabs_->setExpanding(false);tabs_->setUsesScrollButtons(true);tabs_->setStyleSheet("QTabBar::tab{background:#666764;color:#efefea;padding:5px 20px;border:1px solid #777;}QTabBar::tab:selected{background:#078bda;color:white;}");layout->addWidget(tabs_);owner->takeCentralWidget();layout->addWidget(area);owner->setCentralWidget(host);
-  const QStringList names{"logs","cranking","triggers","ignition","fuel","idle","boost","Extra 1","Extra 2","Extra 3","Extra 4","Extra 5","Extra 6","Extra 7","Extra 8","Extra 9","Extra 10","Extra 11"};for(const auto &name:names)states_.append(QJsonObject{{"name",name},{"windows",QJsonArray{}}});rebuildTabs();
+  const QStringList names{"Main","Fueling","Ignition","VVT","Diagnostics","Logs"};for(const auto &name:names)states_.append(QJsonObject{{"name",name},{"windows",QJsonArray{}}});rebuildTabs();
   connect(tabs_,&QTabBar::currentChanged,this,[this](int index){if(!applying_)switchTo(index);});tabs_->setContextMenuPolicy(Qt::CustomContextMenu);connect(tabs_,&QTabBar::customContextMenuRequested,this,[this](const QPoint &point){QMenu menu;auto *rename=menu.addAction(tr("Rename active desktop"));if(menu.exec(tabs_->mapToGlobal(point))==rename){bool ok=false;auto name=QInputDialog::getText(owner_,tr("Rename active desktop"),tr("Name"),QLineEdit::Normal,states_[active_].toObject()["name"].toString(),&ok).trimmed();if(ok&&!name.isEmpty()&&name.size()<=64){auto state=states_[active_].toObject();state["name"]=name;states_[active_]=state;rebuildTabs();}}});
   eventDock_=new QDockWidget(tr("Event log"),owner);eventDock_->setObjectName("EventLogDock");events_=new QPlainTextEdit(eventDock_);events_->setReadOnly(true);events_->setMaximumBlockCount(2000);eventDock_->setWidget(events_);owner->addDockWidget(Qt::BottomDockWidgetArea,eventDock_);eventDock_->hide();connect(owner->statusBar(),&QStatusBar::messageChanged,this,[this](const QString &text){if(!text.isEmpty())events_->appendPlainText(text);});
   helpDock_=new QDockWidget(tr("Help"),owner);helpDock_->setObjectName("ContextHelpDock");context_=new QTextBrowser(helpDock_);helpDock_->setWidget(context_);owner->addDockWidget(Qt::RightDockWidgetArea,helpDock_);helpDock_->hide();
@@ -62,8 +62,19 @@ public:
  int currentDesktop()const{return active_;}
  QByteArray document(){capture();return QJsonDocument(QJsonObject{{"format","tunuino-desktops-v1"},{"active",active_},{"desktops",states_}}).toJson();}
  bool applyDocument(const QByteArray &bytes,QString &error){
-  QJsonParseError parse;const auto doc=QJsonDocument::fromJson(bytes,&parse).object();const auto states=doc["desktops"].toArray();const int active=doc["active"].toInt(-1);if(parse.error!=QJsonParseError::NoError||doc["format"]!="tunuino-desktops-v1"||states.isEmpty()||states.size()>32||active<0||active>=states.size()){error=tr("Invalid desktop template.");return false;}
+  QJsonParseError parse;const auto doc=QJsonDocument::fromJson(bytes,&parse).object();auto states=doc["desktops"].toArray();int active=doc["active"].toInt(-1);if(parse.error!=QJsonParseError::NoError||doc["format"]!="tunuino-desktops-v1"||states.isEmpty()||states.size()>32||active<0||active>=states.size()){error=tr("Invalid desktop template.");return false;}
   for(const auto &value:states){const auto state=value.toObject();if(state["name"].toString().trimmed().isEmpty()||state["name"].toString().size()>64||!state["windows"].isArray()||state["windows"].toArray().size()>128){error=tr("Invalid desktop name or window list.");return false;}QSet<QString> ids;for(const auto &entry:state["windows"].toArray()){const auto w=entry.toObject();const auto id=w["id"].toString();if(id.isEmpty()||id.size()>256||ids.contains(id)){error=tr("Invalid or repeated window identity.");return false;}ids.insert(id);for(const auto &field:{"x","y","w","h"})if(!w[field].isDouble()||w[field].toDouble()!=w[field].toInt()||std::abs(w[field].toInt())>32768){error=tr("Invalid window rectangle.");return false;}if(w["w"].toInt()<80||w["h"].toInt()<50){error=tr("Invalid window size.");return false;}}}
+  QJsonArray useful;
+  int restoredActive=0;
+  for(int i=0;i<states.size();++i){
+      const auto state=states[i].toObject();
+      const auto name=state["name"].toString();
+      const bool placeholder=name=="cranking"||name=="triggers"||name=="idle"||name=="boost"||name.startsWith("Extra ");
+      if(placeholder&&state["windows"].toArray().isEmpty())continue;
+      if(i==active)restoredActive=useful.size();
+      useful.append(state);
+  }
+  if(!useful.isEmpty()){states=useful;active=restoredActive;}
   applying_=true;states_=states;active_=active;rebuildTabs();rebuildSwitchMenu();applying_=false;applyState();return true;
  }
  void switchTo(int index){if(index<0||index>=states_.size()||index==active_)return;capture();active_=index;applying_=true;tabs_->setCurrentIndex(index);applying_=false;applyState();}

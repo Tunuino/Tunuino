@@ -10,7 +10,7 @@ public:
     ToolsSuite(QMainWindow *window,QTreeWidget *navigation);
     void populate(QMenu *menu,QAction *graphLog,QAction *tuneDisplay);
     std::function<ToolSnapshot()> snapshot;
-    std::function<void()> openAutotune,openScope,openOutputTest;
+    std::function<void()> openAutotune,openScope,openOutputTest,openIoConfiguration;
     std::function<void(int)> openServiceData;
     void refreshAssignments();
     std::function<void()> checkForUpdates;

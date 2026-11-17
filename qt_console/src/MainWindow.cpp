@@ -111,7 +111,6 @@
 #include "ecu/MapWriteTransaction.h"
 #include "protocol/MapPageCodec.h"
 #include "calibration/SensorCalibrationWidget.h"
-#include "calibration/SensorNavigation.h"
 #include "calibration/SensorInputsWidget.h"
 #include "calibration/VssMonitor.h"
 #include "calibration/SensorCurveWizard.h"
@@ -497,37 +496,55 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
         return category;
     };
-    auto *sensorsCategory=addCategory(tr("Sensors and inputs"),{});
-    const auto parameterItem=[=](QTreeWidgetItem *parent,const QString &name,const QString &key){auto *item=new QTreeWidgetItem(parent,{name});item->setIcon(0,tunuino::CalibrationAppearance::icon(key.endsWith("wizard")?tunuino::CalibrationAppearance::Wizard:tunuino::CalibrationAppearance::Parameters));item->setData(0,Qt::UserRole,100);item->setData(0,Qt::UserRole+1,key);return item;};
-    tunuino::populateSensorNavigation(sensorsCategory);
-    auto *fuelingCategory=addCategory(tr("Fueling"),{{tr("Autotune"),12}});
-    parameterItem(fuelingCategory,tr("General"),"fuel.general");parameterItem(fuelingCategory,tr("Fuel cut"),"fuel.cut");
-    parameterItem(fuelingCategory,tr("Lambda guard"),"fuel.guard");
-    parameterItem(fuelingCategory,tr("Acceleration"),"fuel.acceleration");
-    auto *fuelCorrections=new QTreeWidgetItem(fuelingCategory,{tr("Corrections")});parameterItem(fuelCorrections,tr("Warmup"),"fuel.corrections");
-    parameterItem(fuelingCategory,tr("Cylinders trim"),"fuel.trim");parameterItem(fuelingCategory,tr("Short term trim"),"fuel.shortterm");
-    auto *fuelTables=new QTreeWidgetItem(fuelingCategory,{tr("Fuel tables")});
-    auto *ve=new QTreeWidgetItem(fuelTables,{tr("Fuel Table")});ve->setData(0,Qt::UserRole,0);
-    auto *fuelGraphItem=new QTreeWidgetItem(fuelTables,{tr("Fuel 3D Graph")});fuelGraphItem->setData(0,Qt::UserRole,7);
-    parameterItem(fuelTables,tr("Target lambda"),"fuel.target");auto *afrItem=new QTreeWidgetItem(fuelTables,{tr("AFR Target")});afrItem->setData(0,Qt::UserRole,2);
-    parameterItem(fuelingCategory,tr("Flex fuel"),"fuel.flex");
-    auto *injectors=new QTreeWidgetItem(fuelingCategory,{tr("Injectors")});parameterItem(injectors,tr("Injector outputs"),"injectors.outputs");parameterItem(injectors,tr("Injector dead time"),"injectors.deadtime");parameterItem(injectors,tr("Voltage compensation"),"voltage.compensation");
-    auto *ignitionCategory=addCategory(tr("Ignition"),{});
-    parameterItem(ignitionCategory,tr("Trigger wizard"),"ignition.wizard");
-    parameterItem(ignitionCategory,tr("Firing order"),"ignition.firing");
-    auto *coils=new QTreeWidgetItem(ignitionCategory,{tr("Coils")});parameterItem(coils,tr("Ignition outputs"),"coils.outputs");parameterItem(coils,tr("Coil dwell time"),"coils.dwell");parameterItem(coils,tr("Voltage compensation"),"voltage.compensation");
-    auto *sparkCorrections=new QTreeWidgetItem(ignitionCategory,{tr("Corrections")});parameterItem(sparkCorrections,tr("IAT"),"ignition.iat");parameterItem(sparkCorrections,tr("Cylinders trim"),"ignition.trim");
-    auto *ignTables=new QTreeWidgetItem(ignitionCategory,{tr("Ign. tables")});auto *ignTable=new QTreeWidgetItem(ignTables,{tr("Ignition Table")});ignTable->setData(0,Qt::UserRole,1);auto *ignGraphItem=new QTreeWidgetItem(ignTables,{tr("Ignition 3D Graph")});ignGraphItem->setData(0,Qt::UserRole,8);
-    parameterItem(ignitionCategory,tr("Rev limiters"),"ignition.limit");auto *triggers=new QTreeWidgetItem(ignitionCategory,{tr("Triggers")});parameterItem(triggers,tr("Primary trigger"),"ignition.primary");parameterItem(triggers,tr("Phase"),"ignition.phase");
-    for(auto *group:{coils,sparkCorrections,ignTables,triggers,injectors,fuelCorrections,fuelTables})group->setIcon(0,tunuino::CalibrationAppearance::icon(tunuino::CalibrationAppearance::Group));
+    const auto parameterItem=[=](QTreeWidgetItem *parent,const QString &name,const QString &key){
+        auto *item=new QTreeWidgetItem(parent,{name});
+        item->setData(0,Qt::UserRole,100);
+        item->setData(0,Qt::UserRole+1,key);
+        item->setIcon(0,tunuino::CalibrationAppearance::icon(tunuino::CalibrationAppearance::Parameters));
+        return item;
+    };
+    auto *engineCategory=addCategory(tr("Engine setup"),{});
+    parameterItem(engineCategory,tr("Engine and cylinders"),"ignition.firing");
+    parameterItem(engineCategory,tr("Trigger setup"),"ignition.wizard");
+    parameterItem(engineCategory,tr("Crankshaft and timing"),"ignition.primary");
+    parameterItem(engineCategory,tr("Camshaft synchronization"),"ignition.phase");
+    parameterItem(engineCategory,tr("Battery compensation"),"voltage.compensation");
+
+    auto *fuelingCategory=addCategory(tr("Fueling"),{
+        {tr("Fuel Table"),0},{tr("AFR Target"),2},{tr("Fuel 3D Graph"),7},{tr("Autotune"),12}});
+    for(const auto &entry:QList<QPair<QString,QString>>{
+        {tr("Fuel calculation"),"fuel.general"},{tr("Target lambda"),"fuel.target"},
+        {tr("Injector dead time"),"injectors.deadtime"},{tr("Warmup enrichment"),"fuel.corrections"},
+        {tr("Acceleration enrichment"),"fuel.acceleration"},{tr("Fuel cut"),"fuel.cut"},
+        {tr("Cylinder fuel trim"),"fuel.trim"},{tr("Lambda correction"),"fuel.shortterm"},
+        {tr("Lean protection"),"fuel.guard"},{tr("Flex fuel correction"),"fuel.flex"}})
+        parameterItem(fuelingCategory,entry.first,entry.second);
+
+    auto *ignitionCategory=addCategory(tr("Ignition"),{
+        {tr("Ignition Table"),1},{tr("Ignition 3D Graph"),8}});
+    parameterItem(ignitionCategory,tr("Coil dwell"),"coils.dwell");
+    parameterItem(ignitionCategory,tr("Air temperature correction"),"ignition.iat");
+    parameterItem(ignitionCategory,tr("Cylinder ignition trim"),"ignition.trim");
+    parameterItem(ignitionCategory,tr("Rev limiters"),"ignition.limit");
+
     auto *vvtCategory=addCategory(tr("VVT"),{});
-    parameterItem(vvtCategory,tr("VTEC Control"),"vtec.setup");
-    auto *cam1=new QTreeWidgetItem(vvtCategory,{tr("CAM 1")});cam1->setIcon(0,tunuino::CalibrationAppearance::icon(tunuino::CalibrationAppearance::Group));
-    parameterItem(cam1,tr("Parameters"),"vvt.parameters");parameterItem(cam1,tr("PID"),"vvt.pid");parameterItem(cam1,tr("CAM1 angle 1"),"vvt.table")->setIcon(0,style()->standardIcon(QStyle::SP_FileDialogDetailedView));parameterItem(cam1,tr("CAM1 angle 2"),"vvt.table2")->setIcon(0,style()->standardIcon(QStyle::SP_FileDialogDetailedView));
-    parameterItem(vvtCategory,tr("VVT"),"vvt.monitor");parameterItem(vvtCategory,tr("VTEC monitor"),"vtec.monitor");
-    auto *logCategory=addCategory(tr("Log"), {{tr("Scope"),11},{tr("Graph Log"),4},{tr("Tune Display"),10},{tr("Autotune"),17}});
-    parameterItem(logCategory,tr("Text Log"),"analysis.text");parameterItem(logCategory,tr("Scatter Plot"),"analysis.scatter");
-    addCategory(tr("Gauges"), {{tr("Runtime gauges"),13},{tr("Engine Status"),9}});
+    parameterItem(vvtCategory,tr("VTEC control"),"vtec.setup");
+    parameterItem(vvtCategory,tr("CAM 1 control"),"vvt.parameters");
+    parameterItem(vvtCategory,tr("CAM 1 PID"),"vvt.pid");
+    parameterItem(vvtCategory,tr("CAM 1 target 1"),"vvt.table");
+    parameterItem(vvtCategory,tr("CAM 1 target 2"),"vvt.table2");
+
+    auto *diagnosticsCategory=addCategory(tr("Diagnostics"),{
+        {tr("Trigger Scope"),11},{tr("Live gauges"),13},{tr("Engine Status"),9}});
+    for(const auto &entry:QList<QPair<QString,QString>>{
+        {tr("Sensor readings"),"inputs.monitor"},{tr("Crankshaft signal"),"inputs.crank"},
+        {tr("CAM 1 signal"),"inputs.cam1.monitor"},{tr("CAM 2 pulses"),"inputs.cam2.monitor"},
+        {tr("Fuel and oil pressure"),"inputs.pressure.monitor"},{tr("Vehicle speed"),"speed.monitor"},
+        {tr("VVT status"),"vvt.monitor"},{tr("VTEC status"),"vtec.monitor"}})
+        parameterItem(diagnosticsCategory,entry.first,entry.second);
+    auto *logCategory=addCategory(tr("Logs"),{{tr("Graph Log"),4},{tr("Tune Display"),10}});
+    parameterItem(logCategory,tr("Text Log"),"analysis.text");
+    parameterItem(logCategory,tr("Scatter Plot"),"analysis.scatter");
     auto engineStatusDockRef = QSharedPointer<QPointer<QDockWidget>>::create();
     connect(navigationTree, &QTreeWidget::itemClicked, tabs, [tabs, workspace, openSettingsPage, fuelGraphWindow, ignitionGraphWindow, engineStatusDockRef, mapWindows, afrGraphWindowRef, openTuneDisplay, toolNavigation, parameterNavigation](QTreeWidgetItem *item, int) {
         if(!item->data(0,Qt::UserRole).isValid()){item->setExpanded(!item->isExpanded());return;}
@@ -559,7 +576,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         std::function<bool(QTreeWidgetItem*,bool)> filter=[&](QTreeWidgetItem *item,bool inherited){const bool own=inherited||term.isEmpty()||item->text(0).contains(term,Qt::CaseInsensitive);bool match=own;for(int i=0;i<item->childCount();++i)match=filter(item->child(i),own)||match;item->setHidden(!match);if(!term.isEmpty()&&match)item->setExpanded(true);return match;};
         for(int i=0;i<navigationTree->topLevelItemCount();++i){auto *category=navigationTree->topLevelItem(i);const bool match=filter(category,false);category->setHidden(!match||!QSettings().value("tools/strategies/"+category->text(0),true).toBool());}
     });
-    navigationTree->topLevelItem(2)->setExpanded(true);
+    fuelingCategory->setExpanded(true);
     // Context inspector on the right; dockable and resizable independently of map grids.
     auto *inspectorDock = new QDockWidget(tr("TUNUINO  |  Configuration"), this);
     inspectorDock->setObjectName(QStringLiteral("ConfigurationInspectorDock"));
@@ -1836,6 +1853,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *graphLog = new tunuino::GraphLogWidget(tabs);
     tabs->addTab(graphLog, tr("Graph Log"));
     auto *tools=new tunuino::ToolsSuite(this,navigationTree);
+    tools->openIoConfiguration=[=]{if(*parameterNavigation)(*parameterNavigation)("io.configuration");};
     auto *serviceTool=new tunuino::ServiceDataWidget;
     auto *scopeTool=new tunuino::ScopeWidget;
     auto *triggerWizard=new tunuino::TriggerWizard;
@@ -2442,6 +2460,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     (*sensorWizards)["sensorwizard:Temperature"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Iat,true,this);
     (*sensorWizards)["sensorwizard:MAP"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Map,false,this);
     (*sensorWizards)["sensorwizard:Pressure"]=new tunuino::SensorCurveWizard(tunuino::SensorKind::Map,false,this,true);
+    for(auto *sensor:*sensorPanels){
+        const auto kind=sensor->kind();
+        const QString wizardKey=kind==tunuino::SensorKind::Iat?"sensorwizard:IAT":
+            kind==tunuino::SensorKind::Clt?"sensorwizard:CLT":
+            kind==tunuino::SensorKind::Map?"sensorwizard:MAP":
+            tunuino::SensorCalibrationCodec::pressure(kind)?"sensorwizard:Pressure":QString{};
+        if(wizardKey.isEmpty())continue;
+        if(auto *bar=sensor->findChild<QToolBar*>()){
+            auto *assistant=bar->addAction(tr("Calibration assistant"));
+            connect(assistant,&QAction::triggered,this,[=]{(*sensorWizards)[wizardKey]->open();});
+        }
+    }
     for(const auto &block:tunuino::ParameterCatalog::blocks()){auto *panel=new tunuino::ParameterWidget(block);parameterPanels->append(panel);auto *window=toolWindow(panel,block.title);window->resize(panel->sizeHint()+QSize(12,30));(*parameterWindows)[block.key]=window;}
     for(auto *panel:*parameterPanels)if(panel->block().key.endsWith(".outputs")){
         panel->configureEngineAssignments=[=]{
@@ -2458,6 +2488,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     scopeTool->captured=[=](const tunuino::ToolSnapshot &source,const QByteArray &header,const QByteArray &samples){triggerWizard->observeScope(source,header,samples);};
     *parameterNavigation=[=](const QString &key){if((*sensorWizards).contains(key)){(*sensorWizards)[key]->open();return;}if(key=="ignition.wizard"){triggerPresets->open();return;}auto *window=(*parameterWindows).value(key).data();if(!window)return;if(!window->property("parameterOpened").toBool()){if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))window->resize(parameters->sizeHint()+QSize(12,30));window->setProperty("parameterOpened",true);}window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
     auto *ioConfiguration = new tunuino::IoConfigurationWidget;
+    ioConfiguration->openConfiguration = [=](const QString &key) { (*parameterNavigation)(key); };
     auto *ioWindow = toolWindow(ioConfiguration, tr("Inputs and outputs"));
     ioWindow->resize(1000, 660);
     (*parameterWindows)["io.configuration"] = ioWindow;
@@ -2482,7 +2513,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 return sensor->restoreEditor(state, true, error);
             },
             [] { return true; },
-            [=] { (*parameterNavigation)("sensor:" + name); },
+            [=] { ioConfiguration->openConfiguration("sensor:" + name); },
             sensor->findChild<QPushButton*>("sensorSave")});
     }
     for (auto *parameters : *parameterPanels) {
@@ -2518,7 +2549,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     return parameters->restoreEditor(state, true, error);
                 },
                 [grid, row, cylinders] { return !cylinders || !grid->isRowHidden(row); },
-                [=] { (*parameterNavigation)(key); },
+                [=] { ioConfiguration->openConfiguration(key); },
                 parameters->findChild<QPushButton*>("parameterSave"),
                 [grid, row, name, cylinders, key] {
                     if (!cylinders) return name;
@@ -3309,7 +3340,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     toolShortcut(tr("Show assigned outputs"),Glyph::Outputs);
     toolShortcut(tr("Show assigned inputs"),Glyph::Inputs);
     toolShortcut(tr("Customize keys"),Glyph::Keyboard);
-    toolShortcut(tr("Available strategies"),Glyph::Strategies);
+    toolShortcut(tr("Navigation sections..."),Glyph::Strategies);
     toolShortcut(tr("Logbook"),Glyph::Logbook);
     toolShortcut(tr("Autotune"),Glyph::Autotune);
     mainToolbar->addSeparator();
