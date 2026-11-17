@@ -50,6 +50,7 @@ public:
   const auto current=snapshot?snapshot():ToolSnapshot{};
   if(!current.valid()||!EtbCodec::supported(current.identity)){if(busy())finish(tr("ECU communication lost. Heartbeats stopped; the native experiment lease shuts the bridge down."));else status_->setText(tr("Offline or ETB firmware unavailable"));return;}
   if(busy()&&(current.identity!=base_.identity||current.generation!=base_.generation||current.pages[11]!=base_.pages[11])){cancel_=true;finish(tr("ECU configuration changed. Experiment lease released."));return;}
+  if(!busy()&&!candidate_.isEmpty()&&(current.identity!=base_.identity||current.generation!=base_.generation||current.pages[11]!=base_.pages[11])){candidate_.clear();dismissed_=true;status_->setText(tr("ECU changed. Obtain a new proposal."));}
   if(!busy())base_=current;
   if(active_){QPointer<EtbAutotune> self(this);waiting_=true;const int operation=cancel_?14:15;
    if(!exchange(command(operation),[self](const QByteArray &p){if(!self)return;self->waiting_=false;if(p!=QByteArray(1,0)){self->finish(tr("Experiment stopped or the ECU rejected the lease. No automatic restart."));return;}self->read();})){waiting_=false;}
