@@ -98,7 +98,7 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     // A disabled capture still has its dedicated hardware contacts. Configure
     // edits that connection without navigating to trigger/strategy parameters.
     centralIo->refresh();pinout->selectPin(0,5);app.processEvents();
-    CHECK(pinTable->item(4,2)->text().contains("Crankshaft sensor")&&pinTable->item(4,2)->text().contains("disabled"));
+    CHECK(pinTable->item(4,3)->text().contains("Crankshaft sensor")&&pinTable->item(4,3)->text().contains("disabled"));
     const int crankRow=ioTable->currentRow();CHECK(ioTable->item(crankRow,0)->text()=="Crankshaft sensor");
     auto *primary=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QWidget*>("ignition.primary"));CHECK(primary);
     const auto primaryBefore=primary->editorState(),projectBeforePinDialog=project->capture(error);
@@ -122,7 +122,7 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     }
     CHECK(primary->restoreEditor(primaryBefore,true,error));centralIo->refresh();
     CHECK(project->capture(error)==projectBeforePinDialog);
-    CHECK(pinTable->item(4,2)->text().contains("disabled"));
+    CHECK(pinTable->item(4,3)->text().contains("disabled"));
 
 
     if(!qEnvironmentVariable("TUNUINO_IO_PREVIEW").isEmpty()){
@@ -157,7 +157,7 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
         CHECK(connectorTabs->currentIndex()==1);
         auto *outputPhoto=dynamic_cast<tunuino::ProteusConnectorPhoto*>(connectorTabs->currentWidget());
         CHECK(outputPhoto&&outputPhoto->highlighted().contains(3));
-        CHECK(pinTable->item(2,2)->text().contains("Injector"));
+        CHECK(pinTable->item(2,3)->text().contains("Injector"));
         const auto beforePhotoClick=project->capture(error);
         QTest::mouseClick(outputPhoto,Qt::LeftButton,Qt::NoModifier,outputPhoto->pinCenter(3).toPoint());
         CHECK(ioTable->currentRow()==row&&project->capture(error)==beforePhotoClick);

@@ -140,13 +140,16 @@ public:
         details_ = new QLabel(tr("Select a function on the left or a connector pin."), this);
         details_->setObjectName("proteusPinDetail"); details_->setWordWrap(true); details_->setTextFormat(Qt::PlainText);
         layout->addWidget(details_);
-        table_ = new QTableWidget(0,3,this); table_->setObjectName("proteusPinTable");
-        table_->setHorizontalHeaderLabels({tr("Pin"), tr("Signal"), tr("Function / state")});
+        table_ = new QTableWidget(0,4,this); table_->setObjectName("proteusPinTable");
+        table_->setHorizontalHeaderLabels({tr("Pin"), tr("Signal"), tr("Function"), tr("Assigned / state")});
         table_->verticalHeader()->hide(); table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
         table_->setSelectionBehavior(QAbstractItemView::SelectRows); table_->setSelectionMode(QAbstractItemView::SingleSelection);
         table_->horizontalHeader()->setSectionResizeMode(0,QHeaderView::ResizeToContents);
         table_->horizontalHeader()->setSectionResizeMode(1,QHeaderView::ResizeToContents);
         table_->horizontalHeader()->setSectionResizeMode(2,QHeaderView::Stretch);
+        table_->horizontalHeader()->setSectionResizeMode(3,QHeaderView::Interactive);
+        table_->setColumnWidth(3,140);table_->setWordWrap(true);table_->setTextElideMode(Qt::ElideNone);
+        connect(table_->horizontalHeader(),&QHeaderView::sectionResized,this,[this]{table_->resizeRowsToContents();});
         layout->addWidget(table_, 2);
         auto *credits = new QPushButton(tr("Photo credits / license"),this);
         credits->setFlat(true); layout->addWidget(credits);
@@ -199,18 +202,22 @@ private:
             table_->setItem(row,1,new QTableWidgetItem(pin.signal));
             table_->item(row,1)->setForeground(proteusPinColor(pin.type));
             table_->item(row,1)->setToolTip(pin.description);
-            table_->setItem(row,2,new QTableWidgetItem);
+            table_->setItem(row,2,new QTableWidgetItem(pin.description));
+            table_->item(row,2)->setToolTip(pin.description);
+            table_->setItem(row,3,new QTableWidgetItem);
         }
-        updateTable();
+        updateTable(); table_->resizeRowsToContents();
     }
     void updateTable() {
+        bool changed=false;
         for(int row=0;row<table_->rowCount();++row) {
             const auto functions=assignments_.value(proteusContact(tabs_->currentIndex(),row+1));
             const auto pin=proteusPins(tabs_->currentIndex())[row];
             const auto contact=proteusContact(tabs_->currentIndex(),row+1);
             const auto value=!functions.isEmpty()?functions.join("; "):dedicated_.contains(contact)?dedicated_.value(contact):proteusFixedPin(pin.type)?tr("Fixed hardware connection"):tr("No function selected");
-            if(table_->item(row,2)->text()!=value) table_->item(row,2)->setText(value);
+            if(table_->item(row,3)->text()!=value) {table_->item(row,3)->setText(value);table_->item(row,3)->setToolTip(value);changed=true;}
         }
+        if(changed) table_->resizeRowsToContents();
     }
     void updatePhotos() {
         for(int c=0;c<3;++c) {
