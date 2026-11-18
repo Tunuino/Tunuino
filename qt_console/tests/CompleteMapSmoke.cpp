@@ -69,11 +69,35 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     QStringList roots;for(int i=0;i<sensorTree->topLevelItemCount();++i)roots<<sensorTree->topLevelItem(i)->text(0);
     CHECK(roots==QStringList({"Inputs and outputs","Engine setup","Fueling","Ignition","VVT","ETB","Diagnostics","Logs"}));
     for(QTreeWidgetItemIterator item(sensorTree);*item;++item) CHECK((*item)->flags() & Qt::ItemIsEnabled);
+    auto *ioRoot=sensorTree->topLevelItem(0);CHECK(ioRoot->childCount()==2&&!ioRoot->data(0,Qt::UserRole).isValid());
+    CHECK(ioRoot->child(0)->text(0)=="ECU Proteus"&&ioRoot->child(0)->child(0)->text(0)=="Proteus Pinout");
+    CHECK(ioRoot->child(1)->text(0)=="ECU UAefi"&&ioRoot->child(1)->child(0)->text(0)=="UAefi Pinout");
+
     const auto openSensor=[&](const QString &key){QTreeWidgetItemIterator sensorItem(sensorTree);while(*sensorItem){if((*sensorItem)->data(0,Qt::UserRole+1).toString()==key){sensorTree->itemClicked(*sensorItem,0);app.processEvents();return;}++sensorItem;}
         auto *central=dynamic_cast<tunuino::IoConfigurationWidget*>(window.findChild<QWidget*>("ioConfiguration"));
         CHECK(central && central->openConfiguration);central->openConfiguration(key);app.processEvents();};
     openSensor("io.configuration");
     CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()->objectName()=="ioConfiguration");
+    CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle()=="Proteus Pinout");
+    CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->property("desktopWindowId")=="Inputs and outputs|ioConfiguration");
+    const auto beforeUaefi=project->capture(error);
+    openSensor("io.uaefi.pinout");auto *uaefiWindow=window.findChild<QMdiArea*>()->activeSubWindow();
+    CHECK(uaefiWindow->windowTitle()=="UAefi Pinout"&&uaefiWindow->widget()->property("ecuBoard")=="UAefi");
+    auto *uaefiTabs=uaefiWindow->findChild<QTabWidget*>("uaefiConnectors");auto *uaefiTable=uaefiWindow->findChild<QTableWidget*>("uaefiPinTable");
+    CHECK(uaefiTabs&&uaefiTabs->count()==5&&uaefiTable&&!uaefiWindow->findChild<QTableWidget*>("ioAssignments"));
+    const int counts[]={8,18,20,16,6};
+    for(int c=0;c<5;++c){uaefiTabs->setCurrentIndex(c);app.processEvents();CHECK(uaefiTable->rowCount()==counts[c]);
+        auto *photo=dynamic_cast<tunuino::ConnectorPhotoWidget*>(uaefiTabs->currentWidget());CHECK(photo&&photo->hasPhoto());
+        QTest::mouseClick(photo,Qt::LeftButton,Qt::NoModifier,photo->pinCenter(1).toPoint());
+        CHECK(uaefiWindow->findChild<QLabel*>("uaefiPinDetail")->text().contains(QString(QChar('A'+c))+"1"));
+        CHECK(project->capture(error)==beforeUaefi); // Hardware browsing cannot edit or write the connected Proteus.
+        app.processEvents();
+        const auto preview=qEnvironmentVariable("TUNUINO_IO_PREVIEW");if(!preview.isEmpty())CHECK(uaefiWindow->grab().save(preview+QString("-UAefi-%1.png").arg(QChar('A'+c))));
+    }
+    const auto uaefiPreview=qEnvironmentVariable("TUNUINO_IO_PREVIEW");if(!uaefiPreview.isEmpty())CHECK(window.grab().save(uaefiPreview+"-ECU-navigation.png"));
+    uaefiWindow->close();openSensor("io.configuration");
+    CHECK(project->capture(error)==beforeUaefi);
+
     auto *ioTable=window.findChild<QTableWidget*>("ioAssignments");
     CHECK(ioTable && ioTable->rowCount() >= 13);
     CHECK(ioTable->item(0,0)->text() != "Ain 1 digital filter");

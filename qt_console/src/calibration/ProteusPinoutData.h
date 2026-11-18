@@ -1,11 +1,12 @@
 #pragma once
+#include "ConnectorPin.h"
 #include <QString>
 #include <QVector>
 #include <QPointF>
 namespace tunuino {
 // Connector contacts checked against Proteus v0.7 KiCad 383558bf7ca1c53ad8bbd8fdc9dd3a4187013c46.
 // Photo positions correspond to the ECU mating face, latch at the top.
-struct ProteusPin { int number; QPointF point; QString signal, description, type; };
+using ProteusPin = ConnectorPin;
 inline QVector<ProteusPin> proteusPins(int connector) {
  switch(connector) {
  case 0: return {

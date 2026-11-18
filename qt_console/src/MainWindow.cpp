@@ -1,4 +1,5 @@
 #include "calibration/IoConfigurationWidget.h"
+#include "calibration/UaefiPinoutWidget.h"
 #include "ui/WriteButtonState.h"
 #include "MainWindow.h"
 #include "workspace/DesktopController.h"
@@ -2719,14 +2720,23 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     scopeTool->captured=[=](const tunuino::ToolSnapshot &source,const QByteArray &header,const QByteArray &samples){triggerWizard->observeScope(source,header,samples);};
     *parameterNavigation=[=](const QString &key){if((*sensorWizards).contains(key)){(*sensorWizards)[key]->open();return;}if(key=="ignition.wizard"){triggerPresets->open();return;}auto *window=(*parameterWindows).value(key).data();if(!window)return;if(!window->property("parameterOpened").toBool()){if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))window->resize(parameters->sizeHint()+QSize(12,30));window->setProperty("parameterOpened",true);}window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
     auto *ioConfiguration = new tunuino::IoConfigurationWidget;
+    ioConfiguration->setProperty("ecuBoard","Proteus");
     ioConfiguration->openConfiguration = [=](const QString &key) { (*parameterNavigation)(key); };
-    auto *ioWindow = toolWindow(ioConfiguration, tr("Inputs and outputs"));
+    auto *ioWindow = toolWindow(ioConfiguration, tr("Proteus Pinout"));
+    ioWindow->setProperty("desktopWindowId",QStringLiteral("Inputs and outputs|ioConfiguration"));
     ioWindow->resize(1000, 660);
     (*parameterWindows)["io.configuration"] = ioWindow;
     auto *ioItem = new QTreeWidgetItem(QStringList{tr("Inputs and outputs")});
-    ioItem->setData(0, Qt::UserRole, 100);
-    ioItem->setData(0, Qt::UserRole + 1, "io.configuration");
+    QFont ioFont=ioItem->font(0);ioFont.setBold(true);ioItem->setFont(0,ioFont);
     navigationTree->insertTopLevelItem(0, ioItem);
+    auto *proteusItem=new QTreeWidgetItem(ioItem,{tr("ECU Proteus")});proteusItem->setFont(0,ioFont);
+    parameterItem(proteusItem,tr("Proteus Pinout"),"io.configuration");
+    auto *uaefiItem=new QTreeWidgetItem(ioItem,{tr("ECU UAefi")});uaefiItem->setFont(0,ioFont);
+    auto *uaefiPinout=new tunuino::UaefiPinoutWidget;
+    auto *uaefiWindow=toolWindow(uaefiPinout,tr("UAefi Pinout"));uaefiWindow->resize(850,680);
+    (*parameterWindows)["io.uaefi.pinout"]=uaefiWindow;
+    parameterItem(uaefiItem,tr("UAefi Pinout"),"io.uaefi.pinout");
+    ioItem->setExpanded(true);proteusItem->setExpanded(true);uaefiItem->setExpanded(true);
     const int avContacts[] = {13,24,14,25,15,26,16,27,17,28,18};
     const int atContacts[] = {19,30,20,31};
 

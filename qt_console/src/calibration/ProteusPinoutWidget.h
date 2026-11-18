@@ -1,5 +1,6 @@
 #pragma once
 #include "ProteusPinoutData.h"
+#include "ConnectorPhotoWidget.h"
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFile>
@@ -25,96 +26,13 @@ inline QString proteusContact(int connector, int pin) {
 inline bool proteusFixedPin(const QString &type) {
     return type=="12v" || type=="5v" || type=="gnd" || type=="agnd" || type=="can" || type=="knock";
 }
-inline QColor proteusPinColor(const QString &type) {
-    if (type == "av") return QColor("#eb8359");
-    if (type == "at") return QColor("#56c8b7");
-    if (type == "din" || type == "agnd" || type == "gnd") return QColor("#76c85d");
-    if (type == "vr") return QColor("#de9054");
-    if (type == "etb" || type == "can") return QColor("#50c9de");
-    if (type == "ls") return QColor("#e786ca");
-    if (type == "ign" || type == "hs") return QColor("#98a6ef");
-    if (type == "12v" || type == "5v") return QColor("#e7cc4a");
-    return QColor("#bcc4cc");
-}
-class ProteusConnectorPhoto final : public QWidget {
+inline QColor proteusPinColor(const QString &type) { return connectorPinColor(type); }
+class ProteusConnectorPhoto final : public ConnectorPhotoWidget {
 public:
-    std::function<void(int)> selected;
     explicit ProteusConnectorPhoto(int connector, QWidget *parent = nullptr)
-        : QWidget(parent), connector_(connector), pins_(proteusPins(connector)) {
-        const QStringList names{"black23", "black35", "white35"};
-        photo_.load(":/proteus/" + names[connector] + ".jpg");
-        setMouseTracking(true);
-        setMinimumHeight(130);
-        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        setObjectName(QString("proteusPhoto%1").arg(connector + 1));
-    }
-    bool hasPhoto() const { return !photo_.isNull(); }
-    void setState(const QSet<int> &highlighted, const QSet<int> &assigned,
-                  const QMap<int, QString> &functions) {
-        if (highlighted_ == highlighted && assigned_ == assigned && functions_ == functions) return;
-        highlighted_ = highlighted; assigned_ = assigned; functions_ = functions; update();
-    }
-    QSet<int> highlighted() const { return highlighted_; }
-    QRectF imageRect() const {
-        if (photo_.isNull()) return {};
-        const QSizeF size = QSizeF(photo_.size()).scaled(QSizeF(width()-8, height()-8), Qt::KeepAspectRatio);
-        return QRectF(QPointF((width()-size.width())/2, (height()-size.height())/2), size);
-    }
-    QPointF pinCenter(int number) const {
-        const auto area = imageRect();
-        for (const auto &pin : pins_) if (pin.number == number)
-            return area.topLeft() + QPointF(pin.point.x()*area.width()/photo_.width(),
-                                             pin.point.y()*area.height()/photo_.height());
-        return {};
-    }
-protected:
-    void paintEvent(QPaintEvent *) override {
-        QPainter painter(this); painter.fillRect(rect(), QColor("#171b1e"));
-        if (photo_.isNull()) return;
-        painter.setRenderHint(QPainter::Antialiasing);
-        const auto area = imageRect(); painter.drawPixmap(area, photo_, photo_.rect());
-        const qreal radius = qBound(5.5, area.width()/52., 22.);
-        QFont font = painter.font(); font.setBold(true); font.setPixelSize(qMax(8, int(radius*1.05))); painter.setFont(font);
-        for (const auto &pin : pins_) {
-            const auto center = pinCenter(pin.number);
-            const bool chosen = highlighted_.contains(pin.number);
-            painter.setPen(QPen(chosen ? QColor("#ffffff") : proteusPinColor(pin.type), chosen ? 3. : 2.));
-            painter.setBrush(chosen ? QColor("#ffd65a") : QColor("#f4f6f7"));
-            painter.drawEllipse(center, radius, radius);
-            painter.setPen(QColor("#162027"));
-            painter.drawText(QRectF(center.x()-radius, center.y()-radius, radius*2, radius*2),
-                             Qt::AlignCenter, QString::number(pin.number));
-            if (assigned_.contains(pin.number)) {
-                painter.setPen(Qt::NoPen); painter.setBrush(QColor("#1c8fdb"));
-                painter.drawEllipse(center + QPointF(radius*.72, -radius*.72), radius*.23, radius*.23);
-            }
-        }
-    }
-    void mousePressEvent(QMouseEvent *event) override {
-        if (event->button() == Qt::LeftButton) { const int pin = hit(event->position()); if (pin && selected) selected(pin); }
-        QWidget::mousePressEvent(event);
-    }
-    void mouseMoveEvent(QMouseEvent *event) override {
-        const int number = hit(event->position());
-        setCursor(number ? Qt::PointingHandCursor : Qt::ArrowCursor);
-        if (number) for (const auto &pin : pins_) if (pin.number == number) {
-            QString text = proteusContact(connector_, number) + " — " + pin.signal + "\n" + pin.description;
-            if (functions_.contains(number)) text += "\n" + functions_[number];
-            QToolTip::showText(event->globalPosition().toPoint(), text, this); return;
-        }
-        QToolTip::hideText();
-    }
-private:
-    int hit(QPointF position) const {
-        const qreal radius = qBound(7., imageRect().width()/45., 26.);
-        for (const auto &pin : pins_) if (QLineF(position, pinCenter(pin.number)).length() <= radius) return pin.number;
-        return 0;
-    }
-    int connector_;
-    QVector<ProteusPin> pins_;
-    QPixmap photo_;
-    QSet<int> highlighted_, assigned_;
-    QMap<int, QString> functions_;
+        : ConnectorPhotoWidget(proteusPins(connector),
+            ":/proteus/" + QStringList{"black23","black35","white35"}.value(connector) + ".jpg",
+            QString("J10%1/").arg(connector+1), QString("proteusPhoto%1").arg(connector+1), parent) {}
 };
 
 class ProteusPinoutWidget final : public QWidget {

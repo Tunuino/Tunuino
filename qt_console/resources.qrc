@@ -8,4 +8,12 @@
     <file alias="white35.jpg">assets/proteus/white35.jpg</file>
     <file alias="PHOTO-LICENSE.txt">assets/proteus/PHOTO-LICENSE.txt</file>
   </qresource>
+  <qresource prefix="/uaefi">
+    <file alias="uaefi-A.jpg">assets/uaefi/uaefi-A.jpg</file>
+    <file alias="uaefi-B.jpg">assets/uaefi/uaefi-B.jpg</file>
+    <file alias="uaefi-C.jpg">assets/uaefi/uaefi-C.jpg</file>
+    <file alias="uaefi-D.jpg">assets/uaefi/uaefi-D.jpg</file>
+    <file alias="uaefi-E.jpg">assets/uaefi/uaefi-E.jpg</file>
+    <file alias="PHOTO-LICENSE.txt">assets/uaefi/PHOTO-LICENSE.txt</file>
+  </qresource>
 </RCC>
