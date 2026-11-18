@@ -141,7 +141,7 @@ public:
         details_->setObjectName("proteusPinDetail"); details_->setWordWrap(true); details_->setTextFormat(Qt::PlainText);
         layout->addWidget(details_);
         table_ = new QTableWidget(0,3,this); table_->setObjectName("proteusPinTable");
-        table_->setHorizontalHeaderLabels({tr("Pin"), tr("Signal"), tr("Assigned function")});
+        table_->setHorizontalHeaderLabels({tr("Pin"), tr("Signal"), tr("Function / state")});
         table_->verticalHeader()->hide(); table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
         table_->setSelectionBehavior(QAbstractItemView::SelectRows); table_->setSelectionMode(QAbstractItemView::SingleSelection);
         table_->horizontalHeader()->setSectionResizeMode(0,QHeaderView::ResizeToContents);
@@ -165,6 +165,10 @@ public:
         });
         connect(table_,&QTableWidget::cellClicked,this,[this](int row,int) { selectPin(tabs_->currentIndex(),row+1); });
         rebuildTable();
+    }
+    void setDedicatedFunctions(const QMap<QString,QString> &functions) {
+        if(dedicated_==functions) return;
+        dedicated_=functions; updatePhotos(); updateTable(); updateDetail();
     }
     void setAssignments(const QMap<QString,QStringList> &assignments) {
         if(assignments_ == assignments) return;
@@ -203,7 +207,8 @@ private:
         for(int row=0;row<table_->rowCount();++row) {
             const auto functions=assignments_.value(proteusContact(tabs_->currentIndex(),row+1));
             const auto pin=proteusPins(tabs_->currentIndex())[row];
-            const auto value=functions.isEmpty()?(proteusFixedPin(pin.type)?tr("Fixed hardware connection"):tr("Not assigned")):functions.join("; ");
+            const auto contact=proteusContact(tabs_->currentIndex(),row+1);
+            const auto value=!functions.isEmpty()?functions.join("; "):dedicated_.contains(contact)?dedicated_.value(contact):proteusFixedPin(pin.type)?tr("Fixed hardware connection"):tr("No function selected");
             if(table_->item(row,2)->text()!=value) table_->item(row,2)->setText(value);
         }
     }
@@ -214,6 +219,7 @@ private:
                 const auto contact=proteusContact(c,pin.number);
                 if(highlights_.contains(contact)) highlight.insert(pin.number);
                 if(assignments_.contains(contact)){assigned.insert(pin.number);functions[pin.number]=assignments_[contact].join("; ");}
+                else if(dedicated_.contains(contact)) functions[pin.number]=dedicated_.value(contact);
             }
             photos_[c]->setState(highlight,assigned,functions);
         }
@@ -224,7 +230,7 @@ private:
             if(contact==proteusContact(c,pin.number)) {
                 const auto functions=assignments_.value(contact);
                 lines<<QString("%1 — %2: %3\n%4").arg(contact,pin.signal,pin.description,
-                       functions.isEmpty()?(proteusFixedPin(pin.type)?tr("Fixed hardware connection."):tr("No function assigned; choose a function on the left.")):functions.join("; "));
+                       !functions.isEmpty()?functions.join("; "):dedicated_.contains(contact)?dedicated_.value(contact):proteusFixedPin(pin.type)?tr("Fixed hardware connection."):tr("No software function selected for this pin. This does not indicate whether a wire is physically connected."));
             }
         details_->setText(lines.isEmpty()?tr("Select a function on the left or a connector pin."):lines.join("\n"));
     }
@@ -233,6 +239,7 @@ private:
     QTableWidget *table_;
     QLabel *details_;
     QMap<QString,QStringList> assignments_;
+    QMap<QString,QString> dedicated_;
     QStringList highlights_;
 };
 }

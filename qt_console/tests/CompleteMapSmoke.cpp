@@ -95,6 +95,35 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     QTest::qWait(250);CHECK(project->capture(error)==beforePinBrowse);
     CHECK(window.findChild<QLabel*>("proteusPinDetail")->text().contains("J103/1"));
     connectorTabs->setCurrentIndex(0);app.processEvents();
+    // A disabled capture still has its dedicated hardware contacts. Configure
+    // edits that connection without navigating to trigger/strategy parameters.
+    centralIo->refresh();pinout->selectPin(0,5);app.processEvents();
+    CHECK(pinTable->item(4,2)->text().contains("Crankshaft sensor")&&pinTable->item(4,2)->text().contains("disabled"));
+    const int crankRow=ioTable->currentRow();CHECK(ioTable->item(crankRow,0)->text()=="Crankshaft sensor");
+    auto *primary=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QWidget*>("ignition.primary"));CHECK(primary);
+    const auto primaryBefore=primary->editorState(),projectBeforePinDialog=project->capture(error);
+    auto *ioActive=window.findChild<QMdiArea*>()->activeSubWindow();
+    for(bool applyPin:{false,true}) {
+        bool visited=false;
+        QTimer::singleShot(0,&window,[&]{
+            auto *dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());CHECK(dialog&&dialog->objectName()=="ioPinConfiguration");
+            CHECK(window.findChild<QMdiArea*>()->activeSubWindow()==ioActive);
+            auto *choice=dialog->findChild<QComboBox*>("ioPinChoice");auto *detail=dialog->findChild<QLabel*>("ioPinConnectionDetail");
+            CHECK(choice&&choice->count()==2&&detail&&detail->text().contains("J101/5")&&detail->text().contains("J101/13"));
+            CHECK(!dialog->findChild<QPushButton*>("ioPinWrite")->isEnabled());
+            choice->setCurrentIndex(1);
+            CHECK(primary->editorState()==primaryBefore); // Choosing alone is not Apply or ECU write.
+            if(applyPin){dialog->findChild<QPushButton*>("ioPinApply")->click();CHECK(primary->editorState()["values"].toObject()["capture"].toInt()==1);}
+            if(!qEnvironmentVariable("TUNUINO_IO_PREVIEW").isEmpty())CHECK(dialog->grab().save(qEnvironmentVariable("TUNUINO_IO_PREVIEW")+(applyPin?"-pin-applied.png":"-pin-dialog.png")));
+            visited=true;dialog->reject();
+        });
+        qobject_cast<QPushButton*>(ioTable->cellWidget(crankRow,2))->click();CHECK(visited);
+        if(!applyPin)CHECK(project->capture(error)==projectBeforePinDialog);
+    }
+    CHECK(primary->restoreEditor(primaryBefore,true,error));centralIo->refresh();
+    CHECK(project->capture(error)==projectBeforePinDialog);
+    CHECK(pinTable->item(4,2)->text().contains("disabled"));
+
 
     if(!qEnvironmentVariable("TUNUINO_IO_PREVIEW").isEmpty()){
         auto *ioWindow=window.findChild<QMdiArea*>()->activeSubWindow();
@@ -119,7 +148,7 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     bool foundInjectorConnection=false;
     for(int row=0;row<ioTable->rowCount();++row)if(ioTable->item(row,0)->text()=="Injector — cylinder 1"){
         auto *connection=qobject_cast<QComboBox*>(ioTable->cellWidget(row,1));CHECK(connection);
-        CHECK(connection->isEnabled()); // Local wiring edits remain available offline.
+        CHECK(connection->isEnabled()&&connection->itemText(0)=="No pin selected"); // Local wiring edits remain available offline.
         CHECK(!qobject_cast<QPushButton*>(ioTable->cellWidget(row,3))->isEnabled());
         connection->setCurrentIndex(1);
         CHECK(QMetaObject::invokeMethod(connection,"activated",Qt::DirectConnection,Q_ARG(int,1)));
