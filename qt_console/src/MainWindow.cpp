@@ -2777,7 +2777,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const bool bridge=field.key=="bridge",input=field.key.startsWith("input");if(!bridge&&!input)continue;
         const int index=input?field.key.mid(5).toInt():-1;QStringList choices;
         if(bridge)choices=field.choices;else{choices<<tr("Disabled");for(int i=0;i<11;++i)choices<<QString("AV%1 — J103 / %2").arg(i+1).arg(avContacts[i]);}
-        const QStringList roles{tr("Accelerator pedal main"),tr("Accelerator pedal check"),tr("ETB 1 main"),tr("ETB 1 check"),tr("ETB 2 main"),tr("ETB 2 check")};
+        const QStringList roles{tr("Accelerator pedal main"),tr("Accelerator pedal check"),tr("ETB 1 main"),tr("ETB 1 TPS check"),tr("ETB 2 TPS main"),tr("ETB 2 TPS check")};
         const QString name=bridge?(panel->block().key=="etb.1.setup"?tr("ETB 1 motor"):tr("ETB 2 motor")):roles.value(index);
         ioConfiguration->add({name,bridge?"HBRIDGE":"AV",choices,
             [panel,field]{return panel->editorState()["values"].toObject()[field.key].toInt();},

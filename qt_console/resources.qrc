@@ -2,4 +2,10 @@
   <qresource prefix="/branding">
     <file alias="tunuino.png">assets/tunuino.png</file>
   </qresource>
+  <qresource prefix="/proteus">
+    <file alias="black23.jpg">assets/proteus/black23.jpg</file>
+    <file alias="black35.jpg">assets/proteus/black35.jpg</file>
+    <file alias="white35.jpg">assets/proteus/white35.jpg</file>
+    <file alias="PHOTO-LICENSE.txt">assets/proteus/PHOTO-LICENSE.txt</file>
+  </qresource>
 </RCC>

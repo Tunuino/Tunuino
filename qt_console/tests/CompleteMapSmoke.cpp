@@ -77,6 +77,25 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     auto *ioTable=window.findChild<QTableWidget*>("ioAssignments");
     CHECK(ioTable && ioTable->rowCount() >= 13);
     CHECK(ioTable->item(0,0)->text() != "Ain 1 digital filter");
+    auto *centralIo=dynamic_cast<tunuino::IoConfigurationWidget*>(window.findChild<QWidget*>("ioConfiguration"));
+    auto *pinout=dynamic_cast<tunuino::ProteusPinoutWidget*>(window.findChild<QWidget*>("proteusPinout"));
+    auto *connectorTabs=window.findChild<QTabWidget*>("proteusConnectors");
+    auto *pinTable=window.findChild<QTableWidget*>("proteusPinTable");
+    CHECK(centralIo&&pinout&&connectorTabs&&connectorTabs->count()==3&&pinTable);
+    const auto beforePinBrowse=project->capture(error);
+    for(int connector=0;connector<3;++connector){
+        connectorTabs->setCurrentIndex(connector);app.processEvents();
+        auto *photo=dynamic_cast<tunuino::ProteusConnectorPhoto*>(connectorTabs->currentWidget());
+        CHECK(photo&&photo->hasPhoto());
+        CHECK(pinTable->rowCount()==(connector==0?23:35));
+        if(!qEnvironmentVariable("TUNUINO_IO_PREVIEW").isEmpty()) CHECK(centralIo->grab().save(qEnvironmentVariable("TUNUINO_IO_PREVIEW")+QString("-J10%1.png").arg(connector+1)));
+        QTest::mouseClick(photo,Qt::LeftButton,Qt::NoModifier,photo->pinCenter(1).toPoint());
+        CHECK(window.findChild<QLabel*>("proteusPinDetail")->text().contains(QString("J10%1/1").arg(connector+1)));
+    }
+    QTest::qWait(250);CHECK(project->capture(error)==beforePinBrowse);
+    CHECK(window.findChild<QLabel*>("proteusPinDetail")->text().contains("J103/1"));
+    connectorTabs->setCurrentIndex(0);app.processEvents();
+
     if(!qEnvironmentVariable("TUNUINO_IO_PREVIEW").isEmpty()){
         auto *ioWindow=window.findChild<QMdiArea*>()->activeSubWindow();
         app.processEvents();
@@ -100,9 +119,21 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     bool foundInjectorConnection=false;
     for(int row=0;row<ioTable->rowCount();++row)if(ioTable->item(row,0)->text()=="Injector — cylinder 1"){
         auto *connection=qobject_cast<QComboBox*>(ioTable->cellWidget(row,1));CHECK(connection);
+        CHECK(connection->isEnabled()); // Local wiring edits remain available offline.
+        CHECK(!qobject_cast<QPushButton*>(ioTable->cellWidget(row,3))->isEnabled());
         connection->setCurrentIndex(1);
         CHECK(QMetaObject::invokeMethod(connection,"activated",Qt::DirectConnection,Q_ARG(int,1)));
         CHECK(firing->editorState()["engineProfile"].toObject()["cylinders"].toArray()[0].toObject()["injector"].toInt()==0);
+        centralIo->refresh();ioTable->setCurrentCell(row,0);app.processEvents();
+        CHECK(connectorTabs->currentIndex()==1);
+        auto *outputPhoto=dynamic_cast<tunuino::ProteusConnectorPhoto*>(connectorTabs->currentWidget());
+        CHECK(outputPhoto&&outputPhoto->highlighted().contains(3));
+        CHECK(pinTable->item(2,2)->text().contains("Injector"));
+        const auto beforePhotoClick=project->capture(error);
+        QTest::mouseClick(outputPhoto,Qt::LeftButton,Qt::NoModifier,outputPhoto->pinCenter(3).toPoint());
+        CHECK(ioTable->currentRow()==row&&project->capture(error)==beforePhotoClick);
+        if(!qEnvironmentVariable("TUNUINO_IO_PREVIEW").isEmpty()) CHECK(centralIo->grab().save(qEnvironmentVariable("TUNUINO_IO_PREVIEW")+"-linked.png"));
+
         CHECK(firing->restoreEditor(profileBeforeConnection,true,error));
         foundInjectorConnection=true;
     }
