@@ -81,7 +81,10 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle()=="Proteus Pinout");
     CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->property("desktopWindowId")=="Inputs and outputs|ioConfiguration");
     const auto beforeUaefi=project->capture(error);
-    openSensor("io.uaefi.pinout");auto *uaefiWindow=window.findChild<QMdiArea*>()->activeSubWindow();
+    auto *proteusSelector=window.findChild<QMdiArea*>()->activeSubWindow()->findChild<QToolButton*>("ecuPinoutSelector");
+    CHECK(proteusSelector&&proteusSelector->text().contains("Proteus"));
+    proteusSelector->menu()->findChild<QAction*>("pinoutSelectUAefi")->trigger();app.processEvents();
+    auto *uaefiWindow=window.findChild<QMdiArea*>()->activeSubWindow();
     CHECK(uaefiWindow->windowTitle()=="UAefi Pinout"&&uaefiWindow->widget()->property("ecuBoard")=="UAefi");
     auto *uaefiTabs=uaefiWindow->findChild<QTabWidget*>("uaefiConnectors");auto *uaefiTable=uaefiWindow->findChild<QTableWidget*>("uaefiPinTable");
     CHECK(uaefiTabs&&uaefiTabs->count()==5&&uaefiTable&&!uaefiWindow->findChild<QTableWidget*>("ioAssignments"));
@@ -95,7 +98,9 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
         const auto preview=qEnvironmentVariable("TUNUINO_IO_PREVIEW");if(!preview.isEmpty())CHECK(uaefiWindow->grab().save(preview+QString("-UAefi-%1.png").arg(QChar('A'+c))));
     }
     const auto uaefiPreview=qEnvironmentVariable("TUNUINO_IO_PREVIEW");if(!uaefiPreview.isEmpty())CHECK(window.grab().save(uaefiPreview+"-ECU-navigation.png"));
-    uaefiWindow->close();openSensor("io.configuration");
+    auto *uaefiSelector=uaefiWindow->findChild<QToolButton*>("ecuPinoutSelector");CHECK(uaefiSelector&&uaefiSelector->text().contains("UAefi"));
+    uaefiSelector->menu()->findChild<QAction*>("pinoutSelectProteus")->trigger();app.processEvents();
+    CHECK(uaefiWindow->isHidden());CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle()=="Proteus Pinout");
     CHECK(project->capture(error)==beforeUaefi);
 
     auto *ioTable=window.findChild<QTableWidget*>("ioAssignments");
@@ -147,7 +152,30 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     CHECK(primary->restoreEditor(primaryBefore,true,error));centralIo->refresh();
     CHECK(project->capture(error)==projectBeforePinDialog);
     CHECK(pinTable->item(4,3)->text().contains("disabled"));
-
+    pinout->selectPin(0,4);app.processEvents();
+    const int camRow=ioTable->currentRow();CHECK(ioTable->item(camRow,0)->text()=="CAM 1 sensor");
+    auto *camChoice=qobject_cast<QComboBox*>(ioTable->cellWidget(camRow,1));
+    auto *crankChoice=qobject_cast<QComboBox*>(ioTable->cellWidget(crankRow,1));
+    CHECK(camChoice&&camChoice->currentText()=="Disabled"&&camChoice->count()==2);
+    CHECK(pinTable->item(3,3)->text().contains("CAM 1 sensor")&&pinTable->item(3,3)->text().contains("disabled"));
+    CHECK(pinTable->item(11,3)->text().contains("disabled"));
+    bool visitedCam=false;
+    QTimer::singleShot(0,&window,[&]{
+        auto *dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());CHECK(dialog);
+        auto *choice=dialog->findChild<QComboBox*>("ioPinChoice");
+        CHECK(choice&&choice->currentText()=="Disabled");
+        const auto detail=dialog->findChild<QLabel*>("ioPinConnectionDetail")->text();
+        CHECK(detail.contains("shared")&&detail.contains("J101/4")&&detail.contains("J101/12"));
+        choice->setCurrentIndex(1);CHECK(primary->editorState()==primaryBefore);
+        dialog->findChild<QPushButton*>("ioPinApply")->click();visitedCam=true;dialog->reject();
+    });
+    qobject_cast<QPushButton*>(ioTable->cellWidget(camRow,2))->click();CHECK(visitedCam);
+    CHECK(primary->editorState()["values"].toObject()["capture"].toInt()==1);
+    centralIo->refresh();CHECK(camChoice->currentIndex()==1&&crankChoice->currentIndex()==1);
+    CHECK(pinTable->item(3,3)->text().contains("CAM 1 sensor")&&!pinTable->item(3,3)->text().contains("disabled"));
+    CHECK(primary->restoreEditor(primaryBefore,true,error));centralIo->refresh();
+    CHECK(camChoice->currentText()=="Disabled"&&crankChoice->currentText()=="Disabled");
+    CHECK(project->capture(error)==projectBeforePinDialog);
 
     if(!qEnvironmentVariable("TUNUINO_IO_PREVIEW").isEmpty()){
         auto *ioWindow=window.findChild<QMdiArea*>()->activeSubWindow();

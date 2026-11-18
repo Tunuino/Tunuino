@@ -2736,6 +2736,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *uaefiWindow=toolWindow(uaefiPinout,tr("UAefi Pinout"));uaefiWindow->resize(850,680);
     (*parameterWindows)["io.uaefi.pinout"]=uaefiWindow;
     parameterItem(uaefiItem,tr("UAefi Pinout"),"io.uaefi.pinout");
+    const auto selectPinout=[=](const QString &board) {
+        const bool proteus=board=="Proteus";
+        (proteus?uaefiWindow:ioWindow)->hide();
+        navigationTree->setCurrentItem(proteus?proteusItem->child(0):uaefiItem->child(0));
+        (*parameterNavigation)(proteus?"io.configuration":"io.uaefi.pinout");
+    };
+    ioConfiguration->selectPinout=selectPinout;uaefiPinout->selectPinout=selectPinout;
     ioItem->setExpanded(true);proteusItem->setExpanded(true);uaefiItem->setExpanded(true);
     const int avContacts[] = {13,24,14,25,15,26,16,27,17,28,18};
     const int atContacts[] = {19,30,20,31};
@@ -2861,11 +2868,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             [=] { (*parameterNavigation)("ignition.primary"); },
             trigger->findChild<QPushButton*>("parameterSave")});
     }
+    for (auto *trigger : *parameterPanels) if (trigger->block().key == "ignition.primary") {
+        tunuino::IoConfigurationWidget::Binding cam{tr("CAM 1 sensor"),"CAM1",
+            {tr("Disabled"),tr("J101 / 4 (+), 12 (-)")},
+            [trigger]{return trigger->editorState()["values"].toObject()["capture"].toInt();},
+            [trigger](int input,QString &error){
+                auto state=trigger->editorState();auto values=state["values"].toObject();
+                values["capture"]=input;state["values"]=values;return trigger->restoreEditor(state,true,error);
+            },[]{return true;},[=]{(*parameterNavigation)("ignition.primary");},
+            trigger->findChild<QPushButton*>("parameterSave")};
+        cam.connectionHelp=tr("Trigger capture is shared by CAM 1 and the crankshaft sensor. Enabling or disabling it changes both inputs. These pins are dedicated; no alternate pin can be selected.");
+        ioConfiguration->add(cam);
+    }
     for (auto *profile : *parameterPanels) if (profile->block().key == "ignition.firing") {
-        ioConfiguration->add({tr("CAM 1 sensor"),"CAM1",{tr("J101 / 4 (+), 12 (-) — fixed input")},
-            []{return 0;},[](int,QString&){return true;},[]{return true;},
-            [=]{(*parameterNavigation)("ignition.firing");},profile->findChild<QPushButton*>("parameterSave")});
-
         const QStringList roles{tr("Fuel pump relay"), tr("Cooling fan relay"), tr("Main relay")};
         const int pins[] = {3,15,4,16,5,6,7,19,8,20,9,21,10,11,12,23};
         QStringList choices{tr("Disabled")};

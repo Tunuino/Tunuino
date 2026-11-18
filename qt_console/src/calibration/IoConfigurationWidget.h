@@ -1,6 +1,7 @@
 #pragma once
 #include "../ui/WriteButtonState.h"
 #include "ProteusPinoutWidget.h"
+#include "EcuPinoutSelector.h"
 #include <QAbstractItemView>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -21,6 +22,7 @@ namespace tunuino {
 class IoConfigurationWidget final : public QWidget {
 public:
     std::function<void(const QString &)> openConfiguration;
+    std::function<void(const QString &)> selectPinout;
     struct Binding {
         QString name;
         QString resource;
@@ -33,11 +35,13 @@ public:
         std::function<QString()> label;
         QComboBox *choice = nullptr;
         QPushButton *write = nullptr;
+        QString connectionHelp;
     };
 
     explicit IoConfigurationWidget(QWidget *parent = nullptr) : QWidget(parent) {
         setObjectName("ioConfiguration");
         auto *layout = new QVBoxLayout(this);
+        layout->addWidget(ecuPinoutSelector(this,"Proteus",[this](const QString &board){if(selectPinout)selectPinout(board);}),0,Qt::AlignLeft);
         auto *hint = new QLabel(tr("Choose an ECU connection in the list below. Configure edits the ECU pin connection here; Write to ECU saves the changes."), this);
         hint->setWordWrap(true); layout->addWidget(hint);
         auto *splitter = new QSplitter(Qt::Horizontal, this);
@@ -81,7 +85,7 @@ public:
         table_->setItem(row, 0, new QTableWidgetItem(binding.name));
         binding.choice = new QComboBox(table_);
         binding.choice->addItems(connectionLabels(binding));
-        binding.choice->setToolTip(tr("Select the physical ECU pin for this function. Changes remain local until Write to ECU."));
+        binding.choice->setToolTip(binding.connectionHelp.isEmpty()?tr("Select the physical ECU pin for this function. Changes remain local until Write to ECU."):binding.connectionHelp);
         binding.choice->setStyleSheet("QComboBox { border: 1px solid #696f76; padding: 3px 20px 3px 5px; }");
         table_->setCellWidget(row, 1, binding.choice);
         auto *configure = new QPushButton(tr("Configure..."), table_);
@@ -164,6 +168,7 @@ private:
         const bool fixed=dedicatedPin(binding);
         if(pins.isEmpty() && fixed) pins=parseContacts(binding.connections.last());
         QStringList details;
+        if(!binding.connectionHelp.isEmpty()) details<<binding.connectionHelp;
         if(fixed) details << (binding.connections.size()>1?tr("Dedicated hardware connection. Enable or disable this function; its physical pins do not move."):tr("Fixed hardware connection. These physical pins cannot be reassigned."));
         if(pins.isEmpty()) details << tr("No ECU pin selected. Choose a compatible connection above.");
         for(const auto &contact:pins) for(int connector=0;connector<3;++connector) for(const auto &pin:proteusPins(connector))
