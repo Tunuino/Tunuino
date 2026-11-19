@@ -10,6 +10,7 @@ SerialSession::SerialSession(QObject *parent) : QObject(parent) {
     connect(&port_, &QSerialPort::errorOccurred, this, &SerialSession::onError);
 }
 bool SerialSession::open(const QString &name, qint32 baud) {
+    if(!targetAllowed_)return false;
     close();
     port_.setPortName(name);
     port_.setBaudRate(baud);
@@ -36,7 +37,7 @@ void SerialSession::close() {
 }
 bool SerialSession::isOpen() const { return port_.isOpen(); }
 bool SerialSession::exchange(const QByteArray &body, int timeoutMs) {
-    if (!isOpen() || busy_ || timeoutMs < 1 || timeoutMs > 60000) return false;
+    if (!targetAllowed_ || !isOpen() || busy_ || timeoutMs < 1 || timeoutMs > 60000) return false;
     outgoing_ = FrameCodec::encode(body);
     if (outgoing_.isEmpty()) return false;
     incoming_.clear();

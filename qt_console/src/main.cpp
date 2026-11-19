@@ -25,6 +25,8 @@ int main(int argc, char *argv[]) {
         QDockWidget::title { background: #303236; padding: 7px; border-bottom: 1px solid #515357; }
         QTreeWidget, QListWidget, QTableWidget { background: #292b2e; alternate-background-color: #303236; color: #e5e5e5; border: 1px solid #4a4c50; gridline-color: #4c4e52; selection-background-color: #0a70b1; selection-color: white; }
         QTreeWidget::item, QListWidget::item { padding: 6px; }
+        QTreeWidget::item:disabled { color: #777b80; }
+        QMenuBar::item:disabled { color: #92948e; }
         QTreeWidget::item:selected, QListWidget::item:selected { background: #0078d7; color: white; }
         QHeaderView::section { background: #3b3d40; color: #e7e7e7; padding: 5px; border: 1px solid #525458; }
         QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox { background: #34363a; color: #f0f0f0; border: 1px solid #65676a; border-radius: 2px; padding: 5px; }

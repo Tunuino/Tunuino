@@ -18,6 +18,7 @@ public:
     static bool decode(const QByteArray &bytes,QJsonObject &payload,QString &error);
     static QJsonObject tableState(QTableWidget *table,QTableWidget *rpm);
     static bool tableState(QTableWidget *table,QTableWidget *rpm,const QJsonObject &,double low,double high,bool apply,QString &error);
+    static QJsonObject uaefiReference();
     static QJsonObject defaultPages();
     static QJsonObject vvtTableState(const QByteArray &page={});
     static QString defaultDirectory();

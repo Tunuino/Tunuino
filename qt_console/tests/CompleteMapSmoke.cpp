@@ -1,3 +1,4 @@
+#include "calibration/ProjectEcuSelection.h"
 #include "calibration/IoConfigurationWidget.h"
 // Integration check using the real Console and its File menu.
 // Offline only; settings/files are isolated in a temporary directory.
@@ -50,6 +51,16 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     QElapsedTimer elapsed;elapsed.start();const auto checkpoint=[&](const char *stage){std::cout<<"CompleteMapSmoke ["<<elapsed.elapsed()<<" ms] "<<stage<<std::endl;};
     checkpoint("construct main window");
     MainWindow window;window.show();app.processEvents();auto *project=dynamic_cast<tunuino::MapProject*>(window.findChild<QObject*>("mapProject"));CHECK(project);
+    auto *ecuSelection=dynamic_cast<tunuino::ProjectEcuSelection*>(window.findChild<QWidget*>("projectEcuSelection"));CHECK(ecuSelection&&ecuSelection->selected().isEmpty());
+    auto *targetSession=window.findChild<tunuino::SerialSession*>();CHECK(targetSession&&!targetSession->targetAllowed());
+    CHECK(!targetSession->open("locked-ecu")&&!targetSession->exchange("TUNUINO:W"));
+    CHECK(project->capture(error).isEmpty());
+    auto *initialTree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(initialTree&&initialTree->topLevelItem(1)->isDisabled());
+    for(auto *w:window.findChild<QMdiArea*>()->subWindowList())CHECK(!w->isEnabled()&&w->isHidden());
+    const auto selectionPreview=qEnvironmentVariable("TUNUINO_IO_PREVIEW");if(!selectionPreview.isEmpty())CHECK(window.grab().save(selectionPreview+"-select-first.png"));
+    auto *boardChoice=ecuSelection->findChild<QComboBox*>("projectEcuChoice");CHECK(boardChoice);
+    boardChoice->setCurrentIndex(boardChoice->findData("Proteus"));ecuSelection->findChild<QPushButton*>("projectEcuApply")->click();app.processEvents();
+    CHECK(ecuSelection->proteus()&&targetSession->targetAllowed());
     if(!qEnvironmentVariable("TUNUINO_SERIAL_TEST_PORT").isEmpty()){
         auto *session=window.findChild<tunuino::SerialSession*>();CHECK(session);CHECK(session->open(qEnvironmentVariable("TUNUINO_SERIAL_TEST_PORT")));CHECK(session->exchange("TUNUINO?"));
         tunuino::ToolsSuite *tools=nullptr;for(auto *object:window.findChildren<QObject*>())if(auto *candidate=dynamic_cast<tunuino::ToolsSuite*>(object))tools=candidate;CHECK(tools);
@@ -68,7 +79,7 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     auto *sensorTree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(sensorTree);CHECK(sensorTree->topLevelItemCount()==8);
     QStringList roots;for(int i=0;i<sensorTree->topLevelItemCount();++i)roots<<sensorTree->topLevelItem(i)->text(0);
     CHECK(roots==QStringList({"Inputs and outputs","Engine setup","Fueling","Ignition","VVT","ETB","Diagnostics","Logs"}));
-    for(QTreeWidgetItemIterator item(sensorTree);*item;++item) CHECK((*item)->flags() & Qt::ItemIsEnabled);
+    CHECK(!sensorTree->topLevelItem(1)->isDisabled());
     auto *ioRoot=sensorTree->topLevelItem(0);CHECK(ioRoot->childCount()==2&&!ioRoot->data(0,Qt::UserRole).isValid());
     CHECK(ioRoot->child(0)->text(0)=="ECU Proteus"&&ioRoot->child(0)->child(0)->text(0)=="Proteus Pinout");
     CHECK(ioRoot->child(1)->text(0)=="ECU UAefi"&&ioRoot->child(1)->child(0)->text(0)=="UAefi Pinout");
@@ -81,9 +92,14 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle()=="Proteus Pinout");
     CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->property("desktopWindowId")=="Inputs and outputs|ioConfiguration");
     const auto beforeUaefi=project->capture(error);
-    auto *proteusSelector=window.findChild<QMdiArea*>()->activeSubWindow()->findChild<QToolButton*>("ecuPinoutSelector");
-    CHECK(proteusSelector&&proteusSelector->text().contains("Proteus"));
-    proteusSelector->menu()->findChild<QAction*>("pinoutSelectUAefi")->trigger();app.processEvents();
+    CHECK(ioRoot->child(1)->isDisabled()&&!ioRoot->child(0)->isDisabled());
+    const auto mayChange=ecuSelection->mayChange;ecuSelection->mayChange=[]{return false;};
+    CHECK(!ecuSelection->select("UAefi",error)&&ecuSelection->proteus()&&project->capture(error)==beforeUaefi);ecuSelection->mayChange=mayChange;
+    openSensor("io.uaefi.pinout");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle()=="Proteus Pinout");
+    boardChoice->setCurrentIndex(boardChoice->findData("UAefi"));ecuSelection->findChild<QPushButton*>("projectEcuApply")->click();app.processEvents();
+    CHECK(ecuSelection->selected()=="UAefi"&&!targetSession->targetAllowed());
+    CHECK(!targetSession->open("locked-ecu")&&!targetSession->exchange("TUNUINO:W"));
+    CHECK(ioRoot->child(0)->isDisabled()&&!ioRoot->child(1)->isDisabled()&&sensorTree->topLevelItem(1)->isDisabled());
     auto *uaefiWindow=window.findChild<QMdiArea*>()->activeSubWindow();
     CHECK(uaefiWindow->windowTitle()=="UAefi Pinout"&&uaefiWindow->widget()->property("ecuBoard")=="UAefi");
     auto *uaefiTabs=uaefiWindow->findChild<QTabWidget*>("uaefiConnectors");auto *uaefiTable=uaefiWindow->findChild<QTableWidget*>("uaefiPinTable");
@@ -93,14 +109,27 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
         auto *photo=dynamic_cast<tunuino::ConnectorPhotoWidget*>(uaefiTabs->currentWidget());CHECK(photo&&photo->hasPhoto());
         QTest::mouseClick(photo,Qt::LeftButton,Qt::NoModifier,photo->pinCenter(1).toPoint());
         CHECK(uaefiWindow->findChild<QLabel*>("uaefiPinDetail")->text().contains(QString(QChar('A'+c))+"1"));
-        CHECK(project->capture(error)==beforeUaefi); // Hardware browsing cannot edit or write the connected Proteus.
+        CHECK(project->capture(error)==tunuino::MapProject::uaefiReference()); // No Proteus configuration can enter the UAefi project.
         app.processEvents();
         const auto preview=qEnvironmentVariable("TUNUINO_IO_PREVIEW");if(!preview.isEmpty())CHECK(uaefiWindow->grab().save(preview+QString("-UAefi-%1.png").arg(QChar('A'+c))));
     }
     const auto uaefiPreview=qEnvironmentVariable("TUNUINO_IO_PREVIEW");if(!uaefiPreview.isEmpty())CHECK(window.grab().save(uaefiPreview+"-ECU-navigation.png"));
-    auto *uaefiSelector=uaefiWindow->findChild<QToolButton*>("ecuPinoutSelector");CHECK(uaefiSelector&&uaefiSelector->text().contains("UAefi"));
-    uaefiSelector->menu()->findChild<QAction*>("pinoutSelectProteus")->trigger();app.processEvents();
-    CHECK(uaefiWindow->isHidden());CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle()=="Proteus Pinout");
+    const auto uaefiDocument=project->capture(error);CHECK(project->save(temp.path()+"/uaefi-reference.tnproj",error));
+    CHECK(!project->applyEdits(beforeUaefi,error));
+    auto mixedUaefi=uaefiDocument;mixedUaefi["pages"]=beforeUaefi["pages"];CHECK(!project->apply(mixedUaefi,error));
+    CHECK(ecuSelection->selected()=="UAefi"&&project->capture(error)==uaefiDocument);
+    openSensor("io.configuration");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()==uaefiWindow);
+    auto *inactiveIo=dynamic_cast<tunuino::IoConfigurationWidget*>(window.findChild<QWidget*>("ioConfiguration"));CHECK(inactiveIo&&!inactiveIo->isEnabled());
+    auto *inactiveTable=inactiveIo->findChild<QTableWidget*>("ioAssignments");
+    auto *inactiveChoice=qobject_cast<QComboBox*>(inactiveTable->cellWidget(0,1));CHECK(inactiveChoice);inactiveChoice->activated(1);
+    boardChoice->setCurrentIndex(boardChoice->findData("Proteus"));ecuSelection->findChild<QPushButton*>("projectEcuApply")->click();app.processEvents();
+    CHECK(uaefiWindow->isHidden()&&!uaefiWindow->isEnabled());CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle()=="Proteus Pinout");
+    CHECK(project->capture(error)==beforeUaefi);
+
+    CHECK(project->open(temp.path()+"/uaefi-reference.tnproj",error)&&ecuSelection->selected()=="UAefi");
+    CHECK(project->capture(error)==uaefiDocument);CHECK(project->apply(beforeUaefi,error)&&ecuSelection->proteus());
+    CHECK(project->capture(error)==beforeUaefi);
+    auto legacyProteus=beforeUaefi;legacyProteus.remove("ecuSelection");CHECK(project->apply(legacyProteus,error)&&ecuSelection->proteus());
     CHECK(project->capture(error)==beforeUaefi);
 
     auto *ioTable=window.findChild<QTableWidget*>("ioAssignments");

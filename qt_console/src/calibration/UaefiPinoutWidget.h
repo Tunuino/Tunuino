@@ -1,7 +1,6 @@
 #pragma once
 #include "ConnectorPhotoWidget.h"
 #include "UaefiPinoutData.h"
-#include "EcuPinoutSelector.h"
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFile>
@@ -17,11 +16,9 @@ namespace tunuino {
 // Hardware reference only. No Proteus editor, ECU snapshot or write command is attached here.
 class UaefiPinoutWidget final : public QWidget {
 public:
-    std::function<void(const QString &)> selectPinout;
     explicit UaefiPinoutWidget(QWidget *parent=nullptr):QWidget(parent) {
         setObjectName("uaefiPinout");setProperty("ecuBoard","UAefi");
         auto *layout=new QVBoxLayout(this);
-        layout->addWidget(ecuPinoutSelector(this,"UAefi",[this](const QString &board){if(selectPinout)selectPinout(board);}),0,Qt::AlignLeft);
         auto *heading=new QLabel(tr("UAefi F3 — connectors A–E"),this);heading->setStyleSheet("font-weight:bold");layout->addWidget(heading);
         auto *info=new QLabel(tr("Hardware pinout reference. Connector mating face, latch at the top. Component population depends on the assembled board."),this);
         info->setWordWrap(true);layout->addWidget(info);

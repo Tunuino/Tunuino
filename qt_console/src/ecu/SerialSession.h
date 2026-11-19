@@ -11,6 +11,8 @@ class SerialSession final : public QObject {
     Q_OBJECT
 public:
     explicit SerialSession(QObject *parent = nullptr);
+    void setTargetAllowed(bool allowed) {targetAllowed_=allowed;if(!allowed)close();}
+    bool targetAllowed() const {return targetAllowed_;}
     bool open(const QString &portName, qint32 baudRate = 115200);
     void close();
     bool isOpen() const;
@@ -34,5 +36,6 @@ private:
     QByteArray outgoing_;
     qsizetype sent_ = 0;
     bool busy_ = false;
+    bool targetAllowed_ = true;
 };
 }

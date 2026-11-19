@@ -1,3 +1,4 @@
+#include "calibration/ProjectEcuSelection.h"
 #include "calibration/IoConfigurationWidget.h"
 #include "calibration/UaefiPinoutWidget.h"
 #include "ui/WriteButtonState.h"
@@ -410,6 +411,7 @@ private:
 };
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
+    auto *ecuSelection=new tunuino::ProjectEcuSelection(this);
     setWindowTitle("Tunuino Console");
     resize(1400, 850);
     // First MDI migration stage: retain the existing tab controller and ECU
@@ -428,7 +430,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *tabs = new QTabWidget(this);
     tabs->hide();
     auto settingsWindows = QSharedPointer<QVector<QPointer<QMdiSubWindow>>>::create(6);
-    const auto openSettingsPage = [this, workspace, tabs, settingsWindows, boundsGuard](int index) {
+    const auto openSettingsPage = [this, workspace, tabs, settingsWindows, boundsGuard,ecuSelection](int index) {
+        if(!ecuSelection->proteus())return;
         if (index < 3 || index >= tabs->count()) return;
         auto &existing = (*settingsWindows)[index];
         if (!existing) {
@@ -460,6 +463,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto parameterNavigation=QSharedPointer<std::function<void(QString)>>::create();
     auto toolNavigation=QSharedPointer<std::function<void(int)>>::create();
     const auto openTuneDisplay=[=]{
+        if(!ecuSelection->proteus())return;
         if(!*tuneWindow)return;auto *window=tuneWindow->data();
         if(window->isMinimized())window->showNormal();else window->show();
         window->widget()->show();workspace->setActiveSubWindow(window);window->raise();
@@ -477,6 +481,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *navigationSearch = new QLineEdit(navigationPanel);
     navigationSearch->setPlaceholderText(tr("Search settings..."));
     navigationSearch->setClearButtonEnabled(true);
+    navigationLayout->addWidget(ecuSelection);
     navigationLayout->addWidget(navigationSearch);
     auto *navigationTree = new QTreeWidget(navigationPanel);
     navigationTree->setObjectName("MainNavigation");navigationTree->setStyleSheet("QTreeWidget{font-family:'Segoe UI';font-size:10pt;}QTreeWidget::item{padding:1px 0;min-height:21px;}QTreeWidget::item:selected{background:#168bd2;color:white;}");navigationTree->setIconSize(QSize(18,18));
@@ -2078,10 +2083,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     const auto toolWindow=[=](QWidget *widget,const QString &title){auto *window=workspace->addSubWindow(widget);tunuino::CalibrationAppearance::frame(window);window->setWindowTitle(title);window->setAttribute(Qt::WA_DeleteOnClose,false);window->resize(900,640);boundsGuard->watch(window);window->hide();return window;};
     auto *serviceWindow=toolWindow(serviceTool,tr("ECU information and Logbook"));
     auto *scopeWindow=toolWindow(scopeTool,tr("Scope"));auto *outputTestWindow=toolWindow(outputTestTool,tr("Test outputs"));auto *autotuneWindow=toolWindow(autotuneTool,autotuneTool->windowTitle());
-    const auto showTool=[=](QMdiSubWindow *window){window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
+    const auto showTool=[=](QMdiSubWindow *window){if(!ecuSelection->proteus())return;window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
     autotuneWindow->setProperty("desktopWindowId",QStringLiteral("Autotune|"));
     connect(autotuneTool,&QWidget::windowTitleChanged,autotuneWindow,&QWidget::setWindowTitle);
-    const auto openAutotune=[=](bool parameters){if(parameters)autotuneTool->configure();else autotuneTool->review();showTool(autotuneWindow);};
+    const auto openAutotune=[=](bool parameters){if(!ecuSelection->proteus())return;if(parameters)autotuneTool->configure();else autotuneTool->review();showTool(autotuneWindow);};
     *toolNavigation=[=](int index){if(index==11)showTool(scopeWindow);else openAutotune(index==12);};
     tools->openServiceData=[=](int page){showTool(serviceWindow);serviceTool->showPage(page);};
     tools->openScope=[=]{showTool(scopeWindow);};tools->openOutputTest=[=]{showTool(outputTestWindow);};tools->openAutotune=[=]{openAutotune(true);};
@@ -2718,9 +2723,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     triggerPresets->openManual=[=]{showTool(manualTriggerWindow);};
     triggerWizard->openScope=[=]{showTool(scopeWindow);};triggerWizard->openFiringOrder=[=]{if(*parameterNavigation)(*parameterNavigation)("ignition.firing");};
     scopeTool->captured=[=](const tunuino::ToolSnapshot &source,const QByteArray &header,const QByteArray &samples){triggerWizard->observeScope(source,header,samples);};
-    *parameterNavigation=[=](const QString &key){if((*sensorWizards).contains(key)){(*sensorWizards)[key]->open();return;}if(key=="ignition.wizard"){triggerPresets->open();return;}auto *window=(*parameterWindows).value(key).data();if(!window)return;if(!window->property("parameterOpened").toBool()){if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))window->resize(parameters->sizeHint()+QSize(12,30));window->setProperty("parameterOpened",true);}window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
+    *parameterNavigation=[=](const QString &key){if((key=="io.uaefi.pinout"&&ecuSelection->selected()!="UAefi")||(key!="io.uaefi.pinout"&&!ecuSelection->proteus()))return;if((*sensorWizards).contains(key)){(*sensorWizards)[key]->open();return;}if(key=="ignition.wizard"){triggerPresets->open();return;}auto *window=(*parameterWindows).value(key).data();if(!window)return;if(!window->property("parameterOpened").toBool()){if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))window->resize(parameters->sizeHint()+QSize(12,30));window->setProperty("parameterOpened",true);}window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
     auto *ioConfiguration = new tunuino::IoConfigurationWidget;
     ioConfiguration->setProperty("ecuBoard","Proteus");
+    ioConfiguration->configurationAllowed=[=]{return ecuSelection->proteus();};
     ioConfiguration->openConfiguration = [=](const QString &key) { (*parameterNavigation)(key); };
     auto *ioWindow = toolWindow(ioConfiguration, tr("Proteus Pinout"));
     ioWindow->setProperty("desktopWindowId",QStringLiteral("Inputs and outputs|ioConfiguration"));
@@ -2736,13 +2742,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *uaefiWindow=toolWindow(uaefiPinout,tr("UAefi Pinout"));uaefiWindow->resize(850,680);
     (*parameterWindows)["io.uaefi.pinout"]=uaefiWindow;
     parameterItem(uaefiItem,tr("UAefi Pinout"),"io.uaefi.pinout");
-    const auto selectPinout=[=](const QString &board) {
-        const bool proteus=board=="Proteus";
-        (proteus?uaefiWindow:ioWindow)->hide();
-        navigationTree->setCurrentItem(proteus?proteusItem->child(0):uaefiItem->child(0));
-        (*parameterNavigation)(proteus?"io.configuration":"io.uaefi.pinout");
-    };
-    ioConfiguration->selectPinout=selectPinout;uaefiPinout->selectPinout=selectPinout;
     ioItem->setExpanded(true);proteusItem->setExpanded(true);uaefiItem->setExpanded(true);
     const int avContacts[] = {13,24,14,25,15,26,16,27,17,28,18};
     const int atContacts[] = {19,30,20,31};
@@ -2961,6 +2960,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     dock->hide();
     *engineStatusDockRef = dock;
     auto *session = new tunuino::SerialSession(this);
+    session->setTargetAllowed(false);
     auto identityVerified = QSharedPointer<bool>::create(false);
     auto ecuOnline = QSharedPointer<bool>::create(false);
     auto ecuClean = QSharedPointer<bool>::create(false);
@@ -3028,7 +3028,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto writeActionRef = QSharedPointer<QPointer<QAction>>::create();
     const auto updateWriteAvailability = [=]() {
         refreshMapWriteColors();
-        const bool ready = *ecuOnline && *ecuClean && *identityVerified && session->isOpen() && !writer->busy() && !*writePending && !*readBusy && !*validationPending && !*toolBusy && !*toolReply;
+        const bool ready = ecuSelection->proteus() && *ecuOnline && *ecuClean && *identityVerified && session->isOpen() && !writer->busy() && !*writePending && !*readBusy && !*validationPending && !*toolBusy && !*toolReply;
         const auto &fuelBase=(*mapBases)[0]; const auto &ignitionBase=(*mapBases)[1];
         fuelSave->setEnabled(ready && !fuelBase.bytes.isEmpty() && fuelBase.identity==*ecuIdentity && fuelBase.generation!=0 && fuelBase.generation==*ecuGeneration);
         ignitionSave->setEnabled(ready && !ignitionBase.bytes.isEmpty() && ignitionBase.identity==*ecuIdentity && ignitionBase.generation!=0 && ignitionBase.generation==*ecuGeneration);
@@ -3039,7 +3039,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const bool sensorReady=ready&&sensorBase->header.size()==256&&sensorBase->aux.size()==256
             &&sensorBase->identity==*ecuIdentity&&sensorBase->generation==*ecuGeneration;
         // Read-only target queries do not invalidate the ADC sample stream.
-        dbwSignals->available=*ecuOnline&&*ecuClean&&*identityVerified&&session->isOpen()&&!writer->busy()&&!*writePending&&!*readBusy&&!*validationPending&&!*toolBusy&&sensorBase->header.size()==256&&sensorBase->aux.size()==256&&sensorBase->identity==*ecuIdentity&&sensorBase->generation==*ecuGeneration;
+        dbwSignals->available=ecuSelection->proteus()&&*ecuOnline&&*ecuClean&&*identityVerified&&session->isOpen()&&!writer->busy()&&!*writePending&&!*readBusy&&!*validationPending&&!*toolBusy&&sensorBase->header.size()==256&&sensorBase->aux.size()==256&&sensorBase->identity==*ecuIdentity&&sensorBase->generation==*ecuGeneration;
         if(!dbwSignals->available)dbwSignals->invalidate();
         for(auto *panel:*sensorPanels)panel->setAvailable(sensorReady);for(auto *panel:*inputPanels)panel->setAvailable(sensorReady);
         for(auto *panel:*parameterPanels)panel->setAvailable(sensorReady);
@@ -3158,6 +3158,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     openProject->setObjectName("fileOpenMap");saveProject->setObjectName("fileSaveMap");
     mapProject->canUse=[=]{return !writer->busy()&&!*writePending&&!*readBusy&&!*validationPending&&!*toolBusy;};
     mapProject->capture=[=](QString &error){
+        if(ecuSelection->selected().isEmpty()){error=tr("Select an ECU before saving or configuring a project.");return QJsonObject{};}
+        if(ecuSelection->selected()=="UAefi")return tunuino::MapProject::uaefiReference();
         auto pages=*projectPages;if(pages.isEmpty())pages=tunuino::MapProject::defaultPages();
         const auto live=tools->snapshot?tools->snapshot():tunuino::ToolSnapshot{};
         if(!*projectLoaded&&live.valid()){const QStringList names{"header","fuel","ignition","aux"};for(int i=0;i<4;++i)pages[names[i]]=QString::fromLatin1(live.pages[i].toHex());if(!live.pages[4].isEmpty())pages["afr"]=QString::fromLatin1(live.pages[4].toHex());if(!live.pages[5].isEmpty())pages["controls"]=QString::fromLatin1(live.pages[5].toHex());if(!live.pages[6].isEmpty())pages["vvt"]=QString::fromLatin1(live.pages[6].toHex());if(!live.pages[7].isEmpty())pages["vvt2"]=QString::fromLatin1(live.pages[7].toHex());if(!live.pages[8].isEmpty())for(int i=8;i<11;++i)pages[QStringList{"cam2Controls","cam2Target1","cam2Target2"}[i-8]]=QString::fromLatin1(live.pages[i].toHex());}
@@ -3168,9 +3170,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         for(auto *panel:*parameterPanels)parameters[panel->block().key]=panel->editorState();
         for(auto *panel:*sensorPanels)sensors[tunuino::SensorCalibrationCodec::name(panel->kind())]=panel->editorState();
         const auto curve=camSensitivity->state();if(!camSensitivity->restore(curve,false,error))return QJsonObject{};
-        return QJsonObject{{"dbw",dbwSignals->state()},{"curves",QJsonObject{{"cam1Sensitivity",curve}}},{"target",QJsonObject{{"family",1},{"mcu",1},{"hardwareRevision",7},{"schema",2}}},{"pages",pages},{"tables",tables},{"parameters",parameters},{"sensors",sensors},{"trigger",triggerWizard->editorState()},{"service",QJsonObject{{"comment",serviceTool->projectComment()}}}};
+        return QJsonObject{{"ecuSelection","Proteus"},{"dbw",dbwSignals->state()},{"curves",QJsonObject{{"cam1Sensitivity",curve}}},{"target",QJsonObject{{"family",1},{"mcu",1},{"hardwareRevision",7},{"schema",2}}},{"pages",pages},{"tables",tables},{"parameters",parameters},{"sensors",sensors},{"trigger",triggerWizard->editorState()},{"service",QJsonObject{{"comment",serviceTool->projectComment()}}}};
     };
     mapProject->apply=[=](const QJsonObject &document,QString &error){
+        if(!mapProject->canUse()){error=tr("Finish the active ECU operation before opening a project.");return false;}
+        if(document.value("ecuSelection")=="UAefi") {
+            if(document!=tunuino::MapProject::uaefiReference()){error=tr("Invalid UAefi reference project. No configuration was changed.");return false;}
+            return ecuSelection->select("UAefi",error);
+        }
+        if((document.contains("ecuSelection")&&document["ecuSelection"]!="Proteus")||document["target"].toObject()!=QJsonObject{{"family",1},{"mcu",1},{"hardwareRevision",7},{"schema",2}}){error=tr("Project ECU is incompatible. No configuration was changed.");return false;}
         const auto dbwState=document.contains("dbw")?document["dbw"].toObject():tunuino::DbwSignals::defaults();if(!dbwSignals->restore(dbwState,false,error))return false;
         const auto curve=document.contains("curves")?document["curves"].toObject()["cam1Sensitivity"].toObject():tunuino::SensitivityCurve::defaultState();if(!camSensitivity->restore(curve,false,error))return false;
         auto tables=document["tables"].toObject();if(!tables.contains("vvt"))tables["vvt"]=tunuino::MapProject::vvtTableState(QByteArray::fromHex(document["pages"].toObject()["vvt"].toString().toLatin1()));if(!tables.contains("vvt2"))tables["vvt2"]=tunuino::MapProject::vvtTableState(QByteArray::fromHex(document["pages"].toObject()["vvt2"].toString().toLatin1()));auto parameters=tunuino::ParameterCatalog::migrateVvt(document["parameters"].toObject(),QByteArray::fromHex(document["pages"].toObject()["controls"].toString().toLatin1()));auto sensors=document["sensors"].toObject();
@@ -3201,6 +3209,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         const QJsonValue comment=document["service"].toObject()["comment"];if(!comment.isString()||comment.toString().size()>128){error=tr("Invalid project comment.");return false;}
         // All content is validated before changing any editor. File data never
         // replaces the trusted live ECU snapshot used by the write transaction.
+        if(!ecuSelection->select("Proteus",error))return false;
         dbwSignals->restore(dbwState,true,error);dbwSetup->sync();dbwMonitor->sync();
         *projectPages=document["pages"].toObject();*projectLoaded=true;
         const auto live=tools->snapshot?tools->snapshot():tunuino::ToolSnapshot{};
@@ -3241,6 +3250,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         statusBar()->showMessage(tr("Trigger preset applied to local editors. Review settings before Write to ECU."),10000);return true;
     };
     mapProject->applyEdits=[=](const QJsonObject &desired,QString &error){
+        if(!ecuSelection->proteus()){error=tr("Select Proteus before editing its configuration.");return false;}
         if(!mapProject->canUse()){error=tr("Wait for the active ECU operation to finish.");return false;}
         const auto current=mapProject->capture(error);if(current.isEmpty())return false;
         if(desired.keys()!=current.keys()||desired["target"]!=current["target"]||desired["pages"]!=current["pages"]){error=tr("Comparator cannot replace the ECU target or stored base pages.");return false;}
@@ -3701,7 +3711,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         return result;
     };
     autoConnectionHooks.isOpen = [session] { return session->isOpen(); };
-    autoConnectionHooks.suspended = [firmwarePage] { return firmwarePage->isVisible(); };
+    autoConnectionHooks.suspended = [=] { return !ecuSelection->proteus()||firmwarePage->isVisible(); };
     autoConnectionHooks.close = [session] { session->close(); };
     autoConnectionHooks.begin = [=](const QString &name) {
         liveTimer->stop();
@@ -4037,8 +4047,29 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         liveTimer->start();
         requestLive();
     });
+    const auto enforceEcuSelection=[=] {
+        setProperty("selectedEcu",ecuSelection->selected());
+        session->setTargetAllowed(ecuSelection->proteus());
+        proteusItem->setDisabled(!ecuSelection->proteus());
+        uaefiItem->setDisabled(ecuSelection->selected()!="UAefi");
+        for(int i=1;i<navigationTree->topLevelItemCount();++i)navigationTree->topLevelItem(i)->setDisabled(!ecuSelection->proteus());
+        for(auto *window:workspace->subWindowList()) {
+            const bool allowed=window==uaefiWindow?ecuSelection->selected()=="UAefi":ecuSelection->proteus();
+            window->setEnabled(allowed);if(!allowed&&!window->isHidden())window->hide();
+        }
+        toolsMenu->menuAction()->setEnabled(ecuSelection->proteus());
+        ecuMenu->menuAction()->setEnabled(ecuSelection->proteus());
+        compareAction->setEnabled(ecuSelection->proteus());
+        updateWriteAvailability();
+        if(!ecuSelection->proteus())connectionStatus_->setText(ecuSelection->selected().isEmpty()?tr("OFFLINE | Select ECU first"):tr("OFFLINE | UAefi selected — pinout only"));
+    };
+    ecuSelection->mayChange=mapProject->canUse;
+    ecuSelection->changed=[=]{enforceEcuSelection();if(*parameterNavigation)(*parameterNavigation)(ecuSelection->proteus()?"io.configuration":"io.uaefi.pinout");};
+    auto enforcing=QSharedPointer<bool>::create(false);
+    connect(workspace,&QMdiArea::subWindowActivated,this,[=](QMdiSubWindow*){if(*enforcing)return;*enforcing=true;enforceEcuSelection();*enforcing=false;});
+    enforceEcuSelection();
     autoConnection->start();
-    statusBar()->showMessage(tr("OFFLINE | Waiting for ECU — automatic connection"));
+    statusBar()->showMessage(tr("Select the project ECU first. The other ECU remains locked."));
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {

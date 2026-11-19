@@ -1,7 +1,6 @@
 #pragma once
 #include "../ui/WriteButtonState.h"
 #include "ProteusPinoutWidget.h"
-#include "EcuPinoutSelector.h"
 #include <QAbstractItemView>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -22,7 +21,7 @@ namespace tunuino {
 class IoConfigurationWidget final : public QWidget {
 public:
     std::function<void(const QString &)> openConfiguration;
-    std::function<void(const QString &)> selectPinout;
+    std::function<bool()> configurationAllowed;
     struct Binding {
         QString name;
         QString resource;
@@ -41,7 +40,6 @@ public:
     explicit IoConfigurationWidget(QWidget *parent = nullptr) : QWidget(parent) {
         setObjectName("ioConfiguration");
         auto *layout = new QVBoxLayout(this);
-        layout->addWidget(ecuPinoutSelector(this,"Proteus",[this](const QString &board){if(selectPinout)selectPinout(board);}),0,Qt::AlignLeft);
         auto *hint = new QLabel(tr("Choose an ECU connection in the list below. Configure edits the ECU pin connection here; Write to ECU saves the changes."), this);
         hint->setWordWrap(true); layout->addWidget(hint);
         auto *splitter = new QSplitter(Qt::Horizontal, this);
@@ -112,7 +110,7 @@ public:
             QSignalBlocker blocker(binding.choice);
             if(!binding.choice->view()->isVisible()) binding.choice->setCurrentIndex(binding.current());
             // Offline editing is independent of whether an ECU write is available.
-            binding.choice->setEnabled(binding.connections.size()>1);
+            binding.choice->setEnabled((!configurationAllowed||configurationAllowed())&&binding.connections.size()>1);
             binding.write->setEnabled(binding.sourceWrite->isEnabled());
             const bool pending = binding.sourceWrite->property("ecuWritePending").toBool();
             showPendingWrite(binding.write, pending);
@@ -177,6 +175,7 @@ private:
         return details.join("\n");
     }
     bool assignConnection(int row,int selected) {
+        if(configurationAllowed&&!configurationAllowed())return false;
         auto &binding=bindings_[row]; table_->setCurrentCell(row,0);
         for(int i=0;i<bindings_.size();++i) {
             const auto &other=bindings_[i];
