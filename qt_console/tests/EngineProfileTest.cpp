@@ -27,13 +27,24 @@ int main(int argc,char **argv){QApplication app(argc,argv);QByteArray header(256
     CHECK(draft.count()==4&&draft.build(error).isEmpty());for(int i=0;i<4;++i){CHECK(draft.cylinders[i].injector==-1&&draft.cylinders[i].coil==-1);CHECK(draft.assign(i,false,i,error)&&draft.assign(i,true,i,error));}
     auto built=draft.build(error);CHECK(built.size()==256&&built.left(128)==header.left(128)&&built[128]==1&&built[129]==4);
     auto auxiliaryDraft=draft.json();
+    auxiliaryDraft["pumpPrimeMs"]=1250;
+    auxiliaryDraft["fanOnCenti"]=9750;
+    auxiliaryDraft["fanOffCenti"]=8925;
     auxiliaryDraft["auxiliaryOutputs"]=QJsonArray{9,10,11};
     EngineProfileDraft auxiliaryProfile;auxiliaryProfile.load(built,aux);
     CHECK(auxiliaryProfile.import(auxiliaryDraft,error));
     const auto auxiliaryHeader=auxiliaryProfile.build(error);
     CHECK(auxiliaryHeader.size()==256 && auxiliaryHeader[150]==9 &&
           auxiliaryHeader[151]==10 && auxiliaryHeader[152]==11);
-    auto legacyDraft=auxiliaryDraft;legacyDraft.remove("auxiliaryOutputs");
+    CHECK(Codec::u16(auxiliaryHeader,138)==1250 && Codec::u16(auxiliaryHeader,140)==9750 && Codec::u16(auxiliaryHeader,142)==8925);
+    QByteArray mask;
+    const auto fanOnly=auxiliaryProfile.sectionHeader("outputs.fan",mask);
+    CHECK(Codec::u16(fanOnly,140)==9750 && fanOnly[151]==10 && mask[151] && !mask[150]);
+    CHECK(fanOnly[150]==built[150] && Codec::u16(fanOnly,138)==Codec::u16(built,138));
+    auto invalidFan=auxiliaryDraft;invalidFan["fanOffCenti"]=9750;
+    CHECK(!auxiliaryProfile.import(invalidFan,error) && auxiliaryProfile.build(error)==auxiliaryHeader);
+    auto legacyDraft=auxiliaryDraft;
+    for(auto key:{"pumpPrimeMs","fanOnCenti","fanOffCenti"})legacyDraft.remove(key);legacyDraft.remove("auxiliaryOutputs");
     CHECK(auxiliaryProfile.import(legacyDraft,error));
     CHECK(auxiliaryProfile.build(error)==auxiliaryHeader);
     auxiliaryDraft["auxiliaryOutputs"]=QJsonArray{17,10,11};

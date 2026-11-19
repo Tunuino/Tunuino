@@ -2,8 +2,7 @@
 #include "../ui/WriteButtonState.h"
 #include "ProteusPinoutWidget.h"
 #include <QAbstractItemView>
-#include <QDialog>
-#include <QDialogButtonBox>
+#include <QShowEvent>
 #include <QFormLayout>
 #include <QRegularExpression>
 #include <QSplitter>
@@ -14,6 +13,7 @@
 #include <QSignalBlocker>
 #include <QTableWidget>
 #include <QTimer>
+#include <QToolBar>
 #include <QVBoxLayout>
 #include <functional>
 
@@ -33,22 +33,22 @@ public:
         QPushButton *sourceWrite = nullptr;
         std::function<QString()> label;
         QComboBox *choice = nullptr;
-        QPushButton *write = nullptr;
+        QLabel *roleLabel = nullptr;
         QString connectionHelp;
     };
 
     explicit IoConfigurationWidget(QWidget *parent = nullptr) : QWidget(parent) {
         setObjectName("ioConfiguration");
         auto *layout = new QVBoxLayout(this);
-        auto *hint = new QLabel(tr("Choose an ECU connection in the list below. Configure edits the ECU pin connection here; Write to ECU saves the changes."), this);
+        auto *hint = new QLabel(tr("Select a connector pin or open a function to configure its connection."), this);
         hint->setWordWrap(true); layout->addWidget(hint);
         auto *splitter = new QSplitter(Qt::Horizontal, this);
         splitter->setObjectName("ioPinoutSplitter");
         splitter->setChildrenCollapsible(false);
-        table_ = new QTableWidget(0, 4, this);
+        table_ = new QTableWidget(0, 3, this);
         table_->setObjectName("ioAssignments");
         table_->setHorizontalHeaderLabels({tr("Sensor / actuator"), tr("ECU connection"),
-                                           tr("Configuration"), tr("ECU")});
+                                           tr("Configuration")});
         table_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
         table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
         table_->verticalHeader()->hide();
@@ -68,31 +68,43 @@ public:
         });
         pinout_->contactSelected = [this](const QString &contact) {
             for(int row=0;row<bindings_.size();++row) if(bindings_[row].visible() && displayContacts(bindings_[row]).contains(contact)) {
-                table_->selectRow(row); table_->scrollToItem(table_->item(row,0)); return;
+                table_->selectRow(row); table_->scrollToItem(table_->item(row,0));
+                if (!configurationAllowed || configurationAllowed()) bindings_[row].configure();
+                return;
             }
         };
         auto *timer = new QTimer(this);
         timer->setInterval(200);
-        connect(timer, &QTimer::timeout, this, [this] { if (isVisible()) refresh(); });
+        connect(timer, &QTimer::timeout, this, [this] { if (isVisible()) refresh(); else for (auto &binding : bindings_)
+                if (binding.choice->parentWidget()->isVisible()) refreshEditor(binding); });
         timer->start();
     }
 
-    void add(Binding binding) {
+    void add(QWidget *owner, Binding binding) {
         const int row = bindings_.size();
         table_->insertRow(row);
         table_->setItem(row, 0, new QTableWidgetItem(binding.name));
-        binding.choice = new QComboBox(table_);
+        auto *form = owner->layout()->findChild<QFormLayout*>("ecuConnections");
+        if (!form) form=owner->layout()->findChild<QFormLayout*>("outputSettings");
+        if (!form) {
+            form = new QFormLayout;
+            form->setObjectName("ecuConnections");
+            form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+            static_cast<QVBoxLayout*>(owner->layout())->insertLayout(owner->findChild<QToolBar*>() ? 1 : 0, form);
+        }
+        binding.roleLabel = new QLabel(binding.name, owner);
+        binding.choice = new QComboBox(owner);
+        binding.choice->setObjectName("connection:" + binding.name);
         binding.choice->addItems(connectionLabels(binding));
-        binding.choice->setToolTip(binding.connectionHelp.isEmpty()?tr("Select the physical ECU pin for this function. Changes remain local until Write to ECU."):binding.connectionHelp);
-        binding.choice->setStyleSheet("QComboBox { border: 1px solid #696f76; padding: 3px 20px 3px 5px; }");
-        table_->setCellWidget(row, 1, binding.choice);
-        auto *configure = new QPushButton(tr("Configure..."), table_);
-        configure->setToolTip(tr("Configure this function's physical ECU connection."));
-        connect(configure, &QPushButton::clicked, this, [this,row] { configurePin(row); });
+        binding.choice->setToolTip(binding.connectionHelp);
+        if (form->objectName()=="outputSettings") form->insertRow(0,binding.roleLabel,binding.choice);
+        else form->addRow(binding.roleLabel,binding.choice);
+        table_->setItem(row, 1, new QTableWidgetItem);
+        auto *configure = new QPushButton(tr("Configure…"), table_);
+        connect(configure, &QPushButton::clicked, this, [this,row] {
+            if (!configurationAllowed || configurationAllowed()) bindings_[row].configure();
+        });
         table_->setCellWidget(row, 2, configure);
-        binding.write = new QPushButton(tr("Write to ECU"), table_);
-        table_->setCellWidget(row, 3, binding.write);
-        connect(binding.write, &QPushButton::clicked, binding.sourceWrite, &QPushButton::click);
         connect(binding.choice, &QComboBox::activated, this, [this, row](int selected) {
             assignConnection(row, selected);
         });
@@ -107,13 +119,9 @@ public:
             const auto &binding = bindings_[i];
             table_->setRowHidden(i, !binding.visible());
             if (binding.label) table_->item(i,0)->setText(binding.label());
-            QSignalBlocker blocker(binding.choice);
-            if(!binding.choice->view()->isVisible()) binding.choice->setCurrentIndex(binding.current());
-            // Offline editing is independent of whether an ECU write is available.
-            binding.choice->setEnabled((!configurationAllowed||configurationAllowed())&&binding.connections.size()>1);
-            binding.write->setEnabled(binding.sourceWrite->isEnabled());
+            refreshEditor(binding);
+            table_->item(i,1)->setText(binding.choice->currentText());
             const bool pending = binding.sourceWrite->property("ecuWritePending").toBool();
-            showPendingWrite(binding.write, pending);
             if(binding.visible()) for(const auto &contact : contacts(binding)) {
                 const QString name = binding.label ? binding.label() : binding.name;
                 assignments[contact] << (pending ? tr("%1 (pending)").arg(name) : name);
@@ -160,64 +168,36 @@ private:
         const auto selected=contacts(binding);
         return selected.isEmpty() && dedicatedPin(binding) ? parseContacts(binding.connections.last()) : selected;
     }
-    QString describeConnection(const Binding &binding,int selected) const {
-        QStringList pins;
-        if(selected>=0 && selected<binding.connections.size()) pins=parseContacts(binding.connections[selected]);
-        const bool fixed=dedicatedPin(binding);
-        if(pins.isEmpty() && fixed) pins=parseContacts(binding.connections.last());
-        QStringList details;
-        if(!binding.connectionHelp.isEmpty()) details<<binding.connectionHelp;
-        if(fixed) details << (binding.connections.size()>1?tr("Dedicated hardware connection. Enable or disable this function; its physical pins do not move."):tr("Fixed hardware connection. These physical pins cannot be reassigned."));
-        if(pins.isEmpty()) details << tr("No ECU pin selected. Choose a compatible connection above.");
-        for(const auto &contact:pins) for(int connector=0;connector<3;++connector) for(const auto &pin:proteusPins(connector))
-            if(contact==proteusContact(connector,pin.number)) details<<QString("%1 — %2: %3").arg(contact,pin.signal,pin.description);
-        if(selected==0 && binding.connections.size()>1) details<<tr("Function disabled. Choosing a connection prepares a local change; it does not write to or arm the ECU.");
-        return details.join("\n");
+    void refreshEditor(const Binding &binding) {
+        QSignalBlocker blocker(binding.choice);
+        if (!binding.choice->view()->isVisible()) binding.choice->setCurrentIndex(binding.current());
+        binding.choice->setEnabled((!configurationAllowed || configurationAllowed()) && binding.connections.size()>1);
+        binding.choice->setVisible(binding.visible());
+        binding.roleLabel->setVisible(binding.visible());
+        if (binding.label) binding.roleLabel->setText(binding.label());
+    }
+    void showEvent(QShowEvent *event) override {
+        QWidget::showEvent(event);
+        refresh();
     }
     bool assignConnection(int row,int selected) {
         if(configurationAllowed&&!configurationAllowed())return false;
-        auto &binding=bindings_[row]; table_->setCurrentCell(row,0);
+        auto &binding=bindings_[row];
+        if (selected<0 || selected>=binding.connections.size() || !binding.visible() ||
+            !binding.sourceWrite->parentWidget()->isEnabled()) return false;
+        table_->setCurrentCell(row,0);
         for(int i=0;i<bindings_.size();++i) {
             const auto &other=bindings_[i];
             if(i!=row && selected && other.resource==binding.resource && other.visible() && other.current()==selected) {
-                QMessageBox::warning(this,tr("Connection occupied"),tr("%1 already uses this connection.").arg(other.label?other.label():other.name));
+                QMessageBox::warning(binding.choice,tr("Connection occupied"),tr("%1 already uses this connection.").arg(other.label?other.label():other.name));
                 refresh(); return false;
             }
         }
         QString error;
         if(selected!=binding.current() && !binding.assign(selected,error)) {
-            QMessageBox::warning(this,tr("Connection assignment"),error); refresh(); return false;
+            QMessageBox::warning(binding.choice,tr("Connection assignment"),error); refresh(); return false;
         }
         refresh(); return true;
-    }
-    void configurePin(int row) {
-        table_->setCurrentCell(row,0); const auto &binding=bindings_[row];
-        pinout_->highlight(displayContacts(binding));
-        QDialog dialog(this); dialog.setObjectName("ioPinConfiguration"); dialog.setWindowTitle(tr("ECU pin — %1").arg(binding.label?binding.label():binding.name));
-        dialog.resize(620,320); auto *layout=new QVBoxLayout(&dialog);
-        auto *heading=new QLabel(binding.label?binding.label():binding.name,&dialog); heading->setStyleSheet("font-weight:bold"); layout->addWidget(heading);
-        auto *form=new QFormLayout; auto *choice=new QComboBox(&dialog);choice->setObjectName("ioPinChoice");
-        choice->addItems(connectionLabels(binding));choice->setCurrentIndex(binding.current());choice->setEnabled(binding.connections.size()>1);
-        form->addRow(tr("ECU connection"),choice);layout->addLayout(form);
-        auto *details=new QLabel(&dialog);details->setObjectName("ioPinConnectionDetail");details->setWordWrap(true);details->setTextFormat(Qt::PlainText);layout->addWidget(details);
-        auto *state=new QLabel(tr("Apply connection keeps the change in the editor. Write to ECU saves it. Function parameters remain in their own navigation section."),&dialog);
-        state->setWordWrap(true);layout->addWidget(state);layout->addStretch();
-        auto *buttons=new QDialogButtonBox(QDialogButtonBox::Apply|QDialogButtonBox::Close,&dialog);
-        auto *apply=buttons->button(QDialogButtonBox::Apply);apply->setText(tr("Apply connection"));apply->setObjectName("ioPinApply");
-        auto *write=new QPushButton(tr("Write to ECU"),&dialog);write->setObjectName("ioPinWrite");buttons->addButton(write,QDialogButtonBox::ActionRole);layout->addWidget(buttons);
-        bool edited=false;
-        const auto update=[&] {
-            const auto &source=bindings_[row];
-            if(!edited && choice->currentIndex()!=source.current()) {QSignalBlocker blocker(choice);choice->setCurrentIndex(source.current());}
-            details->setText(describeConnection(source,choice->currentIndex()));
-            apply->setEnabled(choice->currentIndex()!=source.current());write->setEnabled(source.connections.size()>1 && source.sourceWrite->isEnabled());
-            showPendingWrite(write,choice->currentIndex()!=source.current() || source.sourceWrite->property("ecuWritePending").toBool());
-        };
-        connect(choice,&QComboBox::currentIndexChanged,&dialog,[&]{edited=true;update();});
-        connect(apply,&QPushButton::clicked,&dialog,[&]{if(assignConnection(row,choice->currentIndex())) {edited=false;state->setText(tr("Connection prepared locally. Use Write to ECU to save it."));}update();});
-        connect(write,&QPushButton::clicked,&dialog,[&]{if(assignConnection(row,choice->currentIndex())) {edited=false;if(bindings_[row].sourceWrite->isEnabled()) bindings_[row].sourceWrite->click();}update();});
-        connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
-        QTimer timer; timer.setInterval(200);connect(&timer,&QTimer::timeout,&dialog,[&]{update();});timer.start();update();dialog.exec();
     }
     QTableWidget *table_;
     ProteusPinoutWidget *pinout_;

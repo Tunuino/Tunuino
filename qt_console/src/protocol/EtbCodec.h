@@ -28,7 +28,7 @@ public:
   if(!format(p)||h.size()!=256||a.size()!=256){error="Invalid ETB configuration, calibration, PID limits or shared PWM frequency.";return false;}if(!p[0])return true;
   for(int i=0;i<6;++i){const int ch=quint8(p[1+i]);if(!ch)continue;if(ch==quint8(h[6])||ch==quint8(h[7])||(h[38]==1&&(ch==quint8(h[39])||ch==quint8(h[48])))||(a[0]==1&&ch==quint8(a[5])&&i!=2)){error="An ETB input is occupied by another sensor.";return false;}
    const int flags=SensorCalibrationCodec::u16(a,70);if(a[68]==1&&(ch==quint8(a[73])||((flags&128)&&ch==quint8(a[74]))||((flags&256)&&ch==quint8(a[75])))){error="An ETB input is occupied by another function.";return false;}}
-  if(p[48]&&(a[0]!=1||!a[5])){error="The primary ETB main must use the primary TPS input. Configure the connection centrally before enabling ETB.";return false;}return true;
+  if(p[48]&&(a[0]!=1||!a[5])){error="The primary ETB main must use the primary TPS input. Configure the TPS under Sensors and inputs before enabling ETB.";return false;}return true;
  }
  static bool primaryTps(const QByteArray &p,const QByteArray &a,const QByteArray &h,const QByteArray &runtime,double &percent){
   if(!format(p)||!p[0]||a.size()!=256||h.size()!=256||runtime.size()!=101||runtime[0]||!(quint8(runtime[40])&1)||(quint8(runtime[40])&2))return false;

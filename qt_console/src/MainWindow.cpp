@@ -511,10 +511,38 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         item->setIcon(0,tunuino::CalibrationAppearance::icon(tunuino::CalibrationAppearance::Parameters));
         return item;
     };
+    auto *sensorsCategory = addCategory(tr("Sensors and inputs"), {});
+    auto *digital = new QTreeWidgetItem(sensorsCategory, {tr("Digital inputs")});
+    parameterItem(digital, tr("Crankshaft and CAM 1 capture"), "ignition.primary");
+    parameterItem(digital, tr("Crankshaft signal conditioning"), "inputs.primary");
+    parameterItem(digital, tr("CAM 1 signal conditioning"), "inputs.cam1");
+    parameterItem(digital, tr("CAM 2 sensor"), "inputs.cam2");
+    parameterItem(digital, tr("Vehicle speed sensor"), "inputs.vss");
+    parameterItem(digital, tr("Vehicle speed calibration"), "speed.vehicle");
+    parameterItem(sensorsCategory, tr("Oxygen sensor (Lambda)"), "sensor:Lambda");
+    auto *position = new QTreeWidgetItem(sensorsCategory, {tr("Throttle and pedal position")});
+    parameterItem(position, tr("Throttle position (TPS / ETB 1 main)"), "sensor:TPS");
+    parameterItem(position, tr("ETB 1 TPS check"), "etb.1.sensors");
+    parameterItem(position, tr("ETB 2 throttle position"), "etb.2.sensors");
+    parameterItem(position, tr("Accelerator pedal (PPS)"), "etb.pedal");
+    auto *temperature = new QTreeWidgetItem(sensorsCategory, {tr("Temperature")});
+    parameterItem(temperature, tr("Intake air temperature (IAT)"), "sensor:IAT");
+    parameterItem(temperature, tr("Coolant temperature (CLT)"), "sensor:CLT");
+    auto *pressure = new QTreeWidgetItem(sensorsCategory, {tr("Pressure")});
+    parameterItem(pressure, tr("Manifold pressure (MAP)"), "sensor:MAP");
+    parameterItem(pressure, tr("Fuel pressure"), "sensor:Fuel pressure");
+    parameterItem(pressure, tr("Oil pressure"), "sensor:Oil pressure");
+    parameterItem(sensorsCategory, tr("Battery voltage"), "sensor:Battery");
+    parameterItem(sensorsCategory, tr("Flex fuel"), "fuel.flex");
+
+    auto *outputs = addCategory(tr("Outputs"), {});
+    parameterItem(outputs, tr("Fuel pump"), "outputs.pump");
+    parameterItem(outputs, tr("Coolant fan"), "outputs.fan");
+    parameterItem(outputs, tr("Main relay"), "outputs.main");
+
     auto *engineCategory=addCategory(tr("Engine setup"),{});
     parameterItem(engineCategory,tr("Engine and cylinders"),"ignition.firing");
     parameterItem(engineCategory,tr("Trigger setup"),"ignition.wizard");
-    parameterItem(engineCategory,tr("Crankshaft and timing"),"ignition.primary");
     parameterItem(engineCategory,tr("Camshaft synchronization"),"ignition.phase");
     parameterItem(engineCategory,tr("Battery compensation"),"voltage.compensation");
 
@@ -525,11 +553,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         {tr("Injector dead time"),"injectors.deadtime"},{tr("Warmup enrichment"),"fuel.corrections"},
         {tr("Acceleration enrichment"),"fuel.acceleration"},{tr("Fuel cut"),"fuel.cut"},
         {tr("Cylinder fuel trim"),"fuel.trim"},{tr("Lambda correction"),"fuel.shortterm"},
-        {tr("Lean protection"),"fuel.guard"},{tr("Flex fuel correction"),"fuel.flex"}})
+        {tr("Lean protection"),"fuel.guard"},{tr("Injector connections"),"fuel.connections"}})
         parameterItem(fuelingCategory,entry.first,entry.second);
 
     auto *ignitionCategory=addCategory(tr("Ignition"),{
         {tr("Ignition Table"),1},{tr("Ignition 3D Graph"),8}});
+    parameterItem(ignitionCategory,tr("Coil connections"),"ignition.connections");
     parameterItem(ignitionCategory,tr("Coil dwell"),"coils.dwell");
     parameterItem(ignitionCategory,tr("Air temperature correction"),"ignition.iat");
     parameterItem(ignitionCategory,tr("Cylinder ignition trim"),"ignition.trim");
@@ -547,8 +576,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     parameterItem(vvtCategory,tr("CAM 2 target 2"),"vvt.cam2.table2");
 
     auto *etbCategory=addCategory(tr("ETB"),{});
-    parameterItem(etbCategory,tr("Accelerator pedal"),"etb.pedal");
-    for(int channel=1;channel<=2;++channel){auto *child=new QTreeWidgetItem(etbCategory,QStringList(tr("ETB %1").arg(channel)));const QString prefix=QString("etb.%1.").arg(channel);parameterItem(child,tr("Parameters"),prefix+"setup");parameterItem(child,tr("TPS calibration"),prefix+"sensors");parameterItem(child,tr("PID"),prefix+"pid");parameterItem(child,tr("Autotune"),prefix+"autotune");}
+    for(int channel=1;channel<=2;++channel){auto *child=new QTreeWidgetItem(etbCategory,QStringList(tr("ETB %1").arg(channel)));const QString prefix=QString("etb.%1.").arg(channel);parameterItem(child,tr("Parameters"),prefix+"setup");parameterItem(child,tr("PID"),prefix+"pid");parameterItem(child,tr("Autotune"),prefix+"autotune");}
 
     auto *diagnosticsCategory=addCategory(tr("Diagnostics"),{
         {tr("Trigger Scope"),11},{tr("Live gauges"),13},{tr("Engine Status"),9}});
@@ -2726,13 +2754,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     *parameterNavigation=[=](const QString &key){if((key=="io.uaefi.pinout"&&ecuSelection->selected()!="UAefi")||(key!="io.uaefi.pinout"&&!ecuSelection->proteus()))return;if((*sensorWizards).contains(key)){(*sensorWizards)[key]->open();return;}if(key=="ignition.wizard"){triggerPresets->open();return;}auto *window=(*parameterWindows).value(key).data();if(!window)return;if(!window->property("parameterOpened").toBool()){if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(window->widget()))window->resize(parameters->sizeHint()+QSize(12,30));window->setProperty("parameterOpened",true);}window->showNormal();window->widget()->show();workspace->setActiveSubWindow(window);window->raise();};
     auto *ioConfiguration = new tunuino::IoConfigurationWidget;
     ioConfiguration->setProperty("ecuBoard","Proteus");
-    ioConfiguration->configurationAllowed=[=]{return ecuSelection->proteus();};
+    ioConfiguration->configurationAllowed=[=]{return ecuSelection->proteus() && !property("mapWriteBusy").toBool();};
     ioConfiguration->openConfiguration = [=](const QString &key) { (*parameterNavigation)(key); };
     auto *ioWindow = toolWindow(ioConfiguration, tr("Proteus Pinout"));
     ioWindow->setProperty("desktopWindowId",QStringLiteral("Inputs and outputs|ioConfiguration"));
     ioWindow->resize(1000, 660);
     (*parameterWindows)["io.configuration"] = ioWindow;
-    auto *ioItem = new QTreeWidgetItem(QStringList{tr("Inputs and outputs")});
+    auto *ioItem = new QTreeWidgetItem(QStringList{tr("ECU setup")});
     QFont ioFont=ioItem->font(0);ioFont.setBold(true);ioItem->setFont(0,ioFont);
     navigationTree->insertTopLevelItem(0, ioItem);
     auto *proteusItem=new QTreeWidgetItem(ioItem,{tr("ECU Proteus")});proteusItem->setFont(0,ioFont);
@@ -2753,7 +2781,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         for (int i = 0; i < (temperature ? 4 : 11); ++i)
             choices << QString("%1%2 — J103 / %3").arg(temperature ? "AT" : "AV")
                 .arg(i + 1).arg(temperature ? atContacts[i] : avContacts[i]);
-        ioConfiguration->add({name, temperature ? "AT" : "AV", choices,
+        ioConfiguration->add(sensor, {name, temperature ? "AT" : "AV", choices,
             [sensor] { return sensor->editorState()["input"].toInt(); },
             [sensor](int input, QString &error) {
                 auto state = sensor->editorState();
@@ -2775,14 +2803,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             const QString name=analog?tr("Flex fuel"):key=="vtec.setup"?tr("VTEC solenoid"):
                 key=="vvt.parameters"?tr("VVT CAM 1 solenoid"):key=="vvt.cam2.parameters"?tr("VVT CAM 2 solenoid"):
                 key=="inputs.vss"?tr("Vehicle speed"):tr("CAM 2 sensor");
-            ioConfiguration->add({name,analog?"AV":solenoid?"LS":key,field.choices,
+            ioConfiguration->add(parameters, {name,analog?"AV":solenoid?"LS":key,field.choices,
                 [parameters,field]{return parameters->editorState()["values"].toObject()[field.key].toInt();},
                 [parameters,field](int selected,QString &error){
                     auto state=parameters->editorState();
                     auto values=state["values"].toObject();
                     values[field.key]=selected;
                     state["values"]=values;
-                    return parameters->restoreEditor(state,true,error);
+                    return parameters->editConnections(state,error);
                 },
                 []{return true;},
                 [=]{ioConfiguration->openConfiguration(key);},
@@ -2795,13 +2823,92 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         if(bridge)choices=field.choices;else{choices<<tr("Disabled");for(int i=0;i<11;++i)choices<<QString("AV%1 — J103 / %2").arg(i+1).arg(avContacts[i]);}
         const QStringList roles{tr("Accelerator pedal main"),tr("Accelerator pedal check"),tr("ETB 1 main"),tr("ETB 1 TPS check"),tr("ETB 2 TPS main"),tr("ETB 2 TPS check")};
         const QString name=bridge?(panel->block().key=="etb.1.setup"?tr("ETB 1 motor"):tr("ETB 2 motor")):roles.value(index);
-        ioConfiguration->add({name,bridge?"HBRIDGE":"AV",choices,
+        ioConfiguration->add(panel, {name,bridge?"HBRIDGE":"AV",choices,
             [panel,field]{return panel->editorState()["values"].toObject()[field.key].toInt();},
-            [panel,field](int selected,QString &error){auto state=panel->editorState();auto values=state["values"].toObject();values[field.key]=selected;state["values"]=values;return panel->restoreEditor(state,true,error);},
+            [panel,field](int selected,QString &error){auto state=panel->editorState();auto values=state["values"].toObject();values[field.key]=selected;state["values"]=values;return panel->editConnections(state,error);},
             []{return true;},
             [=]{(*parameterNavigation)(panel->block().key);},panel->findChild<QPushButton*>("parameterSave")});
     }}
     for(auto *profile:*parameterPanels)if(profile->block().key=="ignition.firing"){
+        const auto profilePage = [=](QString key, QString title) {
+            auto *page = new QWidget;
+            page->setObjectName(key);
+            auto *layout = new QVBoxLayout(page);
+            layout->addStretch();
+            auto *note = new QLabel(tr("The first engine profile write includes all cylinder and relay connections."),page);
+            note->setWordWrap(true);
+            layout->addWidget(note);
+            auto *save = new QPushButton(tr("Write to ECU"),page);
+            save->setObjectName("engineProfileWrite");
+            layout->addWidget(save,0,Qt::AlignLeft);
+            auto *source = profile->findChild<QPushButton*>("parameterSave");
+            connect(save,&QPushButton::clicked,page,[=]{profile->saveProfileSection(key);});
+            auto *status = profile->findChild<QLabel*>("parameterStatus");
+            auto *feedback = new QLabel(page);
+            feedback->setWordWrap(true);
+            layout->insertWidget(layout->indexOf(save),feedback);
+            auto *timer = new QTimer(page);
+            const auto refresh = [=] {
+                note->setVisible(!profile->hasStoredEngineProfile());
+                feedback->setText(status->text());
+                feedback->setVisible(!status->isHidden());
+                save->setEnabled(source->isEnabled());
+                tunuino::showPendingWrite(save,profile->profileSectionPending(key));
+            };
+            connect(timer,&QTimer::timeout,page,[=]{if(page->isVisible())refresh();});
+            refresh();
+            timer->start(200);
+            auto *w = toolWindow(page,title);
+            w->resize(560,key.startsWith("outputs.") ? 235 : 400);
+            (*parameterWindows)[key] = w;
+            return page;
+        };
+        auto *injectors = profilePage("fuel.connections",tr("Fueling - Injector connections"));
+        auto *coils = profilePage("ignition.connections",tr("Ignition - Coil connections"));
+        auto *pump = profilePage("outputs.pump",tr("Outputs - Fuel pump"));
+        auto *fan = profilePage("outputs.fan",tr("Outputs - Coolant fan"));
+        const auto profileSetting = [=](QWidget *page, QString key, QString label, bool temperature) {
+            auto *layout = static_cast<QVBoxLayout*>(page->layout());
+            auto *form = layout->findChild<QFormLayout*>("outputSettings");
+            if (!form) {
+                form = new QFormLayout;
+                form->setObjectName("outputSettings");
+                form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+                layout->insertLayout(0,form);
+            }
+            auto *value = new QDoubleSpinBox(page);
+            value->setObjectName(key);
+            value->setDecimals(temperature ? 2 : 0);
+            value->setRange(0,temperature ? 120 : 3000);
+            value->setKeyboardTracking(false);
+            value->setSuffix(temperature ? tr(" °C") : tr(" ms"));
+            form->addRow(label,value);
+            const int scale = temperature ? 100 : 1;
+            const auto refresh = [=] {
+                const auto engine = profile->editorState()["engineProfile"].toObject();
+                QSignalBlocker blocker(value);
+                if (key=="fanOnCenti") value->setMinimum((engine["fanOffCenti"].toInt()+1)/100.);
+                if (key=="fanOffCenti") value->setMaximum((engine["fanOnCenti"].toInt()-1)/100.);
+                value->setValue(engine[key].toDouble()/scale);
+            };
+            refresh();
+            auto *timer = new QTimer(value);
+            connect(timer,&QTimer::timeout,page,[=]{if(page->isVisible() && !value->hasFocus())refresh();});
+            timer->start(200);
+            connect(value,&QDoubleSpinBox::valueChanged,page,[=](double number){
+                if (!ecuSelection->proteus() || !profile->isEnabled()) { refresh(); return; }
+                auto state=profile->editorState();
+                auto engine=state["engineProfile"].toObject();
+                engine[key]=qRound(number*scale);
+                state["engineProfile"]=engine;
+                QString error;
+                if (!profile->editConnections(state,error)) {refresh();statusBar()->showMessage(error,10000);}
+            });
+        };
+        profileSetting(pump,"pumpPrimeMs",tr("Pump prime time"),false);
+        profileSetting(fan,"fanOnCenti",tr("Fan on temperature"),true);
+        profileSetting(fan,"fanOffCenti",tr("Fan off temperature"),true);
+        profilePage("outputs.main",tr("Outputs - Main relay"));
         const auto partner=[](const QJsonObject &engine,int row){
             if(engine["operation"].toInt()<3)return -1;
             const auto cylinders=engine["cylinders"].toArray();
@@ -2819,7 +2926,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             QStringList choices{tr("Not assigned")};
             for(int port=0;port<(spark?12:16);++port)
                 choices<<QString("%1%2 — J102 / %3").arg(spark?"IGN":"LS").arg(port+1).arg(spark?ign[port]:ls[port]);
-            ioConfiguration->add({name,spark?"IGN":"LS",choices,
+            ioConfiguration->add(spark ? coils : injectors, {name,spark?"IGN":"LS",choices,
                 [profile,row,field]{
                     const auto cylinders=profile->editorState()["engineProfile"].toObject()["cylinders"].toArray();
                     return row<cylinders.size()?cylinders[row].toObject()[field].toInt(-1)+1:0;
@@ -2836,7 +2943,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     if(pair>=0){auto other=cylinders[pair].toObject();other[field]=selected-1;cylinders[pair]=other;}
                     engine["cylinders"]=cylinders;
                     state["engineProfile"]=engine;
-                    return profile->restoreEditor(state,true,error);
+                    return profile->editConnections(state,error);
                 },
                 [profile,row,spark,partner]{
                     const auto engine=profile->editorState()["engineProfile"].toObject();
@@ -2844,7 +2951,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     const int pair=spark?partner(engine,row):-1;
                     return pair<0||pair>row;
                 },
-                [=]{ioConfiguration->openConfiguration(spark?"coils.dwell":"injectors.deadtime");},
+                [=]{ioConfiguration->openConfiguration(spark?"ignition.connections":"fuel.connections");},
                 profile->findChild<QPushButton*>("parameterSave"),
                 [profile,row,spark,partner,name]{
                     const int pair=spark?partner(profile->editorState()["engineProfile"].toObject(),row):-1;
@@ -2853,7 +2960,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         }
     }
     for (auto *trigger : *parameterPanels) if (trigger->block().key == "ignition.primary") {
-        ioConfiguration->add({tr("Crankshaft sensor"), "Crank",
+        ioConfiguration->add(trigger, {tr("Crankshaft sensor"), "Crank",
             {tr("Disabled"), tr("J101 / 5 (+), 13 (-)")},
             [trigger] { return trigger->editorState()["values"].toObject()["capture"].toInt(); },
             [trigger](int input, QString &error) {
@@ -2861,7 +2968,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 auto values = state["values"].toObject();
                 values["capture"] = input;
                 state["values"] = values;
-                return trigger->restoreEditor(state, true, error);
+                return trigger->editConnections(state,error);
             },
             [] { return true; },
             [=] { (*parameterNavigation)("ignition.primary"); },
@@ -2873,11 +2980,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
             [trigger]{return trigger->editorState()["values"].toObject()["capture"].toInt();},
             [trigger](int input,QString &error){
                 auto state=trigger->editorState();auto values=state["values"].toObject();
-                values["capture"]=input;state["values"]=values;return trigger->restoreEditor(state,true,error);
+                values["capture"]=input;state["values"]=values;return trigger->editConnections(state,error);
             },[]{return true;},[=]{(*parameterNavigation)("ignition.primary");},
             trigger->findChild<QPushButton*>("parameterSave")};
         cam.connectionHelp=tr("Trigger capture is shared by CAM 1 and the crankshaft sensor. Enabling or disabling it changes both inputs. These pins are dedicated; no alternate pin can be selected.");
-        ioConfiguration->add(cam);
+        ioConfiguration->add(trigger, cam);
     }
     for (auto *profile : *parameterPanels) if (profile->block().key == "ignition.firing") {
         const QStringList roles{tr("Fuel pump relay"), tr("Cooling fan relay"), tr("Main relay")};
@@ -2885,7 +2992,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         QStringList choices{tr("Disabled")};
         for (int i = 0; i < 16; ++i) choices << QString("LS%1 — J102 / %2").arg(i+1).arg(pins[i]);
         for (int i = 0; i < roles.size(); ++i) {
-            ioConfiguration->add({roles[i], "LS", choices,
+            const QString key = QStringList{"outputs.pump","outputs.fan","outputs.main"}.at(i);
+            auto *owner = parameterWindows->value(key)->widget();
+            ioConfiguration->add(owner, {roles[i], "LS", choices,
                 [profile, i] { return profile->editorState()["engineProfile"].toObject()["auxiliaryOutputs"].toArray()[i].toInt(); },
                 [profile, i](int output, QString &error) {
                     auto state = profile->editorState();
@@ -2894,10 +3003,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                     outputs[i] = output;
                     engine["auxiliaryOutputs"] = outputs;
                     state["engineProfile"] = engine;
-                    return profile->restoreEditor(state, true, error);
+                    return profile->editConnections(state,error);
                 },
                 [] { return true; },
-                [=] { (*parameterNavigation)("ignition.firing"); },
+                [=] { (*parameterNavigation)(key); },
                 profile->findChild<QPushButton*>("parameterSave")});
         }
     }
@@ -3055,7 +3164,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
                 || ((page==camSecondPage || page==camSecondSurface) && camSecondSave->isEnabled())
                 || ((page==camTwoPage||page==camTwoSurface)&&camTwoSave->isEnabled())
                 || ((page==camTwoSecondPage||page==camTwoSecondSurface)&&camTwoSecondSave->isEnabled())
-                || (sensorReady&&((sensorPage&&sensorPage->writeEnabled())||dynamic_cast<const tunuino::ParameterWidget*>(page)||(page==triggerWizard&&triggerWizard->reviewReady()))));
+                || (sensorReady&&((page&&page->findChild<QPushButton*>("engineProfileWrite"))||(sensorPage&&sensorPage->writeEnabled())||dynamic_cast<const tunuino::ParameterWidget*>(page)||(page==triggerWizard&&triggerWizard->reviewReady()))));
         }
     };
     auto connectionClock = QSharedPointer<QElapsedTimer>::create();
@@ -3529,7 +3638,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         pendingWrite->sensor=-2;*activeSensorWrite=-1;*activeParameterFinished=std::move(done);pendingWrite->page=page;pendingWrite->desired=desired;pendingWrite->mask=mask;pendingWrite->base=page==1?base.header:page==6?base.controls:page==9?base.controls2:page==12?base.etb:base.aux;pendingWrite->identity=base.identity;pendingWrite->generation=base.generation;
         *writePending=true;setProperty("mapWriteBusy",true);writeWait->start();liveTimer->stop();validationAction->setEnabled(false);freezeMapEditing(true);updateWriteAvailability();writeLaunch->start();return true;
     };
-    for(auto *panel:*parameterPanels)panel->writeRequested=[=](int page,const QByteArray &desired,const QByteArray &mask){queueParameters(panel->block().title,page,desired,mask,[panel](bool success,const QString&){if(success)panel->saved();});};
+    for(auto *panel:*parameterPanels)panel->writeRequested=[=](int page,const QByteArray &desired,const QByteArray &mask){queueParameters(panel->block().title,page,desired,mask,[panel,desired,mask](bool success,const QString&){
+        if(success)panel->acknowledgeProfileSection(desired,mask);
+    });};
     triggerWizard->writeRequested=[=](int page,const QByteArray &desired,const QByteArray &mask){return queueParameters(tr("Ignition - Trigger wizard"),page,desired,mask,[triggerWizard](bool success,const QString &message){triggerWizard->writeFinished(success,message);});};
     connect(fuelSave,&QPushButton::clicked,this,[=] { queueMapWrite(2); });
     connect(ignitionSave,&QPushButton::clicked,this,[=] { queueMapWrite(3); });
@@ -3652,6 +3763,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         else if(auto *sensor=dynamic_cast<tunuino::SensorCalibrationWidget*>(page))sensor->save();
         else if(auto *parameters=dynamic_cast<tunuino::ParameterWidget*>(page))parameters->save();
         else if(page==triggerWizard)triggerWizard->save();
+        else if(page) if(auto *save=page->findChild<QPushButton*>("engineProfileWrite")) save->click();
     });
 
     auto *openFirmware = ecuMenu->addAction(tr("Firmware / USB DFU"));

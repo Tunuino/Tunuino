@@ -84,14 +84,48 @@ QByteArray EngineProfileDraft::build(QString &error)const{
     for(int i=0;i<12;++i){for(int j=0;j<8;++j)p[32+8*i+j]=0;if(i<count()){p[32+8*i]=char(cylinders[i].injector);p[33+8*i]=char(cylinders[i].coil);put(p,34+8*i,cylinders[i].tdc,4);}}
     header.replace(128,128,p);return header;
 }
+QByteArray EngineProfileDraft::sectionHeader(const QString &key,QByteArray &mask) const {
+    mask=QByteArray(256,0);
+    if (header_.size()!=256) return {};
+    auto result=header_;
+    const auto byte=[&](int offset,char value){
+        result[128+offset]=value;
+        mask[128+offset]=char(0xff);
+    };
+    if (key=="outputs.pump") {
+        for (int offset : {10,11,22}) byte(offset,profile_[offset]);
+    } else if (key=="outputs.fan") {
+        for (int offset : {12,13,14,15,23}) byte(offset,profile_[offset]);
+    } else if (key=="outputs.main") {
+        byte(24,profile_[24]);
+    } else if (key=="fuel.connections" || key=="ignition.connections") {
+        const bool spark=key=="ignition.connections";
+        for (int i=0;i<count();++i)
+            byte(32+8*i+int(spark),char(spark?cylinders[i].coil:cylinders[i].injector));
+    } else return {};
+    return result;
+}
 QJsonObject EngineProfileDraft::json()const{
     QJsonArray rows,events;for(const auto &c:cylinders)rows.append(QJsonObject{{"injector",c.injector},{"coil",c.coil},{"tdc",int(c.tdc)}});for(int c:order)events.append(c);
     QJsonArray auxiliary;for(int i=22;i<=24;++i)auxiliary.append(int(quint8(profile_[i])));
-    return {{"auxiliaryOutputs",auxiliary},{"operation",operation},{"inverted",inverted},{"requiredFuel",requiredFuel},{"dwell",dwell},{"deadTime",deadTime},{"maximumInjection",maximumInjection},{"toothZero",int(toothZero)},{"camFirst",camFirst},{"camLast",camLast},{"cylinders",rows},{"order",events}};
+    return {{"pumpPrimeMs",u16(profile_,10)},{"fanOnCenti",u16(profile_,12)},
+            {"fanOffCenti",u16(profile_,14)},{"auxiliaryOutputs",auxiliary},{"operation",operation},{"inverted",inverted},{"requiredFuel",requiredFuel},{"dwell",dwell},{"deadTime",deadTime},{"maximumInjection",maximumInjection},{"toothZero",int(toothZero)},{"camFirst",camFirst},{"camLast",camLast},{"cylinders",rows},{"order",events}};
 }
 bool EngineProfileDraft::import(const QJsonObject &o,QString &error,bool editorDraft){
     auto copy=*this;const auto integer=[&](const QJsonObject &object,const char *key,int low,int high,int &out){const auto v=object[key];const double n=v.toDouble(-1e20);if(!v.isDouble()||n<low||n>high||n!=std::floor(n))return false;out=int(n);return true;};
     int angle=0;if(!integer(o,"operation",0,4,copy.operation)||!o["inverted"].isBool()||!integer(o,"requiredFuel",100,30000,copy.requiredFuel)||!integer(o,"dwell",100,5000,copy.dwell)||!integer(o,"deadTime",0,5000,copy.deadTime)||!integer(o,"maximumInjection",100,20000,copy.maximumInjection)||!integer(o,"toothZero",0,71999,angle)||!integer(o,"camFirst",0,119,copy.camFirst)||!integer(o,"camLast",0,119,copy.camLast)){error="Invalid engine-profile parameters.";return false;}
+    // Older projects keep these settings in the raw profile.
+    int prime=u16(copy.profile_,10), on=u16(copy.profile_,12), off=u16(copy.profile_,14);
+    if ((o.contains("pumpPrimeMs") && !integer(o,"pumpPrimeMs",0,3000,prime)) ||
+        (o.contains("fanOnCenti") && !integer(o,"fanOnCenti",1,12000,on)) ||
+        (o.contains("fanOffCenti") && !integer(o,"fanOffCenti",0,11999,off)) ||
+        off>=on) {
+        error="The fan switch-off temperature must be below switch-on. Check the fan limits and pump prime time.";
+        return false;
+    }
+    put(copy.profile_,10,prime);
+    put(copy.profile_,12,on);
+    put(copy.profile_,14,off);
     if (o.contains("auxiliaryOutputs")) {
         const auto outputs = o["auxiliaryOutputs"].toArray();
         if (outputs.size() != 3) { error = "Invalid auxiliary outputs."; return false; }

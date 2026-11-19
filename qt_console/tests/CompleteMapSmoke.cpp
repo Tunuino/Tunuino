@@ -76,9 +76,9 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
         const auto preview=qEnvironmentVariable("TUNUINO_TRIGGER_BOOTSTRAP_PREVIEW");if(!preview.isEmpty()){wizard->resize(720,540);app.processEvents();wizard->grab().save(preview+"-review.png");scope->resize(720,480);scope->grab().save(preview+"-scope.png");}
         session->close();std::cout<<"Real MainWindow serial bootstrap without engine profile passed.\n";return 0;
     }
-    auto *sensorTree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(sensorTree);CHECK(sensorTree->topLevelItemCount()==8);
+    auto *sensorTree=window.findChild<QTreeWidget*>("MainNavigation");CHECK(sensorTree);CHECK(sensorTree->topLevelItemCount()==10);
     QStringList roots;for(int i=0;i<sensorTree->topLevelItemCount();++i)roots<<sensorTree->topLevelItem(i)->text(0);
-    CHECK(roots==QStringList({"Inputs and outputs","Engine setup","Fueling","Ignition","VVT","ETB","Diagnostics","Logs"}));
+    CHECK(roots==QStringList({"ECU setup","Sensors and inputs","Outputs","Engine setup","Fueling","Ignition","VVT","ETB","Diagnostics","Logs"}));
     CHECK(!sensorTree->topLevelItem(1)->isDisabled());
     auto *ioRoot=sensorTree->topLevelItem(0);CHECK(ioRoot->childCount()==2&&!ioRoot->data(0,Qt::UserRole).isValid());
     CHECK(ioRoot->child(0)->text(0)=="ECU Proteus"&&ioRoot->child(0)->child(0)->text(0)=="Proteus Pinout");
@@ -120,8 +120,8 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     CHECK(ecuSelection->selected()=="UAefi"&&project->capture(error)==uaefiDocument);
     openSensor("io.configuration");CHECK(window.findChild<QMdiArea*>()->activeSubWindow()==uaefiWindow);
     auto *inactiveIo=dynamic_cast<tunuino::IoConfigurationWidget*>(window.findChild<QWidget*>("ioConfiguration"));CHECK(inactiveIo&&!inactiveIo->isEnabled());
-    auto *inactiveTable=inactiveIo->findChild<QTableWidget*>("ioAssignments");
-    auto *inactiveChoice=qobject_cast<QComboBox*>(inactiveTable->cellWidget(0,1));CHECK(inactiveChoice);inactiveChoice->activated(1);
+
+    auto *inactiveChoice=window.findChild<QComboBox*>("connection:TPS");CHECK(inactiveChoice);inactiveChoice->activated(1);
     boardChoice->setCurrentIndex(boardChoice->findData("Proteus"));ecuSelection->findChild<QPushButton*>("projectEcuApply")->click();app.processEvents();
     CHECK(uaefiWindow->isHidden()&&!uaefiWindow->isEnabled());CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->windowTitle()=="Proteus Pinout");
     CHECK(project->capture(error)==beforeUaefi);
@@ -153,59 +153,49 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     QTest::qWait(250);CHECK(project->capture(error)==beforePinBrowse);
     CHECK(window.findChild<QLabel*>("proteusPinDetail")->text().contains("J103/1"));
     connectorTabs->setCurrentIndex(0);app.processEvents();
-    // A disabled capture still has its dedicated hardware contacts. Configure
-    // edits that connection without navigating to trigger/strategy parameters.
-    centralIo->refresh();pinout->selectPin(0,5);app.processEvents();
-    CHECK(pinTable->item(4,3)->text().contains("Crankshaft sensor")&&pinTable->item(4,3)->text().contains("disabled"));
-    const int crankRow=ioTable->currentRow();CHECK(ioTable->item(crankRow,0)->text()=="Crankshaft sensor");
-    auto *primary=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QWidget*>("ignition.primary"));CHECK(primary);
-    const auto primaryBefore=primary->editorState(),projectBeforePinDialog=project->capture(error);
-    auto *ioActive=window.findChild<QMdiArea*>()->activeSubWindow();
-    for(bool applyPin:{false,true}) {
-        bool visited=false;
-        QTimer::singleShot(0,&window,[&]{
-            auto *dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());CHECK(dialog&&dialog->objectName()=="ioPinConfiguration");
-            CHECK(window.findChild<QMdiArea*>()->activeSubWindow()==ioActive);
-            auto *choice=dialog->findChild<QComboBox*>("ioPinChoice");auto *detail=dialog->findChild<QLabel*>("ioPinConnectionDetail");
-            CHECK(choice&&choice->count()==2&&detail&&detail->text().contains("J101/5")&&detail->text().contains("J101/13"));
-            CHECK(!dialog->findChild<QPushButton*>("ioPinWrite")->isEnabled());
-            choice->setCurrentIndex(1);
-            CHECK(primary->editorState()==primaryBefore); // Choosing alone is not Apply or ECU write.
-            if(applyPin){dialog->findChild<QPushButton*>("ioPinApply")->click();CHECK(primary->editorState()["values"].toObject()["capture"].toInt()==1);}
-            if(!qEnvironmentVariable("TUNUINO_IO_PREVIEW").isEmpty())CHECK(dialog->grab().save(qEnvironmentVariable("TUNUINO_IO_PREVIEW")+(applyPin?"-pin-applied.png":"-pin-dialog.png")));
-            visited=true;dialog->reject();
-        });
-        qobject_cast<QPushButton*>(ioTable->cellWidget(crankRow,2))->click();CHECK(visited);
-        if(!applyPin)CHECK(project->capture(error)==projectBeforePinDialog);
-    }
-    CHECK(primary->restoreEditor(primaryBefore,true,error));centralIo->refresh();
-    CHECK(project->capture(error)==projectBeforePinDialog);
-    CHECK(pinTable->item(4,3)->text().contains("disabled"));
-    pinout->selectPin(0,4);app.processEvents();
-    const int camRow=ioTable->currentRow();CHECK(ioTable->item(camRow,0)->text()=="CAM 1 sensor");
-    auto *camChoice=qobject_cast<QComboBox*>(ioTable->cellWidget(camRow,1));
-    auto *crankChoice=qobject_cast<QComboBox*>(ioTable->cellWidget(crankRow,1));
-    CHECK(camChoice&&camChoice->currentText()=="Disabled"&&camChoice->count()==2);
-    CHECK(pinTable->item(3,3)->text().contains("CAM 1 sensor")&&pinTable->item(3,3)->text().contains("disabled"));
-    CHECK(pinTable->item(11,3)->text().contains("disabled"));
-    bool visitedCam=false;
-    QTimer::singleShot(0,&window,[&]{
-        auto *dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());CHECK(dialog);
-        auto *choice=dialog->findChild<QComboBox*>("ioPinChoice");
-        CHECK(choice&&choice->currentText()=="Disabled");
-        const auto detail=dialog->findChild<QLabel*>("ioPinConnectionDetail")->text();
-        CHECK(detail.contains("shared")&&detail.contains("J101/4")&&detail.contains("J101/12"));
-        choice->setCurrentIndex(1);CHECK(primary->editorState()==primaryBefore);
-        dialog->findChild<QPushButton*>("ioPinApply")->click();visitedCam=true;dialog->reject();
-    });
-    qobject_cast<QPushButton*>(ioTable->cellWidget(camRow,2))->click();CHECK(visitedCam);
+    centralIo->refresh();
+    const auto beforePinClick=project->capture(error);
+    pinout->selectPin(0,5);app.processEvents();
+    auto *primary=dynamic_cast<tunuino::ParameterWidget*>(window.findChild<QMdiArea*>()->activeSubWindow()->widget());
+    CHECK(primary && primary->block().key=="ignition.primary");
+    CHECK(ioTable->item(ioTable->currentRow(),0)->text()=="Crankshaft sensor");
+    CHECK(project->capture(error)==beforePinClick);
+    auto *crankChoice=primary->findChild<QComboBox*>("connection:Crankshaft sensor");
+    auto *camChoice=primary->findChild<QComboBox*>("connection:CAM 1 sensor");
+    CHECK(camChoice && crankChoice && camChoice->currentText()=="Disabled" && crankChoice->currentText()=="Disabled");
+    CHECK(camChoice->toolTip().contains("shared") && camChoice->itemText(1).contains("J101 / 4"));
+    CHECK(!primary->findChild<QPushButton*>("parameterSave")->isEnabled());
+    camChoice->activated(1);
     CHECK(primary->editorState()["values"].toObject()["capture"].toInt()==1);
-    centralIo->refresh();CHECK(camChoice->currentIndex()==1&&crankChoice->currentIndex()==1);
-    CHECK(pinTable->item(3,3)->text().contains("CAM 1 sensor")&&!pinTable->item(3,3)->text().contains("disabled"));
-    CHECK(primary->restoreEditor(primaryBefore,true,error));centralIo->refresh();
-    CHECK(camChoice->currentText()=="Disabled"&&crankChoice->currentText()=="Disabled");
-    CHECK(project->capture(error)==projectBeforePinDialog);
-
+    CHECK(crankChoice->currentIndex()==1 && camChoice->currentIndex()==1);
+    CHECK(pinTable->item(3,3)->text().contains("CAM 1 sensor") && !pinTable->item(3,3)->text().contains("disabled"));
+    crankChoice->activated(0);
+    CHECK(camChoice->currentText()=="Disabled" && pinTable->item(4,3)->text().contains("disabled"));
+    CHECK(project->capture(error)==beforePinClick);
+    openSensor("io.configuration");
+    pinout->selectPin(0,4);app.processEvents();
+    CHECK(ioTable->item(ioTable->currentRow(),0)->text()=="CAM 1 sensor");
+    CHECK(window.findChild<QMdiArea*>()->activeSubWindow()->widget()==primary);
+    openSensor("outputs.fan");
+    auto *fan=window.findChild<QMdiArea*>()->activeSubWindow()->widget();
+    auto *on=fan->findChild<QDoubleSpinBox*>("fanOnCenti");
+    auto *off=fan->findChild<QDoubleSpinBox*>("fanOffCenti");
+    CHECK(on && off && fan->findChild<QComboBox*>("connection:Cooling fan relay"));
+    CHECK(on->value()==90 && off->value()==85);
+    on->setValue(97.5);
+    CHECK(project->capture(error)["parameters"].toObject()["ignition.firing"].toObject()["engineProfile"].toObject()["fanOnCenti"].toInt()==9750);
+    if(!qEnvironmentVariable("TUNUINO_IO_PREVIEW").isEmpty())CHECK(fan->grab().save(qEnvironmentVariable("TUNUINO_IO_PREVIEW")+"-fan.png"));
+    on->setValue(90);
+    openSensor("outputs.pump");
+    auto *pump=window.findChild<QMdiArea*>()->activeSubWindow()->widget();
+    auto *prime=pump->findChild<QDoubleSpinBox*>("pumpPrimeMs");
+    CHECK(prime && pump->findChild<QComboBox*>("connection:Fuel pump relay"));
+    const auto previousPrime=prime->value();
+    prime->setValue(1350);
+    CHECK(project->capture(error)["parameters"].toObject()["ignition.firing"].toObject()["engineProfile"].toObject()["pumpPrimeMs"].toInt()==1350);
+    prime->setValue(previousPrime);
+    CHECK(project->capture(error)==beforePinClick);
+    openSensor("io.configuration");
     if(!qEnvironmentVariable("TUNUINO_IO_PREVIEW").isEmpty()){
         auto *ioWindow=window.findChild<QMdiArea*>()->activeSubWindow();
         app.processEvents();
@@ -228,13 +218,15 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     const auto profileBeforeConnection=firing->editorState();
     bool foundInjectorConnection=false;
     for(int row=0;row<ioTable->rowCount();++row)if(ioTable->item(row,0)->text()=="Injector — cylinder 1"){
-        auto *connection=qobject_cast<QComboBox*>(ioTable->cellWidget(row,1));CHECK(connection);
+        qobject_cast<QPushButton*>(ioTable->cellWidget(row,2))->click();
+        auto *owner=window.findChild<QMdiArea*>()->activeSubWindow()->widget();
+        auto *connection=owner->findChild<QComboBox*>("connection:"+ioTable->item(row,0)->text());CHECK(connection);
         CHECK(connection->isEnabled()&&connection->itemText(0)=="No pin selected"); // Local wiring edits remain available offline.
-        CHECK(!qobject_cast<QPushButton*>(ioTable->cellWidget(row,3))->isEnabled());
+        CHECK(!owner->findChild<QPushButton*>("engineProfileWrite")->isEnabled());
         connection->setCurrentIndex(1);
         CHECK(QMetaObject::invokeMethod(connection,"activated",Qt::DirectConnection,Q_ARG(int,1)));
         CHECK(firing->editorState()["engineProfile"].toObject()["cylinders"].toArray()[0].toObject()["injector"].toInt()==0);
-        centralIo->refresh();ioTable->setCurrentCell(row,0);app.processEvents();
+        openSensor("io.configuration");centralIo->refresh();ioTable->setCurrentCell(row,0);app.processEvents();
         CHECK(connectorTabs->currentIndex()==1);
         auto *outputPhoto=dynamic_cast<tunuino::ProteusConnectorPhoto*>(connectorTabs->currentWidget());
         CHECK(outputPhoto&&outputPhoto->highlighted().contains(3));
@@ -306,7 +298,9 @@ int main(int argc,char **argv){QApplication app(argc,argv);app.setStyle(QStyleFa
     const auto vtecBeforeAssignment=vtecPanel->editorState();
     bool foundVtecConnection=false;
     for(int row=0;row<ioTable->rowCount();++row)if(ioTable->item(row,0)->text()=="VTEC solenoid"){
-        auto *connection=qobject_cast<QComboBox*>(ioTable->cellWidget(row,1));CHECK(connection);
+        qobject_cast<QPushButton*>(ioTable->cellWidget(row,2))->click();
+        auto *owner=window.findChild<QMdiArea*>()->activeSubWindow()->widget();
+        auto *connection=owner->findChild<QComboBox*>("connection:"+ioTable->item(row,0)->text());CHECK(connection);
         connection->setCurrentIndex(1);
         CHECK(QMetaObject::invokeMethod(connection,"activated",Qt::DirectConnection,Q_ARG(int,1)));
         CHECK(vtecPanel->editorState()["values"].toObject()["output"].toInt()==1);

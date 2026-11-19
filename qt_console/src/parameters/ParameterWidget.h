@@ -19,6 +19,11 @@ public:
     void setAvailable(bool available);
     void saved(){edited_=false;}
     void save();
+    bool hasStoredEngineProfile() const {return profile_ && base_.size()==256 && base_[128]!=0;}
+    bool profileSectionPending(const QString &key) const;
+    void saveProfileSection(const QString &key);
+    void acknowledgeProfileSection(const QByteArray &desired,const QByteArray &mask);
+    bool editConnections(const QJsonObject &state,QString &error);
     void centralizeAssignments();
     void showEngineAssignments();
     std::function<void()> configureEngineAssignments;

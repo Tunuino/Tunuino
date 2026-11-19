@@ -15,6 +15,7 @@ public:
     void setTdc(int cylinder,quint32 angle);
     bool assign(int cylinder,bool ignition,int channel,QString &error);
     QByteArray build(QString &error)const;
+    QByteArray sectionHeader(const QString &key, QByteArray &mask) const;
     QJsonObject json()const;
     bool import(const QJsonObject &object,QString &error,bool editorDraft=false);
     int count()const{return cylinders.size();}

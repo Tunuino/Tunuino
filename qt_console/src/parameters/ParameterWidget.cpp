@@ -129,7 +129,7 @@ void ParameterWidget::load(const QByteArray &h,const QByteArray &a,const QByteAr
 void ParameterWidget::status(const QString &text,bool important){status_->setText(text);status_->setVisible(important);table_->setToolTip(text);}
 void ParameterWidget::setAvailable(bool available){if(available_==available)return;available_=available;refresh();}
 bool ParameterWidget::assignmentField(const ParameterField &field) const {
-    return (block_.page==12&&(field.key.startsWith("input")||field.key=="bridge"))||block_.key.endsWith(".outputs")
+    return (block_.key=="ignition.primary"&&field.key=="capture") || (block_.page==12&&(field.key.startsWith("input")||field.key=="bridge"))||block_.key.endsWith(".outputs")
         || ((block_.key=="vtec.setup"||(block_.key=="vvt.parameters"||block_.key=="vvt.cam2.parameters"))&&field.key=="output")
         || (block_.key=="fuel.flex"&&field.key=="input")
         || (block_.key=="inputs.pressure")
@@ -140,6 +140,47 @@ bool ParameterWidget::cylinderAssignmentVisible(int row) const {
     if(block_.key=="coils.outputs"&&base_[128]==3)
         for(int i=0;i<row;++i)if(base_[161+8*i]==base_[161+8*row])return false;
     return true;
+}
+bool ParameterWidget::editConnections(const QJsonObject &state,QString &error) {
+    if (!isEnabled() || profileConflict_) {
+        error=tr("ECU configuration changed or a transfer is in progress. Review the current values first.");
+        return false;
+    }
+    return restoreEditor(state,true,error);
+}
+bool ParameterWidget::profileSectionPending(const QString &key) const {
+    if (!profile_ || !edited_ || base_.size()!=256) return false;
+    EngineProfileDraft confirmed;
+    confirmed.load(base_,profileAux_);
+    QByteArray mask;
+    return profile_->sectionHeader(key,mask)!=confirmed.sectionHeader(key,mask);
+}
+void ParameterWidget::saveProfileSection(const QString &key) {
+    if (!profile_ || !available_ || profileConflict_ || base_.size()!=256 || !writeRequested) return;
+    if (!base_[128]) {save();return;} // First write initializes the complete engine profile.
+    const bool cylinderOutputs=key=="fuel.connections" || key=="ignition.connections";
+    if (cylinderOutputs && (profile_->count()!=quint8(base_[129]) || profile_->operation!=quint8(base_[156]))) {
+        status(tr("Write the new cylinder count and operating mode in Engine and cylinders first."));
+        return;
+    }
+    QByteArray mask;
+    const auto desired=profile_->sectionHeader(key,mask);
+    if (desired.isEmpty() || desired==base_) return;
+    EngineProfileDraft merged;
+    merged.load(desired,profileAux_);
+    QString error;
+    if (merged.build(error).isEmpty()) {status(error);return;}
+    writeRequested(1,desired,mask);
+}
+void ParameterWidget::acknowledgeProfileSection(const QByteArray &desired,const QByteArray &mask) {
+    if (!profile_ || mask.size()!=256 || mask[128]) {saved();return;}
+    for (int i=128;i<256;++i) if(mask[i]) profileHeader_[i]=desired[i];
+    base_=profileHeader_;
+    profile_->rebase(base_,profileAux_);
+    EngineProfileDraft confirmed;
+    confirmed.load(base_,profileAux_);
+    edited_=profile_->json()!=confirmed.json();
+    refresh();
 }
 void ParameterWidget::centralizeAssignments(){
     centralizedAssignments_=true;
